@@ -57,7 +57,7 @@
     },
     {
       "id": "instagram",
-      "actif": false,
+      "actif": true,
       "valeur": ""
     },
     {
@@ -87,7 +87,7 @@
     },
     {
       "id": "telegram",
-      "actif": false,
+      "actif": true,
       "valeur": ""
     },
     {
