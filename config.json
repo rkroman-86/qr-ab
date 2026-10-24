@@ -48,7 +48,8 @@
       "masque": false
     },
     {
-      "type": "reseaux"
+      "type": "reseaux",
+      "masque": true
     }
   ],
   "reseaux": [
