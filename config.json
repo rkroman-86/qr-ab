@@ -19,7 +19,8 @@
     "logoRond": true,
     "nomsReseaux": false,
     "reseauxTheme": false,
-    "tousRonds": true
+    "tousRonds": true,
+    "disposition": "droite"
   },
   "boutons": [
     {
