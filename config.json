@@ -20,14 +20,6 @@
   },
   "boutons": [
     {
-      "icone": "⭐",
-      "texte": "Laisser un avis Google",
-      "type": "avis",
-      "valeur": "",
-      "message": "",
-      "couleur": "#4285F4"
-    },
-    {
       "icone": "💬",
       "texte": "Réserver sur WhatsApp",
       "type": "whatsapp",
@@ -38,10 +30,18 @@
     {
       "icone": "📞",
       "texte": "Appeler",
-      "type": "tel",
-      "valeur": "",
+      "type": "sms",
+      "valeur": "+33 6 50 39 10 24",
       "message": "",
       "couleur": ""
+    },
+    {
+      "icone": "⭐",
+      "texte": "Laisser un avis Google",
+      "type": "avis",
+      "valeur": "",
+      "message": "",
+      "couleur": "#4285F4"
     }
   ]
 }
