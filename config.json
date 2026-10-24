@@ -1,26 +1,47 @@
 {
-  "titre": "Nom de l’établissement",
+  "titre": "Taxi Sanek",
   "sousTitre": "Merci de votre visite !",
-  "logo": "",
+  "logo": "images/logo-1792856123826.png",
   "pied": "",
   "design": {
-    "theme": "sable",
-    "fond": "#f5f1ea",
-    "fond2": "#e9e0d2",
-    "texte": "#2b2620",
-    "accent": "#2b2620",
-    "imageFond": "",
-    "voile": 40,
+    "theme": "nuit",
+    "fond": "#0f1115",
+    "fond2": "#1d2230",
+    "texte": "#f3f4f6",
+    "accent": "#e6c07b",
+    "imageFond": "images/fond-1792856144974.jpg",
+    "voile": 39,
     "police": "moderne",
     "forme": "arrondi",
     "style": "plein",
     "ombre": true,
     "carte": false,
-    "logoRond": false
+    "logoRond": true
   },
   "boutons": [
-    { "icone": "⭐", "texte": "Laisser un avis Google", "type": "avis", "valeur": "", "message": "", "couleur": "#4285F4" },
-    { "icone": "💬", "texte": "Réserver sur WhatsApp", "type": "whatsapp", "valeur": "", "message": "Bonjour, je souhaite réserver", "couleur": "#25D366" },
-    { "icone": "📞", "texte": "Appeler", "type": "tel", "valeur": "", "message": "", "couleur": "" }
+    {
+      "icone": "⭐",
+      "texte": "Laisser un avis Google",
+      "type": "avis",
+      "valeur": "",
+      "message": "",
+      "couleur": "#4285F4"
+    },
+    {
+      "icone": "💬",
+      "texte": "Réserver sur WhatsApp",
+      "type": "whatsapp",
+      "valeur": "",
+      "message": "Bonjour, je souhaite réserver",
+      "couleur": "#25D366"
+    },
+    {
+      "icone": "📞",
+      "texte": "Appeler",
+      "type": "tel",
+      "valeur": "",
+      "message": "",
+      "couleur": ""
+    }
   ]
 }
