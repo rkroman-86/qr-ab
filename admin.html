@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex">
+  <title>Éditeur de la page</title>
+  <style>
+    :root{
+      --bg:#f4f4f6; --panneau:#ffffff; --ligne:#e4e4e9; --txt:#17171c; --doux:#6b6b76;
+      --prim:#1f6feb; --prim-txt:#fff; --ok:#1a7f37; --err:#cf222e; --r:12px;
+    }
+    @media (prefers-color-scheme: dark){
+      :root{ --bg:#0e0f12; --panneau:#17181d; --ligne:#2a2c33; --txt:#ececf1; --doux:#9a9aa6; --prim:#4c8dff; }
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;height:100%}
+    body{font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--txt)}
+    button,input,select,textarea{font:inherit;color:inherit}
+    .cache{display:none !important}
+
+    /* ---------- Connexion ---------- */
+    #connexion{min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:24px 16px}
+    .boite{width:100%;max-width:360px;background:var(--panneau);border:1px solid var(--ligne);border-radius:18px;padding:28px 22px}
+    .boite h1{font-size:1.3rem;margin:0 0 6px}
+    .boite p{margin:0 0 20px;color:var(--doux)}
+    .champ{display:block;margin-bottom:14px}
+    .champ > span{display:block;font-size:.82rem;font-weight:600;color:var(--doux);margin-bottom:5px}
+    input[type=text],input[type=password],input[type=url],input[type=tel],select,textarea{
+      width:100%;padding:11px 12px;border:1px solid var(--ligne);border-radius:10px;background:var(--bg);outline:none;min-height:44px}
+    textarea{resize:vertical;min-height:64px}
+    input:focus,select:focus,textarea:focus{border-color:var(--prim);box-shadow:0 0 0 3px color-mix(in srgb,var(--prim) 22%,transparent)}
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;padding:10px 16px;border-radius:10px;
+      border:1px solid var(--ligne);background:var(--panneau);cursor:pointer;font-weight:600}
+    .btn-prim{background:var(--prim);border-color:var(--prim);color:var(--prim-txt)}
+    .btn-plein{width:100%}
+    .btn:disabled{opacity:.55;cursor:default}
+    .btn-mini{min-height:36px;padding:6px 10px;font-size:.88rem}
+    .msg{font-size:.9rem;margin-top:10px;min-height:1.2em}
+    .msg.err{color:var(--err)} .msg.ok{color:var(--ok)}
+    .case{display:flex;align-items:center;gap:8px;margin:4px 0 16px;color:var(--doux);font-size:.9rem}
+
+    /* ---------- Éditeur ---------- */
+    #editeur{min-height:100dvh;display:flex;flex-direction:column}
+    .barre{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:10px;padding:10px 16px;
+      background:var(--panneau);border-bottom:1px solid var(--ligne)}
+    .barre h1{font-size:1rem;margin:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .onglets{display:flex;background:var(--bg);border-radius:10px;padding:3px}
+    .onglets button{border:0;background:transparent;padding:7px 14px;border-radius:8px;font-weight:600;color:var(--doux);cursor:pointer}
+    .onglets button.actif{background:var(--panneau);color:var(--txt);box-shadow:0 1px 3px rgba(0,0,0,.1)}
+    .corps{flex:1;display:grid;grid-template-columns:1fr;min-height:0}
+    .col-edit{padding:16px 16px 110px;max-width:640px;width:100%;margin:0 auto}
+    .col-apercu{padding:0 0 90px}
+    .cadre{min-height:calc(100dvh - 150px);display:flex}
+    .cadre > .qp{min-height:inherit}
+    @media (max-width:899px){
+      body[data-vue=edit] .col-apercu{display:none}
+      body[data-vue=apercu] .col-edit{display:none}
+    }
+    @media (min-width:900px){
+      .onglets{display:none}
+      .corps{grid-template-columns:minmax(380px,1fr) 440px}
+      .col-apercu{position:sticky;top:57px;height:calc(100dvh - 57px);padding:20px;display:flex;align-items:flex-start;justify-content:center}
+      .cadre{width:390px;height:calc(100dvh - 140px);min-height:0;max-height:800px;border-radius:36px;overflow:auto;
+        border:10px solid #111;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+      .cadre > .qp{min-height:100%}
+    }
+
+    .section{background:var(--panneau);border:1px solid var(--ligne);border-radius:16px;margin-bottom:14px;overflow:hidden}
+    .section > summary{list-style:none;cursor:pointer;padding:15px 16px;font-weight:700;display:flex;align-items:center;gap:10px}
+    .section > summary::-webkit-details-marker{display:none}
+    .section > summary::after{content:"";margin-left:auto;width:9px;height:9px;border-right:2px solid var(--doux);border-bottom:2px solid var(--doux);transform:rotate(45deg);transition:transform .15s}
+    .section[open] > summary::after{transform:rotate(-135deg)}
+    .section-corps{padding:2px 16px 16px}
+    .grille2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    @media (max-width:520px){ .bouton-carte .grille2{grid-template-columns:1fr} }
+
+    .themes{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:8px;margin-bottom:16px}
+    .theme{border:2px solid var(--ligne);border-radius:12px;padding:0;overflow:hidden;cursor:pointer;background:none;text-align:left}
+    .theme.actif{border-color:var(--prim)}
+    .theme .ech{height:42px;display:flex;align-items:flex-end;padding:6px}
+    .theme .ech i{display:block;width:100%;height:10px;border-radius:5px}
+    .theme b{display:block;font-size:.8rem;padding:5px 7px}
+
+    .couleurs{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+    .coul{display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--ligne);border-radius:10px;background:var(--bg);font-size:.85rem}
+    input[type=color]{width:34px;height:34px;border:0;padding:0;background:none;border-radius:8px;cursor:pointer;flex-shrink:0}
+    input[type=color]::-webkit-color-swatch-wrapper{padding:0}
+    input[type=color]::-webkit-color-swatch{border:1px solid rgba(0,0,0,.15);border-radius:8px}
+
+    .segments{display:flex;background:var(--bg);border:1px solid var(--ligne);border-radius:10px;padding:3px;margin-bottom:14px}
+    .segments button{flex:1;border:0;background:transparent;padding:8px 4px;border-radius:7px;font-weight:600;font-size:.88rem;color:var(--doux);cursor:pointer}
+    .segments button.actif{background:var(--panneau);color:var(--txt);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+    .etiq{display:block;font-size:.82rem;font-weight:600;color:var(--doux);margin:2px 0 6px}
+    .bascule{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px solid var(--ligne)}
+    .bascule input{width:22px;height:22px}
+
+    .image-ligne{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+    .vignette{width:64px;height:64px;border-radius:12px;border:1px dashed var(--ligne);background:var(--bg) center/cover no-repeat;flex-shrink:0;
+      display:flex;align-items:center;justify-content:center;color:var(--doux);font-size:.75rem}
+    .vignette img{max-width:100%;max-height:100%}
+    input[type=range]{width:100%}
+
+    .bouton-carte{border:1px solid var(--ligne);border-radius:14px;padding:12px;margin-bottom:12px;background:var(--bg)}
+    .bouton-carte.masque{opacity:.55}
+    .bc-haut{display:flex;gap:8px;margin-bottom:10px}
+    .bc-haut .ico{width:56px;text-align:center;font-size:1.2rem;padding:8px 4px}
+    .bc-actions{display:flex;gap:6px;align-items:center;margin-top:10px;flex-wrap:wrap}
+    .bc-actions .esp{flex:1}
+    .bc-coul{display:flex;align-items:center;gap:8px;font-size:.88rem;color:var(--doux)}
+    .aide{font-size:.78rem;color:var(--doux);margin:-8px 0 10px}
+    .ajout{display:flex;gap:8px}
+    .ajout select{flex:1}
+
+    .pied-barre{position:fixed;left:0;right:0;bottom:0;z-index:6;display:flex;align-items:center;gap:12px;
+      padding:12px 16px calc(12px + env(safe-area-inset-bottom));background:var(--panneau);border-top:1px solid var(--ligne)}
+    .pied-barre .etat{flex:1;font-size:.86rem;color:var(--doux);line-height:1.3}
+    .pied-barre .etat.ok{color:var(--ok)} .pied-barre .etat.err{color:var(--err)}
+    .pied-barre .btn-prim{min-width:130px}
+    a.lien{color:var(--prim);font-weight:600;text-decoration:none}
+  </style>
+</head>
+<body data-vue="edit">
+
+<!-- ================= Connexion ================= -->
+<div id="connexion">
+  <form class="boite" id="form-connexion">
+    <h1>Modifier la page</h1>
+    <p>Entrez le mot de passe pour accéder à l'éditeur.</p>
+    <label class="champ"><span>Mot de passe</span>
+      <input type="password" id="mdp" autocomplete="current-password" required>
+    </label>
+    <label class="case"><input type="checkbox" id="rester"> Rester connecté sur cet appareil</label>
+    <button class="btn btn-prim btn-plein" id="btn-connexion">Se connecter</button>
+    <div class="msg" id="msg-connexion"></div>
+  </form>
+</div>
+
+<!-- ================= Éditeur ================= -->
+<div id="editeur" class="cache">
+  <div class="barre">
+    <h1>Éditeur</h1>
+    <div class="onglets">
+      <button type="button" data-vue="edit" class="actif">Modifier</button>
+      <button type="button" data-vue="apercu">Aperçu</button>
+    </div>
+    <button type="button" class="btn btn-mini" id="btn-deconnexion">Quitter</button>
+  </div>
+
+  <div class="corps">
+    <div class="col-edit" id="formulaire"></div>
+    <div class="col-apercu"><div class="cadre" id="apercu"></div></div>
+  </div>
+
+  <div class="pied-barre">
+    <div class="etat" id="etat">Aucune modification</div>
+    <button type="button" class="btn btn-prim" id="btn-enregistrer" disabled>Enregistrer</button>
+  </div>
+</div>
+
+<script src="commun.js"></script>
+<script>
+(function(){
+  'use strict';
+  const $ = s => document.querySelector(s);
+  const CLE_STOCK = 'qp-jeton';
+
+  let depot = depotDepuisURL();
+  let gh = null;
+  let cfg = null;
+  let shaConfig = null;
+  let modifie = false;
+  let imagesLocales = {};    // chemin -> dataURL (aperçu immédiat)
+  let imagesAEnvoyer = {};   // chemin -> base64
+
+  /* ---------------- Connexion ---------------- */
+  async function lireAuth() {
+    const r = await fetch('auth.json?t=' + Date.now(), { cache: 'no-store' });
+    if (!r.ok) throw new Error('Installation non terminée : ouvrez d\'abord setup.html.');
+    const a = await r.json();
+    if (a.owner && a.repo) depot = { owner: a.owner, repo: a.repo, branche: a.branche || 'main' };
+    return a;
+  }
+
+  async function demarrer(jeton) {
+    gh = clientGitHub(jeton, depot);
+    await gh.verifier();
+    const f = await gh.lire('config.json');
+    shaConfig = f ? f.sha : null;
+    cfg = fusion(CONFIG_DEFAUT, f ? JSON.parse(f.texte) : {});
+    $('#connexion').classList.add('cache');
+    $('#editeur').classList.remove('cache');
+    construireFormulaire();
+    majApercu();
+  }
+
+  $('#form-connexion').addEventListener('submit', async e => {
+    e.preventDefault();
+    const msg = $('#msg-connexion'), btn = $('#btn-connexion');
+    msg.className = 'msg'; msg.textContent = 'Vérification…'; btn.disabled = true;
+    try {
+      const auth = await lireAuth();
+      let jeton;
+      try { jeton = await dechiffrerJeton(auth, $('#mdp').value); }
+      catch (err) { throw new Error('Mot de passe incorrect.'); }
+      await demarrer(jeton);
+      try {
+        sessionStorage.setItem(CLE_STOCK, jeton);
+        if ($('#rester').checked) localStorage.setItem(CLE_STOCK, jeton);
+      } catch (err) {}
+    } catch (err) {
+      msg.className = 'msg err';
+      msg.textContent = err.status === 401 ? 'Accès refusé : le jeton GitHub a expiré ou a été révoqué.' : err.message;
+    } finally { btn.disabled = false; }
+  });
+
+  $('#btn-deconnexion').addEventListener('click', () => {
+    if (modifie && !confirm('Des modifications ne sont pas enregistrées. Se déconnecter quand même ?')) return;
+    try { sessionStorage.removeItem(CLE_STOCK); localStorage.removeItem(CLE_STOCK); } catch (e) {}
+    modifie = false;
+    location.reload();
+  });
+
+  (async function auto() {
+    let j = null;
+    try { j = sessionStorage.getItem(CLE_STOCK) || localStorage.getItem(CLE_STOCK); } catch (e) {}
+    if (!j) return;
+    try { await lireAuth(); await demarrer(j); }
+    catch (e) { try { sessionStorage.removeItem(CLE_STOCK); localStorage.removeItem(CLE_STOCK); } catch (x) {} }
+  })();
+
+  /* ---------------- Onglets mobile ---------------- */
+  document.querySelectorAll('.onglets button').forEach(b => b.addEventListener('click', () => {
+    document.body.dataset.vue = b.dataset.vue;
+    document.querySelectorAll('.onglets button').forEach(x => x.classList.toggle('actif', x === b));
+    window.scrollTo(0, 0);
+  }));
+
+  /* ---------------- Aperçu ---------------- */
+  let minuterie = null;
+  function majApercu() {
+    clearTimeout(minuterie);
+    minuterie = setTimeout(() => {
+      rendrePage(cfg, $('#apercu'), { apercu: true, resoudre: p => imagesLocales[p] || p });
+    }, 60);
+  }
+  function changement() {
+    modifie = true;
+    const e = $('#etat'); e.className = 'etat'; e.textContent = 'Modifications non enregistrées';
+    $('#btn-enregistrer').disabled = false;
+    majApercu();
+  }
+  window.addEventListener('beforeunload', e => { if (modifie) { e.preventDefault(); e.returnValue = ''; } });
+
+  /* ---------------- Petits constructeurs ---------------- */
+  function el(tag, attrs, enfants) {
+    const n = document.createElement(tag);
+    for (const k in (attrs || {})) {
+      if (k === 'class') n.className = attrs[k];
+      else if (k === 'text') n.textContent = attrs[k];
+      else if (k.startsWith('on')) n.addEventListener(k.slice(2), attrs[k]);
+      else if (attrs[k] === undefined) continue;
+      else if (k in n && k !== 'list') { try { n[k] = attrs[k]; } catch (e) { /* propriété en lecture seule */ } }
+      else n.setAttribute(k, attrs[k]);
+    }
+    (enfants || []).forEach(c => c && n.appendChild(typeof c === 'string' ? document.createTextNode(c) : c));
+    return n;
+  }
+  let sectionsOuvertes = null; // mémorise l'état ouvert/fermé entre deux reconstructions
+  function section(id, titre, ouvert, contenu) {
+    const d = el('details', { class: 'section' }, [el('summary', { text: titre }), el('div', { class: 'section-corps' }, contenu)]);
+    d.dataset.id = id;
+    d.open = sectionsOuvertes ? sectionsOuvertes.has(id) : ouvert;
+    return d;
+  }
+  function champTexte(etiquette, obj, cle, opts) {
+    opts = opts || {};
+    const input = el(opts.multi ? 'textarea' : 'input', { type: opts.multi ? undefined : (opts.type || 'text'), value: obj[cle] || '', placeholder: opts.ph || '' });
+    if (opts.multi) input.rows = 2;
+    input.addEventListener('input', () => { obj[cle] = input.value; changement(); });
+    return el('label', { class: 'champ' }, [el('span', { text: etiquette }), input]);
+  }
+  function segments(etiquette, options, obj, cle) {
+    const box = el('div', { class: 'segments' });
+    Object.keys(options).forEach(v => {
+      const b = el('button', { type: 'button', text: options[v], class: obj[cle] === v ? 'actif' : '' });
+      b.addEventListener('click', () => {
+        obj[cle] = v;
+        box.querySelectorAll('button').forEach(x => x.classList.toggle('actif', x === b));
+        changement();
+      });
+      box.appendChild(b);
+    });
+    return el('div', {}, [el('span', { class: 'etiq', text: etiquette }), box]);
+  }
+  function bascule(etiquette, obj, cle) {
+    const c = el('input', { type: 'checkbox', checked: !!obj[cle] });
+    c.addEventListener('change', () => { obj[cle] = c.checked; changement(); });
+    return el('label', { class: 'bascule' }, [el('span', { text: etiquette }), c]);
+  }
+  function couleur(etiquette, obj, cle, apres) {
+    const c = el('input', { type: 'color', value: obj[cle] || '#000000' });
+    c.addEventListener('input', () => { obj[cle] = c.value; if (apres) apres(); changement(); });
+    return el('label', { class: 'coul' }, [c, el('span', { text: etiquette })]);
+  }
+
+  /* Choix d'image : logo ou fond */
+  function choixImage(etiquette, obj, cle, reglages) {
+    const vign = el('div', { class: 'vignette' });
+    function majVign() {
+      vign.innerHTML = '';
+      vign.style.backgroundImage = '';
+      const v = obj[cle];
+      if (!v) { vign.textContent = 'Aucune'; return; }
+      const url = imagesLocales[v] || v;
+      if (reglages.fond) vign.style.backgroundImage = 'url("' + url + '")';
+      else vign.appendChild(el('img', { src: url, alt: '' }));
+    }
+    const fichier = el('input', { type: 'file', accept: 'image/*', class: 'cache' });
+    fichier.addEventListener('change', async () => {
+      const f = fichier.files[0]; if (!f) return;
+      try {
+        const png = !reglages.fond && /png|svg|webp/i.test(f.type);
+        const type = png ? 'image/png' : 'image/jpeg';
+        const data = await reduireImage(f, reglages.max, type, 0.85);
+        const chemin = 'images/' + reglages.nom + '-' + Date.now() + (png ? '.png' : '.jpg');
+        imagesLocales[chemin] = data;
+        imagesAEnvoyer[chemin] = data.split(',')[1];
+        obj[cle] = chemin;
+        majVign(); changement();
+      } catch (e) { alert(e.message); }
+      fichier.value = '';
+    });
+    const choisir = el('button', { type: 'button', class: 'btn btn-mini', text: 'Choisir…', onclick: () => fichier.click() });
+    const retirer = el('button', { type: 'button', class: 'btn btn-mini', text: 'Retirer', onclick: () => { obj[cle] = ''; majVign(); changement(); } });
+    majVign();
+    return el('div', {}, [el('span', { class: 'etiq', text: etiquette }),
+      el('div', { class: 'image-ligne' }, [vign, el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' }, [choisir, retirer]), fichier])]);
+  }
+
+  /* ---------------- Modèles de boutons ---------------- */
+  const MODELES = {
+    avis:      { icone: '⭐', texte: 'Laisser un avis Google', type: 'avis', couleur: '#4285F4' },
+    whatsapp:  { icone: '💬', texte: 'Réserver sur WhatsApp', type: 'whatsapp', message: 'Bonjour, je souhaite réserver', couleur: '#25D366' },
+    tel:       { icone: '📞', texte: 'Appeler', type: 'tel', couleur: '' },
+    instagram: { icone: '📸', texte: 'Instagram', type: 'lien', valeur: 'https://instagram.com/', couleur: '#E1306C' },
+    site:      { icone: '🌐', texte: 'Notre site', type: 'lien', couleur: '' },
+    maps:      { icone: '📍', texte: 'Itinéraire', type: 'maps', couleur: '' },
+    email:     { icone: '✉️', texte: 'Nous écrire', type: 'email', couleur: '' },
+    menu:      { icone: '📖', texte: 'Voir la carte', type: 'lien', couleur: '' }
+  };
+
+  /* ---------------- Formulaire complet ---------------- */
+  function construireFormulaire() {
+    const f = $('#formulaire');
+    if (f.children.length) sectionsOuvertes = new Set([...f.querySelectorAll('details.section[open]')].map(x => x.dataset.id));
+    const defil = window.scrollY;
+    f.innerHTML = '';
+    requestAnimationFrame(() => window.scrollTo(0, defil));
+    const d = cfg.design;
+
+    /* Textes */
+    f.appendChild(section('textes', 'Textes', true, [
+      champTexte('Titre', cfg, 'titre', { ph: 'Nom de l’établissement' }),
+      champTexte('Sous-titre', cfg, 'sousTitre', { ph: 'Merci de votre visite !', multi: true }),
+      champTexte('Texte en bas de page', cfg, 'pied', { ph: 'Adresse, horaires…', multi: true })
+    ]));
+
+    /* Boutons */
+    const liste = el('div');
+    cfg.boutons.forEach((b, i) => liste.appendChild(carteBouton(b, i)));
+    const choixAjout = el('select', {}, [el('option', { value: '', text: 'Ajouter un bouton…' })]
+      .concat(Object.keys(MODELES).map(k => el('option', { value: k, text: MODELES[k].icone + ' ' + MODELES[k].texte })))
+      .concat([el('option', { value: 'vide', text: '➕ Bouton vide' })]));
+    choixAjout.addEventListener('change', () => {
+      const k = choixAjout.value; if (!k) return;
+      const m = k === 'vide' ? { icone: '', texte: 'Nouveau bouton', type: 'lien', couleur: '' } : MODELES[k];
+      cfg.boutons.push(Object.assign({ icone: '', texte: '', type: 'lien', valeur: '', message: '', couleur: '' }, m));
+      construireFormulaire(); changement();
+      const cartes = document.querySelectorAll('.bouton-carte');
+      if (cartes.length) cartes[cartes.length - 1].scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    f.appendChild(section('boutons', 'Boutons (' + cfg.boutons.length + ')', true, [liste, el('div', { class: 'ajout' }, [choixAjout])]));
+
+    /* Logo */
+    f.appendChild(section('logo', 'Logo', false, [
+      choixImage('Image du logo', cfg, 'logo', { nom: 'logo', max: 600 }),
+      bascule('Logo rond (photo)', d, 'logoRond')
+    ]));
+
+    /* Design */
+    const themes = el('div', { class: 'themes' });
+    Object.keys(THEMES).forEach(k => {
+      const t = THEMES[k];
+      const b = el('button', { type: 'button', class: 'theme' + (d.theme === k ? ' actif' : '') }, [
+        el('div', { class: 'ech', style: 'background:linear-gradient(165deg,' + t.fond + ',' + t.fond2 + ')' }, [el('i', { style: 'background:' + t.accent })]),
+        el('b', { text: t.nom })
+      ]);
+      b.addEventListener('click', () => {
+        Object.assign(d, { theme: k, fond: t.fond, fond2: t.fond2, texte: t.texte, accent: t.accent });
+        construireFormulaire(); changement();
+      });
+      themes.appendChild(b);
+    });
+    const plusDeTheme = () => { d.theme = ''; themes.querySelectorAll('.theme').forEach(x => x.classList.remove('actif')); };
+
+    const policeSel = el('select', {}, Object.keys(FONTS).map(k => el('option', { value: k, text: FONTS[k].nom, selected: d.police === k })));
+    policeSel.addEventListener('change', () => { d.police = policeSel.value; changement(); });
+
+    const voile = el('input', { type: 'range', min: 0, max: 80, value: d.voile || 0 });
+    voile.addEventListener('input', () => { d.voile = Number(voile.value); changement(); });
+
+    f.appendChild(section('design', 'Design', false, [
+      el('span', { class: 'etiq', text: 'Thème' }), themes,
+      el('span', { class: 'etiq', text: 'Couleurs' }),
+      el('div', { class: 'couleurs' }, [
+        couleur('Fond', d, 'fond', plusDeTheme),
+        couleur('Fond (dégradé)', d, 'fond2', plusDeTheme),
+        couleur('Texte', d, 'texte', plusDeTheme),
+        couleur('Boutons', d, 'accent', plusDeTheme)
+      ]),
+      el('label', { class: 'champ' }, [el('span', { text: 'Police' }), policeSel]),
+      segments('Forme des boutons', { carre: 'Carré', arrondi: 'Arrondi', pilule: 'Pilule' }, d, 'forme'),
+      segments('Style des boutons', { plein: 'Plein', contour: 'Contour', doux: 'Doux' }, d, 'style'),
+      bascule('Ombre sous les boutons', d, 'ombre'),
+      bascule('Encadrer le contenu (carte)', d, 'carte'),
+      el('div', { style: 'height:12px' }),
+      choixImage('Image de fond', d, 'imageFond', { nom: 'fond', max: 1600, fond: true }),
+      el('span', { class: 'etiq', text: 'Assombrir l’image de fond' }), voile
+    ]));
+
+    /* Liens utiles */
+    const urlPublique = location.href.replace(/admin\.html.*$/, '');
+    f.appendChild(el('p', { style: 'text-align:center;color:var(--doux);font-size:.88rem;margin:18px 0' }, [
+      'Page publique : ', el('a', { class: 'lien', href: urlPublique, target: '_blank', rel: 'noopener', text: 'ouvrir ↗' })
+    ]));
+  }
+
+  function carteBouton(b, i) {
+    const n = cfg.boutons.length;
+    const carte = el('div', { class: 'bouton-carte' + (b.masque ? ' masque' : '') });
+
+    const ico = el('input', { type: 'text', class: 'ico', value: b.icone || '', placeholder: '🙂', maxLength: 4 });
+    ico.addEventListener('input', () => { b.icone = ico.value; changement(); });
+    const txt = el('input', { type: 'text', value: b.texte || '', placeholder: 'Texte du bouton' });
+    txt.addEventListener('input', () => { b.texte = txt.value; changement(); });
+
+    const type = el('select', {}, Object.keys(TYPES).map(k => el('option', { value: k, text: TYPES[k].nom, selected: b.type === k })));
+    const valeur = el('input', { type: 'text', value: b.valeur || '', placeholder: (TYPES[b.type] || TYPES.lien).aide, autocapitalize: 'off', autocorrect: 'off', spellcheck: false });
+    valeur.addEventListener('input', () => { b.valeur = valeur.value; changement(); });
+    const zoneMsg = el('div');
+    function majMsg() {
+      zoneMsg.innerHTML = '';
+      if (['whatsapp', 'sms', 'email'].includes(b.type)) {
+        const m = el('textarea', { rows: 2, value: b.message || '', placeholder: 'Message pré-rempli (facultatif)' });
+        m.addEventListener('input', () => { b.message = m.value; changement(); });
+        zoneMsg.appendChild(el('label', { class: 'champ' }, [el('span', { text: 'Message pré-rempli' }), m]));
+      }
+    }
+    type.addEventListener('change', () => {
+      b.type = type.value;
+      valeur.placeholder = TYPES[b.type].aide;
+      aide.textContent = TYPES[b.type].aide;
+      majMsg(); changement();
+    });
+    const aide = el('div', { class: 'aide', text: (TYPES[b.type] || TYPES.lien).aide });
+    majMsg();
+
+    const auto = el('input', { type: 'checkbox', checked: !b.couleur });
+    const c = el('input', { type: 'color', value: b.couleur || cfg.design.accent || '#000000' });
+    c.disabled = !b.couleur;
+    auto.addEventListener('change', () => { c.disabled = auto.checked; b.couleur = auto.checked ? '' : c.value; changement(); });
+    c.addEventListener('input', () => { b.couleur = c.value; changement(); });
+
+    const deplacer = dir => {
+      const j = i + dir; if (j < 0 || j >= n) return;
+      [cfg.boutons[i], cfg.boutons[j]] = [cfg.boutons[j], cfg.boutons[i]];
+      construireFormulaire(); changement();
+    };
+
+    const masquer = el('button', { type: 'button', class: 'btn btn-mini', text: b.masque ? '👁 Afficher' : '🙈 Masquer' });
+    masquer.addEventListener('click', () => { b.masque = !b.masque; construireFormulaire(); changement(); });
+
+    carte.append(
+      el('div', { class: 'bc-haut' }, [ico, txt]),
+      el('div', { class: 'grille2' }, [
+        el('label', { class: 'champ' }, [el('span', { text: 'Action' }), type]),
+        el('label', { class: 'champ' }, [el('span', { text: 'Valeur' }), valeur])
+      ]),
+      aide, zoneMsg,
+      el('div', { class: 'bc-coul' }, [c, el('label', { style: 'display:flex;align-items:center;gap:6px' }, [auto, 'Couleur du thème'])]),
+      el('div', { class: 'bc-actions' }, [
+        el('button', { type: 'button', class: 'btn btn-mini', text: '↑', disabled: i === 0, onclick: () => deplacer(-1) }),
+        el('button', { type: 'button', class: 'btn btn-mini', text: '↓', disabled: i === n - 1, onclick: () => deplacer(1) }),
+        masquer,
+        el('span', { class: 'esp' }),
+        el('button', { type: 'button', class: 'btn btn-mini', text: '🗑 Supprimer', onclick: () => {
+          if (!confirm('Supprimer le bouton « ' + (b.texte || 'sans titre') + ' » ?')) return;
+          cfg.boutons.splice(i, 1); construireFormulaire(); changement();
+        } })
+      ])
+    );
+    return carte;
+  }
+
+  /* ---------------- Enregistrement ---------------- */
+  $('#btn-enregistrer').addEventListener('click', async () => {
+    const btn = $('#btn-enregistrer'), etat = $('#etat');
+    btn.disabled = true; etat.className = 'etat'; etat.textContent = 'Enregistrement…';
+    try {
+      // 1. images d'abord, pour que la page ne pointe jamais vers une image absente
+      const chemins = Object.keys(imagesAEnvoyer).filter(p => JSON.stringify(cfg).includes(p));
+      for (const p of chemins) {
+        etat.textContent = 'Envoi de l’image…';
+        await gh.ecrire(p, imagesAEnvoyer[p], 'Image : ' + p, null);
+        delete imagesAEnvoyer[p];
+      }
+      // 2. configuration
+      etat.textContent = 'Publication…';
+      const contenu = b64.depuisTexte(JSON.stringify(cfg, null, 2) + '\n');
+      try {
+        shaConfig = await gh.ecrire('config.json', contenu, 'Mise à jour de la page', shaConfig);
+      } catch (e) {
+        if (e.status !== 409 && e.status !== 422) throw e;
+        shaConfig = await gh.ecrire('config.json', contenu, 'Mise à jour de la page'); // sha relu
+      }
+      modifie = false;
+      etat.className = 'etat ok';
+      etat.textContent = '✓ Publié. Visible sur la page d’ici 1 à 2 minutes.';
+    } catch (e) {
+      etat.className = 'etat err';
+      etat.textContent = e.status === 401 ? 'Accès refusé : jeton expiré. Prévenez Roman.' : 'Échec : ' + e.message;
+      btn.disabled = false;
+    }
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+{
+  "titre": "Nom de l’établissement",
+  "sousTitre": "Merci de votre visite !",
+  "logo": "",
+  "pied": "",
+  "design": {
+    "theme": "sable",
+    "fond": "#f5f1ea",
+    "fond2": "#e9e0d2",
+    "texte": "#2b2620",
+    "accent": "#2b2620",
+    "imageFond": "",
+    "voile": 40,
+    "police": "moderne",
+    "forme": "arrondi",
+    "style": "plein",
+    "ombre": true,
+    "carte": false,
+    "logoRond": false
+  },
+  "boutons": [
+    { "icone": "⭐", "texte": "Laisser un avis Google", "type": "avis", "valeur": "", "message": "", "couleur": "#4285F4" },
+    { "icone": "💬", "texte": "Réserver sur WhatsApp", "type": "whatsapp", "valeur": "", "message": "Bonjour, je souhaite réserver", "couleur": "#25D366" },
+    { "icone": "📞", "texte": "Appeler", "type": "tel", "valeur": "", "message": "", "couleur": "" }
+  ]
+}

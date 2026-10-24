@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Bienvenue</title>
+  <style>
+    html, body { margin: 0; height: 100%; }
+    body { background: #f5f1ea; }
+    #page { min-height: 100vh; min-height: 100dvh; display: flex; }
+    #page > .qp { min-height: 100vh; min-height: 100dvh; }
+    .chargement { margin: auto; width: 28px; height: 28px; border: 3px solid rgba(0,0,0,.12);
+      border-top-color: rgba(0,0,0,.5); border-radius: 50%; animation: t .8s linear infinite; }
+    @keyframes t { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div id="page"><div class="chargement"></div></div>
+  <noscript>Activez JavaScript pour afficher cette page.</noscript>
+  <script src="commun.js"></script>
+  <script>
+    fetch('config.json?t=' + Date.now(), { cache: 'no-store' })
+      .then(r => r.json())
+      .then(cfg => {
+        const c = rendrePage(cfg, document.getElementById('page'));
+        document.title = c.titre || 'Bienvenue';
+        document.body.style.background = c.design.fond;
+        const meta = document.createElement('meta');
+        meta.name = 'theme-color';
+        meta.content = c.design.fond;
+        document.head.appendChild(meta);
+      })
+      .catch(() => {
+        document.getElementById('page').innerHTML =
+          '<p style="margin:auto;font-family:system-ui;opacity:.6">Page momentanément indisponible.</p>';
+      });
+  </script>
+</body>
+</html>

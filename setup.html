@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Installation</title>
+  <style>
+    :root{--bg:#f4f4f6;--p:#fff;--l:#e4e4e9;--t:#17171c;--d:#6b6b76;--prim:#1f6feb;--ok:#1a7f37;--err:#cf222e}
+    @media (prefers-color-scheme:dark){:root{--bg:#0e0f12;--p:#17181d;--l:#2a2c33;--t:#ececf1;--d:#9a9aa6;--prim:#4c8dff}}
+    *{box-sizing:border-box}
+    body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px 16px;
+      font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--t)}
+    form{width:100%;max-width:440px;background:var(--p);border:1px solid var(--l);border-radius:18px;padding:26px 22px}
+    h1{font-size:1.3rem;margin:0 0 6px} p{margin:0 0 18px;color:var(--d)}
+    label{display:block;margin-bottom:14px}
+    label span{display:block;font-size:.82rem;font-weight:600;color:var(--d);margin-bottom:5px}
+    input{width:100%;padding:11px 12px;min-height:44px;border:1px solid var(--l);border-radius:10px;background:var(--bg);color:inherit;font:inherit}
+    .duo{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    button{width:100%;min-height:46px;border:0;border-radius:10px;background:var(--prim);color:#fff;font:inherit;font-weight:700;cursor:pointer;margin-top:6px}
+    button:disabled{opacity:.55}
+    #msg{margin-top:14px;font-size:.92rem;min-height:1.3em}
+    .ok{color:var(--ok)} .err{color:var(--err)}
+    a{color:var(--prim);font-weight:600;word-break:break-all}
+    small{display:block;color:var(--d);margin-top:-8px;margin-bottom:14px;font-size:.8rem}
+  </style>
+</head>
+<body>
+<form id="f">
+  <h1>Installation de l'éditeur</h1>
+  <p>À faire une seule fois (ou pour changer le mot de passe). Le jeton GitHub est chiffré avec le mot de passe, puis enregistré dans le dépôt.</p>
+
+  <div class="duo">
+    <label><span>Compte GitHub</span><input id="owner" required autocapitalize="off"></label>
+    <label><span>Dépôt</span><input id="repo" required autocapitalize="off"></label>
+  </div>
+  <label><span>Jeton GitHub (fine-grained)</span><input id="jeton" type="password" required autocomplete="off" placeholder="github_pat_…"></label>
+  <label><span>Mot de passe pour Alex</span><input id="mdp" type="password" required minlength="10" autocomplete="new-password"></label>
+  <small>10 caractères minimum. Préférez une phrase : « soleil-terrasse-2026 ».</small>
+  <label><span>Confirmer le mot de passe</span><input id="mdp2" type="password" required autocomplete="new-password"></label>
+  <button id="go">Chiffrer et enregistrer</button>
+  <div id="msg"></div>
+</form>
+
+<script src="commun.js"></script>
+<script>
+  const d = depotDepuisURL();
+  document.getElementById('owner').value = d.owner;
+  document.getElementById('repo').value = d.repo;
+
+  document.getElementById('f').addEventListener('submit', async e => {
+    e.preventDefault();
+    const msg = document.getElementById('msg'), btn = document.getElementById('go');
+    const mdp = document.getElementById('mdp').value;
+    if (mdp !== document.getElementById('mdp2').value) { msg.className = 'err'; msg.textContent = 'Les mots de passe ne correspondent pas.'; return; }
+    const depot = { owner: document.getElementById('owner').value.trim(), repo: document.getElementById('repo').value.trim(), branche: 'main' };
+    const jeton = document.getElementById('jeton').value.trim();
+    btn.disabled = true; msg.className = ''; msg.textContent = 'Vérification du jeton…';
+    try {
+      const gh = clientGitHub(jeton, depot);
+      const info = await gh.verifier();
+      if (info.permissions && info.permissions.push === false) throw new Error('Ce jeton n\'a pas le droit d\'écriture (Contents : Read and write).');
+      depot.branche = info.default_branch || 'main';
+      msg.textContent = 'Chiffrement…';
+      const auth = Object.assign({ owner: depot.owner, repo: depot.repo, branche: depot.branche }, await chiffrerJeton(jeton, mdp));
+      msg.textContent = 'Enregistrement dans le dépôt…';
+      await clientGitHub(jeton, depot).ecrire('auth.json', b64.depuisTexte(JSON.stringify(auth, null, 2) + '\n'), 'Accès éditeur (jeton chiffré)');
+      const admin = location.href.replace(/setup\.html.*$/, 'admin.html');
+      msg.className = 'ok';
+      msg.innerHTML = '✓ Terminé. Dans 1 à 2 minutes, l\'éditeur sera prêt :<br><a></a>';
+      const a = msg.querySelector('a'); a.href = admin; a.textContent = admin;
+      document.getElementById('jeton').value = '';
+    } catch (err) {
+      msg.className = 'err';
+      msg.textContent = err.status === 401 ? 'Jeton invalide ou expiré.' : err.message;
+    } finally { btn.disabled = false; }
+  });
+</script>
+</body>
+</html>
