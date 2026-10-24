@@ -90,7 +90,7 @@
     },
     {
       "id": "telegram",
-      "actif": true,
+      "actif": false,
       "valeur": "https://rkroman-86.github.io/qr-ab/"
     },
     {
