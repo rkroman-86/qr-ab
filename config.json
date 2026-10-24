@@ -18,7 +18,8 @@
     "carte": false,
     "logoRond": true,
     "nomsReseaux": false,
-    "reseauxTheme": false
+    "reseauxTheme": false,
+    "tousRonds": true
   },
   "boutons": [
     {

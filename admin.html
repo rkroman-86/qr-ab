@@ -436,8 +436,9 @@
       segments('Style des boutons', { plein: 'Plein', contour: 'Contour', doux: 'Doux' }, d, 'style'),
       bascule('Ombre sous les boutons', d, 'ombre'),
       bascule('Encadrer le contenu (carte)', d, 'carte'),
-      bascule('Noms sous les icônes des réseaux', d, 'nomsReseaux'),
-      bascule('Icônes des réseaux aux couleurs du thème', d, 'reseauxTheme'),
+      bascule('Tous les boutons en icônes rondes', d, 'tousRonds'),
+      bascule('Noms sous les icônes', d, 'nomsReseaux'),
+      bascule('Icônes aux couleurs du thème', d, 'reseauxTheme'),
       el('div', { style: 'height:12px' }),
       choixImage('Image de fond', d, 'imageFond', { nom: 'fond', max: 1600, fond: true }),
       el('span', { class: 'etiq', text: 'Assombrir l’image de fond' }), voile
@@ -476,7 +477,7 @@
       const ico = el('span', { class: 'rs-ico' }, [el('i')]);
       ico.style.background = R.coul;
       ico.firstChild.style.setProperty('--ico', 'url("' + iconeReseau(r.id) + '")');
-      ico.firstChild.style.background = texteContraste(R.coul);
+      ico.firstChild.style.background = couleurIcone(R.coul);
       const val = el('input', { type: 'text', value: r.valeur || '', placeholder: R.aide, autocapitalize: 'off', autocorrect: 'off', spellcheck: false });
       val.addEventListener('input', () => { r.valeur = val.value; changement(); });
       const bouge = dir => { const j = k + dir; if (j < 0 || j >= liste.length) return; [liste[k], liste[j]] = [liste[j], liste[k]]; construireFormulaire(); changement(); };

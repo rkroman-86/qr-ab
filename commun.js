@@ -35,6 +35,23 @@ const TYPES = {
 /* Réseaux sociaux : icônes rondes (bibliothèque libre Simple Icons, chargée depuis jsDelivr) */
 const ICONES_CDN = 'https://cdn.jsdelivr.net/npm/simple-icons@16/icons/';
 const GLOBE_SVG = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2"><circle cx="12" cy="12" r="9.5"/><path d="M2.5 12h19M12 2.5c2.8 3 2.8 16 0 19M12 2.5c-2.8 3-2.8 16 0 19"/></svg>');
+function svgIcone(corps) {
+  return 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + corps + '</svg>');
+}
+const ICONES_ACTIONS = {
+  tel:   svgIcone('<path d="M5 3h4l2 5-2.5 1.5a11 11 0 0 0 6 6L16 13l5 2v4a2 2 0 0 1-2 2A17 17 0 0 1 3 5a2 2 0 0 1 2-2z" fill="#000"/>'),
+  sms:   svgIcone('<path d="M4 4h16v12H8l-4 4z" fill="#000"/>'),
+  email: svgIcone('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>'),
+  lien:  svgIcone('<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>')
+};
+const COULEURS_ACTIONS = { whatsapp: '#25D366', avis: '#4285F4', maps: '#34A853', tel: '#0A84FF', sms: '#34C759', email: '#EA4335', lien: '#4B5563' };
+function iconeAction(type) {
+  if (type === 'whatsapp') return ICONES_CDN + 'whatsapp.svg';
+  if (type === 'avis') return ICONES_CDN + 'google.svg';
+  if (type === 'maps') return ICONES_CDN + 'googlemaps.svg';
+  return ICONES_ACTIONS[type] || ICONES_ACTIONS.lien;
+}
+
 const RESEAUX = {
   facebook:  { nom: 'Facebook',  coul: '#1877F2', aide: 'Nom de la page ou lien',     url: v => 'https://www.facebook.com/' + v },
   instagram: { nom: 'Instagram', coul: '#E4405F', aide: 'Nom d’utilisateur ou lien',  url: v => 'https://www.instagram.com/' + v },
@@ -80,7 +97,7 @@ const CONFIG_DEFAUT = {
   design: {
     theme: 'sable', fond: '#f5f1ea', fond2: '#e9e0d2', texte: '#2b2620', accent: '#2b2620',
     imageFond: '', voile: 40, police: 'moderne', forme: 'arrondi', style: 'plein',
-    ombre: true, carte: false, logoRond: false, nomsReseaux: false, reseauxTheme: false
+    ombre: true, carte: false, logoRond: false, nomsReseaux: false, reseauxTheme: false, tousRonds: false
   },
   boutons: []
 };
@@ -161,6 +178,14 @@ function texteContraste(hex) {
   return L > 0.45 ? '#111111' : '#ffffff';
 }
 
+/* Icône blanche sur les couleurs de marque, noire seulement sur fond très clair (Snapchat, blanc) */
+function couleurIcone(hex) {
+  const rgb = hexVersRgb(hex);
+  if (!rgb) return '#ffffff';
+  const [r, g, b] = rgb.map(c => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); });
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) > 0.7 ? '#111111' : '#ffffff';
+}
+
 /* ---------- Styles de la page (injectés une fois) ---------- */
 const CSS_PAGE = `
 .qp{--fond:#f5f1ea;--fond2:#e9e0d2;--texte:#2b2620;--accent:#2b2620;--police:system-ui;--rayon:14px;
@@ -202,6 +227,26 @@ function injecterCSS(doc) {
   s.id = 'qp-css';
   s.textContent = CSS_PAGE;
   doc.head.appendChild(s);
+}
+
+function creerRond(doc, o) {
+  const a = doc.createElement('a');
+  a.className = 'qp-rs-item' + (o.vide ? ' vide' : '');
+  a.href = o.href;
+  a.setAttribute('aria-label', o.nom);
+  if (/^https?:/i.test(a.getAttribute('href'))) { a.target = '_blank'; a.rel = 'noopener'; }
+  if (o.apercu) a.addEventListener('click', e => e.preventDefault());
+  const rond = doc.createElement('span');
+  rond.className = 'qp-rs-rond';
+  rond.style.background = o.fond;
+  const ico = doc.createElement('span');
+  ico.className = 'qp-rs-ico';
+  ico.style.setProperty('--ico', 'url("' + o.icone + '")');
+  ico.style.background = couleurIcone(o.fond);
+  rond.appendChild(ico);
+  a.appendChild(rond);
+  if (o.nomVisible) { const n = doc.createElement('span'); n.textContent = o.nom; a.appendChild(n); }
+  return a;
 }
 
 /* ---------- Rendu de la page ----------
@@ -265,38 +310,39 @@ function rendrePage(cfgBrut, racine, opts) {
   normaliser(cfg);
   const visibles = (cfg.boutons || []).filter(b => b && !b.masque && (b.type === 'reseaux' || b.texte));
   let nbAffiches = 0;
+  let grille = null; // grille d'icônes rondes en cours
+  const nouvelleGrille = () => { grille = doc.createElement('div'); grille.className = 'qp-rs'; zone.appendChild(grille); };
+
   visibles.forEach(b => {
     if (b.type === 'reseaux') {
       const items = cfg.reseaux.filter(r => r.actif && (opts.apercu || String(r.valeur || '').trim()));
       if (!items.length) return;
-      const grille = doc.createElement('div');
-      grille.className = 'qp-rs';
+      if (!d.tousRonds || !grille) nouvelleGrille();
       items.forEach(r => {
         const R = RESEAUX[r.id];
-        const a = doc.createElement('a');
-        a.className = 'qp-rs-item' + (String(r.valeur || '').trim() ? '' : ' vide');
-        a.href = lienReseau(r.id, r.valeur);
-        a.setAttribute('aria-label', R.nom);
-        if (/^https?:/i.test(a.getAttribute('href'))) { a.target = '_blank'; a.rel = 'noopener'; }
-        if (opts.apercu) a.addEventListener('click', e => e.preventDefault());
-        const rond = doc.createElement('span');
-        rond.className = 'qp-rs-rond';
-        const fondRond = d.reseauxTheme ? d.accent : R.coul;
-        rond.style.background = fondRond;
-        const ico = doc.createElement('span');
-        ico.className = 'qp-rs-ico';
-        ico.style.setProperty('--ico', 'url("' + iconeReseau(r.id) + '")');
-        ico.style.background = texteContraste(fondRond);
-        rond.appendChild(ico);
-        a.appendChild(rond);
-        if (d.nomsReseaux) { const n = doc.createElement('span'); n.textContent = R.nom; a.appendChild(n); }
-        grille.appendChild(a);
+        grille.appendChild(creerRond(doc, {
+          href: lienReseau(r.id, r.valeur), nom: R.nom, icone: iconeReseau(r.id),
+          fond: d.reseauxTheme ? d.accent : R.coul, vide: !String(r.valeur || '').trim(),
+          nomVisible: d.nomsReseaux, apercu: opts.apercu
+        }));
       });
-      zone.appendChild(grille);
+      if (!d.tousRonds) grille = null;
       nbAffiches++;
       return;
     }
+    if (d.tousRonds) {
+      if (!opts.apercu && !String(b.valeur || '').trim()) return; // pas de lien : pas d'icône
+      nbAffiches++;
+      if (!grille) nouvelleGrille();
+      grille.appendChild(creerRond(doc, {
+        href: construireLien(b), nom: b.texte, icone: iconeAction(b.type),
+        fond: b.couleur || (d.reseauxTheme ? d.accent : (COULEURS_ACTIONS[b.type] || d.accent)),
+        vide: !String(b.valeur || '').trim(), nomVisible: d.nomsReseaux, apercu: opts.apercu
+      }));
+      return;
+    }
     nbAffiches++;
+
     const a = doc.createElement('a');
     a.className = 'qp-btn';
     a.href = construireLien(b);
