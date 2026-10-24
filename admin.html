@@ -111,7 +111,7 @@
     .carte-apercu{width:100%;border-radius:12px;box-shadow:0 6px 24px rgba(0,0,0,.2)}
     .modeles-carte{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
     .modele-carte{border:2px solid var(--ligne);border-radius:12px;padding:6px;background:var(--bg);cursor:pointer;color:var(--txt);display:flex;flex-direction:column;gap:6px}
-    .modele-carte img{width:100%;border-radius:6px;display:block}
+    .modele-carte img{width:100%;aspect-ratio:2008/1300;object-fit:contain;border-radius:6px;display:block;background:color-mix(in srgb,var(--txt) 6%,transparent)}
     .modele-carte b{font-size:.8rem}
     .modele-carte.actif{border-color:var(--prim);background:color-mix(in srgb,var(--prim) 8%,var(--bg))}
     .dispos{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:10px}
@@ -605,6 +605,8 @@
     if (tel && wa && numeroInternational(tel.valeur) === numeroInternational(wa.valeur)) ajout('Tél. / WhatsApp', formaterNumero(tel.valeur));
     else { if (tel) ajout('Tél.', formaterNumero(tel.valeur)); if (wa) ajout('WhatsApp', formaterNumero(wa.valeur)); }
     btns.filter(b => b.type === 'email').forEach(b => ajout('E-mail', b.valeur.trim()));
+    const mail = cfg.reseaux.find(r => r.id === 'email' && r.actif && String(r.valeur || '').trim());
+    if (mail) ajout('E-mail', String(mail.valeur).trim().replace(/^mailto:/i, ''));
     const site = cfg.reseaux.find(r => r.id === 'site' && r.actif && String(r.valeur || '').trim());
     const lienWeb = site ? site.valeur : (btns.find(b => b.type === 'lien') || {}).valeur;
     if (lienWeb) ajout('Web', String(lienWeb).trim().replace(/^https?:\/\//i, '').replace(/\/$/, ''));
@@ -645,8 +647,15 @@
     luxe:    'Luxe',
     bandeau: 'Bandeau',
     centre:  'Centré',
+    couleur: 'Couleur',
+    diagonale: 'Diagonale',
+    cadre:   'Cadre',
+    photoHaut: 'Photo en haut',
+    minimal: 'Minimal',
+    vertical: 'Vertical',
     verso:   'Verso QR'
   };
+  const TAILLES_CARTE = { vertical: { W: 1300, H: 2008 } };
 
   function luminance(hex) {
     const rgb = hexVersRgb(hex) || [0, 0, 0];
@@ -724,9 +733,10 @@
     y += 30;
     ctx.fillStyle = c.accent; ctx.fillRect(align === 'center' ? ax - 65 : x, y, 130, 8); y += 56;
     if (c.enLigne) {
-      ctx.font = policeAjustee(ctx, D.coords.map(l => l[1]).join('   ·   '), '600', 50, 30, largeur, fam);
+      const ligne = D.coords.slice(0, 2).map(l => l[1]).join('   ·   ');
+      ctx.font = policeAjustee(ctx, ligne, '600', 52, 34, largeur, fam);
       ctx.fillStyle = c.texte;
-      ctx.fillText(D.coords.map(l => l[1]).join('   ·   '), ax, y);
+      ctx.fillText(ligne, ax, y);
       y += 70;
     } else {
       D.coords.forEach(([etiq, val]) => {
@@ -758,6 +768,25 @@
     g.addColorStop(0, D.d.fond); g.addColorStop(1, D.d.fond2 || D.d.fond);
     ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
     return D.d.texte;
+  }
+
+  // Liste des coordonnées seule (étiquette + valeur)
+  function dessinerCoords(ctx, D, x, y, largeur, c, align) {
+    const ax = align === 'center' ? x + largeur / 2 : x;
+    ctx.textAlign = align || 'left'; ctx.textBaseline = 'top';
+    D.coords.forEach(([etiq, val]) => {
+      ctx.font = '700 ' + (c.etiq || 40) + 'px ' + D.fam; ctx.fillStyle = c.accent; ctx.fillText(etiq.toUpperCase(), ax, y);
+      ctx.fillStyle = c.texte; ctx.font = policeAjustee(ctx, val, '600', c.val || 56, 30, largeur, D.fam);
+      ctx.fillText(val, ax, y + (c.etiq || 40) + 6); y += (c.pas || 128);
+    });
+    ctx.textAlign = 'left';
+    return y;
+  }
+
+  function fondAccent(ctx, D, x, y, w, h) {
+    const g = ctx.createLinearGradient(x, y, x + w, y + h);
+    g.addColorStop(0, D.d.accent); g.addColorStop(1, D.d.fond2 && D.d.fond2 !== D.d.fond ? D.d.fond2 : D.d.accent);
+    ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
   }
 
   const DESSINS_CARTE = {
@@ -825,6 +854,101 @@
       dessinerBlocQR(ctx, D, W - P - q + 40, H - P - q * 1.17 + 40, q, 'Scannez', true);
       dessinerPied(ctx, D, P - 20, H - P + 40, texte);
     },
+    couleur(ctx, D) {
+      const { W, H, P } = D;
+      ctx.fillStyle = D.d.accent; ctx.fillRect(0, 0, W, H);
+      const g = ctx.createRadialGradient(W * 0.2, H * 0.1, 50, W * 0.5, H * 0.5, W * 0.9);
+      g.addColorStop(0, 'rgba(255,255,255,.18)'); g.addColorStop(1, 'rgba(0,0,0,.25)');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+      const texte = couleurIcone(D.d.accent);
+      const q = 560, bx = W - P - q;
+      dessinerBlocQR(ctx, D, bx, (H - q * 1.17) / 2, q, 'Scannez-moi', true);
+      let y = P + (D.logo ? dessinerLogo(ctx, D, P, P, 210) + 56 : 40);
+      dessinerTextes(ctx, D, P, y, bx - P - 90, { texte, accent: texte }, 'left');
+      dessinerPied(ctx, D, P, H - P + 30, texte);
+    },
+    diagonale(ctx, D) {
+      const { W, H, P } = D;
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
+      const xa = W * 0.5, xb = W * 0.36;
+      ctx.save(); ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(xa, 0); ctx.lineTo(xb, H); ctx.lineTo(0, H); ctx.closePath(); ctx.clip();
+      if (D.fondImg) fondPage(ctx, D, 0, 0, xa, H, 0.35); else fondAccent(ctx, D, 0, 0, xa, H);
+      ctx.restore();
+      ctx.strokeStyle = D.d.accent; ctx.lineWidth = 14;
+      ctx.beginPath(); ctx.moveTo(xa + 22, 0); ctx.lineTo(xb + 22, H); ctx.stroke();
+      const q = 460;
+      let y = 110;
+      if (D.logo) { dessinerLogo(ctx, D, 110, y, 190); y += 190 + 50; }
+      dessinerBlocQR(ctx, D, 110, D.logo ? y : (H - q * 1.17) / 2, q, 'Scannez-moi', true);
+      const accent = luminance(D.d.accent) > 0.6 ? '#1a1a1a' : D.d.accent;
+      const x = xa + 90;
+      dessinerTextes(ctx, D, x, 150, W - x - P + 20, { texte: '#1a1a1a', accent, titre: 104, sous: 48 }, 'left');
+      dessinerPied(ctx, D, x, H - P + 20, '#1a1a1a');
+    },
+    cadre(ctx, D) {
+      const { W, H } = D;
+      fondPage(ctx, D, 0, 0, W, H, 0.25);
+      const m = 80;
+      ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.3)'; ctx.shadowBlur = 50; ctx.shadowOffsetY = 12;
+      ctx.fillStyle = 'rgba(255,255,255,.95)'; rectArrondi(ctx, m, m, W - 2 * m, H - 2 * m, 50); ctx.fill(); ctx.restore();
+      const P = m + 90;
+      const q = 480, bx = W - P - q;
+      dessinerQR(ctx, URL_PUBLIQUE, bx, (H - q) / 2 - 24, q, '#111');
+      ctx.fillStyle = '#666'; ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.font = '600 38px ' + D.fam;
+      ctx.fillText('Scannez-moi', bx + q / 2, (H + q) / 2 - 4); ctx.textAlign = 'left';
+      const accent = luminance(D.d.accent) > 0.6 ? '#1a1a1a' : D.d.accent;
+      let y = P - 10 + (D.logo ? dessinerLogo(ctx, D, P, P - 10, 170) + 44 : 20);
+      dessinerTextes(ctx, D, P, y, bx - P - 90, { texte: '#1a1a1a', accent, titre: 100, sous: 46 }, 'left');
+    },
+    photoHaut(ctx, D) {
+      const { W, H, P } = D;
+      const Hh = Math.round(H * 0.5);
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
+      if (D.fondImg) fondPage(ctx, D, 0, 0, W, Hh, 0.4); else fondAccent(ctx, D, 0, 0, W, Hh);
+      const blanc = D.fondImg ? '#ffffff' : couleurIcone(D.d.accent);
+      const q = 470, qx = W - P - q, qy = Hh - 120;
+      let x = P;
+      if (D.logo) { dessinerLogo(ctx, D, P, Hh - 250, 200); x = P + 250; }
+      const Lt = qx - x - 50;
+      ctx.fillStyle = blanc; ctx.textBaseline = 'alphabetic';
+      ctx.font = policeAjustee(ctx, cfg.titre || '', '800', 112, 52, Lt, D.fam);
+      ctx.fillText(cfg.titre || '', x, Hh - (cfg.sousTitre ? 130 : 70));
+      if (cfg.sousTitre) {
+        ctx.font = policeAjustee(ctx, cfg.sousTitre, '400', 50, 28, Lt, D.fam); ctx.globalAlpha = .85;
+        ctx.fillText(cfg.sousTitre, x, Hh - 64); ctx.globalAlpha = 1;
+      }
+      const accent = luminance(D.d.accent) > 0.6 ? '#1a1a1a' : D.d.accent;
+      dessinerBlocQR(ctx, D, qx, qy, q, '', true);
+      const coords = D.coords.slice(0, 3);
+      dessinerCoords(ctx, Object.assign({}, D, { coords }), P, Hh + 80, qx - P - 80, { texte: '#1a1a1a', accent, val: 52, pas: 116 }, 'left');
+      dessinerPied(ctx, D, P, H - 70, '#1a1a1a');
+    },
+    minimal(ctx, D) {
+      const { W, H } = D;
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
+      const accent = luminance(D.d.accent) > 0.6 ? '#1a1a1a' : D.d.accent;
+      let y = 110;
+      if (D.logo) { dessinerLogo(ctx, D, (W - 170) / 2, y, 170); y += 170 + 40; } else y += 60;
+      ctx.fillStyle = '#111'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      ctx.font = policeAjustee(ctx, cfg.titre || '', '300', 104, 56, W - 300, D.fam);
+      ctx.fillText(cfg.titre || '', W / 2, y); y += 130;
+      ctx.fillStyle = accent; ctx.fillRect(W / 2 - 50, y, 100, 5); y += 40;
+      const ligne = D.coords.slice(0, 2).map(l => l[1]).join('   ·   ');
+      ctx.fillStyle = '#444'; ctx.font = policeAjustee(ctx, ligne, '500', 48, 30, W - 300, D.fam);
+      ctx.fillText(ligne, W / 2, y); y += 90;
+      const q = Math.min(440, H - y - 90);
+      dessinerQR(ctx, URL_PUBLIQUE, (W - q) / 2, y, q, '#111');
+      ctx.textAlign = 'left';
+    },
+    vertical(ctx, D) {
+      const { W, H } = D;
+      const texte = fondPage(ctx, D, 0, 0, W, H, 0.5);
+      let y = 130;
+      if (D.logo) { dessinerLogo(ctx, D, (W - 280) / 2, y, 280); y += 280 + 60; } else y += 80;
+      y = dessinerTextes(ctx, D, 110, y, W - 220, { texte, accent: D.d.accent, titre: 116, enLigne: false }, 'center');
+      const q = 560;
+      dessinerBlocQR(ctx, D, (W - q) / 2, Math.max(y + 10, H - 110 - q * 1.17), q, 'Scannez-moi', true);
+    },
     verso(ctx, D) {
       const { W, H } = D;
       const texte = fondPage(ctx, D, 0, 0, W, H, 0.55);
@@ -841,6 +965,8 @@
 
   async function genererCarte(modele, D) {
     D = D || await preparerCarte();
+    if (TAILLES_CARTE[modele]) D = Object.assign({}, D, TAILLES_CARTE[modele]);
+    else D = Object.assign({}, D, { W: 2008, H: 1300 });
     const cv = document.createElement('canvas');
     cv.width = D.W; cv.height = D.H;
     (DESSINS_CARTE[modele] || DESSINS_CARTE.photo)(cv.getContext('2d'), D);
@@ -874,7 +1000,7 @@
       zoneCarte.append(
         el('img', { class: 'carte-apercu', alt: 'Carte de visite', src: cv.toDataURL('image/jpeg', 0.85) }),
         el('button', { type: 'button', class: 'btn btn-prim btn-plein', text: '⬇ Télécharger « ' + MODELES_CARTE[choisi] + ' » (JPEG)', onclick: () => telecharger(cv, nomFichierCarte(choisi), 'image/jpeg', 0.95) }),
-        el('div', { class: 'aide', style: 'margin:4px 0 0', text: 'Format 85 × 55 mm, 600 dpi, prêt pour l’imprimeur. Astuce : « Verso QR » fait un beau dos de carte.' }));
+        el('div', { class: 'aide', style: 'margin:4px 0 0', text: (choisi === 'vertical' ? 'Format 55 × 85 mm (vertical)' : 'Format 85 × 55 mm') + ', 600 dpi, prêt pour l’imprimeur. Astuce : « Verso QR » fait un beau dos de carte.' }));
     }
 
     const btnCarte = el('button', { type: 'button', class: 'btn btn-prim btn-plein', text: 'Voir les modèles de carte' });
@@ -886,8 +1012,9 @@
         for (const k of Object.keys(MODELES_CARTE)) {
           const cv = await genererCarte(k, donnees);
           const mini = document.createElement('canvas');
-          mini.width = 502; mini.height = 325;
-          mini.getContext('2d').drawImage(cv, 0, 0, 502, 325);
+          const ech = Math.min(502 / cv.width, 325 / cv.height);
+          mini.width = Math.round(cv.width * ech); mini.height = Math.round(cv.height * ech);
+          mini.getContext('2d').drawImage(cv, 0, 0, mini.width, mini.height);
           const b = el('button', { type: 'button', class: 'modele-carte' + (k === choisi ? ' actif' : '') }, [
             el('img', { src: mini.toDataURL('image/jpeg', 0.8), alt: '' }), el('b', { text: MODELES_CARTE[k] })]);
           b.addEventListener('click', async () => {

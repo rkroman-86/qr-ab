@@ -61,7 +61,8 @@ const RESEAUX = {
   site:      { nom: 'Site web',  coul: '#4B5563', aide: 'Adresse du site',            url: v => 'https://' + v, icone: GLOBE_SVG },
   youtube:   { nom: 'YouTube',   coul: '#FF0000', aide: 'Nom de la chaîne ou lien',   url: v => 'https://www.youtube.com/@' + v },
   telegram:  { nom: 'Telegram',  coul: '#26A5E4', aide: 'Nom d’utilisateur ou lien',  url: v => 'https://t.me/' + v },
-  tripadvisor:{ nom: 'Tripadvisor', coul: '#34E0A1', aide: 'Lien de la fiche',        url: v => 'https://' + v }
+  tripadvisor:{ nom: 'Tripadvisor', coul: '#34E0A1', aide: 'Lien de la fiche',        url: v => 'https://' + v },
+  email:     { nom: 'E-mail',    coul: '#EA4335', aide: 'Adresse e-mail',             url: v => 'mailto:' + v, icone: ICONES_ACTIONS.email }
 };
 const RESEAUX_ACTIFS_DEFAUT = ['facebook', 'instagram', 'x', 'snapchat', 'tiktok', 'site'];
 
@@ -70,6 +71,7 @@ function iconeReseau(id) { return (RESEAUX[id] && RESEAUX[id].icone) || (ICONES_
 function lienReseau(id, valeur) {
   let v = String(valeur || '').trim();
   if (!v || !RESEAUX[id]) return '#';
+  if (id === 'email') return lienSur('mailto:' + v.replace(/^mailto:/i, ''));
   if (estURL(v)) return lienSur(v);
   if (/^(www\.|[a-z0-9-]+\.[a-z]{2,})/i.test(v) && v.includes('.') && id !== 'site') return lienSur('https://' + v);
   if (id === 'site' || id === 'tripadvisor') return lienSur('https://' + v);
