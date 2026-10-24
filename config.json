@@ -52,7 +52,7 @@
   "reseaux": [
     {
       "id": "facebook",
-      "actif": false,
+      "actif": true,
       "valeur": ""
     },
     {
