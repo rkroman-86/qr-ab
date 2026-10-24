@@ -97,7 +97,9 @@ const DISPOSITIONS = {
   gauche:  { nom: 'Barre à gauche', ronds: true },
   droite:  { nom: 'Barre à droite', ronds: true },
   carte:   { nom: 'Carte de visite' },
-  affiche: { nom: 'Affiche' }
+  affiche: { nom: 'Affiche' },
+  hautbas: { nom: 'Haut + bas', ronds: true, scinde: true },
+  cotes:   { nom: 'Gauche + droite', ronds: true, scinde: true }
 };
 
 const CONFIG_DEFAUT = {
@@ -234,6 +236,23 @@ const CSS_PAGE = `
 .qp-dispo-haut .qp-btns{order:-1;margin-bottom:24px}
 .qp-dispo-haut .qp-entete{margin:auto 0}
 .qp-dispo-bas .qp-entete{margin:auto 0 30px}
+.qp-dispo-hautbas{align-items:stretch}
+.qp-dispo-hautbas .qp-contenu{display:flex;flex-direction:column}
+.qp-dispo-hautbas .qp-zone-a{order:-1}
+.qp-dispo-hautbas .qp-entete{margin:auto 0}
+.qp-dispo-hautbas .qp-rs{display:flex;flex-wrap:wrap;justify-content:center;gap:14px 22px}
+.qp-dispo-hautbas .qp-zone-b{margin-top:24px}
+.qp-dispo-cotes{align-items:stretch}
+.qp-dispo-cotes .qp-contenu{display:grid;grid-template-columns:66px 1fr 66px;grid-template-areas:"a entete b" "a pied b";
+  grid-template-rows:1fr auto;column-gap:10px;max-width:560px}
+.qp-dispo-cotes .qp-zone-a{grid-area:a;align-self:center}
+.qp-dispo-cotes .qp-zone-b{grid-area:b;align-self:center}
+.qp-dispo-cotes .qp-entete{grid-area:entete;align-self:center}
+.qp-dispo-cotes .qp-pied{grid-area:pied}
+.qp-dispo-cotes .qp-rs{grid-template-columns:1fr;gap:14px}
+.qp-dispo-cotes .qp-rs-rond{width:54px;height:54px}
+.qp-dispo-cotes .qp-titre{font-size:1.35rem}
+.qp-dispo-cotes .qp-logo-rond{width:90px;height:90px}
 .qp-dispo-bas .qp-pied{margin-top:18px}
 .qp-dispo-gauche .qp-contenu,.qp-dispo-droite .qp-contenu{display:grid;grid-template-columns:78px 1fr;
   grid-template-areas:"zone entete" "zone pied";grid-template-rows:1fr auto;column-gap:14px;max-width:560px}
@@ -429,7 +448,24 @@ function rendrePage(cfgBrut, racine, opts) {
     v.textContent = 'Aucun bouton pour l’instant';
     zone.appendChild(v);
   }
-  c.appendChild(zone);
+  if (DISPOSITIONS[dispo].scinde) {
+    // Répartit les icônes en deux groupes : première moitié / seconde moitié (ordre des flèches)
+    const items = [...zone.querySelectorAll('.qp-rs-item')];
+    const moitie = Math.ceil(items.length / 2);
+    zone.innerHTML = '';
+    zone.classList.add('qp-zone-a');
+    const zoneB = doc.createElement('div');
+    zoneB.className = 'qp-btns qp-zone-b';
+    [[zone, items.slice(0, moitie)], [zoneB, items.slice(moitie)]].forEach(([z, lot]) => {
+      const g = doc.createElement('div');
+      g.className = 'qp-rs';
+      lot.forEach(it => g.appendChild(it));
+      z.appendChild(g);
+    });
+    if (!items.length && opts.apercu) zone.appendChild(Object.assign(doc.createElement('div'), { className: 'qp-vide', textContent: 'Aucun bouton pour l’instant' }));
+    c.appendChild(zone);
+    c.appendChild(zoneB);
+  } else c.appendChild(zone);
 
   if (cfg.pied) {
     const f = doc.createElement('p');

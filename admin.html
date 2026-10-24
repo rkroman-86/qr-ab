@@ -415,7 +415,7 @@
     });
     f.appendChild(section('dispo', 'Disposition', true, [
       dispos,
-      el('div', { class: 'aide', style: 'margin:10px 0 0', text: 'Les barres à gauche et à droite utilisent toujours les icônes rondes.' })
+      el('div', { class: 'aide', style: 'margin:10px 0 0', text: 'Les barres et les modèles « Haut + bas » et « Gauche + droite » utilisent toujours les icônes rondes. Pour ces deux derniers, la première moitié des boutons va en haut (ou à gauche), la seconde en bas (ou à droite) : l’ordre se règle avec les flèches.' })
     ]));
 
     /* Logo */
@@ -542,6 +542,8 @@
       case 'droite':  c = pts(col(49, 26, 5, 12)) + logo(22, 36, 7) + barre(10, 48, 24) + barre(13, 55, 18, 3, .35); break;
       case 'carte':   c = logo(15, 30, 7) + barre(26, 26, 26) + barre(26, 33, 18, 3, .35) + pts(grille(14, 52, 6, 12).map(p => [p[0], p[1], 4.5])); break;
       case 'affiche': c = '<rect x="0" y="0" width="60" height="100" fill="' + L + '" opacity=".08"/>' + logo(13, 50, 5) + barre(8, 60, 40, 7, .7) + barre(8, 71, 30, 3, .35) + pts([[13, 84], [26, 84], [39, 84]]); break;
+      case 'hautbas': c = pts([[18, 14], [30, 14], [42, 14]]) + logo(30, 42, 7) + barre(16, 54, 28) + barre(20, 61, 20, 3, .35) + pts([[18, 86], [30, 86], [42, 86]]); break;
+      case 'cotes':   c = pts(col(9, 32, 3, 12)) + pts(col(51, 32, 3, 12)) + logo(30, 40, 7) + barre(19, 52, 22) + barre(22, 59, 16, 3, .35); break;
       default:        c = logo(30, 26, 8) + barre(16, 40, 28) + barre(20, 47, 20, 3, .35) + pts(grille(18, 62, 6, 12));
     }
     return '<svg viewBox="0 0 60 100" aria-hidden="true">' + c + '</svg>';
