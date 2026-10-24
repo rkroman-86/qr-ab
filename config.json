@@ -16,7 +16,9 @@
     "style": "plein",
     "ombre": true,
     "carte": false,
-    "logoRond": true
+    "logoRond": true,
+    "nomsReseaux": false,
+    "reseauxTheme": false
   },
   "boutons": [
     {
@@ -42,6 +44,56 @@
       "valeur": "",
       "message": "",
       "couleur": "#4285F4"
+    },
+    {
+      "type": "reseaux"
+    }
+  ],
+  "reseaux": [
+    {
+      "id": "facebook",
+      "actif": false,
+      "valeur": ""
+    },
+    {
+      "id": "instagram",
+      "actif": false,
+      "valeur": ""
+    },
+    {
+      "id": "x",
+      "actif": false,
+      "valeur": ""
+    },
+    {
+      "id": "snapchat",
+      "actif": false,
+      "valeur": ""
+    },
+    {
+      "id": "tiktok",
+      "actif": false,
+      "valeur": ""
+    },
+    {
+      "id": "site",
+      "actif": false,
+      "valeur": ""
+    },
+    {
+      "id": "youtube",
+      "actif": false,
+      "valeur": ""
+    },
+    {
+      "id": "telegram",
+      "actif": false,
+      "valeur": ""
+    },
+    {
+      "id": "tripadvisor",
+      "actif": false,
+      "valeur": ""
     }
   ]
 }
