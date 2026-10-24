@@ -89,6 +89,17 @@ function normaliser(cfg) {
   return cfg;
 }
 
+/* Modèles de disposition */
+const DISPOSITIONS = {
+  centre:  { nom: 'Centré' },
+  haut:    { nom: 'Boutons en haut' },
+  bas:     { nom: 'Boutons en bas' },
+  gauche:  { nom: 'Barre à gauche', ronds: true },
+  droite:  { nom: 'Barre à droite', ronds: true },
+  carte:   { nom: 'Carte de visite' },
+  affiche: { nom: 'Affiche' }
+};
+
 const CONFIG_DEFAUT = {
   titre: 'Nom de l’établissement',
   sousTitre: 'Merci de votre visite !',
@@ -97,7 +108,7 @@ const CONFIG_DEFAUT = {
   design: {
     theme: 'sable', fond: '#f5f1ea', fond2: '#e9e0d2', texte: '#2b2620', accent: '#2b2620',
     imageFond: '', voile: 40, police: 'moderne', forme: 'arrondi', style: 'plein',
-    ombre: true, carte: false, logoRond: false, nomsReseaux: false, reseauxTheme: false, tousRonds: false
+    ombre: true, carte: false, logoRond: false, nomsReseaux: false, reseauxTheme: false, tousRonds: false, disposition: 'centre'
   },
   boutons: []
 };
@@ -216,6 +227,38 @@ const CSS_PAGE = `
 .qp-ombre .qp-rs-rond{box-shadow:0 6px 16px rgba(0,0,0,.18)}
 .qp-rs-ico{width:28px;height:28px;-webkit-mask:var(--ico) center/contain no-repeat;mask:var(--ico) center/contain no-repeat}
 .qp-rs-item.vide{opacity:.4}
+.qp-entete-txt{min-width:0}
+/* --- Dispositions --- */
+.qp-dispo-haut,.qp-dispo-bas,.qp-dispo-gauche,.qp-dispo-droite{align-items:stretch}
+.qp-dispo-haut .qp-contenu,.qp-dispo-bas .qp-contenu{display:flex;flex-direction:column}
+.qp-dispo-haut .qp-btns{order:-1;margin-bottom:24px}
+.qp-dispo-haut .qp-entete{margin:auto 0}
+.qp-dispo-bas .qp-entete{margin:auto 0 30px}
+.qp-dispo-bas .qp-pied{margin-top:18px}
+.qp-dispo-gauche .qp-contenu,.qp-dispo-droite .qp-contenu{display:grid;grid-template-columns:78px 1fr;
+  grid-template-areas:"zone entete" "zone pied";grid-template-rows:1fr auto;column-gap:14px;max-width:560px}
+.qp-dispo-droite .qp-contenu{grid-template-columns:1fr 78px;grid-template-areas:"entete zone" "pied zone"}
+.qp-dispo-gauche .qp-btns,.qp-dispo-droite .qp-btns{grid-area:zone;align-self:center}
+.qp-dispo-gauche .qp-entete,.qp-dispo-droite .qp-entete{grid-area:entete;align-self:center}
+.qp-dispo-gauche .qp-pied,.qp-dispo-droite .qp-pied{grid-area:pied}
+.qp-dispo-gauche .qp-rs,.qp-dispo-droite .qp-rs{grid-template-columns:1fr;gap:14px}
+.qp-dispo-gauche .qp-rs-rond,.qp-dispo-droite .qp-rs-rond{width:56px;height:56px}
+.qp-dispo-gauche .qp-titre,.qp-dispo-droite .qp-titre{font-size:1.5rem}
+.qp-dispo-carte .qp-contenu{text-align:left}
+.qp-dispo-carte .qp-entete{display:flex;align-items:center;gap:16px;margin-bottom:26px}
+.qp-dispo-carte .qp-logo{margin:0;max-width:86px;max-height:86px;flex-shrink:0}
+.qp-dispo-carte .qp-logo-rond{width:86px;height:86px}
+.qp-dispo-carte .qp-titre{font-size:1.4rem;margin-bottom:4px}
+.qp-dispo-carte .qp-sous{margin:0;font-size:.95rem}
+.qp-dispo-carte .qp-rs{grid-template-columns:repeat(4,1fr)}
+.qp-dispo-carte .qp-rs-rond{width:56px;height:56px}
+.qp-dispo-affiche{align-items:flex-end}
+.qp-dispo-affiche .qp-contenu{text-align:left;padding-bottom:12px}
+.qp-dispo-affiche .qp-logo{margin:0 0 16px;max-width:90px;max-height:90px}
+.qp-dispo-affiche .qp-logo-rond{width:80px;height:80px}
+.qp-dispo-affiche .qp-titre{font-size:2.4rem;line-height:1.05;margin-bottom:10px}
+.qp-dispo-affiche .qp-rs{grid-template-columns:repeat(4,56px);justify-content:start;gap:14px}
+.qp-dispo-affiche .qp-rs-rond{width:56px;height:56px}
 .qp-pied{margin-top:28px;font-size:.85rem;opacity:.65;line-height:1.5;white-space:pre-line}
 .qp-vide{opacity:.55;font-size:.95rem;padding:20px 0}
 `;
@@ -264,7 +307,9 @@ function rendrePage(cfgBrut, racine, opts) {
 
   racine.innerHTML = '';
   const page = doc.createElement('div');
-  page.className = 'qp' + (d.carte ? ' qp-carte' : '') + (d.ombre ? ' qp-ombre' : '');
+  const dispo = DISPOSITIONS[d.disposition] ? d.disposition : 'centre';
+  const ronds = d.tousRonds || !!DISPOSITIONS[dispo].ronds;
+  page.className = 'qp qp-dispo-' + dispo + (d.carte ? ' qp-carte' : '') + (d.ombre ? ' qp-ombre' : '');
   const p = page.style;
   p.setProperty('--fond', d.fond);
   p.setProperty('--fond2', d.fond2 || d.fond);
@@ -285,25 +330,32 @@ function rendrePage(cfgBrut, racine, opts) {
   const c = doc.createElement('div');
   c.className = 'qp-contenu';
 
+  const entete = doc.createElement('div');
+  entete.className = 'qp-entete';
+  const texteEntete = doc.createElement('div');
+  texteEntete.className = 'qp-entete-txt';
   if (cfg.logo) {
     const img = doc.createElement('img');
     img.className = 'qp-logo' + (d.logoRond ? ' qp-logo-rond' : '');
     img.src = res(cfg.logo);
     img.alt = cfg.titre || '';
-    c.appendChild(img);
+    entete.appendChild(img);
   }
   if (cfg.titre) {
     const h = doc.createElement('h1');
     h.className = 'qp-titre';
     h.textContent = cfg.titre;
-    c.appendChild(h);
+    texteEntete.appendChild(h);
   }
   if (cfg.sousTitre) {
     const s = doc.createElement('p');
     s.className = 'qp-sous';
     s.textContent = cfg.sousTitre;
-    c.appendChild(s);
+    texteEntete.appendChild(s);
   }
+
+  entete.appendChild(texteEntete);
+  c.appendChild(entete);
 
   const zone = doc.createElement('div');
   zone.className = 'qp-btns';
@@ -317,7 +369,7 @@ function rendrePage(cfgBrut, racine, opts) {
     if (b.type === 'reseaux') {
       const items = cfg.reseaux.filter(r => r.actif && (opts.apercu || String(r.valeur || '').trim()));
       if (!items.length) return;
-      if (!d.tousRonds || !grille) nouvelleGrille();
+      if (!ronds || !grille) nouvelleGrille();
       items.forEach(r => {
         const R = RESEAUX[r.id];
         grille.appendChild(creerRond(doc, {
@@ -326,11 +378,11 @@ function rendrePage(cfgBrut, racine, opts) {
           nomVisible: d.nomsReseaux, apercu: opts.apercu
         }));
       });
-      if (!d.tousRonds) grille = null;
+      if (!ronds) grille = null;
       nbAffiches++;
       return;
     }
-    if (d.tousRonds) {
+    if (ronds) {
       if (!opts.apercu && !String(b.valeur || '').trim()) return; // pas de lien : pas d'icône
       nbAffiches++;
       if (!grille) nouvelleGrille();

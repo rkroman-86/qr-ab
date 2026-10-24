@@ -103,6 +103,12 @@
 
     .bouton-carte{border:1px solid var(--ligne);border-radius:14px;padding:12px;margin-bottom:12px;background:var(--bg)}
     .bouton-carte.masque{opacity:.55}
+    .dispos{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:10px}
+    .dispo{border:2px solid var(--ligne);border-radius:14px;background:var(--bg);padding:8px 6px 6px;cursor:pointer;color:var(--txt);
+      display:flex;flex-direction:column;align-items:center;gap:6px}
+    .dispo svg{width:54px;height:90px;border:1px solid var(--ligne);border-radius:8px;background:var(--panneau)}
+    .dispo b{font-size:.76rem;line-height:1.2;text-align:center}
+    .dispo.actif{border-color:var(--prim);background:color-mix(in srgb,var(--prim) 8%,var(--bg))}
     .afficher{display:inline-flex;align-items:center;gap:6px;font-weight:600;font-size:.88rem;min-height:36px}
     .afficher input,.rs-tete input[type=checkbox]{width:20px;height:20px}
     .bloc-rs{border-style:dashed}
@@ -394,6 +400,24 @@
     });
     f.appendChild(section('boutons', 'Boutons et réseaux', true, [liste, el('div', { class: 'ajout' }, [choixAjout])]));
 
+    /* Disposition */
+    const dispos = el('div', { class: 'dispos' });
+    Object.keys(DISPOSITIONS).forEach(k => {
+      const b = el('button', { type: 'button', class: 'dispo' + ((d.disposition || 'centre') === k ? ' actif' : '') });
+      b.innerHTML = miniature(k);
+      b.appendChild(el('b', { text: DISPOSITIONS[k].nom }));
+      b.addEventListener('click', () => {
+        d.disposition = k;
+        dispos.querySelectorAll('.dispo').forEach(x => x.classList.toggle('actif', x === b));
+        changement();
+      });
+      dispos.appendChild(b);
+    });
+    f.appendChild(section('dispo', 'Disposition', true, [
+      dispos,
+      el('div', { class: 'aide', style: 'margin:10px 0 0', text: 'Les barres à gauche et à droite utilisent toujours les icônes rondes.' })
+    ]));
+
     /* Logo */
     f.appendChild(section('logo', 'Logo', false, [
       choixImage('Image du logo', cfg, 'logo', { nom: 'logo', max: 600 }),
@@ -500,6 +524,27 @@
       ])
     );
     return carte;
+  }
+
+  /* Schéma miniature d'une disposition (formes simples) */
+  function miniature(k) {
+    const L = 'currentColor', A = 'var(--prim)';
+    const logo = (x, y, r) => '<circle cx="' + x + '" cy="' + y + '" r="' + r + '" fill="' + L + '" opacity=".35"/>';
+    const barre = (x, y, w, h, o) => '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + (h || 4) + '" rx="2" fill="' + L + '" opacity="' + (o || .55) + '"/>';
+    const pts = (pos) => pos.map(p => '<circle cx="' + p[0] + '" cy="' + p[1] + '" r="' + (p[2] || 5) + '" fill="' + A + '"/>').join('');
+    const grille = (x0, y0, n, pas) => { const a = []; for (let i = 0; i < n; i++) a.push([x0 + (i % 3) * pas, y0 + Math.floor(i / 3) * pas]); return a; };
+    const col = (x, y0, n, pas) => { const a = []; for (let i = 0; i < n; i++) a.push([x, y0 + i * pas]); return a; };
+    let c = '';
+    switch (k) {
+      case 'haut':    c = pts(grille(18, 14, 3, 12)) + logo(30, 48, 7) + barre(16, 60, 28) + barre(20, 67, 20, 3, .35); break;
+      case 'bas':     c = logo(30, 26, 7) + barre(16, 38, 28) + barre(20, 45, 20, 3, .35) + pts(grille(18, 72, 6, 12)); break;
+      case 'gauche':  c = pts(col(11, 26, 5, 12)) + logo(38, 36, 7) + barre(26, 48, 24) + barre(29, 55, 18, 3, .35); break;
+      case 'droite':  c = pts(col(49, 26, 5, 12)) + logo(22, 36, 7) + barre(10, 48, 24) + barre(13, 55, 18, 3, .35); break;
+      case 'carte':   c = logo(15, 30, 7) + barre(26, 26, 26) + barre(26, 33, 18, 3, .35) + pts(grille(14, 52, 6, 12).map(p => [p[0], p[1], 4.5])); break;
+      case 'affiche': c = '<rect x="0" y="0" width="60" height="100" fill="' + L + '" opacity=".08"/>' + logo(13, 50, 5) + barre(8, 60, 40, 7, .7) + barre(8, 71, 30, 3, .35) + pts([[13, 84], [26, 84], [39, 84]]); break;
+      default:        c = logo(30, 26, 8) + barre(16, 40, 28) + barre(20, 47, 20, 3, .35) + pts(grille(18, 62, 6, 12));
+    }
+    return '<svg viewBox="0 0 60 100" aria-hidden="true">' + c + '</svg>';
   }
 
   function carteBouton(b, i) {
