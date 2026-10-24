@@ -103,6 +103,12 @@
 
     .bouton-carte{border:1px solid var(--ligne);border-radius:14px;padding:12px;margin-bottom:12px;background:var(--bg)}
     .bouton-carte.masque{opacity:.55}
+    .qr-bloc{display:flex;flex-direction:column;align-items:center;gap:10px}
+    .qr-apercu{width:200px;height:200px;border-radius:14px;border:1px solid var(--ligne)}
+    .qr-url{font-size:.82rem;color:var(--doux);word-break:break-all;text-align:center}
+    .qr-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+    .carte-zone{display:flex;flex-direction:column;gap:10px;margin-top:12px}
+    .carte-apercu{width:100%;border-radius:12px;box-shadow:0 6px 24px rgba(0,0,0,.2)}
     .dispos{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:10px}
     .dispo{border:2px solid var(--ligne);border-radius:14px;background:var(--bg);padding:8px 6px 6px;cursor:pointer;color:var(--txt);
       display:flex;flex-direction:column;align-items:center;gap:6px}
@@ -178,6 +184,7 @@
 </div>
 
 <script src="commun.js"></script>
+<script src="qrcode.js"></script>
 <script>
 (function(){
   'use strict';
@@ -468,6 +475,9 @@
       el('span', { class: 'etiq', text: 'Assombrir l’image de fond' }), voile
     ]));
 
+    /* QR code et carte de visite */
+    f.appendChild(sectionPartage());
+
     /* Liens utiles */
     const urlPublique = location.href.replace(/admin\.html.*$/, '');
     f.appendChild(el('p', { style: 'text-align:center;color:var(--doux);font-size:.88rem;margin:18px 0' }, [
@@ -527,6 +537,230 @@
   }
 
   /* Schéma miniature d'une disposition (formes simples) */
+  /* =============== QR code et carte de visite =============== */
+  const URL_PUBLIQUE = location.href.replace(/admin\.html.*$/, '').replace(/[?#].*$/, '');
+
+  // Dessine le QR code sur un contexte 2D (zone carrée x, y, taille)
+  function dessinerQR(ctx, texte, x, y, taille, couleur) {
+    const qr = qrcode(0, 'M');
+    qr.addData(texte);
+    qr.make();
+    const n = qr.getModuleCount();
+    const m = taille / n;
+    ctx.fillStyle = couleur || '#000';
+    for (let r = 0; r < n; r++)
+      for (let c = 0; c < n; c++)
+        if (qr.isDark(r, c)) ctx.fillRect(Math.floor(x + c * m), Math.floor(y + r * m), Math.ceil(m), Math.ceil(m));
+  }
+
+  function canvasQR(taillePx) {
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = taillePx;
+    const ctx = cv.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, taillePx, taillePx);
+    const marge = Math.round(taillePx * 0.08);
+    dessinerQR(ctx, URL_PUBLIQUE, marge, marge, taillePx - 2 * marge);
+    return cv;
+  }
+
+  function telecharger(cv, nom, type, qualite) {
+    cv.toBlob(blob => {
+      const url = URL.createObjectURL(blob);
+      const a = el('a', { href: url, download: nom });
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+    }, type, qualite);
+  }
+
+  function chargerImage(src) {
+    return new Promise((ok, ko) => {
+      if (!src) return ok(null);
+      const im = new Image();
+      if (/^https?:/i.test(src)) im.crossOrigin = 'anonymous';
+      im.onload = () => ok(im);
+      im.onerror = () => ok(null);
+      im.src = src;
+    });
+  }
+
+  function formaterNumero(v) {
+    const n = numeroInternational(v);
+    if (/^33\d{9}$/.test(n)) return '+33 ' + n[2] + ' ' + n.slice(3).match(/../g).join(' ');
+    return '+' + n;
+  }
+
+  // Coordonnées à imprimer, tirées des boutons visibles
+  function coordonnees() {
+    const lignes = [];
+    const vus = {};
+    const ajout = (etiq, val) => { if (val && !vus[val]) { vus[val] = 1; lignes.push([etiq, val]); } };
+    const btns = cfg.boutons.filter(b => b && !b.masque && b.type !== 'reseaux' && String(b.valeur || '').trim());
+    const tel = btns.find(b => b.type === 'tel') || btns.find(b => b.type === 'sms'), wa = btns.find(b => b.type === 'whatsapp');
+    if (tel && wa && numeroInternational(tel.valeur) === numeroInternational(wa.valeur)) ajout('Tél. / WhatsApp', formaterNumero(tel.valeur));
+    else { if (tel) ajout('Tél.', formaterNumero(tel.valeur)); if (wa) ajout('WhatsApp', formaterNumero(wa.valeur)); }
+    btns.filter(b => b.type === 'email').forEach(b => ajout('E-mail', b.valeur.trim()));
+    const site = cfg.reseaux.find(r => r.id === 'site' && r.actif && String(r.valeur || '').trim());
+    const lienWeb = site ? site.valeur : (btns.find(b => b.type === 'lien') || {}).valeur;
+    if (lienWeb) ajout('Web', String(lienWeb).trim().replace(/^https?:\/\//i, '').replace(/\/$/, ''));
+    const insta = cfg.reseaux.find(r => r.id === 'instagram' && r.actif && String(r.valeur || '').trim());
+    if (insta && lignes.length < 4) ajout('Instagram', '@' + String(insta.valeur).trim().replace(/^https?:\/\/(www\.)?instagram\.com\//i, '').replace(/^@/, '').replace(/\/.*$/, ''));
+    return lignes.slice(0, 4);
+  }
+
+  // Ajuste la taille de police pour tenir dans une largeur
+  function policeAjustee(ctx, texte, poids, tailleMax, tailleMin, largeur, famille) {
+    let t = tailleMax;
+    do { ctx.font = poids + ' ' + t + 'px ' + famille; t -= 4; } while (ctx.measureText(texte).width > largeur && t > tailleMin);
+    return ctx.font;
+  }
+
+  function coupeLignes(ctx, texte, largeur, max) {
+    const mots = String(texte).split(/\s+/), lignes = [];
+    let l = '';
+    mots.forEach(m => {
+      const essai = l ? l + ' ' + m : m;
+      if (ctx.measureText(essai).width > largeur && l) { lignes.push(l); l = m; } else l = essai;
+    });
+    if (l) lignes.push(l);
+    if (lignes.length > max) { lignes.length = max; lignes[max - 1] = lignes[max - 1].replace(/\s*\S*$/, '') + '…'; }
+    return lignes;
+  }
+
+  function rectArrondi(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+  }
+
+  // Carte de visite 85 × 55 mm à 600 dpi
+  async function genererCarte() {
+    const W = 2008, H = 1300, P = 110;
+    const d = cfg.design;
+    const fam = (FONTS[d.police] || FONTS.moderne).css;
+    const res = p => imagesLocales[p] || p;
+    const cv = document.createElement('canvas');
+    cv.width = W; cv.height = H;
+    const ctx = cv.getContext('2d');
+
+    // Fond
+    const fondImg = await chargerImage(d.imageFond ? res(d.imageFond) : '');
+    if (fondImg) {
+      const k = Math.max(W / fondImg.width, H / fondImg.height);
+      const w = fondImg.width * k, h = fondImg.height * k;
+      ctx.drawImage(fondImg, (W - w) / 2, (H - h) / 2, w, h);
+      ctx.fillStyle = 'rgba(0,0,0,' + Math.max(0.5, (Number(d.voile) || 0) / 100) + ')';
+      ctx.fillRect(0, 0, W, H);
+    } else {
+      const g = ctx.createLinearGradient(0, 0, W * 0.4, H);
+      g.addColorStop(0, d.fond); g.addColorStop(1, d.fond2 || d.fond);
+      ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    }
+    const coulTexte = fondImg ? '#ffffff' : d.texte;
+    const accent = d.accent;
+
+    // Bloc QR à droite
+    const qrBoite = 600, qrH = 700;
+    const bx = W - P - qrBoite, by = (H - qrH) / 2;
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,.25)'; ctx.shadowBlur = 40; ctx.shadowOffsetY = 10;
+    ctx.fillStyle = '#ffffff'; rectArrondi(ctx, bx, by, qrBoite, qrH, 44); ctx.fill();
+    ctx.restore();
+    dessinerQR(ctx, URL_PUBLIQUE, bx + 50, by + 50, qrBoite - 100, '#111');
+    ctx.fillStyle = '#111'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+    ctx.font = '700 46px ' + fam;
+    ctx.fillText('Scannez-moi', bx + qrBoite / 2, by + qrH - 42);
+    ctx.textAlign = 'left';
+
+    // Colonne de gauche
+    const L = bx - P - 90;
+    let y = P;
+    const logo = await chargerImage(cfg.logo ? res(cfg.logo) : '');
+    if (logo) {
+      const T = 230;
+      if (d.logoRond) {
+        ctx.save(); ctx.beginPath(); ctx.arc(P + T / 2, y + T / 2, T / 2, 0, Math.PI * 2); ctx.closePath(); ctx.clip();
+        const k = Math.max(T / logo.width, T / logo.height);
+        ctx.drawImage(logo, P + (T - logo.width * k) / 2, y + (T - logo.height * k) / 2, logo.width * k, logo.height * k);
+        ctx.restore();
+      } else {
+        const k = Math.min(T / logo.width, T / logo.height);
+        ctx.drawImage(logo, P, y + (T - logo.height * k) / 2, logo.width * k, logo.height * k);
+      }
+      y += T + 60;
+    } else y += 40;
+
+    ctx.fillStyle = coulTexte; ctx.textBaseline = 'top';
+    if (cfg.titre) {
+      ctx.font = policeAjustee(ctx, cfg.titre, '800', 124, 64, L, fam);
+      const t = parseInt(ctx.font.match(/(\d+)px/)[1], 10);
+      ctx.fillText(cfg.titre, P, y);
+      y += t * 1.18;
+    }
+    if (cfg.sousTitre) {
+      ctx.font = '400 54px ' + fam;
+      ctx.globalAlpha = 0.82;
+      coupeLignes(ctx, cfg.sousTitre, L, 2).forEach(l => { ctx.fillText(l, P, y); y += 68; });
+      ctx.globalAlpha = 1;
+    }
+    y += 30;
+    ctx.fillStyle = accent; ctx.fillRect(P, y, 130, 8);
+    y += 56;
+
+    coordonnees().forEach(([etiq, val]) => {
+      ctx.font = '700 40px ' + fam; ctx.fillStyle = accent;
+      ctx.fillText(etiq.toUpperCase(), P, y);
+      ctx.font = '600 56px ' + fam; ctx.fillStyle = coulTexte;
+      ctx.font = policeAjustee(ctx, val, '600', 56, 34, L, fam);
+      ctx.fillText(val, P, y + 46);
+      y += 128;
+    });
+
+    if (cfg.pied) {
+      ctx.font = '500 40px ' + fam; ctx.fillStyle = coulTexte; ctx.globalAlpha = .7; ctx.textBaseline = 'alphabetic';
+      ctx.fillText(String(cfg.pied).split('\n')[0], P, H - P + 30);
+      ctx.globalAlpha = 1;
+    }
+    return cv;
+  }
+
+  function sectionPartage() {
+    const apercuQR = canvasQR(480);
+    apercuQR.className = 'qr-apercu';
+    const lien = el('div', { class: 'qr-url', text: URL_PUBLIQUE });
+    const btnQR = el('button', { type: 'button', class: 'btn btn-mini', text: '⬇ QR code (PNG)', onclick: () => telecharger(canvasQR(1200), 'qr-code.png', 'image/png') });
+    const btnCopier = el('button', { type: 'button', class: 'btn btn-mini', text: 'Copier le lien' });
+    btnCopier.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(URL_PUBLIQUE); btnCopier.textContent = '✓ Copié'; }
+      catch (e) { prompt('Lien de la page :', URL_PUBLIQUE); }
+      setTimeout(() => (btnCopier.textContent = 'Copier le lien'), 2000);
+    });
+
+    const zoneCarte = el('div', { class: 'carte-zone' });
+    const btnCarte = el('button', { type: 'button', class: 'btn btn-prim btn-plein', text: 'Créer la carte de visite' });
+    btnCarte.addEventListener('click', async () => {
+      btnCarte.disabled = true; btnCarte.textContent = 'Création…';
+      try {
+        const cv = await genererCarte();
+        zoneCarte.innerHTML = '';
+        const img = el('img', { class: 'carte-apercu', alt: 'Carte de visite', src: cv.toDataURL('image/jpeg', 0.85) });
+        const nom = 'carte-visite-' + (cfg.titre || 'page').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '.jpg';
+        zoneCarte.append(img,
+          el('button', { type: 'button', class: 'btn btn-plein', text: '⬇ Télécharger la carte (JPEG)', onclick: () => telecharger(cv, nom, 'image/jpeg', 0.95) }),
+          el('div', { class: 'aide', style: 'margin:8px 0 0', text: 'Format 85 × 55 mm, haute définition (600 dpi), prêt pour l’imprimeur.' }));
+      } catch (e) { alert('Impossible de créer la carte : ' + e.message); }
+      btnCarte.disabled = false; btnCarte.textContent = 'Recréer la carte de visite';
+    });
+
+    return section('partage', 'QR code et carte de visite', false, [
+      el('div', { class: 'qr-bloc' }, [apercuQR, lien, el('div', { class: 'qr-actions' }, [btnQR, btnCopier])]),
+      el('div', { style: 'height:16px' }),
+      el('span', { class: 'etiq', text: 'Carte de visite' }),
+      el('div', { class: 'aide', style: 'margin:0 0 10px', text: 'Créée à partir de la page telle qu’elle est affichée : fond, logo, nom, coordonnées des boutons et QR code.' }),
+      btnCarte, zoneCarte
+    ]);
+  }
+
   function miniature(k) {
     const L = 'currentColor', A = 'var(--prim)';
     const logo = (x, y, r) => '<circle cx="' + x + '" cy="' + y + '" r="' + r + '" fill="' + L + '" opacity=".35"/>';
