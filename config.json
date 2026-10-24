@@ -32,7 +32,7 @@
       "couleur": "#25D366"
     },
     {
-      "icone": "📞",
+      "icone": "📨",
       "texte": "Appeler",
       "type": "sms",
       "valeur": "+33 6 50 39 10 24",
@@ -51,6 +51,14 @@
     {
       "type": "reseaux",
       "masque": false
+    },
+    {
+      "icone": "✉️",
+      "texte": "Nous écrire",
+      "type": "email",
+      "valeur": "",
+      "message": "",
+      "couleur": ""
     }
   ],
   "reseaux": [
