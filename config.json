@@ -54,12 +54,12 @@
   "reseaux": [
     {
       "id": "facebook",
-      "actif": true,
+      "actif": false,
       "valeur": ""
     },
     {
       "id": "instagram",
-      "actif": true,
+      "actif": false,
       "valeur": ""
     },
     {
@@ -89,7 +89,7 @@
     },
     {
       "id": "telegram",
-      "actif": true,
+      "actif": false,
       "valeur": ""
     },
     {
