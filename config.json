@@ -44,7 +44,8 @@
       "type": "avis",
       "valeur": "",
       "message": "",
-      "couleur": "#4285F4"
+      "couleur": "#4285F4",
+      "masque": false
     },
     {
       "type": "reseaux"
