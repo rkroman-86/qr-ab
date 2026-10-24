@@ -32,6 +32,46 @@ const TYPES = {
   lien:     { nom: 'Lien web',     aide: 'Adresse du site, Instagram, menu…' }
 };
 
+/* Réseaux sociaux : icônes rondes (bibliothèque libre Simple Icons, chargée depuis jsDelivr) */
+const ICONES_CDN = 'https://cdn.jsdelivr.net/npm/simple-icons@16/icons/';
+const GLOBE_SVG = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2"><circle cx="12" cy="12" r="9.5"/><path d="M2.5 12h19M12 2.5c2.8 3 2.8 16 0 19M12 2.5c-2.8 3-2.8 16 0 19"/></svg>');
+const RESEAUX = {
+  facebook:  { nom: 'Facebook',  coul: '#1877F2', aide: 'Nom de la page ou lien',     url: v => 'https://www.facebook.com/' + v },
+  instagram: { nom: 'Instagram', coul: '#E4405F', aide: 'Nom d’utilisateur ou lien',  url: v => 'https://www.instagram.com/' + v },
+  x:         { nom: 'X',         coul: '#000000', aide: 'Nom d’utilisateur ou lien',  url: v => 'https://x.com/' + v },
+  snapchat:  { nom: 'Snapchat',  coul: '#FFFC00', aide: 'Nom d’utilisateur ou lien',  url: v => 'https://www.snapchat.com/add/' + v },
+  tiktok:    { nom: 'TikTok',    coul: '#000000', aide: 'Nom d’utilisateur ou lien',  url: v => 'https://www.tiktok.com/@' + v },
+  site:      { nom: 'Site web',  coul: '#4B5563', aide: 'Adresse du site',            url: v => 'https://' + v, icone: GLOBE_SVG },
+  youtube:   { nom: 'YouTube',   coul: '#FF0000', aide: 'Nom de la chaîne ou lien',   url: v => 'https://www.youtube.com/@' + v },
+  telegram:  { nom: 'Telegram',  coul: '#26A5E4', aide: 'Nom d’utilisateur ou lien',  url: v => 'https://t.me/' + v },
+  tripadvisor:{ nom: 'Tripadvisor', coul: '#34E0A1', aide: 'Lien de la fiche',        url: v => 'https://' + v }
+};
+const RESEAUX_ACTIFS_DEFAUT = ['facebook', 'instagram', 'x', 'snapchat', 'tiktok', 'site'];
+
+function iconeReseau(id) { return (RESEAUX[id] && RESEAUX[id].icone) || (ICONES_CDN + id + '.svg'); }
+
+function lienReseau(id, valeur) {
+  let v = String(valeur || '').trim();
+  if (!v || !RESEAUX[id]) return '#';
+  if (estURL(v)) return lienSur(v);
+  if (/^(www\.|[a-z0-9-]+\.[a-z]{2,})/i.test(v) && v.includes('.') && id !== 'site') return lienSur('https://' + v);
+  if (id === 'site' || id === 'tripadvisor') return lienSur('https://' + v);
+  v = v.replace(/^@/, '').replace(/[^\w.\-]/g, '');
+  return lienSur(RESEAUX[id].url(v));
+}
+
+/* Complète une configuration ancienne : liste des réseaux + bloc d'icônes dans les boutons */
+function normaliser(cfg) {
+  const liste = Array.isArray(cfg.reseaux) ? cfg.reseaux.filter(r => r && RESEAUX[r.id]) : [];
+  Object.keys(RESEAUX).forEach(id => {
+    if (!liste.some(r => r.id === id)) liste.push({ id, actif: RESEAUX_ACTIFS_DEFAUT.includes(id), valeur: '' });
+  });
+  cfg.reseaux = liste;
+  if (!Array.isArray(cfg.boutons)) cfg.boutons = [];
+  if (!cfg.boutons.some(b => b && b.type === 'reseaux')) cfg.boutons.push({ type: 'reseaux' });
+  return cfg;
+}
+
 const CONFIG_DEFAUT = {
   titre: 'Nom de l’établissement',
   sousTitre: 'Merci de votre visite !',
@@ -40,7 +80,7 @@ const CONFIG_DEFAUT = {
   design: {
     theme: 'sable', fond: '#f5f1ea', fond2: '#e9e0d2', texte: '#2b2620', accent: '#2b2620',
     imageFond: '', voile: 40, police: 'moderne', forme: 'arrondi', style: 'plein',
-    ombre: true, carte: false, logoRond: false
+    ombre: true, carte: false, logoRond: false, nomsReseaux: false, reseauxTheme: false
   },
   boutons: []
 };
@@ -143,6 +183,14 @@ const CSS_PAGE = `
 .qp-btn:active{transform:scale(.97)}
 .qp-ombre .qp-btn{box-shadow:0 6px 16px rgba(0,0,0,.14)}
 .qp-ico{font-size:1.2em;line-height:1}
+.qp-rs{display:grid;grid-template-columns:repeat(3,1fr);gap:16px 10px;justify-items:center;padding:8px 0}
+.qp-rs-item{display:flex;flex-direction:column;align-items:center;gap:6px;text-decoration:none;color:inherit;
+  font-size:.78rem;font-weight:600;-webkit-tap-highlight-color:transparent;transition:transform .12s}
+.qp-rs-item:active{transform:scale(.92)}
+.qp-rs-rond{width:62px;height:62px;border-radius:50%;display:flex;align-items:center;justify-content:center}
+.qp-ombre .qp-rs-rond{box-shadow:0 6px 16px rgba(0,0,0,.18)}
+.qp-rs-ico{width:28px;height:28px;-webkit-mask:var(--ico) center/contain no-repeat;mask:var(--ico) center/contain no-repeat}
+.qp-rs-item.vide{opacity:.4}
 .qp-pied{margin-top:28px;font-size:.85rem;opacity:.65;line-height:1.5;white-space:pre-line}
 .qp-vide{opacity:.55;font-size:.95rem;padding:20px 0}
 `;
@@ -214,8 +262,41 @@ function rendrePage(cfgBrut, racine, opts) {
 
   const zone = doc.createElement('div');
   zone.className = 'qp-btns';
-  const visibles = (cfg.boutons || []).filter(b => b && b.texte && !b.masque);
+  normaliser(cfg);
+  const visibles = (cfg.boutons || []).filter(b => b && !b.masque && (b.type === 'reseaux' || b.texte));
+  let nbAffiches = 0;
   visibles.forEach(b => {
+    if (b.type === 'reseaux') {
+      const items = cfg.reseaux.filter(r => r.actif && (opts.apercu || String(r.valeur || '').trim()));
+      if (!items.length) return;
+      const grille = doc.createElement('div');
+      grille.className = 'qp-rs';
+      items.forEach(r => {
+        const R = RESEAUX[r.id];
+        const a = doc.createElement('a');
+        a.className = 'qp-rs-item' + (String(r.valeur || '').trim() ? '' : ' vide');
+        a.href = lienReseau(r.id, r.valeur);
+        a.setAttribute('aria-label', R.nom);
+        if (/^https?:/i.test(a.getAttribute('href'))) { a.target = '_blank'; a.rel = 'noopener'; }
+        if (opts.apercu) a.addEventListener('click', e => e.preventDefault());
+        const rond = doc.createElement('span');
+        rond.className = 'qp-rs-rond';
+        const fondRond = d.reseauxTheme ? d.accent : R.coul;
+        rond.style.background = fondRond;
+        const ico = doc.createElement('span');
+        ico.className = 'qp-rs-ico';
+        ico.style.setProperty('--ico', 'url("' + iconeReseau(r.id) + '")');
+        ico.style.background = texteContraste(fondRond);
+        rond.appendChild(ico);
+        a.appendChild(rond);
+        if (d.nomsReseaux) { const n = doc.createElement('span'); n.textContent = R.nom; a.appendChild(n); }
+        grille.appendChild(a);
+      });
+      zone.appendChild(grille);
+      nbAffiches++;
+      return;
+    }
+    nbAffiches++;
     const a = doc.createElement('a');
     a.className = 'qp-btn';
     a.href = construireLien(b);
@@ -244,7 +325,7 @@ function rendrePage(cfgBrut, racine, opts) {
     if (opts.apercu) a.addEventListener('click', e => e.preventDefault());
     zone.appendChild(a);
   });
-  if (!visibles.length && opts.apercu) {
+  if (!nbAffiches && opts.apercu) {
     const v = doc.createElement('div');
     v.className = 'qp-vide';
     v.textContent = 'Aucun bouton pour l’instant';

@@ -103,6 +103,19 @@
 
     .bouton-carte{border:1px solid var(--ligne);border-radius:14px;padding:12px;margin-bottom:12px;background:var(--bg)}
     .bouton-carte.masque{opacity:.55}
+    .afficher{display:inline-flex;align-items:center;gap:6px;font-weight:600;font-size:.88rem;min-height:36px}
+    .afficher input,.rs-tete input[type=checkbox]{width:20px;height:20px}
+    .bloc-rs{border-style:dashed}
+    .rs-titre{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+    .aide-inline{font-size:.8rem;color:var(--doux)}
+    .rs-ligne{padding:10px 0;border-top:1px solid var(--ligne)}
+    .rs-ligne.off input[type=text]{display:none}
+    .rs-ligne.off .rs-ico,.rs-ligne.off b{opacity:.45}
+    .rs-tete{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+    .rs-ligne.off .rs-tete{margin-bottom:0}
+    .rs-tete .esp{flex:1}
+    .rs-ico{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+    .rs-ico i{width:15px;height:15px;-webkit-mask:var(--ico) center/contain no-repeat;mask:var(--ico) center/contain no-repeat}
     .bc-haut{display:flex;gap:8px;margin-bottom:10px}
     .bc-haut .ico{width:56px;text-align:center;font-size:1.2rem;padding:8px 4px}
     .bc-actions{display:flex;gap:6px;align-items:center;margin-top:10px;flex-wrap:wrap}
@@ -187,7 +200,7 @@
     await gh.verifier();
     const f = await gh.lire('config.json');
     shaConfig = f ? f.sha : null;
-    cfg = fusion(CONFIG_DEFAUT, f ? JSON.parse(f.texte) : {});
+    cfg = normaliser(fusion(CONFIG_DEFAUT, f ? JSON.parse(f.texte) : {}));
     $('#connexion').classList.add('cache');
     $('#editeur').classList.remove('cache');
     construireFormulaire();
@@ -343,7 +356,6 @@
     avis:      { icone: '⭐', texte: 'Laisser un avis Google', type: 'avis', couleur: '#4285F4' },
     whatsapp:  { icone: '💬', texte: 'Réserver sur WhatsApp', type: 'whatsapp', message: 'Bonjour, je souhaite réserver', couleur: '#25D366' },
     tel:       { icone: '📞', texte: 'Appeler', type: 'tel', couleur: '' },
-    instagram: { icone: '📸', texte: 'Instagram', type: 'lien', valeur: 'https://instagram.com/', couleur: '#E1306C' },
     site:      { icone: '🌐', texte: 'Notre site', type: 'lien', couleur: '' },
     maps:      { icone: '📍', texte: 'Itinéraire', type: 'maps', couleur: '' },
     email:     { icone: '✉️', texte: 'Nous écrire', type: 'email', couleur: '' },
@@ -380,7 +392,7 @@
       const cartes = document.querySelectorAll('.bouton-carte');
       if (cartes.length) cartes[cartes.length - 1].scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
-    f.appendChild(section('boutons', 'Boutons (' + cfg.boutons.length + ')', true, [liste, el('div', { class: 'ajout' }, [choixAjout])]));
+    f.appendChild(section('boutons', 'Boutons et réseaux', true, [liste, el('div', { class: 'ajout' }, [choixAjout])]));
 
     /* Logo */
     f.appendChild(section('logo', 'Logo', false, [
@@ -424,6 +436,8 @@
       segments('Style des boutons', { plein: 'Plein', contour: 'Contour', doux: 'Doux' }, d, 'style'),
       bascule('Ombre sous les boutons', d, 'ombre'),
       bascule('Encadrer le contenu (carte)', d, 'carte'),
+      bascule('Noms sous les icônes des réseaux', d, 'nomsReseaux'),
+      bascule('Icônes des réseaux aux couleurs du thème', d, 'reseauxTheme'),
       el('div', { style: 'height:12px' }),
       choixImage('Image de fond', d, 'imageFond', { nom: 'fond', max: 1600, fond: true }),
       el('span', { class: 'etiq', text: 'Assombrir l’image de fond' }), voile
@@ -436,7 +450,59 @@
     ]));
   }
 
+  function caseAfficher(b, carte) {
+    const c = el('input', { type: 'checkbox', checked: !b.masque });
+    c.addEventListener('change', () => { b.masque = !c.checked; carte.classList.toggle('masque', b.masque); changement(); });
+    return el('label', { class: 'afficher' }, [c, 'Afficher']);
+  }
+
+  function deplacerBouton(i, dir) {
+    const j = i + dir; if (j < 0 || j >= cfg.boutons.length) return;
+    [cfg.boutons[i], cfg.boutons[j]] = [cfg.boutons[j], cfg.boutons[i]];
+    construireFormulaire(); changement();
+  }
+
+  /* Bloc d'icônes rondes (réseaux sociaux) */
+  function carteReseaux(b, i) {
+    const n = cfg.boutons.length;
+    const carte = el('div', { class: 'bouton-carte bloc-rs' + (b.masque ? ' masque' : '') });
+    const liste = cfg.reseaux;
+    const lignes = el('div');
+    liste.forEach((r, k) => {
+      const R = RESEAUX[r.id];
+      const ligne = el('div', { class: 'rs-ligne' + (r.actif ? '' : ' off') });
+      const coche = el('input', { type: 'checkbox', checked: !!r.actif, 'aria-label': 'Afficher ' + R.nom });
+      coche.addEventListener('change', () => { r.actif = coche.checked; ligne.classList.toggle('off', !r.actif); changement(); });
+      const ico = el('span', { class: 'rs-ico' }, [el('i')]);
+      ico.style.background = R.coul;
+      ico.firstChild.style.setProperty('--ico', 'url("' + iconeReseau(r.id) + '")');
+      ico.firstChild.style.background = texteContraste(R.coul);
+      const val = el('input', { type: 'text', value: r.valeur || '', placeholder: R.aide, autocapitalize: 'off', autocorrect: 'off', spellcheck: false });
+      val.addEventListener('input', () => { r.valeur = val.value; changement(); });
+      const bouge = dir => { const j = k + dir; if (j < 0 || j >= liste.length) return; [liste[k], liste[j]] = [liste[j], liste[k]]; construireFormulaire(); changement(); };
+      ligne.append(
+        el('div', { class: 'rs-tete' }, [coche, ico, el('b', { text: R.nom }), el('span', { class: 'esp' }),
+          el('button', { type: 'button', class: 'btn btn-mini', text: '↑', disabled: k === 0, onclick: () => bouge(-1) }),
+          el('button', { type: 'button', class: 'btn btn-mini', text: '↓', disabled: k === liste.length - 1, onclick: () => bouge(1) })]),
+        val);
+      lignes.appendChild(ligne);
+    });
+    carte.append(
+      el('div', { class: 'rs-titre' }, [el('b', { text: 'Réseaux sociaux' }), el('span', { class: 'aide-inline', text: 'icônes rondes, 3 par ligne' })]),
+      el('div', { class: 'aide', style: 'margin:4px 0 10px', text: 'Cochez les réseaux à afficher. Seuls ceux qui ont un lien apparaissent sur la page.' }),
+      lignes,
+      el('div', { class: 'bc-actions' }, [
+        el('button', { type: 'button', class: 'btn btn-mini', text: '↑ Bloc', disabled: i === 0, onclick: () => deplacerBouton(i, -1) }),
+        el('button', { type: 'button', class: 'btn btn-mini', text: '↓ Bloc', disabled: i === n - 1, onclick: () => deplacerBouton(i, 1) }),
+        el('span', { class: 'esp' }),
+        caseAfficher(b, carte)
+      ])
+    );
+    return carte;
+  }
+
   function carteBouton(b, i) {
+    if (b.type === 'reseaux') return carteReseaux(b, i);
     const n = cfg.boutons.length;
     const carte = el('div', { class: 'bouton-carte' + (b.masque ? ' masque' : '') });
 
@@ -478,8 +544,7 @@
       construireFormulaire(); changement();
     };
 
-    const masquer = el('button', { type: 'button', class: 'btn btn-mini', text: b.masque ? '👁 Afficher' : '🙈 Masquer' });
-    masquer.addEventListener('click', () => { b.masque = !b.masque; construireFormulaire(); changement(); });
+    const masquer = caseAfficher(b, carte);
 
     carte.append(
       el('div', { class: 'bc-haut' }, [ico, txt]),
