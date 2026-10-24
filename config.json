@@ -4,10 +4,10 @@
   "logo": "images/logo-1792856123826.png",
   "pied": "24/24 - 7/7",
   "design": {
-    "theme": "luxe",
+    "theme": "",
     "fond": "#111111",
     "fond2": "#111111",
-    "texte": "#f5efe0",
+    "texte": "#f7cb05",
     "accent": "#c9a45c",
     "imageFond": "images/fond-1792856144974.jpg",
     "voile": 39,
