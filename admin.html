@@ -115,6 +115,8 @@
     .ia-relecture{margin-top:14px;padding-top:12px;border-top:1px dashed var(--ligne)}
     .ia-art{background:var(--panneau);border:1px solid var(--ligne);border-radius:12px;padding:10px;margin-bottom:10px;display:flex;flex-direction:column;gap:8px}
     .ia-art input{font-weight:700}
+    .ia-seo{border-color:color-mix(in srgb,var(--ok) 40%,var(--ligne))}
+    .ia-seo textarea{font-weight:400}
     .ia-compte{font-size:.75rem;color:var(--doux);text-align:right;margin-top:-4px}
     .ia-actions{display:flex;gap:8px;justify-content:space-between;margin-top:8px;flex-wrap:wrap}
     .article-carte .ac-tete{display:flex;align-items:center;gap:8px;margin-bottom:10px}
@@ -222,6 +224,7 @@
   let imagesAEnvoyer = {};   // chemin -> base64
   let secrets = { github: '', anthropic: '' };
   let proposition = null;    // articles proposés par l'IA, en attente de validation
+  let propositionSeo = null; // titre et description Google proposés
 
   /* ---------------- Connexion ---------------- */
   async function lireAuth() {
@@ -1172,11 +1175,18 @@
       '- Écris dans la langue de la description fournie par le client.',
       '- N’invente aucun fait vérifiable absent des informations : prix, chiffres, années d’expérience, labels, certifications, diplômes, noms, adresses, horaires, avis clients, garanties, marques. Si une information manque, reste général.',
       '- Titre : 2 à 6 mots, 40 caractères maximum, sans point final.',
-      '- Texte : 2 ou 3 phrases, 280 caractères maximum. Un seul retour à la ligne autorisé.',
+      '- Texte : 2 à 4 phrases, 380 caractères maximum. Un seul retour à la ligne autorisé.',
       '- Pas d’emoji, pas de hashtag, pas de superlatif creux (« le meilleur », « n°1 », « incontournable »).',
       '- Chaque pancarte traite un sujet différent, sans répétition d’une pancarte à l’autre.',
       '- S’il y a plusieurs pancartes : la première présente l’entreprise, la dernière invite à prendre contact en citant les moyens de contact disponibles.',
-      '- Cite la zone d’action là où c’est naturel, sans la répéter partout.',
+      '',
+      'Référencement Google (SEO local) :',
+      '- Choisis un mot-clé principal = activité + ville principale de la zone (ex. « chauffeur privé Paris »), et 3 à 6 mots-clés secondaires = services précis + lieux de la zone (ex. « transfert aéroport Orly », « chauffeur Disneyland Paris »).',
+      '- Le mot-clé principal figure dans le titre de la première pancarte et dans sa première phrase, puis revient naturellement 2 à 3 fois sur l’ensemble des pancartes.',
+      '- Chaque autre pancarte cible un mot-clé secondaire : il apparaît dans son titre et une fois dans son texte.',
+      '- Varie avec des synonymes et des formes proches (ex. chauffeur privé, VTC, transport avec chauffeur) et cite les villes et lieux de la zone d’action, répartis sur les pancartes.',
+      '- Densité naturelle : un même mot-clé au plus 2 fois par pancarte. Jamais de liste de mots-clés ni de répétition forcée : Google pénalise le bourrage de mots-clés, le texte doit rester agréable à lire pour un humain.',
+      '- Rédige aussi un titre Google (55 à 60 caractères, mot-clé principal en tête, nom de l’entreprise à la fin) et une description Google (140 à 155 caractères, mot-clé principal, un service, la zone et une incitation à réserver ou contacter).',
       '- Corrige silencieusement les fautes de frappe évidentes de la description (ex. « 24/14 » pour « 24/24 », « passages » pour « passagers »).',
       '- Respecte exactement le nombre de pancartes demandé.',
       '- Réponds uniquement en appelant l’outil proposer_articles, sans texte autour.'
@@ -1217,9 +1227,19 @@
                   properties: { titre: { type: 'string' }, texte: { type: 'string' } },
                   required: ['titre', 'texte']
                 }
+              },
+              seo: {
+                type: 'object',
+                properties: {
+                  titre: { type: 'string', description: 'Balise title, 55 à 60 caractères' },
+                  description: { type: 'string', description: 'Meta description, 140 à 155 caractères' },
+                  motCle: { type: 'string', description: 'Mot-clé principal' },
+                  motsCles: { type: 'array', items: { type: 'string' }, description: 'Mots-clés secondaires' }
+                },
+                required: ['titre', 'description', 'motCle']
               }
             },
-            required: ['articles']
+            required: ['articles', 'seo']
           }
         }],
         tool_choice: { type: 'auto' },
@@ -1239,17 +1259,22 @@
     const blocs = j.content || [];
     const outil = blocs.find(c => c.type === 'tool_use' && c.input);
     let liste = outil && Array.isArray(outil.input.articles) ? outil.input.articles : [];
+    let seo = outil && outil.input.seo ? outil.input.seo : null;
     if (!liste.length) {
       // Secours : JSON renvoyé en texte
       const texte = blocs.filter(c => c.type === 'text').map(c => c.text).join('\n');
       const m = texte.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
       if (m) {
-        try { const o = JSON.parse(m[0]); liste = Array.isArray(o) ? o : (o.articles || []); } catch (e) {}
+        try { const o = JSON.parse(m[0]); liste = Array.isArray(o) ? o : (o.articles || []); if (!Array.isArray(o) && o.seo) seo = o.seo; } catch (e) {}
       }
     }
     const propre = liste.filter(a => a && (a.titre || a.texte)).slice(0, brief.nombre)
       .map(a => ({ titre: String(a.titre || '').trim(), texte: String(a.texte || '').trim() }));
     if (!propre.length) throw new Error('Réponse vide de l’IA. Réessayez.');
+    propositionSeo = seo && (seo.titre || seo.description) ? {
+      titre: String(seo.titre || '').trim(), description: String(seo.description || '').trim(),
+      motCle: String(seo.motCle || '').trim(), motsCles: Array.isArray(seo.motsCles) ? seo.motsCles.map(String) : []
+    } : null;
     return propre;
   }
 
@@ -1353,7 +1378,29 @@
       x.addEventListener('input', () => { x.nextSibling.textContent = x.value.length + ' caractères'; });
     });
 
+    if (propositionSeo) {
+      const S = propositionSeo;
+      const compteur = (champ, min, max) => {
+        const c = el('div', { class: 'ia-compte' });
+        const maj = () => { const n = champ.value.length; c.textContent = n + ' caractères (idéal ' + min + '–' + max + ')'; c.style.color = n > max ? 'var(--err)' : ''; };
+        champ.addEventListener('input', maj); maj();
+        return c;
+      };
+      const t = el('input', { type: 'text', value: S.titre });
+      t.addEventListener('input', () => { S.titre = t.value; });
+      const d = el('textarea', { rows: 3, value: S.description });
+      d.addEventListener('input', () => { S.description = d.value; });
+      box.appendChild(el('div', { class: 'ia-art ia-seo' }, [
+        el('span', { class: 'etiq', text: 'Référencement Google' }),
+        el('div', { class: 'aide', style: 'margin:0', text: 'Mot-clé principal : ' + (S.motCle || '—') + (S.motsCles.length ? ' · secondaires : ' + S.motsCles.join(', ') : '') }),
+        el('label', { class: 'champ', style: 'margin:0' }, [el('span', { text: 'Titre dans Google' }), t]), compteur(t, 50, 60),
+        el('label', { class: 'champ', style: 'margin:0' }, [el('span', { text: 'Description dans Google' }), d]), compteur(d, 120, 155)
+      ]));
+    }
+
     const appliquer = mode => {
+      if (propositionSeo) cfg.seo = { titre: propositionSeo.titre, description: propositionSeo.description, motCle: propositionSeo.motCle, motsCles: propositionSeo.motsCles };
+      propositionSeo = null;
       const anciens = cfg.home.articles;
       const nouveaux = proposition.map((a, i) => {
         const ref = mode === 'remplacer' ? anciens[i] : null;
@@ -1374,7 +1421,7 @@
       el('div', { class: 'ia-actions' }, [
         el('button', { type: 'button', class: 'btn btn-mini', text: '＋ Ajouter à la suite', disabled: place < proposition.length,
           title: place < proposition.length ? 'Pas assez de place (10 maximum)' : '', onclick: () => appliquer('ajouter') }),
-        el('button', { type: 'button', class: 'btn btn-mini', text: '✕ Abandonner', onclick: () => { proposition = null; construireFormulaire(); majApercu(); } })
+        el('button', { type: 'button', class: 'btn btn-mini', text: '✕ Abandonner', onclick: () => { proposition = null; propositionSeo = null; construireFormulaire(); majApercu(); } })
       ]));
     return box;
   }

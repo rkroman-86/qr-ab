@@ -35,7 +35,11 @@
       if (montrerHome) rendreHome(cfg, racine);
       else rendrePage(cfg, racine, { lienHome: avecHome });
       window.scrollTo(0, 0);
-      document.title = c.titre || 'Bienvenue';
+      const seo = c.seo || {};
+      document.title = seo.titre || c.titre || 'Bienvenue';
+      let desc = document.querySelector('meta[name=description]');
+      if (!desc) { desc = document.createElement('meta'); desc.name = 'description'; document.head.appendChild(desc); }
+      desc.content = seo.description || c.sousTitre || '';
       document.body.style.background = c.design.fond;
       let meta = document.querySelector('meta[name=theme-color]');
       if (!meta) { meta = document.createElement('meta'); meta.name = 'theme-color'; document.head.appendChild(meta); }
