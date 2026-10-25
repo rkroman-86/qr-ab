@@ -546,6 +546,14 @@ function rendrePage(cfgBrut, racine, opts) {
    GitHub + chiffrement (admin et setup uniquement)
    ========================================================= */
 
+/* Dossier du site, quelle que soit la façon d'ouvrir l'éditeur :
+   …/qr-ab/admin.html, …/qr-ab/admin, …/qr-ab/admin/ → …/qr-ab/ */
+function dossierSite() {
+  let p = location.pathname.replace(/\/(admin|setup|index|accueil)(\.html)?\/?$/i, '/');
+  if (!p.endsWith('/')) p = p.replace(/[^/]*$/, '');
+  return location.origin + p;
+}
+
 function depotDepuisURL() {
   const host = location.hostname;              // rkroman-86.github.io
   const owner = host.endsWith('.github.io') ? host.split('.')[0] : '';

@@ -67,7 +67,7 @@
       const auth = Object.assign({ owner: depot.owner, repo: depot.repo, branche: depot.branche }, await chiffrerJeton(JSON.stringify({ github: jeton, anthropic: document.getElementById('cleia').value.trim() }), mdp));
       msg.textContent = 'Enregistrement dans le dépôt…';
       await clientGitHub(jeton, depot).ecrire('auth.json', b64.depuisTexte(JSON.stringify(auth, null, 2) + '\n'), 'Accès éditeur (jeton chiffré)');
-      const admin = location.href.replace(/setup\.html.*$/, 'admin.html');
+      const admin = dossierSite() + 'admin.html';
       msg.className = 'ok';
       msg.innerHTML = '✓ Terminé. Dans 1 à 2 minutes, l\'éditeur sera prêt :<br><a></a>';
       const a = msg.querySelector('a'); a.href = admin; a.textContent = admin;

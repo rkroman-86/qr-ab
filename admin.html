@@ -574,7 +574,7 @@
     f.appendChild(sectionPartage());
 
     /* Liens utiles */
-    const urlPublique = location.href.replace(/admin\.html.*$/, '');
+    const urlPublique = dossierSite();
     f.appendChild(el('p', { style: 'text-align:center;color:var(--doux);font-size:.88rem;margin:18px 0' }, [
       'Page publique : ', el('a', { class: 'lien', href: urlPublique, target: '_blank', rel: 'noopener', text: 'ouvrir ↗' })
     ]));
@@ -633,7 +633,7 @@
 
   /* Schéma miniature d'une disposition (formes simples) */
   /* =============== QR code et carte de visite =============== */
-  const URL_PUBLIQUE = location.href.replace(/admin\.html.*$/, '').replace(/[?#].*$/, '');
+  const URL_PUBLIQUE = dossierSite();
 
   // Dessine le QR code sur un contexte 2D (zone carrée x, y, taille)
   function dessinerQR(ctx, texte, x, y, taille, couleur) {
