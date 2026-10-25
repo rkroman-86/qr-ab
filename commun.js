@@ -532,7 +532,7 @@ function rendrePage(cfgBrut, racine, opts) {
   if (opts.lienHome) {
     const l = doc.createElement('a');
     l.className = 'qp-lien-home';
-    l.href = '#accueil';
+    l.href = opts.hrefHome || '#accueil';
     l.textContent = cfg.home.lienTexte || 'Découvrir l’entreprise';
     if (opts.surHome) l.addEventListener('click', e => { e.preventDefault(); opts.surHome(); });
     page.appendChild(l);
@@ -704,7 +704,7 @@ function rendreHome(cfgBrut, racine, opts) {
   barre.appendChild(nom);
   const contact = doc.createElement('a');
   contact.className = 'qh-contact';
-  contact.href = '#contact';
+  contact.href = opts.hrefContact || '#contact';
   contact.textContent = cfg.home.boutonContact || 'Contact';
   contact.style.background = d.accent;
   contact.style.color = texteContraste(d.accent);
@@ -800,4 +800,155 @@ function rendreHome(cfgBrut, racine, opts) {
   if (opts.position) defile.scrollTop = opts.position;
   home.defile = defile;
   return cfg;
+}
+
+
+/* =========================================================
+   Pages HTML fixes pour Google (générées par l'éditeur)
+   index.html, accueil.html, sitemap.xml
+   ========================================================= */
+function echapperHTML(t) {
+  return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function urlAbsolue(base, p) {
+  if (!p) return '';
+  if (/^https?:\/\//i.test(p)) return p;
+  return base.replace(/\/?$/, '/') + String(p).replace(/^\.?\//, '');
+}
+
+function couper(t, max) {
+  t = String(t || '').replace(/\s+/g, ' ').trim();
+  if (t.length <= max) return t;
+  return t.slice(0, max - 1).replace(/\s+\S*$/, '') + '…';
+}
+
+/* Fiche « entreprise locale » (schema.org) */
+function donneesStructurees(cfg, base) {
+  const seo = cfg.seo || {};
+  const btn = t => cfg.boutons.find(b => b && !b.masque && b.type === t && String(b.valeur || '').trim());
+  const numero = btn('tel') || btn('whatsapp') || btn('sms');
+  const mailBtn = btn('email');
+  const mailRs = cfg.reseaux.find(r => r.id === 'email' && r.actif && String(r.valeur || '').trim());
+  const sameAs = cfg.reseaux
+    .filter(r => r.actif && String(r.valeur || '').trim() && !['email', 'site'].includes(r.id))
+    .map(r => lienReseau(r.id, r.valeur)).filter(u => /^https?:/i.test(u));
+  const zones = String(seo.zone || (cfg.home && cfg.home.ia && cfg.home.ia.zone) || '')
+    .split(/[,;\/]| et /).map(z => z.trim()).filter(Boolean);
+  const o = {
+    '@context': 'https://schema.org',
+    '@type': 'LocalBusiness',
+    name: cfg.titre || '',
+    description: seo.description || cfg.sousTitre || '',
+    url: base,
+    image: urlAbsolue(base, cfg.design.imageFond || cfg.logo) || undefined,
+    logo: urlAbsolue(base, cfg.logo) || undefined,
+    telephone: numero ? '+' + numeroInternational(numero.valeur) : undefined,
+    email: mailBtn ? mailBtn.valeur.trim() : (mailRs ? String(mailRs.valeur).trim().replace(/^mailto:/i, '') : undefined),
+    areaServed: zones.length ? zones.map(z => ({ '@type': 'Place', name: z })) : undefined,
+    sameAs: sameAs.length ? sameAs : undefined
+  };
+  Object.keys(o).forEach(k => o[k] === undefined && delete o[k]);
+  return JSON.stringify(o, null, 2).replace(/</g, '\\u003c');
+}
+
+const CSS_BASE_SITE = `html,body{margin:0;height:100%}
+#page{min-height:100vh;min-height:100dvh;display:flex}
+#page>.qp{min-height:100vh;min-height:100dvh}
+#page>.qh{height:100vh;height:100dvh}
+body.mode-home{overflow:hidden}`;
+
+/* Script de démarrage commun aux pages générées */
+const BOOT_SITE = `(function(){
+  var vueFixe = window.QP_VUE || '';
+  var cfg = null;
+  function afficher() {
+    var racine = document.getElementById('page');
+    var ancre = location.hash;
+    var c = normaliser(fusion(CONFIG_DEFAUT, cfg));
+    var avecHome = homeVisible(c);
+    if (vueFixe === 'home' && !avecHome) { location.replace('./'); return; }
+    var montrerHome = avecHome && (vueFixe === 'home' || ancre === '#accueil' || (ancre !== '#contact' && c.home.arrivee === 'home'));
+    document.body.classList.toggle('mode-home', montrerHome);
+    if (montrerHome) rendreHome(cfg, racine, { hrefContact: vueFixe === 'home' ? './#contact' : '#contact' });
+    else rendrePage(cfg, racine, { lienHome: avecHome, hrefHome: c.home.arrivee === 'home' ? '#accueil' : 'accueil.html' });
+    document.body.style.background = c.design.fond;
+  }
+  fetch('config.json?t=' + Date.now(), { cache: 'no-store' })
+    .then(function (r) { return r.json(); })
+    .then(function (c) { cfg = c; afficher(); window.addEventListener('hashchange', afficher); })
+    .catch(function () {});
+})();`;
+
+function pageHTML(o) {
+  const meta = (n, v, attr) => v ? '<meta ' + (attr || 'name') + '="' + n + '" content="' + echapperHTML(v) + '">\n' : '';
+  return '<!DOCTYPE html>\n<html lang="fr">\n<head>\n' +
+    '<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n' +
+    '<title>' + echapperHTML(o.titre) + '</title>\n' +
+    meta('description', o.description) +
+    '<link rel="canonical" href="' + echapperHTML(o.canonique) + '">\n' +
+    meta('robots', 'index, follow') +
+    meta('og:type', 'website', 'property') + meta('og:locale', 'fr_FR', 'property') +
+    meta('og:site_name', o.nom, 'property') + meta('og:title', o.titre, 'property') +
+    meta('og:description', o.description, 'property') + meta('og:url', o.canonique, 'property') +
+    meta('og:image', o.image, 'property') + meta('twitter:card', o.image ? 'summary_large_image' : 'summary') +
+    meta('theme-color', o.couleur) +
+    (o.icone ? '<link rel="icon" href="' + echapperHTML(o.icone) + '">\n' : '') +
+    '<script type="application/ld+json">\n' + o.jsonld + '\n</script>\n' +
+    '<style>' + CSS_BASE_SITE + '</style>\n<style id="qp-css">' + CSS_PAGE + '</style>\n' +
+    '</head>\n<body' + (o.modeHome ? ' class="mode-home"' : '') + ' style="background:' + echapperHTML(o.couleur) + '">\n' +
+    '<div id="page">' + o.contenu + '</div>\n' +
+    '<script src="commun.js"></script>\n<script>window.QP_VUE=' + JSON.stringify(o.vue || '') + ';\n' + BOOT_SITE + '</script>\n' +
+    '</body>\n</html>\n';
+}
+
+/* Construit tous les fichiers ; doc sert au pré-rendu */
+function genererFichiersSite(cfgBrut, base, doc) {
+  const cfg = normaliser(fusion(CONFIG_DEFAUT, cfgBrut));
+  const d = cfg.design, seo = cfg.seo || {};
+  base = base.replace(/\/?$/, '/');
+  const avecHome = homeVisible(cfg);
+  const arriveeHome = avecHome && cfg.home.arrivee === 'home';
+  const jsonld = donneesStructurees(cfg, base);
+  const image = urlAbsolue(base, d.imageFond || cfg.logo);
+  const icone = cfg.logo || '';
+  const titreSite = seo.titre || [cfg.titre, cfg.sousTitre].filter(Boolean).join(' – ') || 'Bienvenue';
+  const descSite = seo.description || couper([cfg.sousTitre, cfg.pied].filter(Boolean).join('. '), 155);
+
+  const preRendu = (vue) => {
+    const tmp = doc.createElement('div');
+    if (vue === 'home') rendreHome(cfgBrut, tmp, { hrefContact: arriveeHome ? '#contact' : './#contact' });
+    else rendrePage(cfgBrut, tmp, { lienHome: avecHome, hrefHome: arriveeHome ? '#accueil' : 'accueil.html' });
+    return tmp.innerHTML;
+  };
+
+  const fichiers = {};
+  fichiers['index.html'] = pageHTML({
+    titre: titreSite, description: descSite, canonique: base, nom: cfg.titre, image, icone, couleur: d.fond, jsonld,
+    contenu: preRendu(arriveeHome ? 'home' : 'contact'), modeHome: arriveeHome, vue: ''
+  });
+
+  const urls = [base];
+  if (avecHome) {
+    const art = cfg.home.articles.find(a => a && !a.masque && (a.titre || a.texte)) || {};
+    const arts = cfg.home.articles.filter(a => a && !a.masque && a.titre);
+    const nom = cfg.titre || '';
+    const doublon = t => nom && String(t || '').toLowerCase().includes(nom.toLowerCase());
+    const sujet = (arts.find(a => !doublon(a.titre)) || {}).titre || cfg.sousTitre || 'Nos services';
+    const titreHome = arriveeHome ? titreSite : couper(nom ? sujet + ' – ' + nom : sujet, 65);
+    const descHome = arriveeHome ? descSite : couper(art.texte || descSite, 155);
+    fichiers['accueil.html'] = pageHTML({
+      titre: titreHome, description: descHome, canonique: arriveeHome ? base : base + 'accueil.html', nom: cfg.titre,
+      image, icone, couleur: d.fond, jsonld, contenu: preRendu('home'), modeHome: true, vue: 'home'
+    });
+    if (!arriveeHome) urls.push(base + 'accueil.html');
+  } else {
+    fichiers['accueil.html'] = '<!DOCTYPE html>\n<html lang="fr"><head><meta charset="utf-8"><title>' + echapperHTML(cfg.titre) +
+      '</title><link rel="canonical" href="' + echapperHTML(base) + '"><meta http-equiv="refresh" content="0; url=./"></head><body></body></html>\n';
+  }
+
+  const jour = new Date().toISOString().slice(0, 10);
+  fichiers['sitemap.xml'] = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
+    urls.map(u => '  <url><loc>' + echapperHTML(u) + '</loc><lastmod>' + jour + '</lastmod></url>\n').join('') + '</urlset>\n';
+  return fichiers;
 }

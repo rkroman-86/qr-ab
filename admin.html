@@ -115,6 +115,10 @@
     .ia-relecture{margin-top:14px;padding-top:12px;border-top:1px dashed var(--ligne)}
     .ia-art{background:var(--panneau);border:1px solid var(--ligne);border-radius:12px;padding:10px;margin-bottom:10px;display:flex;flex-direction:column;gap:8px}
     .ia-art input{font-weight:700}
+    .g-apercu{background:#fff;color:#202124;border:1px solid var(--ligne);border-radius:12px;padding:12px 14px;margin-bottom:14px;font-family:Arial,sans-serif}
+    .g-url{font-size:.78rem;color:#4d5156;margin-bottom:3px;word-break:break-all}
+    .g-titre{font-size:1.1rem;color:#1a0dab;line-height:1.3;margin-bottom:4px}
+    .g-desc{font-size:.86rem;color:#4d5156;line-height:1.45}
     .ia-seo{border-color:color-mix(in srgb,var(--ok) 40%,var(--ligne))}
     .ia-seo textarea{font-weight:400}
     .ia-compte{font-size:.75rem;color:var(--doux);text-align:right;margin-top:-4px}
@@ -530,6 +534,9 @@
       choixImage('Image de fond', d, 'imageFond', { nom: 'fond', max: 1600, fond: true }),
       el('span', { class: 'etiq', text: 'Assombrir l’image de fond' }), voile
     ]));
+
+    /* Référencement Google */
+    f.appendChild(sectionSEO());
 
     /* QR code et carte de visite */
     f.appendChild(sectionPartage());
@@ -1399,7 +1406,7 @@
     }
 
     const appliquer = mode => {
-      if (propositionSeo) cfg.seo = { titre: propositionSeo.titre, description: propositionSeo.description, motCle: propositionSeo.motCle, motsCles: propositionSeo.motsCles };
+      if (propositionSeo) cfg.seo = Object.assign({}, cfg.seo, { titre: propositionSeo.titre, description: propositionSeo.description, motCle: propositionSeo.motCle, motsCles: propositionSeo.motsCles, zone: (cfg.seo && cfg.seo.zone) || (cfg.home.ia && cfg.home.ia.zone) || '' });
       propositionSeo = null;
       const anciens = cfg.home.articles;
       const nouveaux = proposition.map((a, i) => {
@@ -1424,6 +1431,33 @@
         el('button', { type: 'button', class: 'btn btn-mini', text: '✕ Abandonner', onclick: () => { proposition = null; propositionSeo = null; construireFormulaire(); majApercu(); } })
       ]));
     return box;
+  }
+
+  function sectionSEO() {
+    cfg.seo = Object.assign({ titre: '', description: '', zone: (cfg.home.ia && cfg.home.ia.zone) || '' }, cfg.seo || {});
+    const S = cfg.seo;
+    const apT = el('div', { class: 'g-titre' }), apU = el('div', { class: 'g-url', text: URL_PUBLIQUE.replace(/^https?:\/\//, '') }), apD = el('div', { class: 'g-desc' });
+    const maj = () => {
+      apT.textContent = couper(S.titre || [cfg.titre, cfg.sousTitre].filter(Boolean).join(' – '), 62);
+      apD.textContent = couper(S.description || [cfg.sousTitre, cfg.pied].filter(Boolean).join('. '), 158);
+    };
+    const champ = (etiq, cle, min, max, multi, ph) => {
+      const c = el(multi ? 'textarea' : 'input', multi ? { rows: 3, value: S[cle] || '', placeholder: ph } : { type: 'text', value: S[cle] || '', placeholder: ph });
+      const cpt = el('div', { class: 'ia-compte' });
+      const m2 = () => { const n = c.value.length; cpt.textContent = max ? n + ' caractères (idéal ' + min + '–' + max + ')' : ''; cpt.style.color = max && n > max ? 'var(--err)' : ''; };
+      c.addEventListener('input', () => { S[cle] = c.value; m2(); maj(); changement(); });
+      m2();
+      return el('div', {}, [el('label', { class: 'champ', style: 'margin-bottom:4px' }, [el('span', { text: etiq }), c]), cpt]);
+    };
+    maj();
+    return section('seo', 'Référencement Google', false, [
+      el('div', { class: 'aide', style: 'margin:0 0 12px', text: 'À chaque enregistrement, le site publie aussi des pages HTML lisibles directement par Google, la fiche « entreprise locale », et le plan du site (sitemap.xml). La rédaction IA remplit ces champs automatiquement.' }),
+      el('span', { class: 'etiq', text: 'Aperçu dans Google' }),
+      el('div', { class: 'g-apercu' }, [apU, apT, apD]),
+      champ('Titre dans Google', 'titre', 50, 60, false, 'Chauffeur privé Paris – Aéroports, Disneyland | Votre nom'),
+      champ('Description dans Google', 'description', 120, 155, true, 'Une ou deux phrases : service, zone, incitation à contacter'),
+      champ('Zone desservie (villes séparées par des virgules)', 'zone', 0, 0, false, 'Paris, Île-de-France, Normandie')
+    ]);
   }
 
   function carteArticle(a, i) {
@@ -1541,6 +1575,19 @@
       } catch (e) {
         if (e.status !== 409 && e.status !== 422) throw e;
         shaConfig = await gh.ecrire('config.json', contenu, 'Mise à jour de la page'); // sha relu
+      }
+      // 3. pages fixes pour Google (seulement les fichiers qui changent)
+      etat.textContent = 'Mise à jour du référencement…';
+      try {
+        const fichiers = genererFichiersSite(cfg, URL_PUBLIQUE, document);
+        for (const nom of Object.keys(fichiers)) {
+          const actuel = await gh.lire(nom);
+          const sansDate = t => String(t || '').replace(/<lastmod>[^<]*<\/lastmod>/g, '');
+          if (actuel && sansDate(actuel.texte) === sansDate(fichiers[nom])) continue;
+          await gh.ecrire(nom, b64.depuisTexte(fichiers[nom]), 'Référencement : ' + nom, actuel ? actuel.sha : null);
+        }
+      } catch (e) {
+        console.warn('Référencement non mis à jour', e);
       }
       modifie = false;
       etat.className = 'etat ok';
