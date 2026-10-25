@@ -120,32 +120,32 @@
     "lienTexte": "Découvrir nos services",
     "articles": [
       {
-        "titre": "Chauffeur Privé Paris",
-        "texte": "Un service de chauffeur privé haut de gamme, pensé pour vos déplacements à Paris, en Île-de-France et en Normandie.\nDisponible 24h/24 et 7j/7.",
+        "titre": "Chauffeur privé Paris",
+        "texte": "Chauffeur privé Paris et Île-de-France : un service de transport avec chauffeur pensé pour votre confort. À bord d'une Mercedes V Class, voyagez dans une ambiance haut de gamme, à toute heure, 24/24 et 7/7.",
         "image": "images/fond-1792856144974.jpg",
         "style": "photo"
       },
       {
-        "titre": "Aéroports et Disneyland",
-        "texte": "Départs, arrivées, correspondances : nous vous conduisons vers les aéroports et Disneyland en toute sérénité. Ponctualité et sérénité guident chaque trajet.",
+        "titre": "Transfert aéroport Paris",
+        "texte": "Pour votre transfert aéroport Paris, votre chauffeur vous accompagne au départ comme à l'arrivée. Un trajet serein et ponctuel, de jour comme de nuit, avec un véhicule tout confort.",
         "image": "",
         "style": "texte"
       },
       {
-        "titre": "Mercedes V-Class de luxe",
-        "texte": "Voyagez à bord d’une Mercedes V-Class, spacieuse et confortable. Le véhicule accueille jusqu’à 7 passagers, idéal pour les familles et les groupes.",
+        "titre": "Chauffeur Disneyland Paris",
+        "texte": "Une journée en famille ou entre amis ? Votre chauffeur Disneyland Paris vous conduit jusqu'au parc et vous ramène à bon port. Le véhicule peut accueillir jusqu'à 7 passagers.",
         "image": "",
         "style": "texte"
       },
       {
-        "titre": "Événements et longs trajets",
-        "texte": "Mariage, soirée, déplacement professionnel : nous assurons l’événementiel avec élégance. Nous réalisons aussi des trajets longue distance et d’accompagnement, jusqu’en Normandie.",
+        "titre": "Chauffeur longue distance Normandie",
+        "texte": "Pour un trajet longue distance Normandie, un déplacement d'accompagnement ou un événement, voyagez l'esprit libre. Installez-vous dans un véhicule de luxe et profitez de la route en toute tranquillité.",
         "image": "",
         "style": "texte"
       },
       {
-        "titre": "Réservez votre chauffeur",
-        "texte": "Écrivez-nous sur WhatsApp, par SMS ou par e-mail pour organiser votre trajet. Indiquez-nous votre destination et le nombre de passagers.",
+        "titre": "Contactez votre chauffeur",
+        "texte": "Pour réserver votre chauffeur privé Paris, écrivez-nous par WhatsApp, SMS ou e-mail. Précisez votre trajet et le nombre de passagers : nous revenons vers vous rapidement, 24/24 et 7/7.",
         "image": "",
         "style": "texte"
       }
@@ -156,5 +156,18 @@
       "nombre": 5,
       "ton": "pro"
     }
+  },
+  "seo": {
+    "titre": "Chauffeur privé Paris, Île-de-France | Chauffeur Privé Paris",
+    "description": "Chauffeur privé Paris en Mercedes V Class : transfert aéroport, Disneyland, Normandie. Disponible 24/24, 7/7. Contactez-nous par WhatsApp, SMS ou e-mail.",
+    "zone": "Paris, Ile de France,  Normandie",
+    "motCle": "chauffeur privé Paris",
+    "motsCles": [
+      "transfert aéroport Paris",
+      "chauffeur Disneyland Paris",
+      "chauffeur longue distance Normandie",
+      "Mercedes V Class avec chauffeur",
+      "chauffeur événementiel Île-de-France"
+    ]
   }
 }
