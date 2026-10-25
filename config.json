@@ -106,6 +106,11 @@
       "id": "tripadvisor",
       "actif": false,
       "valeur": ""
+    },
+    {
+      "id": "email",
+      "actif": false,
+      "valeur": ""
     }
   ],
   "home": {
@@ -116,28 +121,40 @@
     "articles": [
       {
         "titre": "Chauffeur Privé Paris",
-        "texte": "Votre chauffeur privé à Paris, 24 h/24 et 7 j/7.\nTransferts, mises à disposition et longues distances, à bord d’un van Mercedes Classe V.",
+        "texte": "Un service de chauffeur privé haut de gamme, pensé pour vos déplacements à Paris, en Île-de-France et en Normandie.\nDisponible 24h/24 et 7j/7.",
         "image": "images/fond-1792856144974.jpg",
         "style": "photo"
       },
       {
-        "titre": "Aéroports & gares",
-        "texte": "Transferts vers ou depuis Roissy-CDG, Orly, Beauvais et toutes les gares parisiennes.\nVous voyagez l’esprit tranquille, bagages compris.",
+        "titre": "Aéroports et Disneyland",
+        "texte": "Départs, arrivées, correspondances : nous vous conduisons vers les aéroports et Disneyland en toute sérénité. Ponctualité et sérénité guident chaque trajet.",
         "image": "",
         "style": "texte"
       },
       {
-        "titre": "Disneyland & Normandie",
-        "texte": "Disneyland Paris, la Normandie et toutes vos destinations hors de Paris.\nEn famille ou en groupe, dans un véhicule spacieux et confortable.",
+        "titre": "Mercedes V-Class de luxe",
+        "texte": "Voyagez à bord d’une Mercedes V-Class, spacieuse et confortable. Le véhicule accueille jusqu’à 7 passagers, idéal pour les familles et les groupes.",
         "image": "",
         "style": "texte"
       },
       {
-        "titre": "Réservez en un message",
-        "texte": "Un message WhatsApp ou un appel suffit.\nRéponse rapide, 24 h/24 et 7 j/7.",
+        "titre": "Événements et longs trajets",
+        "texte": "Mariage, soirée, déplacement professionnel : nous assurons l’événementiel avec élégance. Nous réalisons aussi des trajets longue distance et d’accompagnement, jusqu’en Normandie.",
+        "image": "",
+        "style": "texte"
+      },
+      {
+        "titre": "Réservez votre chauffeur",
+        "texte": "Écrivez-nous sur WhatsApp, par SMS ou par e-mail pour organiser votre trajet. Indiquez-nous votre destination et le nombre de passagers.",
         "image": "",
         "style": "texte"
       }
-    ]
+    ],
+    "ia": {
+      "description": "Chauffeur Privé, événementiel, véhicule tout confort, luxe, 24/14, 7/7, trajets d'accompagnement, trajets longues, Disneyland, aéroports, jusqu'à 7 passages , mercedes v class",
+      "zone": "Paris, Ile de France,  Normandie",
+      "nombre": 5,
+      "ton": "pro"
+    }
   }
 }
