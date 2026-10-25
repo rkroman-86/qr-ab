@@ -308,10 +308,17 @@
   })();
 
   /* ---------------- Onglets mobile ---------------- */
+  // Mémorise la position de défilement de chaque onglet (Modifier / Aperçu)
+  const positionsVue = { edit: 0, apercu: 0 };
   document.querySelectorAll('.onglets button').forEach(b => b.addEventListener('click', () => {
+    const avant = document.body.dataset.vue;
+    if (avant === b.dataset.vue) return;
+    positionsVue[avant] = window.scrollY;
     document.body.dataset.vue = b.dataset.vue;
     document.querySelectorAll('.onglets button').forEach(x => x.classList.toggle('actif', x === b));
-    window.scrollTo(0, 0);
+    const cible = positionsVue[b.dataset.vue] || 0;
+    window.scrollTo(0, cible);
+    requestAnimationFrame(() => window.scrollTo(0, cible)); // après la remise en page
   }));
 
   /* ---------------- Aperçu ---------------- */
