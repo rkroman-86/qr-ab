@@ -110,6 +110,26 @@
 
     .bouton-carte{border:1px solid var(--ligne);border-radius:14px;padding:12px;margin-bottom:12px;background:var(--bg)}
     .bouton-carte.masque{opacity:.55}
+    .modale-fond{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.55);display:flex;align-items:flex-end;justify-content:center}
+    @media (min-width:700px){.modale-fond{align-items:center}}
+    .modale{width:100%;max-width:560px;max-height:92dvh;display:flex;flex-direction:column;background:var(--panneau);color:var(--txt);
+      border-radius:20px 20px 0 0;box-shadow:0 -10px 40px rgba(0,0,0,.3)}
+    @media (min-width:700px){.modale{border-radius:20px}}
+    .modale-tete{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--ligne)}
+    .modale-corps{padding:14px 16px calc(20px + env(safe-area-inset-bottom));overflow-y:auto}
+    .opt{margin-bottom:14px}
+    .puces{display:flex;flex-wrap:wrap;gap:6px}
+    .puce{border:1px solid var(--ligne);background:var(--bg);color:var(--txt);border-radius:999px;padding:8px 13px;font-weight:600;font-size:.86rem;cursor:pointer}
+    .puce.actif{background:var(--prim);border-color:var(--prim);color:#fff}
+    .alerte{background:color-mix(in srgb,#f0a020 14%,var(--bg));border:1px solid color-mix(in srgb,#f0a020 45%,var(--ligne));border-radius:12px;padding:12px;margin:6px 0 14px;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+    .fond-vign{height:110px;border-radius:12px;background:#111 center/cover no-repeat}
+    .logos-grille{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:14px}
+    .logo-prop{border:2px solid var(--ligne);border-radius:14px;background:var(--bg);padding:8px;cursor:pointer;color:var(--txt);display:flex;flex-direction:column;gap:6px;align-items:center}
+    .logo-prop:hover{border-color:var(--prim)}
+    .logo-prop .damier{width:100%;aspect-ratio:1;border-radius:10px;display:flex;align-items:center;justify-content:center;
+      background:repeating-conic-gradient(#e6e6e6 0 25%,#fff 0 50%) 0 0/20px 20px}
+    .logo-prop img{width:88%;height:88%;object-fit:contain}
+    .logo-prop b{font-size:.8rem}
     .ia-boite{border:1px solid color-mix(in srgb,var(--prim) 35%,var(--ligne));background:color-mix(in srgb,var(--prim) 5%,var(--bg));border-radius:14px;padding:14px;margin:6px 0 18px}
     .ia-titre{display:block;font-size:1rem}
     .ia-relecture{margin-top:14px;padding-top:12px;border-top:1px dashed var(--ligne)}
@@ -488,6 +508,7 @@
     /* Logo */
     f.appendChild(section('logo', 'Logo', false, [
       choixImage('Image du logo', cfg, 'logo', { nom: 'logo', max: 600 }),
+      el('button', { type: 'button', class: 'btn btn-prim btn-plein', text: '✨ Créer un logo avec l’IA', onclick: ouvrirCreateurLogo }),
       bascule('Logo rond (photo)', d, 'logoRond')
     ]));
 
@@ -1297,6 +1318,332 @@
       sessionStorage.setItem(CLE_STOCK, brut);
       if (localStorage.getItem(CLE_STOCK)) localStorage.setItem(CLE_STOCK, brut);
     } catch (e) {}
+  }
+
+  /* =============== Création de logo par l'IA =============== */
+  const LOGO_STYLES = {
+    minimal:    { nom: 'Minimaliste', p: 'logo minimaliste : un pictogramme simple et géométrique, peu d’éléments, beaucoup d’espace' },
+    embleme:    { nom: 'Emblème', p: 'emblème / badge : pictogramme central entouré du nom, composition circulaire ou en écusson, esprit sceau ou blason moderne' },
+    monogramme: { nom: 'Monogramme', p: 'monogramme : initiales entrelacées ou superposées avec élégance, éventuellement le nom complet en petit dessous' },
+    illustration:{ nom: 'Illustration', p: 'illustration au trait : silhouette stylisée et reconnaissable du sujet, dessinée en lignes nettes, sans détails photographiques' },
+    typo:       { nom: 'Typographique', p: 'logo typographique : le nom mis en scène par la typographie, avec un petit élément graphique d’accent' }
+  };
+  const LOGO_FORMES = {
+    rond:   { nom: 'Rond', p: 'inscrit dans un disque plein qui occupe tout le cadre' },
+    carre:  { nom: 'Carré arrondi', p: 'inscrit dans un carré plein aux coins arrondis qui occupe tout le cadre' },
+    blason: { nom: 'Blason', p: 'inscrit dans un écusson / bouclier plein' },
+    libre:  { nom: 'Libre', p: 'sans forme de fond : fond transparent, la silhouette du logo est libre' }
+  };
+  const LOGO_EFFETS = {
+    mat:      { nom: 'Mat', p: 'aplats de couleur, aucun dégradé, aucune ombre' },
+    brillant: { nom: 'Brillant', p: 'dégradés doux et un reflet lumineux discret sur le haut, aspect verni' },
+    metal:    { nom: 'Métallique', p: 'dégradés métalliques (or ou argent selon la palette) façon gravure ou dorure à chaud, plusieurs arrêts de dégradé pour un reflet réaliste' },
+    neon:     { nom: 'Néon', p: 'traits lumineux avec halo (filtre feGaussianBlur fusionné), fond sombre' }
+  };
+  const LOGO_PALETTES = {
+    theme:  { nom: 'Couleurs du site' },
+    or:     { nom: 'Or & noir', c: ['#111111', '#c9a45c'] },
+    argent: { nom: 'Argent & bleu nuit', c: ['#0f1b2d', '#c0c6cf'] },
+    mono:   { nom: 'Noir & blanc', c: ['#111111', '#ffffff'] },
+    perso:  { nom: 'Personnalisées' }
+  };
+
+  function nettoyerSVG(t) {
+    const m = String(t || '').match(/<svg[\s\S]*?<\/svg>/i);
+    if (!m) return null;
+    let s = m[0]
+      .replace(/<script[\s\S]*?<\/script>/gi, '')
+      .replace(/<foreignObject[\s\S]*?<\/foreignObject>/gi, '')
+      .replace(/<image\b[^>]*>/gi, '')
+      .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*')/gi, '')
+      .replace(/(xlink:href|href)\s*=\s*("|')(?!#)[^"']*\2/gi, '')
+      .replace(/@import[^;]*;/gi, '');
+    // balise racine : xmlns + taille fixe pour la conversion en PNG
+    s = s.replace(/<svg\b[^>]*>/i, tag => {
+      let t2 = tag.replace(/\s(width|height)\s*=\s*("[^"]*"|'[^']*')/gi, '');
+      if (!/xmlns=/.test(t2)) t2 = t2.replace(/<svg/i, '<svg xmlns="http://www.w3.org/2000/svg"');
+      if (!/viewBox=/i.test(t2)) t2 = t2.replace(/<svg/i, '<svg viewBox="0 0 512 512"');
+      return t2.replace(/<svg/i, '<svg width="1024" height="1024"');
+    });
+    return s;
+  }
+  const svgEnURL = svg => 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+
+  function imageEnPNG(src, taille) {
+    return new Promise((ok, ko) => {
+      const im = new Image();
+      im.onload = () => {
+        const cv = document.createElement('canvas');
+        cv.width = cv.height = taille;
+        cv.getContext('2d').drawImage(im, 0, 0, taille, taille);
+        try { ok(cv.toDataURL('image/png')); } catch (e) { ko(e); }
+      };
+      im.onerror = () => ko(new Error('Logo illisible'));
+      im.src = src;
+    });
+  }
+
+  async function imageFondEnBase64() {
+    const src = imagesLocales[cfg.design.imageFond] || cfg.design.imageFond;
+    const im = await chargerImage(src);
+    if (!im) throw new Error('Image de fond introuvable');
+    const k = Math.min(1, 1024 / Math.max(im.width, im.height));
+    const cv = document.createElement('canvas');
+    cv.width = Math.round(im.width * k); cv.height = Math.round(im.height * k);
+    cv.getContext('2d').drawImage(im, 0, 0, cv.width, cv.height);
+    return { im, b64: cv.toDataURL('image/jpeg', 0.85).split(',')[1] };
+  }
+
+  function couleursLogo(o) {
+    if (o.palette === 'perso') return [o.c1, o.c2];
+    if (o.palette === 'theme') return [cfg.design.fond, cfg.design.accent];
+    return LOGO_PALETTES[o.palette].c;
+  }
+
+  function cheminForme(ctx, forme, T) {
+    ctx.beginPath();
+    if (forme === 'rond') ctx.arc(T / 2, T / 2, T / 2, 0, Math.PI * 2);
+    else if (forme === 'carre') rectArrondi(ctx, 0, 0, T, T, T * 0.2);
+    else if (forme === 'blason') {
+      ctx.moveTo(T * .08, T * .06); ctx.lineTo(T * .92, T * .06); ctx.lineTo(T * .92, T * .5);
+      ctx.quadraticCurveTo(T * .9, T * .82, T * .5, T * .97); ctx.quadraticCurveTo(T * .1, T * .82, T * .08, T * .5); ctx.closePath();
+    } else ctx.rect(0, 0, T, T);
+  }
+
+  /* Variante locale : la photo de fond recadrée et stylisée */
+  function logoPhoto(im, o) {
+    const T = 1024;
+    const [c1, c2] = couleursLogo(o);
+    const cv = document.createElement('canvas'); cv.width = cv.height = T;
+    const ctx = cv.getContext('2d');
+    ctx.save(); cheminForme(ctx, o.forme, T); ctx.clip();
+    const z = o.zoom || 1.4;
+    const k = Math.max(T / im.width, T / im.height) * z;
+    ctx.drawImage(im, (T - im.width * k) / 2, (T - im.height * k) / 2, im.width * k, im.height * k);
+    // bichromie : sombre → couleur 1, clair → couleur 2
+    const px = ctx.getImageData(0, 0, T, T), d = px.data;
+    const a = hexVersRgb(c1) || [0, 0, 0], b = hexVersRgb(c2) || [255, 255, 255];
+    for (let i = 0; i < d.length; i += 4) {
+      let l = (0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]) / 255;
+      l = Math.min(1, Math.max(0, (l - 0.5) * 1.5 + 0.5));
+      d[i] = a[0] + (b[0] - a[0]) * l; d[i + 1] = a[1] + (b[1] - a[1]) * l; d[i + 2] = a[2] + (b[2] - a[2]) * l;
+    }
+    ctx.putImageData(px, 0, 0);
+    if (o.effet === 'brillant' || o.effet === 'metal') {
+      const g = ctx.createLinearGradient(0, 0, 0, T * .55);
+      g.addColorStop(0, 'rgba(255,255,255,.35)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, T, T * .55);
+    }
+    ctx.restore();
+    if (o.forme !== 'libre') {
+      ctx.save(); cheminForme(ctx, o.forme, T); ctx.clip();
+      ctx.lineWidth = T * 0.05;
+      if (o.effet === 'metal') {
+        const g = ctx.createLinearGradient(0, 0, T, T);
+        ['#8a6d2f', '#f3e3a3', '#a8842f', '#f8ecc0', '#7a5f26'].forEach((c, i) => g.addColorStop(i / 4, c));
+        ctx.strokeStyle = g;
+      } else ctx.strokeStyle = c2;
+      if (o.effet === 'neon') { ctx.shadowColor = c2; ctx.shadowBlur = 40; }
+      cheminForme(ctx, o.forme, T); ctx.stroke();
+      ctx.restore();
+    }
+    return cv.toDataURL('image/png');
+  }
+
+  async function genererLogosIA(o, photo) {
+    const [c1, c2] = couleursLogo(o);
+    const systeme = [
+      'Tu es directeur artistique et tu dessines des logos vectoriels en SVG autonome, de qualité professionnelle.',
+      'Contraintes techniques strictes :',
+      '- Racine : <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">.',
+      '- Interdit : <script>, <image>, <foreignObject>, liens externes, polices externes, @import.',
+      '- Polices autorisées uniquement : "Georgia, serif", "Times New Roman, serif", "Arial, Helvetica, sans-serif", "Trebuchet MS, sans-serif", "Verdana, sans-serif".',
+      '- Autorisés : path, circle, rect, polygon, text, textPath, g, defs, linearGradient, radialGradient, clipPath, filter (feGaussianBlur, feDropShadow, feMerge).',
+      '- Moins de 12 000 caractères par SVG. Formes nettes, lisibles même affichées à 40 pixels.',
+      '- Tout le texte reste entièrement dans le cadre avec une marge, jamais coupé ; texte court et bien proportionné.',
+      '- Les variantes doivent être nettement différentes entre elles (composition, pictogramme, typographie).',
+      'Réponds uniquement en appelant l’outil proposer_logos.'
+    ].join('\n');
+    const texteLogo = o.texte === 'nom' ? 'le nom « ' + o.nom + ' »' : o.texte === 'initiales' ? 'les initiales de « ' + o.nom + ' »' : 'aucun texte (pictogramme seul)';
+    const demande = [
+      'Entreprise : ' + (cfg.titre || ''),
+      cfg.sousTitre ? 'Accroche : ' + cfg.sousTitre : '',
+      cfg.home && cfg.home.ia && cfg.home.ia.description ? 'Activité : ' + cfg.home.ia.description : '',
+      o.description ? 'Idée du client pour le logo : ' + o.description : '',
+      'Style : ' + LOGO_STYLES[o.style].p + '.',
+      'Forme : ' + LOGO_FORMES[o.forme].p + '.',
+      'Rendu : ' + LOGO_EFFETS[o.effet].p + '.',
+      'Palette principale : ' + c1 + ' et ' + c2 + ' (des nuances proches sont permises pour les dégradés).',
+      'Texte dans le logo : ' + texteLogo + '.',
+      photo ? 'Inspire-toi du sujet principal de la photo jointe : reproduis-en une silhouette simplifiée et reconnaissable (contour, proportions), sans détail photographique.' : '',
+      'Propose ' + o.nombre + ' variantes.'
+    ].filter(Boolean).join('\n');
+
+    const contenu = photo
+      ? [{ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: photo } }, { type: 'text', text: demande }]
+      : demande;
+
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-api-key': secrets.anthropic, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+      body: JSON.stringify({
+        model: MODELE_IA, max_tokens: 16000, system: systeme,
+        tools: [{
+          name: 'proposer_logos', description: 'Renvoie les variantes de logo en SVG.',
+          input_schema: { type: 'object', properties: { logos: { type: 'array', items: { type: 'object', properties: { nom: { type: 'string' }, svg: { type: 'string' } }, required: ['svg'] } } }, required: ['logos'] }
+        }],
+        tool_choice: { type: 'auto' },
+        messages: [{ role: 'user', content: contenu }]
+      })
+    });
+    let j = null;
+    try { j = await r.json(); } catch (e) {}
+    if (!r.ok) {
+      const m = (j && j.error && j.error.message) || r.statusText;
+      if (r.status === 401) throw new Error('Clé API refusée.');
+      if (r.status === 429) throw new Error('Trop de demandes. Réessayez dans une minute.');
+      if (r.status >= 500) throw new Error('Le service IA est surchargé. Réessayez dans un instant.');
+      if (/credit|balance/i.test(m)) throw new Error('Crédit API épuisé : rechargez le compte sur console.anthropic.com.');
+      throw new Error(m);
+    }
+    const blocs = j.content || [];
+    const outil = blocs.find(c => c.type === 'tool_use' && c.input && Array.isArray(c.input.logos));
+    let bruts = outil ? outil.input.logos.map(l => l.svg) : [];
+    if (!bruts.length) bruts = (blocs.filter(c => c.type === 'text').map(c => c.text).join('\n').match(/<svg[\s\S]*?<\/svg>/gi) || []);
+    const propres = bruts.map(nettoyerSVG).filter(Boolean);
+    // on garde seulement ce que le navigateur sait afficher
+    const ok = [];
+    for (const s of propres) {
+      try { await imageEnPNG(svgEnURL(s), 64); ok.push(s); } catch (e) {}
+    }
+    if (!ok.length) throw new Error('Aucun logo exploitable dans la réponse. Réessayez.');
+    return ok;
+  }
+
+  function ouvrirCreateurLogo() {
+    const o = Object.assign({ source: 'description', description: '', style: 'embleme', forme: 'rond', effet: 'brillant', palette: 'theme',
+      c1: cfg.design.fond, c2: cfg.design.accent, texte: 'nom', nom: cfg.titre || '', nombre: 3, zoom: 1.4 }, cfg.logoIA || {});
+    cfg.logoIA = o;
+    const fond = el('div', { class: 'modale-fond' });
+    const boite = el('div', { class: 'modale', role: 'dialog', 'aria-modal': 'true' });
+    const fermer = () => { fond.remove(); document.body.style.overflow = ''; };
+    fond.addEventListener('click', e => { if (e.target === fond) fermer(); });
+    document.addEventListener('keydown', function esc(e) { if (e.key === 'Escape') { fermer(); document.removeEventListener('keydown', esc); } });
+
+    const corps = el('div', { class: 'modale-corps' });
+    const resultats = el('div', { class: 'logos-grille' });
+    const msg = el('div', { class: 'msg' });
+
+    function puces(etiq, options, cle, apres) {
+      const box = el('div', { class: 'puces' });
+      Object.keys(options).forEach(k => {
+        const b = el('button', { type: 'button', class: 'puce' + (o[cle] === k ? ' actif' : ''), text: options[k].nom });
+        b.addEventListener('click', () => { o[cle] = k; box.querySelectorAll('.puce').forEach(x => x.classList.toggle('actif', x === b)); if (apres) apres(); });
+        box.appendChild(b);
+      });
+      return el('div', { class: 'opt' }, [el('span', { class: 'etiq', text: etiq }), box]);
+    }
+
+    function construire() {
+      corps.innerHTML = '';
+      const aFond = !!cfg.design.imageFond;
+      corps.appendChild(puces('Point de départ', { description: { nom: '✍️ Une description' }, fond: { nom: '🖼 L’image de fond' } }, 'source', construire));
+
+      if (o.source === 'fond' && !aFond) {
+        corps.appendChild(el('div', { class: 'alerte' }, [
+          el('b', { text: 'Aucune image de fond pour l’instant.' }),
+          el('div', { text: 'Ajoutez d’abord une photo dans la section Design → Image de fond, puis revenez ici.' }),
+          el('button', { type: 'button', class: 'btn btn-mini', text: 'Aller à Design', onclick: () => {
+            fermer();
+            const d = document.querySelector('details[data-id=design]');
+            if (d) { d.open = true; d.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+          } })
+        ]));
+        return;
+      }
+      if (o.source === 'fond') {
+        const v = el('div', { class: 'fond-vign' });
+        v.style.backgroundImage = 'url("' + (imagesLocales[cfg.design.imageFond] || cfg.design.imageFond) + '")';
+        corps.appendChild(el('div', { class: 'opt' }, [el('span', { class: 'etiq', text: 'Photo utilisée' }), v]));
+      }
+      const desc = el('textarea', { rows: 2, value: o.description, placeholder: o.source === 'fond' ? 'Facultatif : précisions (ex. mettre l’accent sur la calandre)' : 'Ex. : un van stylisé de face, élégant, esprit service haut de gamme' });
+      desc.addEventListener('input', () => { o.description = desc.value; });
+      corps.appendChild(el('label', { class: 'champ' }, [el('span', { text: o.source === 'fond' ? 'Précisions (facultatif)' : 'Décrivez le logo souhaité' }), desc]));
+
+      corps.appendChild(puces('Style', LOGO_STYLES, 'style'));
+      corps.appendChild(puces('Forme', LOGO_FORMES, 'forme'));
+      corps.appendChild(puces('Rendu', LOGO_EFFETS, 'effet'));
+      const perso = el('div', { class: 'couleurs' + (o.palette === 'perso' ? '' : ' cache'), style: 'margin-top:8px' }, [couleur('Couleur 1', o, 'c1'), couleur('Couleur 2', o, 'c2')]);
+      corps.appendChild(puces('Couleurs', LOGO_PALETTES, 'palette', () => perso.classList.toggle('cache', o.palette !== 'perso')));
+      corps.appendChild(perso);
+
+      const nom = el('input', { type: 'text', value: o.nom });
+      nom.addEventListener('input', () => { o.nom = nom.value; });
+      corps.appendChild(puces('Texte dans le logo', { nom: { nom: 'Nom complet' }, initiales: { nom: 'Initiales' }, aucun: { nom: 'Sans texte' } }, 'texte'));
+      corps.appendChild(el('label', { class: 'champ' }, [el('span', { text: 'Nom à utiliser' }), nom]));
+
+      if (!secrets.anthropic) {
+        corps.appendChild(el('div', { class: 'alerte' }, [el('b', { text: 'Rédaction IA non activée.' }),
+          el('div', { text: 'Activez-la dans la section Page Home (clé API). ' + (o.source === 'fond' ? 'La version « photo stylisée » reste disponible.' : '') })]));
+      }
+      const go = el('button', { type: 'button', class: 'btn btn-prim btn-plein', text: '✨ Créer les logos' });
+      go.addEventListener('click', () => lancer(go));
+      corps.append(el('div', { class: 'aide', style: 'margin:6px 0 10px', text: 'L’IA dessine ' + o.nombre + ' variantes vectorielles (environ 30 secondes, quelques centimes).' + (o.source === 'fond' ? ' Une version « photo stylisée » est aussi créée à partir de votre image.' : '') }), go, msg, resultats);
+    }
+
+    async function lancer(go) {
+      go.disabled = true; go.textContent = 'Création en cours…';
+      msg.className = 'msg'; msg.textContent = 'L’IA dessine vos logos, patientez…';
+      resultats.innerHTML = '';
+      const propositions = [];
+      try {
+        let photo = null;
+        if (o.source === 'fond') {
+          const f = await imageFondEnBase64();
+          photo = f.b64;
+          propositions.push({ nom: 'Photo stylisée', png: logoPhoto(f.im, o) });
+          afficherResultats(propositions);
+        }
+        if (secrets.anthropic) {
+          const svgs = await genererLogosIA(o, photo);
+          for (const s of svgs) propositions.push({ nom: 'Logo IA', png: await imageEnPNG(svgEnURL(s), 1024) });
+        }
+        afficherResultats(propositions);
+        msg.textContent = propositions.length ? 'Touchez un logo pour le choisir.' : '';
+      } catch (e) {
+        msg.className = 'msg err'; msg.textContent = e.message === 'Failed to fetch' ? 'Connexion impossible au service IA.' : e.message;
+        if (propositions.length) afficherResultats(propositions);
+      }
+      go.disabled = false; go.textContent = '↻ Nouvelles variantes';
+    }
+
+    function afficherResultats(liste) {
+      resultats.innerHTML = '';
+      liste.forEach(p => {
+        const carte = el('button', { type: 'button', class: 'logo-prop' }, [
+          el('span', { class: 'damier' }, [el('img', { src: p.png, alt: p.nom })]), el('b', { text: p.nom })]);
+        carte.addEventListener('click', () => {
+          const chemin = 'images/logo-ia-' + Date.now() + '.png';
+          imagesLocales[chemin] = p.png;
+          imagesAEnvoyer[chemin] = p.png.split(',')[1];
+          cfg.logo = chemin;
+          cfg.design.logoRond = false;
+          fermer();
+          construireFormulaire(); changement();
+          const e = $('#etat'); e.className = 'etat'; e.textContent = 'Nouveau logo : cliquez sur Enregistrer pour publier';
+        });
+        resultats.appendChild(carte);
+      });
+    }
+
+    boite.append(
+      el('div', { class: 'modale-tete' }, [el('b', { text: '✨ Créer un logo avec l’IA' }),
+        el('button', { type: 'button', class: 'btn btn-mini', text: '✕', 'aria-label': 'Fermer', onclick: fermer })]),
+      corps);
+    fond.appendChild(boite);
+    document.body.appendChild(fond);
+    document.body.style.overflow = 'hidden';
+    construire();
   }
 
   function blocIA() {
