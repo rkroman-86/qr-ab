@@ -1,7 +1,7 @@
 {
   "titre": "Chauffeur Privé Paris",
   "sousTitre": "Paris - Aéroports - Disneyland - Normandie",
-  "logo": "images/logo-1792856123826.png",
+  "logo": "images/logo-1792964951491.png",
   "pied": "24/24 - 7/7",
   "design": {
     "theme": "",
@@ -16,7 +16,7 @@
     "style": "plein",
     "ombre": true,
     "carte": false,
-    "logoRond": true,
+    "logoRond": false,
     "nomsReseaux": false,
     "reseauxTheme": false,
     "tousRonds": true,
@@ -169,5 +169,27 @@
       "Mercedes V Class avec chauffeur",
       "chauffeur événementiel Île-de-France"
     ]
+  },
+  "logoIA": {
+    "motifs": [],
+    "choix": "photo",
+    "idee": "",
+    "styleMotif": "silhouette",
+    "sourceIA": "description",
+    "forme": "rond",
+    "transparent": true,
+    "bordure": "epaisse",
+    "effet": "metal",
+    "palette": "theme",
+    "cFond": "#111111",
+    "cMotif": "#c9a45c",
+    "cTexte": "#c9a45c",
+    "texte": "nom",
+    "nom": "Chauffeur Privé Paris",
+    "position": "dessous",
+    "police": "elegante",
+    "taille": 99,
+    "photoOrigine": false,
+    "_fond": "transparent"
   }
 }
