@@ -596,6 +596,15 @@ async function dechiffrerJeton(auth, mdp) {
   return new TextDecoder().decode(pt);
 }
 
+/* Secret chiffré : JSON {github, anthropic} (ancien format : jeton GitHub seul) */
+function lireSecret(texte) {
+  try {
+    const o = JSON.parse(texte);
+    if (o && typeof o === 'object' && o.github) return { github: o.github, anthropic: o.anthropic || '' };
+  } catch (e) {}
+  return { github: String(texte || ''), anthropic: '' };
+}
+
 /* Petit client pour l'API GitHub « contents » */
 function clientGitHub(jeton, depot) {
   const base = 'https://api.github.com/repos/' + depot.owner + '/' + depot.repo;

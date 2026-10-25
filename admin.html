@@ -110,6 +110,13 @@
 
     .bouton-carte{border:1px solid var(--ligne);border-radius:14px;padding:12px;margin-bottom:12px;background:var(--bg)}
     .bouton-carte.masque{opacity:.55}
+    .ia-boite{border:1px solid color-mix(in srgb,var(--prim) 35%,var(--ligne));background:color-mix(in srgb,var(--prim) 5%,var(--bg));border-radius:14px;padding:14px;margin:6px 0 18px}
+    .ia-titre{display:block;font-size:1rem}
+    .ia-relecture{margin-top:14px;padding-top:12px;border-top:1px dashed var(--ligne)}
+    .ia-art{background:var(--panneau);border:1px solid var(--ligne);border-radius:12px;padding:10px;margin-bottom:10px;display:flex;flex-direction:column;gap:8px}
+    .ia-art input{font-weight:700}
+    .ia-compte{font-size:.75rem;color:var(--doux);text-align:right;margin-top:-4px}
+    .ia-actions{display:flex;gap:8px;justify-content:space-between;margin-top:8px;flex-wrap:wrap}
     .article-carte .ac-tete{display:flex;align-items:center;gap:8px;margin-bottom:10px}
     .article-carte .ac-tete b{flex:1}
     .ajout-article{width:100%}
@@ -213,6 +220,8 @@
   let modifie = false;
   let imagesLocales = {};    // chemin -> dataURL (aperçu immédiat)
   let imagesAEnvoyer = {};   // chemin -> base64
+  let secrets = { github: '', anthropic: '' };
+  let proposition = null;    // articles proposés par l'IA, en attente de validation
 
   /* ---------------- Connexion ---------------- */
   async function lireAuth() {
@@ -241,13 +250,14 @@
     msg.className = 'msg'; msg.textContent = 'Vérification…'; btn.disabled = true;
     try {
       const auth = await lireAuth();
-      let jeton;
-      try { jeton = await dechiffrerJeton(auth, $('#mdp').value); }
+      let brut;
+      try { brut = await dechiffrerJeton(auth, $('#mdp').value); }
       catch (err) { throw new Error('Mot de passe incorrect.'); }
-      await demarrer(jeton);
+      secrets = lireSecret(brut);
+      await demarrer(secrets.github);
       try {
-        sessionStorage.setItem(CLE_STOCK, jeton);
-        if ($('#rester').checked) localStorage.setItem(CLE_STOCK, jeton);
+        sessionStorage.setItem(CLE_STOCK, brut);
+        if ($('#rester').checked) localStorage.setItem(CLE_STOCK, brut);
       } catch (err) {}
     } catch (err) {
       msg.className = 'msg err';
@@ -266,7 +276,7 @@
     let j = null;
     try { j = sessionStorage.getItem(CLE_STOCK) || localStorage.getItem(CLE_STOCK); } catch (e) {}
     if (!j) return;
-    try { await lireAuth(); await demarrer(j); }
+    try { await lireAuth(); secrets = lireSecret(j); await demarrer(secrets.github); }
     catch (e) { try { sessionStorage.removeItem(CLE_STOCK); localStorage.removeItem(CLE_STOCK); } catch (x) {} }
   })();
 
@@ -291,15 +301,16 @@
     clearTimeout(minuterie);
     minuterie = setTimeout(() => {
       const cadre = $('#apercu');
-      const avecHome = cfg.home && cfg.home.actif;
+      const avecHome = (cfg.home && cfg.home.actif) || !!proposition;
       if (!avecHome) vueApercu = 'contact';
       $('#choix-apercu').classList.toggle('cache', !avecHome);
       document.querySelectorAll('#choix-apercu button').forEach(b => b.classList.toggle('actif', b.dataset.p === vueApercu));
       const resoudre = p => imagesLocales[p] || p;
+      const cfgVue = proposition ? Object.assign({}, cfg, { home: Object.assign({}, cfg.home, { actif: true, articles: proposition }) }) : cfg;
       const ancien = cadre.querySelector('.qh-defile');
       const position = ancien ? ancien.scrollTop : 0;
       cadre.classList.toggle('mode-home', vueApercu === 'home');
-      if (vueApercu === 'home') rendreHome(cfg, cadre, { apercu: true, resoudre, position, surContact: () => choisirApercu('contact') });
+      if (vueApercu === 'home') rendreHome(cfgVue, cadre, { apercu: true, resoudre, position, surContact: () => choisirApercu('contact') });
       else rendrePage(cfg, cadre, { apercu: true, resoudre, lienHome: homeVisible(cfg), surHome: () => choisirApercu('home') });
     }, 60);
   }
@@ -412,7 +423,7 @@
   document.getElementById('formulaire').addEventListener('focusin', e => {
     const sec = e.target.closest('details.section');
     if (!sec || sec.dataset.id === 'partage') return;
-    choisirApercu(sec.dataset.id === 'home' && cfg.home.actif ? 'home' : 'contact');
+    choisirApercu(sec.dataset.id === 'home' && (cfg.home.actif || proposition) ? 'home' : 'contact');
   });
 
   function construireFormulaire() {
@@ -1130,6 +1141,7 @@
         champTexte('Bouton de la barre du haut', h, 'boutonContact', { ph: 'Contact' }),
         champTexte('Lien vers la Home (page contact)', h, 'lienTexte', { ph: 'Découvrir l’entreprise' })
       ]),
+      blocIA(),
       el('span', { class: 'etiq', text: 'Articles — une pancarte plein écran chacun, on passe de l’une à l’autre en glissant' }),
       liste, ajouter
     );
@@ -1137,6 +1149,223 @@
       el('label', { class: 'bascule', style: 'border-top:0' }, [el('span', { text: 'Activer la page Home' }), actif]),
       corps
     ]);
+  }
+
+  /* =============== Rédaction des articles par l'IA =============== */
+  const MODELE_IA = 'claude-sonnet-5-5';
+  const TONS_IA = { pro: 'Professionnel', chaleureux: 'Chaleureux', luxe: 'Haut de gamme', dynamique: 'Dynamique', simple: 'Simple et direct' };
+
+  function moyensDeContact() {
+    const noms = { whatsapp: 'WhatsApp', tel: 'téléphone', sms: 'SMS', email: 'e-mail' };
+    const m = new Set();
+    cfg.boutons.filter(b => b && !b.masque && b.type !== 'reseaux' && String(b.valeur || '').trim())
+      .forEach(b => { if (noms[b.type]) m.add(noms[b.type]); });
+    cfg.reseaux.filter(r => r.actif && String(r.valeur || '').trim()).forEach(r => m.add(r.id === 'email' ? 'e-mail' : RESEAUX[r.id].nom));
+    return [...m];
+  }
+
+  async function redigerAvecIA(brief) {
+    const systeme = [
+      'Tu es rédacteur web. Tu écris les pancartes de la page d’accueil mobile d’une petite entreprise.',
+      'Chaque pancarte occupe tout l’écran d’un téléphone : un titre court et un texte bref.',
+      'Règles :',
+      '- Écris dans la langue de la description fournie par le client.',
+      '- N’invente aucun fait vérifiable absent des informations : prix, chiffres, années d’expérience, labels, certifications, diplômes, noms, adresses, horaires, avis clients, garanties, marques. Si une information manque, reste général.',
+      '- Titre : 2 à 6 mots, 40 caractères maximum, sans point final.',
+      '- Texte : 2 ou 3 phrases, 280 caractères maximum. Un seul retour à la ligne autorisé.',
+      '- Pas d’emoji, pas de hashtag, pas de superlatif creux (« le meilleur », « n°1 », « incontournable »).',
+      '- Chaque pancarte traite un sujet différent, sans répétition d’une pancarte à l’autre.',
+      '- S’il y a plusieurs pancartes : la première présente l’entreprise, la dernière invite à prendre contact en citant les moyens de contact disponibles.',
+      '- Cite la zone d’action là où c’est naturel, sans la répéter partout.',
+      '- Respecte exactement le nombre de pancartes demandé.'
+    ].join('\n');
+    const infos = [
+      'Nom de l’entreprise : ' + (cfg.titre || '(non précisé)'),
+      cfg.sousTitre ? 'Accroche actuelle : ' + cfg.sousTitre : '',
+      cfg.pied ? 'Mention en bas de page : ' + cfg.pied : '',
+      'Description par le client : ' + brief.description,
+      'Zone d’action : ' + (brief.zone || '(non précisée)'),
+      'Moyens de contact disponibles : ' + (moyensDeContact().join(', ') || '(non précisés)'),
+      'Ton souhaité : ' + (TONS_IA[brief.ton] || TONS_IA.pro),
+      'Nombre de pancartes : ' + brief.nombre
+    ].filter(Boolean).join('\n');
+
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': secrets.anthropic,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: MODELE_IA,
+        max_tokens: 3000,
+        system: systeme,
+        tools: [{
+          name: 'proposer_articles',
+          description: 'Renvoie les pancartes rédigées, dans l’ordre d’affichage.',
+          input_schema: {
+            type: 'object',
+            properties: {
+              articles: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: { titre: { type: 'string' }, texte: { type: 'string' } },
+                  required: ['titre', 'texte']
+                }
+              }
+            },
+            required: ['articles']
+          }
+        }],
+        tool_choice: { type: 'tool', name: 'proposer_articles' },
+        messages: [{ role: 'user', content: infos }]
+      })
+    });
+    let j = null;
+    try { j = await r.json(); } catch (e) {}
+    if (!r.ok) {
+      const m = (j && j.error && j.error.message) || r.statusText;
+      if (r.status === 401) throw new Error('Clé API refusée. Vérifiez-la ou remplacez-la.');
+      if (r.status === 429) throw new Error('Trop de demandes. Réessayez dans une minute.');
+      if (r.status === 529 || r.status >= 500) throw new Error('Le service IA est surchargé. Réessayez dans un instant.');
+      if (/credit|balance/i.test(m)) throw new Error('Crédit API épuisé : rechargez le compte sur console.anthropic.com.');
+      throw new Error(m);
+    }
+    const outil = (j.content || []).find(c => c.type === 'tool_use');
+    const liste = outil && outil.input && Array.isArray(outil.input.articles) ? outil.input.articles : [];
+    const propre = liste.filter(a => a && (a.titre || a.texte)).slice(0, brief.nombre)
+      .map(a => ({ titre: String(a.titre || '').trim(), texte: String(a.texte || '').trim() }));
+    if (!propre.length) throw new Error('Réponse vide de l’IA. Réessayez.');
+    return propre;
+  }
+
+  /* Ajoute la clé API au secret chiffré (même mot de passe) */
+  async function enregistrerCleIA(cle, mdp) {
+    const auth = await lireAuth();
+    try { await dechiffrerJeton(auth, mdp); } catch (e) { throw new Error('Mot de passe incorrect.'); }
+    const brut = JSON.stringify({ github: secrets.github, anthropic: cle });
+    const nouvel = Object.assign({ owner: auth.owner, repo: auth.repo, branche: auth.branche }, await chiffrerJeton(brut, mdp));
+    await gh.ecrire('auth.json', b64.depuisTexte(JSON.stringify(nouvel, null, 2) + '\n'), 'Clé API pour la rédaction IA (chiffrée)');
+    secrets = lireSecret(brut);
+    try {
+      sessionStorage.setItem(CLE_STOCK, brut);
+      if (localStorage.getItem(CLE_STOCK)) localStorage.setItem(CLE_STOCK, brut);
+    } catch (e) {}
+  }
+
+  function blocIA() {
+    const h = cfg.home;
+    h.ia = Object.assign({ description: '', zone: '', nombre: 4, ton: 'pro' }, h.ia || {});
+    const ia = h.ia;
+    const boite = el('div', { class: 'ia-boite' });
+
+    if (!secrets.anthropic) {
+      const cle = el('input', { type: 'password', placeholder: 'sk-ant-…', autocomplete: 'off' });
+      const mdp = el('input', { type: 'password', placeholder: 'Mot de passe de l’éditeur', autocomplete: 'current-password' });
+      const msg = el('div', { class: 'msg' });
+      const ok = el('button', { type: 'button', class: 'btn btn-mini', text: 'Activer' });
+      ok.addEventListener('click', async () => {
+        if (!cle.value.trim() || !mdp.value) { msg.className = 'msg err'; msg.textContent = 'Renseignez la clé et le mot de passe.'; return; }
+        ok.disabled = true; msg.className = 'msg'; msg.textContent = 'Enregistrement…';
+        try { await enregistrerCleIA(cle.value.trim(), mdp.value); construireFormulaire(); }
+        catch (e) { msg.className = 'msg err'; msg.textContent = e.message; ok.disabled = false; }
+      });
+      boite.append(
+        el('b', { class: 'ia-titre', text: '✨ Rédaction par l’IA' }),
+        el('div', { class: 'aide', style: 'margin:4px 0 12px', text: 'Pour l’activer, ajoutez une clé API Anthropic (console.anthropic.com). Elle est chiffrée avec le mot de passe de l’éditeur.' }),
+        el('label', { class: 'champ' }, [el('span', { text: 'Clé API' }), cle]),
+        el('label', { class: 'champ' }, [el('span', { text: 'Mot de passe de l’éditeur' }), mdp]),
+        ok, msg);
+      return boite;
+    }
+
+    const desc = el('textarea', { rows: 3, value: ia.description, placeholder: 'Ex. : chauffeur privé avec van 7 places, transferts aéroports, excursions, mise à disposition' });
+    desc.addEventListener('input', () => { ia.description = desc.value; });
+    const zone = el('input', { type: 'text', value: ia.zone, placeholder: 'Ex. : Paris et Île-de-France, Normandie' });
+    zone.addEventListener('input', () => { ia.zone = zone.value; });
+    const nb = el('select', {}, Array.from({ length: HOME_MAX_ARTICLES }, (_, k) => el('option', { value: k + 1, text: (k + 1) + (k ? ' pancartes' : ' pancarte'), selected: Number(ia.nombre) === k + 1 })));
+    nb.addEventListener('change', () => { ia.nombre = Number(nb.value); });
+    const ton = el('select', {}, Object.keys(TONS_IA).map(k => el('option', { value: k, text: TONS_IA[k], selected: ia.ton === k })));
+    ton.addEventListener('change', () => { ia.ton = ton.value; });
+
+    const msg = el('div', { class: 'msg' });
+    const go = el('button', { type: 'button', class: 'btn btn-prim btn-plein', text: proposition ? 'Rédiger une nouvelle version' : '✨ Rédiger les articles' });
+    const zoneRelecture = el('div');
+
+    go.addEventListener('click', async () => {
+      if (ia.description.trim().length < 10) { msg.className = 'msg err'; msg.textContent = 'Décrivez l’activité en quelques mots (10 caractères minimum).'; desc.focus(); return; }
+      go.disabled = true; go.textContent = 'Rédaction en cours…'; msg.className = 'msg'; msg.textContent = 'L’IA écrit vos ' + ia.nombre + ' pancarte' + (ia.nombre > 1 ? 's' : '') + ', quelques secondes…';
+      try {
+        proposition = await redigerAvecIA({ description: ia.description.trim(), zone: ia.zone.trim(), nombre: Number(ia.nombre), ton: ia.ton });
+        modifie = true;
+        vueApercu = 'home';
+        construireFormulaire(); majApercu();
+        const r = document.querySelector('.ia-relecture');
+        if (r) r.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } catch (e) {
+        msg.className = 'msg err'; msg.textContent = e.message === 'Failed to fetch' ? 'Connexion impossible au service IA.' : e.message;
+        go.disabled = false; go.textContent = '✨ Rédiger les articles';
+      }
+    });
+
+    if (proposition) zoneRelecture.appendChild(relecture());
+
+    boite.append(
+      el('b', { class: 'ia-titre', text: '✨ Rédaction par l’IA' }),
+      el('div', { class: 'aide', style: 'margin:4px 0 12px', text: 'Décrivez votre activité : l’IA rédige les pancartes, vous relisez, corrigez si besoin et validez.' }),
+      el('label', { class: 'champ' }, [el('span', { text: '1. Votre activité en quelques mots' }), desc]),
+      el('label', { class: 'champ' }, [el('span', { text: '2. Zone d’action' }), zone]),
+      el('div', { class: 'grille2' }, [
+        el('label', { class: 'champ' }, [el('span', { text: '3. Nombre de pancartes' }), nb]),
+        el('label', { class: 'champ' }, [el('span', { text: 'Ton' }), ton])
+      ]),
+      go, msg, zoneRelecture);
+    return boite;
+  }
+
+  /* Relecture : l'utilisateur corrige puis valide */
+  function relecture() {
+    const box = el('div', { class: 'ia-relecture' });
+    const n = cfg.home.articles.filter(a => !a.masque).length;
+    proposition.forEach((a, i) => {
+      const t = el('input', { type: 'text', value: a.titre });
+      t.addEventListener('input', () => { a.titre = t.value; majApercu(); });
+      const x = el('textarea', { rows: 4, value: a.texte });
+      x.addEventListener('input', () => { a.texte = x.value; majApercu(); });
+      box.appendChild(el('div', { class: 'ia-art' }, [
+        el('span', { class: 'etiq', text: 'Pancarte ' + (i + 1) + ' / ' + proposition.length }), t, x,
+        el('div', { class: 'ia-compte', text: x.value.length + ' caractères' })
+      ]));
+      x.addEventListener('input', () => { x.nextSibling.textContent = x.value.length + ' caractères'; });
+    });
+
+    const appliquer = mode => {
+      const anciens = cfg.home.articles;
+      const nouveaux = proposition.map((a, i) => {
+        const ref = mode === 'remplacer' ? anciens[i] : null;
+        return { titre: a.titre, texte: a.texte, image: ref ? ref.image || '' : '', style: ref ? ref.style || 'texte' : 'texte' };
+      });
+      if (mode === 'remplacer' && !nouveaux[0].image && cfg.design.imageFond) { nouveaux[0].image = cfg.design.imageFond; nouveaux[0].style = 'photo'; }
+      cfg.home.articles = mode === 'remplacer' ? nouveaux : anciens.concat(nouveaux).slice(0, HOME_MAX_ARTICLES);
+      cfg.home.actif = true;
+      proposition = null;
+      vueApercu = 'home';
+      construireFormulaire(); changement();
+      const e = $('#etat'); e.className = 'etat'; e.textContent = 'Articles validés : cliquez sur Enregistrer pour publier';
+    };
+    const place = HOME_MAX_ARTICLES - cfg.home.articles.length;
+    box.append(
+      el('div', { class: 'aide', style: 'margin:6px 0 10px', text: 'Relisez et corrigez directement ci-dessus : l’aperçu se met à jour. Les photos des pancartes actuelles sont conservées.' }),
+      el('button', { type: 'button', class: 'btn btn-prim btn-plein', text: '✓ Valider et remplacer les ' + n + ' articles actuels', onclick: () => appliquer('remplacer') }),
+      el('div', { class: 'ia-actions' }, [
+        el('button', { type: 'button', class: 'btn btn-mini', text: '＋ Ajouter à la suite', disabled: place < proposition.length,
+          title: place < proposition.length ? 'Pas assez de place (10 maximum)' : '', onclick: () => appliquer('ajouter') }),
+        el('button', { type: 'button', class: 'btn btn-mini', text: '✕ Abandonner', onclick: () => { proposition = null; construireFormulaire(); majApercu(); } })
+      ]));
+    return box;
   }
 
   function carteArticle(a, i) {

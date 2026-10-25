@@ -35,6 +35,8 @@
     <label><span>Dépôt</span><input id="repo" required autocapitalize="off"></label>
   </div>
   <label><span>Jeton GitHub (fine-grained)</span><input id="jeton" type="password" required autocomplete="off" placeholder="github_pat_…"></label>
+  <label><span>Clé API Anthropic (facultatif, pour la rédaction IA)</span><input id="cleia" type="password" autocomplete="off" placeholder="sk-ant-…"></label>
+  <small>Se crée sur console.anthropic.com. Peut aussi être ajoutée plus tard depuis l'éditeur.</small>
   <label><span>Mot de passe pour Alex</span><input id="mdp" type="password" required minlength="10" autocomplete="new-password"></label>
   <small>10 caractères minimum. Préférez une phrase : « soleil-terrasse-2026 ».</small>
   <label><span>Confirmer le mot de passe</span><input id="mdp2" type="password" required autocomplete="new-password"></label>
@@ -62,14 +64,14 @@
       if (info.permissions && info.permissions.push === false) throw new Error('Ce jeton n\'a pas le droit d\'écriture (Contents : Read and write).');
       depot.branche = info.default_branch || 'main';
       msg.textContent = 'Chiffrement…';
-      const auth = Object.assign({ owner: depot.owner, repo: depot.repo, branche: depot.branche }, await chiffrerJeton(jeton, mdp));
+      const auth = Object.assign({ owner: depot.owner, repo: depot.repo, branche: depot.branche }, await chiffrerJeton(JSON.stringify({ github: jeton, anthropic: document.getElementById('cleia').value.trim() }), mdp));
       msg.textContent = 'Enregistrement dans le dépôt…';
       await clientGitHub(jeton, depot).ecrire('auth.json', b64.depuisTexte(JSON.stringify(auth, null, 2) + '\n'), 'Accès éditeur (jeton chiffré)');
       const admin = location.href.replace(/setup\.html.*$/, 'admin.html');
       msg.className = 'ok';
       msg.innerHTML = '✓ Terminé. Dans 1 à 2 minutes, l\'éditeur sera prêt :<br><a></a>';
       const a = msg.querySelector('a'); a.href = admin; a.textContent = admin;
-      document.getElementById('jeton').value = '';
+      document.getElementById('jeton').value = ''; document.getElementById('cleia').value = '';
     } catch (err) {
       msg.className = 'err';
       msg.textContent = err.status === 401 ? 'Jeton invalide ou expiré.' : err.message;
