@@ -734,12 +734,6 @@ function rendreHome(cfgBrut, racine, opts) {
     }
     const corps = doc.createElement('div');
     corps.className = 'qh-corps';
-    if (total > 1) {
-      const n = doc.createElement('div');
-      n.className = 'qh-num';
-      n.textContent = String(i + 1).padStart(2, '0') + ' / ' + String(total).padStart(2, '0');
-      corps.appendChild(n);
-    }
     const trait = doc.createElement('div');
     trait.className = 'qh-trait';
     corps.appendChild(trait);
