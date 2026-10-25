@@ -123,13 +123,17 @@
     .puce.actif{background:var(--prim);border-color:var(--prim);color:#fff}
     .alerte{background:color-mix(in srgb,#f0a020 14%,var(--bg));border:1px solid color-mix(in srgb,#f0a020 45%,var(--ligne));border-radius:12px;padding:12px;margin:6px 0 14px;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
     .fond-vign{height:110px;border-radius:12px;background:#111 center/cover no-repeat}
-    .logos-grille{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:14px}
-    .logo-prop{border:2px solid var(--ligne);border-radius:14px;background:var(--bg);padding:8px;cursor:pointer;color:var(--txt);display:flex;flex-direction:column;gap:6px;align-items:center}
-    .logo-prop:hover{border-color:var(--prim)}
-    .logo-prop .damier{width:100%;aspect-ratio:1;border-radius:10px;display:flex;align-items:center;justify-content:center;
-      background:repeating-conic-gradient(#e6e6e6 0 25%,#fff 0 50%) 0 0/20px 20px}
-    .logo-prop img{width:88%;height:88%;object-fit:contain}
-    .logo-prop b{font-size:.8rem}
+    .logo-scene{display:flex;flex-direction:column;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--ligne)}
+    .damier{display:flex;align-items:center;justify-content:center;border-radius:10px;background:repeating-conic-gradient(#e6e6e6 0 25%,#fff 0 50%) 0 0/16px 16px}
+    .damier.grand{width:min(200px,44vw);aspect-ratio:1}
+    .damier img{width:90%;height:90%;object-fit:contain}
+    .logo-apercu{display:block}
+    .motifs{display:grid;grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:8px;margin:6px 0 14px}
+    .motif-v{border:2px solid var(--ligne);border-radius:12px;background:var(--bg);padding:5px;cursor:pointer;color:var(--txt);display:flex;flex-direction:column;align-items:center;gap:4px}
+    .motif-v .damier{width:100%;aspect-ratio:1}
+    .motif-v b{font-size:.7rem;text-align:center}
+    .motif-v.actif{border-color:var(--prim)}
+    .motif-plus .plus{width:100%;aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:1.8rem;color:var(--prim);border:1px dashed var(--prim);border-radius:10px}
     .ia-boite{border:1px solid color-mix(in srgb,var(--prim) 35%,var(--ligne));background:color-mix(in srgb,var(--prim) 5%,var(--bg));border-radius:14px;padding:14px;margin:6px 0 18px}
     .ia-titre{display:block;font-size:1rem}
     .ia-relecture{margin-top:14px;padding-top:12px;border-top:1px dashed var(--ligne)}
@@ -515,7 +519,7 @@
     /* Logo */
     f.appendChild(section('logo', 'Logo', false, [
       choixImage('Image du logo', cfg, 'logo', { nom: 'logo', max: 600 }),
-      el('button', { type: 'button', class: 'btn btn-prim btn-plein', text: '✨ Créer un logo avec l’IA', onclick: ouvrirCreateurLogo }),
+      el('button', { type: 'button', class: 'btn btn-prim btn-plein', text: '✨ Atelier logo (IA)', onclick: ouvrirCreateurLogo }),
       bascule('Logo rond (photo)', d, 'logoRond')
     ]));
 
@@ -1327,52 +1331,156 @@
     } catch (e) {}
   }
 
-  /* =============== Création de logo par l'IA =============== */
-  const LOGO_STYLES = {
-    minimal:    { nom: 'Minimaliste', p: 'logo minimaliste : un pictogramme simple et géométrique, peu d’éléments, beaucoup d’espace' },
-    embleme:    { nom: 'Emblème', p: 'emblème / badge : pictogramme central entouré du nom, composition circulaire ou en écusson, esprit sceau ou blason moderne' },
-    monogramme: { nom: 'Monogramme', p: 'monogramme : initiales entrelacées ou superposées avec élégance, éventuellement le nom complet en petit dessous' },
-    illustration:{ nom: 'Illustration', p: 'illustration au trait : silhouette stylisée et reconnaissable du sujet, dessinée en lignes nettes, sans détails photographiques' },
-    typo:       { nom: 'Typographique', p: 'logo typographique : le nom mis en scène par la typographie, avec un petit élément graphique d’accent' }
-  };
-  const LOGO_FORMES = {
-    rond:   { nom: 'Rond', p: 'inscrit dans un disque plein qui occupe tout le cadre' },
-    carre:  { nom: 'Carré arrondi', p: 'inscrit dans un carré plein aux coins arrondis qui occupe tout le cadre' },
-    blason: { nom: 'Blason', p: 'inscrit dans un écusson / bouclier plein' },
-    libre:  { nom: 'Libre', p: 'sans forme de fond : fond transparent, la silhouette du logo est libre' }
-  };
-  const LOGO_EFFETS = {
-    mat:      { nom: 'Mat', p: 'aplats de couleur, aucun dégradé, aucune ombre' },
-    brillant: { nom: 'Brillant', p: 'dégradés doux et un reflet lumineux discret sur le haut, aspect verni' },
-    metal:    { nom: 'Métallique', p: 'dégradés métalliques (or ou argent selon la palette) façon gravure ou dorure à chaud, plusieurs arrêts de dégradé pour un reflet réaliste' },
-    neon:     { nom: 'Néon', p: 'traits lumineux avec halo (filtre feGaussianBlur fusionné), fond sombre' }
-  };
+  /* =============== Atelier logo : motif (IA, monogramme ou photo) + habillage local =============== */
+  const LOGO_FORMES = { rond: 'Rond', carre: 'Carré arrondi', blason: 'Blason', hexagone: 'Hexagone', aucune: 'Sans forme' };
+  const LOGO_EFFETS = { mat: 'Mat', brillant: 'Brillant', metal: 'Métallique', neon: 'Néon', ombre: 'Ombre' };
   const LOGO_PALETTES = {
     theme:  { nom: 'Couleurs du site' },
-    or:     { nom: 'Or & noir', c: ['#111111', '#c9a45c'] },
-    argent: { nom: 'Argent & bleu nuit', c: ['#0f1b2d', '#c0c6cf'] },
-    mono:   { nom: 'Noir & blanc', c: ['#111111', '#ffffff'] },
+    or:     { nom: 'Or & noir', c: ['#111111', '#c9a45c', '#c9a45c'] },
+    argent: { nom: 'Argent & bleu nuit', c: ['#0f1b2d', '#c0c6cf', '#c0c6cf'] },
+    mono:   { nom: 'Noir & blanc', c: ['#111111', '#ffffff', '#ffffff'] },
+    clair:  { nom: 'Blanc & noir', c: ['#ffffff', '#111111', '#111111'] },
     perso:  { nom: 'Personnalisées' }
   };
+  const LOGO_POLICES = {
+    elegante: { nom: 'Élégante', f: 'Georgia, serif', p: 400 },
+    moderne:  { nom: 'Moderne', f: 'Arial, Helvetica, sans-serif', p: 700 },
+    classique:{ nom: 'Classique', f: '"Times New Roman", Times, serif', p: 400 },
+    arrondie: { nom: 'Arrondie', f: '"Trebuchet MS", sans-serif', p: 700 }
+  };
+  const LOGO_MOTIFS_IA = {
+    silhouette: { nom: 'Silhouette pleine', p: 'silhouette pleine (fill="currentColor"), formes massives et nettes' },
+    trait:      { nom: 'Trait fin', p: 'dessin au trait (fill="none" stroke="currentColor", stroke-width 10 à 16, extrémités arrondies)' },
+    geometrique:{ nom: 'Géométrique', p: 'pictogramme géométrique abstrait, construit avec cercles, arcs et lignes, élégant' }
+  };
 
-  function nettoyerSVG(t) {
-    const m = String(t || '').match(/<svg[\s\S]*?<\/svg>/i);
+  const xml = t => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  function melanger(hex, cible, t) {
+    const a = hexVersRgb(hex) || [0, 0, 0], b = hexVersRgb(cible) || [255, 255, 255];
+    return '#' + a.map((v, i) => Math.round(v + (b[i] - v) * t).toString(16).padStart(2, '0')).join('');
+  }
+  const eclaircir = (h, t) => melanger(h, '#ffffff', t), assombrir = (h, t) => melanger(h, '#000000', t);
+  function initiales(nom) {
+    const mots = String(nom || '').trim().split(/[\s\-']+/).filter(m => m && !/^(de|du|des|la|le|les|et|d|l|&)$/i.test(m));
+    return (mots.slice(0, 3).map(m => m[0]).join('') || '?').toUpperCase();
+  }
+
+  /* Motif IA : on garde le contenu du SVG, tout en couleur courante */
+  function nettoyerMotif(t) {
+    const m = String(t || '').match(/<svg\b([^>]*)>([\s\S]*?)<\/svg>/i);
     if (!m) return null;
-    let s = m[0]
-      .replace(/<script[\s\S]*?<\/script>/gi, '')
-      .replace(/<foreignObject[\s\S]*?<\/foreignObject>/gi, '')
-      .replace(/<image\b[^>]*>/gi, '')
-      .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*')/gi, '')
+    const vb = (m[1].match(/viewBox\s*=\s*["']([^"']+)["']/i) || [])[1] || '0 0 512 512';
+    let c = m[2]
+      .replace(/<script[\s\S]*?<\/script>/gi, '').replace(/<foreignObject[\s\S]*?<\/foreignObject>/gi, '')
+      .replace(/<image\b[^>]*>/gi, '').replace(/<text[\s\S]*?<\/text>/gi, '').replace(/<style[\s\S]*?<\/style>/gi, '')
+      .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*')/gi, '').replace(/\sstyle\s*=\s*("[^"]*"|'[^']*')/gi, '')
       .replace(/(xlink:href|href)\s*=\s*("|')(?!#)[^"']*\2/gi, '')
-      .replace(/@import[^;]*;/gi, '');
-    // balise racine : xmlns + taille fixe pour la conversion en PNG
-    s = s.replace(/<svg\b[^>]*>/i, tag => {
-      let t2 = tag.replace(/\s(width|height)\s*=\s*("[^"]*"|'[^']*')/gi, '');
-      if (!/xmlns=/.test(t2)) t2 = t2.replace(/<svg/i, '<svg xmlns="http://www.w3.org/2000/svg"');
-      if (!/viewBox=/i.test(t2)) t2 = t2.replace(/<svg/i, '<svg viewBox="0 0 512 512"');
-      return t2.replace(/<svg/i, '<svg width="1024" height="1024"');
-    });
-    return s;
+      .replace(/\s(fill|stroke)\s*=\s*("|')(?!none|currentColor|url)[^"']*\2/gi, ' $1="currentColor"');
+    if (c.length > 20000 || !/<(path|circle|rect|polygon|ellipse|line|polyline)\b/i.test(c)) return null;
+    return { type: 'ia', vb, c };
+  }
+
+  /* Assemble le logo final en SVG à partir du motif et des réglages */
+  function composerLogo(o, motif) {
+    const pal = o.palette === 'perso' ? [o.cFond, o.cMotif, o.cTexte]
+      : o.palette === 'theme' ? [cfg.design.fond, cfg.design.accent, cfg.design.accent] : LOGO_PALETTES[o.palette].c;
+    const [cFond, cMotif, cTexte] = pal;
+    const forme = o.forme, plein = forme !== 'aucune' && !o.transparent;
+    const pol = LOGO_POLICES[o.police] || LOGO_POLICES.elegante;
+    const defs = [];
+    const peinture = (id, c) => {
+      if (o.effet === 'brillant') { defs.push('<linearGradient id="' + id + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="' + eclaircir(c, .4) + '"/><stop offset=".55" stop-color="' + c + '"/><stop offset="1" stop-color="' + assombrir(c, .2) + '"/></linearGradient>'); return 'url(#' + id + ')'; }
+      if (o.effet === 'metal') { defs.push('<linearGradient id="' + id + '" x1="0" y1="0" x2="1" y2="1">' + [[0, assombrir(c, .45)], [.3, eclaircir(c, .6)], [.5, assombrir(c, .15)], [.72, eclaircir(c, .45)], [1, assombrir(c, .5)]].map(s => '<stop offset="' + s[0] + '" stop-color="' + s[1] + '"/>').join('') + '</linearGradient>'); return 'url(#' + id + ')'; }
+      return c;
+    };
+    let filtre = '';
+    if (o.effet === 'neon') { defs.push('<filter id="lueur" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="7" result="f"/><feMerge><feMergeNode in="f"/><feMergeNode in="f"/><feMergeNode in="SourceGraphic"/></feMerge></filter>'); filtre = ' filter="url(#lueur)"'; }
+    if (o.effet === 'ombre') { defs.push('<filter id="ombre" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#000" flood-opacity=".45"/></filter>'); filtre = ' filter="url(#ombre)"'; }
+
+    const formeEl = (attrs) => ({
+      rond: '<circle cx="256" cy="256" r="246"' + attrs + '/>',
+      carre: '<rect x="10" y="10" width="492" height="492" rx="96"' + attrs + '/>',
+      blason: '<path d="M40 22H472V244C472 380 378 456 256 500C134 456 40 380 40 244Z"' + attrs + '/>',
+      hexagone: '<polygon points="256,10 469,133 469,379 256,502 43,379 43,133"' + attrs + '/>'
+    })[forme] || '';
+
+    const parts = [];
+    if (forme !== 'aucune') defs.push('<clipPath id="forme">' + formeEl('') + '</clipPath>');
+    if (plein) {
+      const fondPaint = o.effet === 'neon' ? assombrir(cFond, .35) : cFond;
+      parts.push(formeEl(' fill="' + fondPaint + '"'));
+      if (o.effet === 'brillant' || o.effet === 'metal') {
+        defs.push('<radialGradient id="reflet" cx=".5" cy=".12" r=".75"><stop offset="0" stop-color="#fff" stop-opacity=".32"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>');
+        parts.push('<g clip-path="url(#forme)"><rect width="512" height="512" fill="url(#reflet)"/></g>');
+      }
+    }
+
+    // Texte et emplacement du motif
+    const texte = o.texte === 'nom' ? String(o.nom || '').trim() : o.texte === 'initiales' ? initiales(o.nom) : '';
+    const arc = !!texte && o.position === 'arc' && (forme === 'rond' || forme === 'aucune');
+    const k = (Number(o.taille) || 100) / 100;
+    let S, cy;
+    if (motif.type === 'photo') { S = 0; cy = 256; }
+    else if (!texte) { S = (forme === 'aucune' ? 420 : forme === 'blason' ? 270 : 300) * k; cy = forme === 'blason' ? 236 : 256; }
+    else if (arc) { S = 230 * k; cy = 256; }
+    else { S = (forme === 'blason' ? 190 : 215) * k; cy = forme === 'blason' ? 195 : 212; }
+
+    // Motif
+    if (motif.type === 'photo') {
+      const z = k;
+      const W = 512 * z, X = 256 - W / 2;
+      let filtrePhoto = '';
+      if (!o.photoOrigine) {
+        const a = hexVersRgb(cFond) || [0, 0, 0], b = hexVersRgb(cMotif) || [255, 255, 255];
+        const tv = i => (a[i] / 255).toFixed(3) + ' ' + (b[i] / 255).toFixed(3);
+        defs.push('<filter id="bichro" color-interpolation-filters="sRGB"><feColorMatrix type="saturate" values="0"/><feComponentTransfer><feFuncR type="linear" slope="1.5" intercept="-.25"/><feFuncG type="linear" slope="1.5" intercept="-.25"/><feFuncB type="linear" slope="1.5" intercept="-.25"/></feComponentTransfer><feComponentTransfer><feFuncR type="table" tableValues="' + tv(0) + '"/><feFuncG type="table" tableValues="' + tv(1) + '"/><feFuncB type="table" tableValues="' + tv(2) + '"/></feComponentTransfer></filter>');
+        filtrePhoto = ' filter="url(#bichro)"';
+      }
+      const img = '<image href="' + motif.data + '" x="' + X + '" y="' + X + '" width="' + W + '" height="' + W + '" preserveAspectRatio="xMidYMid slice"' + filtrePhoto + '/>';
+      parts.push(forme !== 'aucune' ? '<g clip-path="url(#forme)">' + img + '</g>' : img);
+      if (texte && !arc) {
+        defs.push('<linearGradient id="bande" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="' + cFond + '" stop-opacity="0"/><stop offset="1" stop-color="' + cFond + '" stop-opacity=".92"/></linearGradient>');
+        parts.push('<g' + (forme !== 'aucune' ? ' clip-path="url(#forme)"' : '') + '><rect y="300" width="512" height="212" fill="url(#bande)"/></g>');
+      }
+    } else if (S > 0) {
+      const x = 256 - S / 2, y = cy - S / 2;
+      let contenu;
+      if (motif.type === 'mono') {
+        const ini = initiales(o.nom);
+        const fs = Math.min(400, 760 / Math.max(1, ini.length)) ;
+        contenu = '<svg x="' + x + '" y="' + y + '" width="' + S + '" height="' + S + '" viewBox="0 0 512 512"><text x="256" y="256" dominant-baseline="central" text-anchor="middle" font-family=\'' + pol.f + '\' font-weight="' + pol.p + '" font-size="' + fs + '" fill="#fff">' + xml(ini) + '</text></svg>';
+      } else {
+        contenu = '<svg x="' + x + '" y="' + y + '" width="' + S + '" height="' + S + '" viewBox="' + xml(motif.vb) + '" color="#fff" fill="none">' + motif.c + '</svg>';
+      }
+      defs.push('<mask id="motif" maskUnits="userSpaceOnUse" x="0" y="0" width="512" height="512">' + contenu + '</mask>');
+      parts.push('<g' + filtre + '><rect width="512" height="512" fill="' + peinture('pMotif', cMotif) + '" mask="url(#motif)"/></g>');
+    }
+
+    // Texte
+    if (texte) {
+      const peintureTexte = peinture('pTexte', cTexte);
+      const attrs = ' font-family=\'' + pol.f + '\' font-weight="' + pol.p + '" fill="' + peintureTexte + '" text-anchor="middle"';
+      if (arc) {
+        defs.push('<path id="arcHaut" d="M66 256A190 190 0 0 1 446 256"/>');
+        const fs = Math.max(22, Math.min(56, 560 / (texte.length * 0.62)));
+        parts.push('<g' + filtre + '><text' + attrs + ' font-size="' + fs.toFixed(1) + '" letter-spacing="3"><textPath href="#arcHaut" startOffset="50%">' + xml(texte.toUpperCase()) + '</textPath></text></g>');
+      } else {
+        const largeur = forme === 'blason' ? 300 : forme === 'aucune' ? 470 : forme === 'rond' ? 340 : 400;
+        const ini = o.texte === 'initiales';
+        const fs = Math.max(24, Math.min(ini ? 110 : 66, largeur / (texte.length * 0.58)));
+        const yT = motif.type === 'photo' ? 430 : Math.min(470, cy + S / 2 + 26 + fs * 0.78);
+        const trop = texte.length * fs * 0.58 > largeur;
+        parts.push('<g' + filtre + '><text' + attrs + ' x="256" y="' + yT.toFixed(1) + '" font-size="' + fs.toFixed(1) + '"' + (trop ? ' textLength="' + largeur + '" lengthAdjust="spacingAndGlyphs"' : '') + '>' + xml(texte) + '</text></g>');
+      }
+    }
+
+    // Bordure
+    if (o.bordure !== 'aucune' && forme !== 'aucune') {
+      const ep = o.bordure === 'epaisse' ? 22 : 10;
+      parts.push('<g' + filtre + ' transform="translate(256 256) scale(' + (1 - ep / 512 - 0.02) + ') translate(-256 -256)">' + formeEl(' fill="none" stroke="' + peinture('pBord', cMotif) + '" stroke-width="' + ep + '"') + '</g>');
+    }
+
+    return '<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 512 512"><defs>' + defs.join('') + '</defs>' + parts.join('') + '</svg>';
   }
   const svgEnURL = svg => 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
 
@@ -1390,115 +1498,46 @@
     });
   }
 
-  async function imageFondEnBase64() {
+  async function imageFondReduite(max, qualite) {
     const src = imagesLocales[cfg.design.imageFond] || cfg.design.imageFond;
     const im = await chargerImage(src);
     if (!im) throw new Error('Image de fond introuvable');
-    const k = Math.min(1, 1024 / Math.max(im.width, im.height));
+    const k = Math.min(1, max / Math.max(im.width, im.height));
     const cv = document.createElement('canvas');
     cv.width = Math.round(im.width * k); cv.height = Math.round(im.height * k);
     cv.getContext('2d').drawImage(im, 0, 0, cv.width, cv.height);
-    return { im, b64: cv.toDataURL('image/jpeg', 0.85).split(',')[1] };
+    return cv.toDataURL('image/jpeg', qualite || 0.85);
   }
 
-  function couleursLogo(o) {
-    if (o.palette === 'perso') return [o.c1, o.c2];
-    if (o.palette === 'theme') return [cfg.design.fond, cfg.design.accent];
-    return LOGO_PALETTES[o.palette].c;
-  }
-
-  function cheminForme(ctx, forme, T) {
-    ctx.beginPath();
-    if (forme === 'rond') ctx.arc(T / 2, T / 2, T / 2, 0, Math.PI * 2);
-    else if (forme === 'carre') rectArrondi(ctx, 0, 0, T, T, T * 0.2);
-    else if (forme === 'blason') {
-      ctx.moveTo(T * .08, T * .06); ctx.lineTo(T * .92, T * .06); ctx.lineTo(T * .92, T * .5);
-      ctx.quadraticCurveTo(T * .9, T * .82, T * .5, T * .97); ctx.quadraticCurveTo(T * .1, T * .82, T * .08, T * .5); ctx.closePath();
-    } else ctx.rect(0, 0, T, T);
-  }
-
-  /* Variante locale : la photo de fond recadrée et stylisée */
-  function logoPhoto(im, o) {
-    const T = 1024;
-    const [c1, c2] = couleursLogo(o);
-    const cv = document.createElement('canvas'); cv.width = cv.height = T;
-    const ctx = cv.getContext('2d');
-    ctx.save(); cheminForme(ctx, o.forme, T); ctx.clip();
-    const z = o.zoom || 1.4;
-    const k = Math.max(T / im.width, T / im.height) * z;
-    ctx.drawImage(im, (T - im.width * k) / 2, (T - im.height * k) / 2, im.width * k, im.height * k);
-    // bichromie : sombre → couleur 1, clair → couleur 2
-    const px = ctx.getImageData(0, 0, T, T), d = px.data;
-    const a = hexVersRgb(c1) || [0, 0, 0], b = hexVersRgb(c2) || [255, 255, 255];
-    for (let i = 0; i < d.length; i += 4) {
-      let l = (0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]) / 255;
-      l = Math.min(1, Math.max(0, (l - 0.5) * 1.5 + 0.5));
-      d[i] = a[0] + (b[0] - a[0]) * l; d[i + 1] = a[1] + (b[1] - a[1]) * l; d[i + 2] = a[2] + (b[2] - a[2]) * l;
-    }
-    ctx.putImageData(px, 0, 0);
-    if (o.effet === 'brillant' || o.effet === 'metal') {
-      const g = ctx.createLinearGradient(0, 0, 0, T * .55);
-      g.addColorStop(0, 'rgba(255,255,255,.35)'); g.addColorStop(1, 'rgba(255,255,255,0)');
-      ctx.fillStyle = g; ctx.fillRect(0, 0, T, T * .55);
-    }
-    ctx.restore();
-    if (o.forme !== 'libre') {
-      ctx.save(); cheminForme(ctx, o.forme, T); ctx.clip();
-      ctx.lineWidth = T * 0.05;
-      if (o.effet === 'metal') {
-        const g = ctx.createLinearGradient(0, 0, T, T);
-        ['#8a6d2f', '#f3e3a3', '#a8842f', '#f8ecc0', '#7a5f26'].forEach((c, i) => g.addColorStop(i / 4, c));
-        ctx.strokeStyle = g;
-      } else ctx.strokeStyle = c2;
-      if (o.effet === 'neon') { ctx.shadowColor = c2; ctx.shadowBlur = 40; }
-      cheminForme(ctx, o.forme, T); ctx.stroke();
-      ctx.restore();
-    }
-    return cv.toDataURL('image/png');
-  }
-
-  async function genererLogosIA(o, photo) {
-    const [c1, c2] = couleursLogo(o);
+  /* Un seul appel IA : 3 motifs monochromes, réutilisables à volonté */
+  async function creerMotifsIA(o, photoB64) {
     const systeme = [
-      'Tu es directeur artistique et tu dessines des logos vectoriels en SVG autonome, de qualité professionnelle.',
-      'Contraintes techniques strictes :',
-      '- Racine : <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">.',
-      '- Interdit : <script>, <image>, <foreignObject>, liens externes, polices externes, @import.',
-      '- Polices autorisées uniquement : "Georgia, serif", "Times New Roman, serif", "Arial, Helvetica, sans-serif", "Trebuchet MS, sans-serif", "Verdana, sans-serif".',
-      '- Autorisés : path, circle, rect, polygon, text, textPath, g, defs, linearGradient, radialGradient, clipPath, filter (feGaussianBlur, feDropShadow, feMerge).',
-      '- Moins de 12 000 caractères par SVG. Formes nettes, lisibles même affichées à 40 pixels.',
-      '- Tout le texte reste entièrement dans le cadre avec une marge, jamais coupé ; texte court et bien proportionné.',
-      '- Les variantes doivent être nettement différentes entre elles (composition, pictogramme, typographie).',
-      'Réponds uniquement en appelant l’outil proposer_logos.'
+      'Tu dessines des pictogrammes vectoriels destinés à des logos.',
+      'Chaque pictogramme est un SVG autonome : <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">.',
+      'Il contient UNIQUEMENT le motif, centré, occupant environ 90 % du cadre.',
+      'Monochrome : uniquement fill="currentColor" ou stroke="currentColor" (et fill="none" pour les traits).',
+      'Interdit : fond, cadre, cercle de bordure, texte, lettres, dégradé, filtre, <image>, <script>, <style>, styles en ligne.',
+      'Formes nettes et lisibles même affichées à 40 pixels. Moins de 6 000 caractères par SVG.',
+      'Les 3 propositions doivent être nettement différentes (angle, niveau de détail, composition).',
+      'Réponds uniquement en appelant l’outil proposer_motifs.'
     ].join('\n');
-    const texteLogo = o.texte === 'nom' ? 'le nom « ' + o.nom + ' »' : o.texte === 'initiales' ? 'les initiales de « ' + o.nom + ' »' : 'aucun texte (pictogramme seul)';
     const demande = [
       'Entreprise : ' + (cfg.titre || ''),
       cfg.sousTitre ? 'Accroche : ' + cfg.sousTitre : '',
       cfg.home && cfg.home.ia && cfg.home.ia.description ? 'Activité : ' + cfg.home.ia.description : '',
-      o.description ? 'Idée du client pour le logo : ' + o.description : '',
-      'Style : ' + LOGO_STYLES[o.style].p + '.',
-      'Forme : ' + LOGO_FORMES[o.forme].p + '.',
-      'Rendu : ' + LOGO_EFFETS[o.effet].p + '.',
-      'Palette principale : ' + c1 + ' et ' + c2 + ' (des nuances proches sont permises pour les dégradés).',
-      'Texte dans le logo : ' + texteLogo + '.',
-      photo ? 'Inspire-toi du sujet principal de la photo jointe : reproduis-en une silhouette simplifiée et reconnaissable (contour, proportions), sans détail photographique.' : '',
-      'Propose ' + o.nombre + ' variantes.'
+      o.idee ? 'Idée du client : ' + o.idee : '',
+      'Style du motif : ' + LOGO_MOTIFS_IA[o.styleMotif].p + '.',
+      photoB64 ? 'Dessine une silhouette simplifiée et reconnaissable du sujet principal de la photo jointe (contour, proportions), sans détail photographique.' : '',
+      'Propose 3 pictogrammes.'
     ].filter(Boolean).join('\n');
-
-    const contenu = photo
-      ? [{ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: photo } }, { type: 'text', text: demande }]
-      : demande;
-
+    const contenu = photoB64 ? [{ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: photoB64 } }, { type: 'text', text: demande }] : demande;
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-api-key': secrets.anthropic, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
       body: JSON.stringify({
-        model: MODELE_IA, max_tokens: 16000, system: systeme,
-        tools: [{
-          name: 'proposer_logos', description: 'Renvoie les variantes de logo en SVG.',
-          input_schema: { type: 'object', properties: { logos: { type: 'array', items: { type: 'object', properties: { nom: { type: 'string' }, svg: { type: 'string' } }, required: ['svg'] } } }, required: ['logos'] }
-        }],
+        model: MODELE_IA, max_tokens: 8000, system: systeme,
+        tools: [{ name: 'proposer_motifs', description: 'Renvoie les pictogrammes en SVG.',
+          input_schema: { type: 'object', properties: { motifs: { type: 'array', items: { type: 'object', properties: { nom: { type: 'string' }, svg: { type: 'string' } }, required: ['svg'] } } }, required: ['motifs'] } }],
         tool_choice: { type: 'auto' },
         messages: [{ role: 'user', content: contenu }]
       })
@@ -1514,143 +1553,185 @@
       throw new Error(m);
     }
     const blocs = j.content || [];
-    const outil = blocs.find(c => c.type === 'tool_use' && c.input && Array.isArray(c.input.logos));
-    let bruts = outil ? outil.input.logos.map(l => l.svg) : [];
-    if (!bruts.length) bruts = (blocs.filter(c => c.type === 'text').map(c => c.text).join('\n').match(/<svg[\s\S]*?<\/svg>/gi) || []);
-    const propres = bruts.map(nettoyerSVG).filter(Boolean);
-    // on garde seulement ce que le navigateur sait afficher
-    const ok = [];
-    for (const s of propres) {
-      try { await imageEnPNG(svgEnURL(s), 64); ok.push(s); } catch (e) {}
+    const outil = blocs.find(c => c.type === 'tool_use' && c.input && Array.isArray(c.input.motifs));
+    let bruts = outil ? outil.input.motifs.map(x => x.svg) : [];
+    if (!bruts.length) bruts = blocs.filter(c => c.type === 'text').map(c => c.text).join('\n').match(/<svg[\s\S]*?<\/svg>/gi) || [];
+    const motifs = [];
+    for (const b of bruts) {
+      const m = nettoyerMotif(b);
+      if (!m) continue;
+      try { await imageEnPNG(svgEnURL(composerLogo(Object.assign({}, cfg.logoIA, { texte: 'aucun', forme: 'aucune', palette: 'clair', effet: 'mat' }), m)), 64); motifs.push(m); } catch (e) {}
     }
-    if (!ok.length) throw new Error('Aucun logo exploitable dans la réponse. Réessayez.');
-    return ok;
+    if (!motifs.length) throw new Error('Aucun motif exploitable dans la réponse. Réessayez.');
+    return motifs;
   }
 
   function ouvrirCreateurLogo() {
-    const o = Object.assign({ source: 'description', description: '', style: 'embleme', forme: 'rond', effet: 'brillant', palette: 'theme',
-      c1: cfg.design.fond, c2: cfg.design.accent, texte: 'nom', nom: cfg.titre || '', nombre: 3, zoom: 1.4 }, cfg.logoIA || {});
-    cfg.logoIA = o;
+    const o = cfg.logoIA = Object.assign({
+      motifs: [], choix: 'mono', idee: '', styleMotif: 'silhouette', sourceIA: 'description',
+      forme: 'rond', transparent: false, bordure: 'fine', effet: 'brillant', palette: 'theme',
+      cFond: cfg.design.fond, cMotif: cfg.design.accent, cTexte: cfg.design.accent,
+      texte: 'nom', nom: cfg.titre || '', position: 'dessous', police: 'elegante', taille: 100, photoOrigine: false
+    }, cfg.logoIA || {});
+    if (!Array.isArray(o.motifs)) o.motifs = [];
+    let photo = null; // motif photo (calculé à l'ouverture, non enregistré)
+
     const fond = el('div', { class: 'modale-fond' });
     const boite = el('div', { class: 'modale', role: 'dialog', 'aria-modal': 'true' });
-    const fermer = () => { fond.remove(); document.body.style.overflow = ''; };
+    const fermer = () => { fond.remove(); document.body.style.overflow = ''; document.removeEventListener('keydown', esc); };
+    const esc = e => { if (e.key === 'Escape') fermer(); };
+    document.addEventListener('keydown', esc);
     fond.addEventListener('click', e => { if (e.target === fond) fermer(); });
-    document.addEventListener('keydown', function esc(e) { if (e.key === 'Escape') { fermer(); document.removeEventListener('keydown', esc); } });
 
+    const apercu = el('img', { class: 'logo-apercu', alt: 'Aperçu du logo' });
     const corps = el('div', { class: 'modale-corps' });
-    const resultats = el('div', { class: 'logos-grille' });
-    const msg = el('div', { class: 'msg' });
+    const motifCourant = () => {
+      if (o.choix === 'photo') return photo;
+      if (o.choix === 'mono') return { type: 'mono' };
+      const i = Number(String(o.choix).replace('ia', ''));
+      return o.motifs[i] || { type: 'mono' };
+    };
+    const rafraichir = () => { const m = motifCourant(); if (m) apercu.src = svgEnURL(composerLogo(o, m)); };
 
     function puces(etiq, options, cle, apres) {
       const box = el('div', { class: 'puces' });
       Object.keys(options).forEach(k => {
-        const b = el('button', { type: 'button', class: 'puce' + (o[cle] === k ? ' actif' : ''), text: options[k].nom });
-        b.addEventListener('click', () => { o[cle] = k; box.querySelectorAll('.puce').forEach(x => x.classList.toggle('actif', x === b)); if (apres) apres(); });
+        const b = el('button', { type: 'button', class: 'puce' + (String(o[cle]) === k ? ' actif' : ''), text: options[k].nom || options[k] });
+        b.addEventListener('click', () => { o[cle] = k; box.querySelectorAll('.puce').forEach(x => x.classList.toggle('actif', x === b)); if (apres) apres(); rafraichir(); });
         box.appendChild(b);
       });
       return el('div', { class: 'opt' }, [el('span', { class: 'etiq', text: etiq }), box]);
     }
+    const couleurLogo = (etiq, cle) => {
+      const c = el('input', { type: 'color', value: o[cle] || '#000000' });
+      c.addEventListener('input', () => { o[cle] = c.value; rafraichir(); });
+      return el('label', { class: 'coul' }, [c, el('span', { text: etiq })]);
+    };
 
+    function vignetteMotif(cle, motif, nom) {
+      const im = el('img', { alt: '', src: svgEnURL(composerLogo(Object.assign({}, o, { texte: 'aucun', bordure: 'aucune' }), motif)) });
+      const b = el('button', { type: 'button', class: 'motif-v' + (o.choix === cle ? ' actif' : '') }, [el('span', { class: 'damier' }, [im]), el('b', { text: nom })]);
+      b.addEventListener('click', () => { o.choix = cle; construire(); });
+      return b;
+    }
+
+    function panneauIA() {
+      const p = el('div', { class: 'ia-boite', style: 'margin:0 0 14px' });
+      if (!secrets.anthropic) {
+        p.append(el('b', { text: 'IA non activée' }), el('div', { class: 'aide', text: 'Ajoutez la clé API dans la section Page Home pour créer des motifs dessinés. Le monogramme et la photo restent disponibles.' }));
+        return p;
+      }
+      const aFond = !!cfg.design.imageFond;
+      const idee = el('textarea', { rows: 2, value: o.idee, placeholder: 'Ex. : un van vu de face, élégant' });
+      idee.addEventListener('input', () => { o.idee = idee.value; });
+      const msg = el('div', { class: 'msg' });
+      const go = el('button', { type: 'button', class: 'btn btn-prim btn-plein', text: '✨ Créer 3 motifs (quelques centimes)' });
+      go.addEventListener('click', async () => {
+        go.disabled = true; go.textContent = 'L’IA dessine…'; msg.className = 'msg'; msg.textContent = '';
+        try {
+          const b64 = o.sourceIA === 'fond' && aFond ? (await imageFondReduite(1024, .85)).split(',')[1] : null;
+          const nouveaux = await creerMotifsIA(o, b64);
+          o.motifs = o.motifs.concat(nouveaux).slice(-9);
+          o.choix = 'ia' + (o.motifs.length - nouveaux.length);
+          changement();
+          construire();
+        } catch (e) {
+          msg.className = 'msg err'; msg.textContent = e.message === 'Failed to fetch' ? 'Connexion impossible au service IA.' : e.message;
+          go.disabled = false; go.textContent = '✨ Créer 3 motifs (quelques centimes)';
+        }
+      });
+      const src = el('div');
+      src.appendChild(puces('Inspiration', { description: 'Ma description', fond: 'Mon image de fond' }, 'sourceIA', () => { construireAlerte(); }));
+      const alerte = el('div');
+      const construireAlerte = () => {
+        alerte.innerHTML = '';
+        if (o.sourceIA === 'fond' && !aFond) alerte.appendChild(el('div', { class: 'alerte' }, [
+          el('b', { text: 'Aucune image de fond pour l’instant.' }),
+          el('div', { text: 'Ajoutez d’abord une photo dans Design → Image de fond.' }),
+          el('button', { type: 'button', class: 'btn btn-mini', text: 'Aller à Design', onclick: () => {
+            fermer(); const d = document.querySelector('details[data-id=design]');
+            if (d) { d.open = true; d.scrollIntoView({ behavior: 'smooth', block: 'start' }); } } })]));
+        go.disabled = o.sourceIA === 'fond' && !aFond;
+      };
+      construireAlerte();
+      p.append(el('b', { class: 'ia-titre', text: '✨ Nouveaux motifs dessinés par l’IA' }),
+        el('div', { class: 'aide', style: 'margin:4px 0 10px', text: 'Un seul appel : vous gardez les motifs et changez ensuite forme, couleurs et effets gratuitement.' }),
+        src, alerte,
+        el('label', { class: 'champ' }, [el('span', { text: 'Votre idée (facultatif)' }), idee]),
+        puces('Style du motif', LOGO_MOTIFS_IA, 'styleMotif'), go, msg);
+      return p;
+    }
+
+    let iaOuvert = false;
     function construire() {
       corps.innerHTML = '';
-      const aFond = !!cfg.design.imageFond;
-      corps.appendChild(puces('Point de départ', { description: { nom: '✍️ Une description' }, fond: { nom: '🖼 L’image de fond' } }, 'source', construire));
+      // Motifs disponibles
+      const grille = el('div', { class: 'motifs' });
+      grille.appendChild(vignetteMotif('mono', { type: 'mono' }, 'Monogramme'));
+      if (photo) grille.appendChild(vignetteMotif('photo', photo, 'Photo'));
+      o.motifs.forEach((m, i) => grille.appendChild(vignetteMotif('ia' + i, m, 'Motif IA ' + (i + 1))));
+      const plus = el('button', { type: 'button', class: 'motif-v motif-plus' }, [el('span', { class: 'plus', text: '＋' }), el('b', { text: 'Motifs IA' })]);
+      plus.addEventListener('click', () => { iaOuvert = !iaOuvert; construire(); });
+      grille.appendChild(plus);
+      corps.append(el('span', { class: 'etiq', text: '1. Motif' }), grille);
+      if (iaOuvert || (!o.motifs.length && secrets.anthropic && o.choix === 'mono' && false)) corps.appendChild(panneauIA());
 
-      if (o.source === 'fond' && !aFond) {
-        corps.appendChild(el('div', { class: 'alerte' }, [
-          el('b', { text: 'Aucune image de fond pour l’instant.' }),
-          el('div', { text: 'Ajoutez d’abord une photo dans la section Design → Image de fond, puis revenez ici.' }),
-          el('button', { type: 'button', class: 'btn btn-mini', text: 'Aller à Design', onclick: () => {
-            fermer();
-            const d = document.querySelector('details[data-id=design]');
-            if (d) { d.open = true; d.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
-          } })
-        ]));
-        return;
+      // Habillage (local, gratuit)
+      corps.append(el('div', { class: 'aide', style: 'margin:4px 0 12px', text: '2. Habillage : tous ces réglages s’appliquent en direct, sans IA ni coût.' }));
+      corps.appendChild(puces('Forme', LOGO_FORMES, 'forme', construire));
+      if (o.forme !== 'aucune') {
+        corps.appendChild(puces('Fond', { plein: 'Plein', transparent: 'Transparent' }, '_fond', () => { o.transparent = o._fond === 'transparent'; }));
+        corps.appendChild(puces('Bordure', { aucune: 'Aucune', fine: 'Fine', epaisse: 'Épaisse' }, 'bordure'));
       }
-      if (o.source === 'fond') {
-        const v = el('div', { class: 'fond-vign' });
-        v.style.backgroundImage = 'url("' + (imagesLocales[cfg.design.imageFond] || cfg.design.imageFond) + '")';
-        corps.appendChild(el('div', { class: 'opt' }, [el('span', { class: 'etiq', text: 'Photo utilisée' }), v]));
-      }
-      const desc = el('textarea', { rows: 2, value: o.description, placeholder: o.source === 'fond' ? 'Facultatif : précisions (ex. mettre l’accent sur la calandre)' : 'Ex. : un van stylisé de face, élégant, esprit service haut de gamme' });
-      desc.addEventListener('input', () => { o.description = desc.value; });
-      corps.appendChild(el('label', { class: 'champ' }, [el('span', { text: o.source === 'fond' ? 'Précisions (facultatif)' : 'Décrivez le logo souhaité' }), desc]));
-
-      corps.appendChild(puces('Style', LOGO_STYLES, 'style'));
-      corps.appendChild(puces('Forme', LOGO_FORMES, 'forme'));
       corps.appendChild(puces('Rendu', LOGO_EFFETS, 'effet'));
-      const perso = el('div', { class: 'couleurs' + (o.palette === 'perso' ? '' : ' cache'), style: 'margin-top:8px' }, [couleur('Couleur 1', o, 'c1'), couleur('Couleur 2', o, 'c2')]);
+      const perso = el('div', { class: 'couleurs' + (o.palette === 'perso' ? '' : ' cache') }, [couleurLogo('Fond', 'cFond'), couleurLogo('Motif', 'cMotif'), couleurLogo('Texte', 'cTexte')]);
       corps.appendChild(puces('Couleurs', LOGO_PALETTES, 'palette', () => perso.classList.toggle('cache', o.palette !== 'perso')));
       corps.appendChild(perso);
-
-      const nom = el('input', { type: 'text', value: o.nom });
-      nom.addEventListener('input', () => { o.nom = nom.value; });
-      corps.appendChild(puces('Texte dans le logo', { nom: { nom: 'Nom complet' }, initiales: { nom: 'Initiales' }, aucun: { nom: 'Sans texte' } }, 'texte'));
-      corps.appendChild(el('label', { class: 'champ' }, [el('span', { text: 'Nom à utiliser' }), nom]));
-
-      if (!secrets.anthropic) {
-        corps.appendChild(el('div', { class: 'alerte' }, [el('b', { text: 'Rédaction IA non activée.' }),
-          el('div', { text: 'Activez-la dans la section Page Home (clé API). ' + (o.source === 'fond' ? 'La version « photo stylisée » reste disponible.' : '') })]));
+      if (o.choix === 'photo') {
+        const c = el('input', { type: 'checkbox', checked: !!o.photoOrigine });
+        c.addEventListener('change', () => { o.photoOrigine = c.checked; rafraichir(); });
+        corps.appendChild(el('label', { class: 'bascule', style: 'border-top:0;margin-top:-6px' }, [el('span', { text: 'Garder les couleurs de la photo' }), c]));
       }
-      const go = el('button', { type: 'button', class: 'btn btn-prim btn-plein', text: '✨ Créer les logos' });
-      go.addEventListener('click', () => lancer(go));
-      corps.append(el('div', { class: 'aide', style: 'margin:6px 0 10px', text: 'L’IA dessine ' + o.nombre + ' variantes vectorielles (environ 30 secondes, quelques centimes).' + (o.source === 'fond' ? ' Une version « photo stylisée » est aussi créée à partir de votre image.' : '') }), go, msg, resultats);
+      corps.appendChild(puces('Texte', { nom: 'Nom', initiales: 'Initiales', aucun: 'Aucun' }, 'texte', construire));
+      if (o.texte !== 'aucun') {
+        const nom = el('input', { type: 'text', value: o.nom });
+        nom.addEventListener('input', () => { o.nom = nom.value; rafraichir(); });
+        corps.appendChild(el('label', { class: 'champ' }, [el('span', { text: 'Nom' }), nom]));
+        if (o.forme === 'rond' || o.forme === 'aucune') corps.appendChild(puces('Position du texte', { dessous: 'Dessous', arc: 'En arc' }, 'position'));
+        corps.appendChild(puces('Police', LOGO_POLICES, 'police'));
+      }
+      const taille = el('input', { type: 'range', min: 60, max: 140, value: o.taille });
+      taille.addEventListener('input', () => { o.taille = Number(taille.value); rafraichir(); });
+      corps.appendChild(el('div', { class: 'opt' }, [el('span', { class: 'etiq', text: o.choix === 'photo' ? 'Zoom de la photo' : 'Taille du motif' }), taille]));
+      o._fond = o.transparent ? 'transparent' : 'plein';
+      rafraichir();
     }
 
-    async function lancer(go) {
-      go.disabled = true; go.textContent = 'Création en cours…';
-      msg.className = 'msg'; msg.textContent = 'L’IA dessine vos logos, patientez…';
-      resultats.innerHTML = '';
-      const propositions = [];
+    const utiliser = el('button', { type: 'button', class: 'btn btn-prim', text: '✓ Utiliser ce logo' });
+    utiliser.addEventListener('click', async () => {
+      utiliser.disabled = true;
       try {
-        let photo = null;
-        if (o.source === 'fond') {
-          const f = await imageFondEnBase64();
-          photo = f.b64;
-          propositions.push({ nom: 'Photo stylisée', png: logoPhoto(f.im, o) });
-          afficherResultats(propositions);
-        }
-        if (secrets.anthropic) {
-          const svgs = await genererLogosIA(o, photo);
-          for (const s of svgs) propositions.push({ nom: 'Logo IA', png: await imageEnPNG(svgEnURL(s), 1024) });
-        }
-        afficherResultats(propositions);
-        msg.textContent = propositions.length ? 'Touchez un logo pour le choisir.' : '';
-      } catch (e) {
-        msg.className = 'msg err'; msg.textContent = e.message === 'Failed to fetch' ? 'Connexion impossible au service IA.' : e.message;
-        if (propositions.length) afficherResultats(propositions);
-      }
-      go.disabled = false; go.textContent = '↻ Nouvelles variantes';
-    }
-
-    function afficherResultats(liste) {
-      resultats.innerHTML = '';
-      liste.forEach(p => {
-        const carte = el('button', { type: 'button', class: 'logo-prop' }, [
-          el('span', { class: 'damier' }, [el('img', { src: p.png, alt: p.nom })]), el('b', { text: p.nom })]);
-        carte.addEventListener('click', () => {
-          const chemin = 'images/logo-ia-' + Date.now() + '.png';
-          imagesLocales[chemin] = p.png;
-          imagesAEnvoyer[chemin] = p.png.split(',')[1];
-          cfg.logo = chemin;
-          cfg.design.logoRond = false;
-          fermer();
-          construireFormulaire(); changement();
-          const e = $('#etat'); e.className = 'etat'; e.textContent = 'Nouveau logo : cliquez sur Enregistrer pour publier';
-        });
-        resultats.appendChild(carte);
-      });
-    }
+        const png = await imageEnPNG(svgEnURL(composerLogo(o, motifCourant())), 1024);
+        const chemin = 'images/logo-' + Date.now() + '.png';
+        imagesLocales[chemin] = png;
+        imagesAEnvoyer[chemin] = png.split(',')[1];
+        cfg.logo = chemin;
+        cfg.design.logoRond = false;
+        fermer();
+        construireFormulaire(); changement();
+        const e = $('#etat'); e.className = 'etat'; e.textContent = 'Nouveau logo : cliquez sur Enregistrer pour publier';
+      } catch (e) { alert('Impossible de créer l’image : ' + e.message); utiliser.disabled = false; }
+    });
 
     boite.append(
-      el('div', { class: 'modale-tete' }, [el('b', { text: '✨ Créer un logo avec l’IA' }),
-        el('button', { type: 'button', class: 'btn btn-mini', text: '✕', 'aria-label': 'Fermer', onclick: fermer })]),
+      el('div', { class: 'modale-tete' }, [el('b', { text: '✨ Atelier logo' }), el('button', { type: 'button', class: 'btn btn-mini', text: '✕', 'aria-label': 'Fermer', onclick: fermer })]),
+      el('div', { class: 'logo-scene' }, [el('span', { class: 'damier grand' }, [apercu]), utiliser]),
       corps);
     fond.appendChild(boite);
     document.body.appendChild(fond);
     document.body.style.overflow = 'hidden';
     construire();
+    if (cfg.design.imageFond) imageFondReduite(700, .82).then(d => { photo = { type: 'photo', data: d }; construire(); }).catch(() => {});
   }
 
   function blocIA() {
