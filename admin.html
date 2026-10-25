@@ -53,6 +53,12 @@
     .col-apercu{padding:0 0 90px}
     .cadre{min-height:calc(100dvh - 150px);display:flex}
     .cadre > .qp{min-height:inherit}
+    .choix-apercu{display:flex;gap:4px;margin:10px auto;padding:3px;width:max-content;background:var(--bg);border:1px solid var(--ligne);border-radius:10px}
+    .choix-apercu.cache{display:none}
+    .choix-apercu button{border:0;background:transparent;padding:7px 14px;border-radius:7px;font-weight:600;font-size:.86rem;color:var(--doux);cursor:pointer}
+    .choix-apercu button.actif{background:var(--panneau);color:var(--txt);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+    .cadre.mode-home{height:calc(100dvh - 200px);min-height:0}
+    .cadre > .qh{height:100%}
     @media (max-width:899px){
       body[data-vue=edit] .col-apercu{display:none}
       body[data-vue=apercu] .col-edit{display:none}
@@ -60,8 +66,9 @@
     @media (min-width:900px){
       .onglets{display:none}
       .corps{grid-template-columns:minmax(380px,1fr) 440px}
-      .col-apercu{position:sticky;top:57px;height:calc(100dvh - 57px);padding:20px;display:flex;align-items:flex-start;justify-content:center}
-      .cadre{width:390px;height:calc(100dvh - 140px);min-height:0;max-height:800px;border-radius:36px;overflow:auto;
+      .col-apercu{position:sticky;top:57px;height:calc(100dvh - 57px);padding:4px 20px 20px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start}
+      .choix-apercu{margin:8px auto 12px}
+      .cadre,.cadre.mode-home{width:390px;height:calc(100dvh - 190px);min-height:0;max-height:800px;border-radius:36px;overflow:auto;
         border:10px solid #111;box-shadow:0 20px 60px rgba(0,0,0,.25)}
       .cadre > .qp{min-height:100%}
     }
@@ -103,6 +110,9 @@
 
     .bouton-carte{border:1px solid var(--ligne);border-radius:14px;padding:12px;margin-bottom:12px;background:var(--bg)}
     .bouton-carte.masque{opacity:.55}
+    .article-carte .ac-tete{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+    .article-carte .ac-tete b{flex:1}
+    .ajout-article{width:100%}
     .qr-bloc{display:flex;flex-direction:column;align-items:center;gap:10px}
     .qr-apercu{width:200px;height:200px;border-radius:14px;border:1px solid var(--ligne)}
     .qr-url{font-size:.82rem;color:var(--doux);word-break:break-all;text-align:center}
@@ -179,7 +189,7 @@
 
   <div class="corps">
     <div class="col-edit" id="formulaire"></div>
-    <div class="col-apercu"><div class="cadre" id="apercu"></div></div>
+    <div class="col-apercu"><div class="choix-apercu" id="choix-apercu"><button type="button" data-p="contact" class="actif">Page contact</button><button type="button" data-p="home">Page Home</button></div><div class="cadre" id="apercu"></div></div>
   </div>
 
   <div class="pied-barre">
@@ -269,10 +279,28 @@
 
   /* ---------------- Aperçu ---------------- */
   let minuterie = null;
+  let vueApercu = 'contact';
+  function choisirApercu(v) {
+    if (v === vueApercu) return;
+    vueApercu = v;
+    majApercu();
+  }
+  document.querySelectorAll('#choix-apercu button').forEach(b => b.addEventListener('click', () => choisirApercu(b.dataset.p)));
+
   function majApercu() {
     clearTimeout(minuterie);
     minuterie = setTimeout(() => {
-      rendrePage(cfg, $('#apercu'), { apercu: true, resoudre: p => imagesLocales[p] || p });
+      const cadre = $('#apercu');
+      const avecHome = cfg.home && cfg.home.actif;
+      if (!avecHome) vueApercu = 'contact';
+      $('#choix-apercu').classList.toggle('cache', !avecHome);
+      document.querySelectorAll('#choix-apercu button').forEach(b => b.classList.toggle('actif', b.dataset.p === vueApercu));
+      const resoudre = p => imagesLocales[p] || p;
+      const ancien = cadre.querySelector('.qh-defile');
+      const position = ancien ? ancien.scrollTop : 0;
+      cadre.classList.toggle('mode-home', vueApercu === 'home');
+      if (vueApercu === 'home') rendreHome(cfg, cadre, { apercu: true, resoudre, position, surContact: () => choisirApercu('contact') });
+      else rendrePage(cfg, cadre, { apercu: true, resoudre, lienHome: homeVisible(cfg), surHome: () => choisirApercu('home') });
     }, 60);
   }
   function changement() {
@@ -381,6 +409,12 @@
   };
 
   /* ---------------- Formulaire complet ---------------- */
+  document.getElementById('formulaire').addEventListener('focusin', e => {
+    const sec = e.target.closest('details.section');
+    if (!sec || sec.dataset.id === 'partage') return;
+    choisirApercu(sec.dataset.id === 'home' && cfg.home.actif ? 'home' : 'contact');
+  });
+
   function construireFormulaire() {
     const f = $('#formulaire');
     if (f.children.length) sectionsOuvertes = new Set([...f.querySelectorAll('details.section[open]')].map(x => x.dataset.id));
@@ -411,6 +445,9 @@
       if (cartes.length) cartes[cartes.length - 1].scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
     f.appendChild(section('boutons', 'Boutons et réseaux', true, [liste, el('div', { class: 'ajout' }, [choixAjout])]));
+
+    /* Page Home */
+    f.appendChild(sectionHome());
 
     /* Disposition */
     const dispos = el('div', { class: 'dispos' });
@@ -1059,6 +1096,75 @@
       default:        c = logo(30, 26, 8) + barre(16, 40, 28) + barre(20, 47, 20, 3, .35) + pts(grille(18, 62, 6, 12));
     }
     return '<svg viewBox="0 0 60 100" aria-hidden="true">' + c + '</svg>';
+  }
+
+  /* =============== Page Home : articles en pancartes =============== */
+  function sectionHome() {
+    const h = cfg.home;
+    const actif = el('input', { type: 'checkbox', checked: !!h.actif });
+    const corps = el('div', { class: h.actif ? '' : 'cache' });
+    actif.addEventListener('change', () => {
+      h.actif = actif.checked;
+      corps.classList.toggle('cache', !h.actif);
+      vueApercu = h.actif ? 'home' : 'contact';
+      changement();
+    });
+
+    const liste = el('div');
+    h.articles.forEach((a, i) => liste.appendChild(carteArticle(a, i)));
+    const plein = h.articles.length >= HOME_MAX_ARTICLES;
+    const ajouter = el('button', { type: 'button', class: 'btn ajout-article', disabled: plein,
+      text: plein ? 'Maximum atteint (' + HOME_MAX_ARTICLES + ' articles)' : '＋ Ajouter un article (' + h.articles.length + '/' + HOME_MAX_ARTICLES + ')' });
+    ajouter.addEventListener('click', () => {
+      if (h.articles.length >= HOME_MAX_ARTICLES) return;
+      h.articles.push({ titre: 'Nouvel article', texte: '', image: '', style: 'texte' });
+      vueApercu = 'home';
+      construireFormulaire(); changement();
+      const cartes = document.querySelectorAll('.article-carte');
+      if (cartes.length) cartes[cartes.length - 1].scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+
+    corps.append(
+      segments('Le QR code ouvre', { contact: 'Page contact', home: 'Page Home' }, h, 'arrivee'),
+      el('div', { class: 'grille2' }, [
+        champTexte('Bouton de la barre du haut', h, 'boutonContact', { ph: 'Contact' }),
+        champTexte('Lien vers la Home (page contact)', h, 'lienTexte', { ph: 'Découvrir l’entreprise' })
+      ]),
+      el('span', { class: 'etiq', text: 'Articles — une pancarte plein écran chacun, on passe de l’une à l’autre en glissant' }),
+      liste, ajouter
+    );
+    return section('home', 'Page Home', false, [
+      el('label', { class: 'bascule', style: 'border-top:0' }, [el('span', { text: 'Activer la page Home' }), actif]),
+      corps
+    ]);
+  }
+
+  function carteArticle(a, i) {
+    const n = cfg.home.articles.length;
+    const carte = el('div', { class: 'bouton-carte article-carte' + (a.masque ? ' masque' : '') });
+    const deplacer = dir => {
+      const j = i + dir; if (j < 0 || j >= n) return;
+      const L = cfg.home.articles;
+      [L[i], L[j]] = [L[j], L[i]];
+      construireFormulaire(); changement();
+    };
+    carte.append(
+      el('div', { class: 'ac-tete' }, [el('b', { text: 'Pancarte ' + (i + 1) }), caseAfficher(a, carte)]),
+      champTexte('Titre', a, 'titre', { ph: 'Qui sommes-nous ?' }),
+      (() => { const c = champTexte('Texte', a, 'texte', { multi: true, ph: 'Votre texte…' }); c.querySelector('textarea').rows = 5; return c; })(),
+      segments('Mise en page', HOME_STYLES, a, 'style'),
+      choixImage('Image', a, 'image', { nom: 'article', max: 1600, fond: true }),
+      el('div', { class: 'bc-actions' }, [
+        el('button', { type: 'button', class: 'btn btn-mini', text: '↑', disabled: i === 0, onclick: () => deplacer(-1) }),
+        el('button', { type: 'button', class: 'btn btn-mini', text: '↓', disabled: i === n - 1, onclick: () => deplacer(1) }),
+        el('span', { class: 'esp' }),
+        el('button', { type: 'button', class: 'btn btn-mini', text: '🗑 Supprimer', disabled: n <= 1, onclick: () => {
+          if (!confirm('Supprimer la pancarte « ' + (a.titre || 'sans titre') + ' » ?')) return;
+          cfg.home.articles.splice(i, 1); construireFormulaire(); changement();
+        } })
+      ])
+    );
+    return carte;
   }
 
   function carteBouton(b, i) {

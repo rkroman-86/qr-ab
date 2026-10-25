@@ -9,6 +9,8 @@
     body { background: #f5f1ea; }
     #page { min-height: 100vh; min-height: 100dvh; display: flex; }
     #page > .qp { min-height: 100vh; min-height: 100dvh; }
+    #page > .qh { height: 100vh; height: 100dvh; }
+    body.mode-home { overflow: hidden; }
     .chargement { margin: auto; width: 28px; height: 28px; border: 3px solid rgba(0,0,0,.12);
       border-top-color: rgba(0,0,0,.5); border-radius: 50%; animation: t .8s linear infinite; }
     @keyframes t { to { transform: rotate(360deg); } }
@@ -19,17 +21,30 @@
   <noscript>Activez JavaScript pour afficher cette page.</noscript>
   <script src="commun.js"></script>
   <script>
+    let cfg = null;
+
+    /* #accueil → page Home, #contact → page des boutons,
+       sans ancre → page d'arrivée choisie dans l'éditeur */
+    function afficher() {
+      const racine = document.getElementById('page');
+      const ancre = location.hash;
+      const c = normaliser(fusion(CONFIG_DEFAUT, cfg));
+      const avecHome = homeVisible(c);
+      const montrerHome = avecHome && (ancre === '#accueil' || (ancre !== '#contact' && c.home.arrivee === 'home'));
+      document.body.classList.toggle('mode-home', montrerHome);
+      if (montrerHome) rendreHome(cfg, racine);
+      else rendrePage(cfg, racine, { lienHome: avecHome });
+      window.scrollTo(0, 0);
+      document.title = c.titre || 'Bienvenue';
+      document.body.style.background = c.design.fond;
+      let meta = document.querySelector('meta[name=theme-color]');
+      if (!meta) { meta = document.createElement('meta'); meta.name = 'theme-color'; document.head.appendChild(meta); }
+      meta.content = c.design.fond;
+    }
+
     fetch('config.json?t=' + Date.now(), { cache: 'no-store' })
       .then(r => r.json())
-      .then(cfg => {
-        const c = rendrePage(cfg, document.getElementById('page'));
-        document.title = c.titre || 'Bienvenue';
-        document.body.style.background = c.design.fond;
-        const meta = document.createElement('meta');
-        meta.name = 'theme-color';
-        meta.content = c.design.fond;
-        document.head.appendChild(meta);
-      })
+      .then(c => { cfg = c; afficher(); window.addEventListener('hashchange', afficher); })
       .catch(() => {
         document.getElementById('page').innerHTML =
           '<p style="margin:auto;font-family:system-ui;opacity:.6">Page momentanément indisponible.</p>';

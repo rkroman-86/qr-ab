@@ -88,7 +88,19 @@ function normaliser(cfg) {
   cfg.reseaux = liste;
   if (!Array.isArray(cfg.boutons)) cfg.boutons = [];
   if (!cfg.boutons.some(b => b && b.type === 'reseaux')) cfg.boutons.push({ type: 'reseaux' });
+  const h = cfg.home && typeof cfg.home === 'object' ? cfg.home : {};
+  cfg.home = Object.assign({ actif: false, arrivee: 'contact', boutonContact: 'Contact', lienTexte: 'Découvrir l’entreprise' }, h);
+  if (!Array.isArray(cfg.home.articles) || !cfg.home.articles.length)
+    cfg.home.articles = [{ titre: 'Qui sommes-nous ?', texte: 'Présentez votre entreprise en quelques lignes.', image: '', style: 'photo' }];
+  cfg.home.articles = cfg.home.articles.slice(0, HOME_MAX_ARTICLES);
   return cfg;
+}
+
+const HOME_MAX_ARTICLES = 10;
+const HOME_STYLES = { photo: 'Photo plein écran', image: 'Image + texte', texte: 'Texte seul' };
+
+function homeVisible(cfg) {
+  return !!(cfg.home && cfg.home.actif && (cfg.home.articles || []).some(a => a && !a.masque && (a.titre || a.texte)));
 }
 
 /* Modèles de disposition */
@@ -250,6 +262,46 @@ const CSS_PAGE = `
 .qp-dispo-cotes .qp-zone-a{grid-area:a;align-self:center}
 .qp-dispo-cotes .qp-zone-b{grid-area:b;align-self:center}
 .qp-dispo-cotes .qp-entete{grid-area:entete;align-self:center}
+.qp-lien-home{position:absolute;top:calc(14px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);z-index:4;
+  padding:9px 18px;border-radius:999px;background:rgba(0,0,0,.38);color:#fff;font-weight:600;font-size:.88rem;text-decoration:none;
+  white-space:nowrap;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 4px 14px rgba(0,0,0,.18)}
+.qp-avec-home{padding-top:76px}
+/* ---------- Page Home : pancartes plein écran ---------- */
+.qh{position:relative;width:100%;height:100%;overflow:hidden;font-family:var(--police);color:var(--texte);background:var(--fond)}
+.qh *{box-sizing:border-box}
+.qh-barre{position:absolute;top:0;left:0;right:0;z-index:5;display:flex;align-items:center;gap:10px;
+  padding:10px 14px;padding-top:calc(10px + env(safe-area-inset-top));
+  background:color-mix(in srgb,var(--fond) 76%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border-bottom:1px solid color-mix(in srgb,var(--texte) 12%,transparent)}
+.qh-logo{width:38px;height:38px;object-fit:contain;flex-shrink:0}
+.qh-logo.rond{border-radius:50%;object-fit:cover;background:#fff}
+.qh-nom{flex:1;min-width:0;font-weight:700;font-size:1rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.qh-contact{flex-shrink:0;padding:9px 16px;border-radius:999px;font-weight:700;font-size:.9rem;text-decoration:none}
+.qh-defile{height:100%;overflow-y:auto;scroll-snap-type:y mandatory;overscroll-behavior-y:contain;scrollbar-width:none;outline:none}
+.qh-defile::-webkit-scrollbar{display:none}
+.qh-panneau{position:relative;height:100%;min-height:100%;scroll-snap-align:start;scroll-snap-stop:always;overflow:hidden;
+  display:flex;flex-direction:column;justify-content:flex-end;padding:88px 30px 70px 26px}
+.qh-p-photo{color:#fff;background:#111 center/cover no-repeat}
+.qh-p-photo::before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.15) 0%,rgba(0,0,0,.05) 35%,rgba(0,0,0,.78) 100%)}
+.qh-p-texte{justify-content:center;background:linear-gradient(165deg,var(--fond),var(--fond2))}
+.qh-p-image{padding:0;justify-content:flex-start;background:var(--fond)}
+.qh-p-image .qh-img{height:46%;flex-shrink:0;background:#111 center/cover no-repeat;margin-top:58px}
+.qh-p-image .qh-corps{padding:28px 30px 60px 26px;flex:1;display:flex;flex-direction:column;justify-content:center}
+.qh-corps{position:relative;z-index:1;max-width:620px}
+.qh-num{font-size:.78rem;letter-spacing:.18em;font-weight:700;opacity:.7;margin-bottom:12px}
+.qh-trait{width:46px;height:4px;border-radius:2px;background:var(--accent);margin-bottom:18px}
+.qh-titre{font-size:2.15rem;line-height:1.08;margin:0 0 14px;font-weight:800;letter-spacing:-.01em}
+.qh-p-texte .qh-titre{font-size:2.5rem}
+.qh-texte{font-size:1.04rem;line-height:1.58;margin:0;opacity:.92;white-space:pre-line}
+.qh-points{position:absolute;right:9px;top:50%;transform:translateY(-50%);z-index:5;display:flex;flex-direction:column;align-items:center;gap:8px}
+.qh-point{width:7px;height:7px;border-radius:4px;border:0;padding:0;cursor:pointer;background:#fff;opacity:.5;
+  box-shadow:0 0 0 1px rgba(0,0,0,.25);transition:height .25s,opacity .25s}
+.qh-point.actif{height:22px;opacity:1}
+.qh-indice{position:absolute;left:50%;bottom:calc(16px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:2;
+  display:flex;flex-direction:column;align-items:center;font-size:.75rem;font-weight:600;letter-spacing:.08em;opacity:.8;animation:qh-rebond 1.8s ease-in-out infinite}
+.qh-indice::after{content:"";width:12px;height:12px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(45deg);margin-top:2px}
+@keyframes qh-rebond{0%,100%{transform:translate(-50%,0)}50%{transform:translate(-50%,6px)}}
+@media (prefers-reduced-motion:reduce){.qh-indice{animation:none}}
 .qp-dispo-cotes .qp-pied{grid-area:pied}
 .qp-dispo-cotes .qp-rs{grid-template-columns:1fr;gap:14px}
 .qp-dispo-cotes .qp-rs-rond{width:54px;height:54px}
@@ -477,6 +529,15 @@ function rendrePage(cfgBrut, racine, opts) {
   }
 
   page.appendChild(c);
+  if (opts.lienHome) {
+    const l = doc.createElement('a');
+    l.className = 'qp-lien-home';
+    l.href = '#accueil';
+    l.textContent = cfg.home.lienTexte || 'Découvrir l’entreprise';
+    if (opts.surHome) l.addEventListener('click', e => { e.preventDefault(); opts.surHome(); });
+    page.appendChild(l);
+    page.classList.add('qp-avec-home');
+  }
   racine.appendChild(page);
   return cfg;
 }
@@ -594,4 +655,140 @@ function reduireImage(fichier, maxCote, typeSortie, qualite) {
     img.onerror = () => { URL.revokeObjectURL(url); ko(new Error('Image illisible')); };
     img.src = url;
   });
+}
+
+
+/* =========================================================
+   Page Home : pancartes plein écran à défilement aimanté
+   opts.resoudre(chemin), opts.apercu, opts.surContact()
+   ========================================================= */
+function rendreHome(cfgBrut, racine, opts) {
+  opts = opts || {};
+  const cfg = normaliser(fusion(CONFIG_DEFAUT, cfgBrut));
+  const d = cfg.design;
+  const res = opts.resoudre || (x => x);
+  const doc = racine.ownerDocument;
+  injecterCSS(doc);
+  racine.innerHTML = '';
+
+  const home = doc.createElement('div');
+  home.className = 'qh';
+  const st = home.style;
+  st.setProperty('--fond', d.fond);
+  st.setProperty('--fond2', d.fond2 || d.fond);
+  st.setProperty('--texte', d.texte);
+  st.setProperty('--accent', d.accent);
+  st.setProperty('--police', (FONTS[d.police] || FONTS.moderne).css);
+
+  /* Barre du haut, fixe */
+  const barre = doc.createElement('div');
+  barre.className = 'qh-barre';
+  if (cfg.logo) {
+    const img = doc.createElement('img');
+    img.className = 'qh-logo' + (d.logoRond ? ' rond' : '');
+    img.src = res(cfg.logo); img.alt = '';
+    barre.appendChild(img);
+  }
+  const nom = doc.createElement('div');
+  nom.className = 'qh-nom';
+  nom.textContent = cfg.titre || '';
+  barre.appendChild(nom);
+  const contact = doc.createElement('a');
+  contact.className = 'qh-contact';
+  contact.href = '#contact';
+  contact.textContent = cfg.home.boutonContact || 'Contact';
+  contact.style.background = d.accent;
+  contact.style.color = texteContraste(d.accent);
+  if (opts.surContact) contact.addEventListener('click', e => { e.preventDefault(); opts.surContact(); });
+  barre.appendChild(contact);
+
+  /* Pancartes */
+  const defile = doc.createElement('div');
+  defile.className = 'qh-defile';
+  defile.tabIndex = 0;
+  const articles = cfg.home.articles.filter(a => a && !a.masque && (a.titre || a.texte));
+  const total = articles.length;
+  const points = doc.createElement('div');
+  points.className = 'qh-points';
+
+  articles.forEach((a, i) => {
+    const style = (a.style === 'photo' || a.style === 'image') && !a.image ? 'texte' : (HOME_STYLES[a.style] ? a.style : 'texte');
+    const p = doc.createElement('section');
+    p.className = 'qh-panneau qh-p-' + style;
+    const url = a.image ? 'url("' + res(a.image).replace(/"/g, '%22') + '")' : '';
+    if (style === 'photo') p.style.backgroundImage = url;
+    if (style === 'image') {
+      const im = doc.createElement('div');
+      im.className = 'qh-img';
+      im.style.backgroundImage = url;
+      p.appendChild(im);
+    }
+    const corps = doc.createElement('div');
+    corps.className = 'qh-corps';
+    if (total > 1) {
+      const n = doc.createElement('div');
+      n.className = 'qh-num';
+      n.textContent = String(i + 1).padStart(2, '0') + ' / ' + String(total).padStart(2, '0');
+      corps.appendChild(n);
+    }
+    const trait = doc.createElement('div');
+    trait.className = 'qh-trait';
+    corps.appendChild(trait);
+    if (a.titre) {
+      const h = doc.createElement('h2');
+      h.className = 'qh-titre';
+      h.textContent = a.titre;
+      corps.appendChild(h);
+    }
+    if (a.texte) {
+      const t = doc.createElement('p');
+      t.className = 'qh-texte';
+      t.textContent = a.texte;
+      corps.appendChild(t);
+    }
+    p.appendChild(corps);
+    if (i === 0 && total > 1) {
+      const ind = doc.createElement('div');
+      ind.className = 'qh-indice';
+      ind.textContent = 'GLISSEZ';
+      if (style !== 'photo') ind.style.color = 'var(--texte)';
+      p.appendChild(ind);
+    }
+    defile.appendChild(p);
+
+    if (total > 1) {
+      const pt = doc.createElement('button');
+      pt.type = 'button';
+      pt.className = 'qh-point' + (i === 0 ? ' actif' : '');
+      pt.setAttribute('aria-label', 'Article ' + (i + 1));
+      pt.addEventListener('click', () => defile.scrollTo({ top: p.offsetTop, behavior: 'smooth' }));
+      points.appendChild(pt);
+    }
+  });
+
+  if (!total) {
+    const p = doc.createElement('section');
+    p.className = 'qh-panneau qh-p-texte';
+    p.innerHTML = '<div class="qh-corps"><p class="qh-texte">Aucun article pour l’instant</p></div>';
+    defile.appendChild(p);
+  }
+
+  home.append(defile, barre, points);
+  racine.appendChild(home);
+
+  /* Point actif selon la pancarte visible */
+  if (total > 1 && 'IntersectionObserver' in window) {
+    const panneaux = [...defile.children];
+    const io = new IntersectionObserver(entrees => {
+      entrees.forEach(e => {
+        if (!e.isIntersecting) return;
+        const k = panneaux.indexOf(e.target);
+        [...points.children].forEach((x, j) => x.classList.toggle('actif', j === k));
+      });
+    }, { root: defile, threshold: 0.55 });
+    panneaux.forEach(x => io.observe(x));
+  }
+  if (opts.position) defile.scrollTop = opts.position;
+  home.defile = defile;
+  return cfg;
 }

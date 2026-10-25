@@ -107,5 +107,37 @@
       "actif": false,
       "valeur": ""
     }
-  ]
+  ],
+  "home": {
+    "actif": true,
+    "arrivee": "contact",
+    "boutonContact": "Réserver",
+    "lienTexte": "Découvrir nos services",
+    "articles": [
+      {
+        "titre": "Chauffeur Privé Paris",
+        "texte": "Votre chauffeur privé à Paris, 24 h/24 et 7 j/7.\nTransferts, mises à disposition et longues distances, à bord d’un van Mercedes Classe V.",
+        "image": "images/fond-1792856144974.jpg",
+        "style": "photo"
+      },
+      {
+        "titre": "Aéroports & gares",
+        "texte": "Transferts vers ou depuis Roissy-CDG, Orly, Beauvais et toutes les gares parisiennes.\nVous voyagez l’esprit tranquille, bagages compris.",
+        "image": "",
+        "style": "texte"
+      },
+      {
+        "titre": "Disneyland & Normandie",
+        "texte": "Disneyland Paris, la Normandie et toutes vos destinations hors de Paris.\nEn famille ou en groupe, dans un véhicule spacieux et confortable.",
+        "image": "",
+        "style": "texte"
+      },
+      {
+        "titre": "Réservez en un message",
+        "texte": "Un message WhatsApp ou un appel suffit.\nRéponse rapide, 24 h/24 et 7 j/7.",
+        "image": "",
+        "style": "texte"
+      }
+    ]
+  }
 }
