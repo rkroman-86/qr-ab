@@ -1405,10 +1405,15 @@
     })[forme] || '';
 
     const parts = [];
-    if (forme !== 'aucune') defs.push('<clipPath id="forme">' + formeEl('') + '</clipPath>');
+    const ep = o.bordure === 'epaisse' ? 22 : o.bordure === 'fine' ? 10 : 0;
+    const avecBord = ep > 0 && forme !== 'aucune';
+    const echBord = 246 / (246 + ep / 2);                       // bordure collée au bord extérieur
+    const echInt = avecBord ? echBord * (246 - ep / 2 + 1) / 246 : 1; // intérieur de la bordure (léger recouvrement)
+    const autour = e => 'translate(256 256) scale(' + e.toFixed(4) + ') translate(-256 -256)';
+    if (forme !== 'aucune') defs.push('<clipPath id="forme">' + formeEl(' transform="' + autour(echInt) + '"') + '</clipPath>');
     if (plein) {
       const fondPaint = o.effet === 'neon' ? assombrir(cFond, .35) : cFond;
-      parts.push(formeEl(' fill="' + fondPaint + '"'));
+      parts.push('<g transform="' + autour(echInt) + '">' + formeEl(' fill="' + fondPaint + '"') + '</g>');
       if (o.effet === 'brillant' || o.effet === 'metal') {
         defs.push('<radialGradient id="reflet" cx=".5" cy=".12" r=".75"><stop offset="0" stop-color="#fff" stop-opacity=".32"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>');
         parts.push('<g clip-path="url(#forme)"><rect width="512" height="512" fill="url(#reflet)"/></g>');
@@ -1465,19 +1470,18 @@
         const fs = Math.max(22, Math.min(56, 560 / (texte.length * 0.62)));
         parts.push('<g' + filtre + '><text' + attrs + ' font-size="' + fs.toFixed(1) + '" letter-spacing="3"><textPath href="#arcHaut" startOffset="50%">' + xml(texte.toUpperCase()) + '</textPath></text></g>');
       } else {
-        const largeur = forme === 'blason' ? 300 : forme === 'aucune' ? 470 : forme === 'rond' ? 340 : 400;
+        const largeur = forme === 'blason' ? 290 : forme === 'aucune' ? 470 : forme === 'rond' || forme === 'hexagone' ? 320 : 390;
         const ini = o.texte === 'initiales';
         const fs = Math.max(24, Math.min(ini ? 110 : 66, largeur / (texte.length * 0.58)));
-        const yT = motif.type === 'photo' ? 430 : Math.min(470, cy + S / 2 + 26 + fs * 0.78);
+        const yT = motif.type === 'photo' ? ({ blason: 385, hexagone: 400, rond: 425, carre: 440 }[forme] || 465) : Math.min(470, cy + S / 2 + 26 + fs * 0.78);
         const trop = texte.length * fs * 0.58 > largeur;
         parts.push('<g' + filtre + '><text' + attrs + ' x="256" y="' + yT.toFixed(1) + '" font-size="' + fs.toFixed(1) + '"' + (trop ? ' textLength="' + largeur + '" lengthAdjust="spacingAndGlyphs"' : '') + '>' + xml(texte) + '</text></g>');
       }
     }
 
     // Bordure
-    if (o.bordure !== 'aucune' && forme !== 'aucune') {
-      const ep = o.bordure === 'epaisse' ? 22 : 10;
-      parts.push('<g' + filtre + ' transform="translate(256 256) scale(' + (1 - ep / 512 - 0.02) + ') translate(-256 -256)">' + formeEl(' fill="none" stroke="' + peinture('pBord', cMotif) + '" stroke-width="' + ep + '"') + '</g>');
+    if (avecBord) {
+      parts.push('<g' + filtre + '><g transform="' + autour(echBord) + '">' + formeEl(' fill="none" stroke="' + peinture('pBord', cMotif) + '" stroke-width="' + ep + '"') + '</g></g>');
     }
 
     return '<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 512 512"><defs>' + defs.join('') + '</defs>' + parts.join('') + '</svg>';
