@@ -1177,7 +1177,9 @@
       '- Chaque pancarte traite un sujet différent, sans répétition d’une pancarte à l’autre.',
       '- S’il y a plusieurs pancartes : la première présente l’entreprise, la dernière invite à prendre contact en citant les moyens de contact disponibles.',
       '- Cite la zone d’action là où c’est naturel, sans la répéter partout.',
-      '- Respecte exactement le nombre de pancartes demandé.'
+      '- Corrige silencieusement les fautes de frappe évidentes de la description (ex. « 24/14 » pour « 24/24 », « passages » pour « passagers »).',
+      '- Respecte exactement le nombre de pancartes demandé.',
+      '- Réponds uniquement en appelant l’outil proposer_articles, sans texte autour.'
     ].join('\n');
     const infos = [
       'Nom de l’entreprise : ' + (cfg.titre || '(non précisé)'),
@@ -1220,7 +1222,7 @@
             required: ['articles']
           }
         }],
-        tool_choice: { type: 'tool', name: 'proposer_articles' },
+        tool_choice: { type: 'auto' },
         messages: [{ role: 'user', content: infos }]
       })
     });
@@ -1234,8 +1236,17 @@
       if (/credit|balance/i.test(m)) throw new Error('Crédit API épuisé : rechargez le compte sur console.anthropic.com.');
       throw new Error(m);
     }
-    const outil = (j.content || []).find(c => c.type === 'tool_use');
-    const liste = outil && outil.input && Array.isArray(outil.input.articles) ? outil.input.articles : [];
+    const blocs = j.content || [];
+    const outil = blocs.find(c => c.type === 'tool_use' && c.input);
+    let liste = outil && Array.isArray(outil.input.articles) ? outil.input.articles : [];
+    if (!liste.length) {
+      // Secours : JSON renvoyé en texte
+      const texte = blocs.filter(c => c.type === 'text').map(c => c.text).join('\n');
+      const m = texte.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
+      if (m) {
+        try { const o = JSON.parse(m[0]); liste = Array.isArray(o) ? o : (o.articles || []); } catch (e) {}
+      }
+    }
     const propre = liste.filter(a => a && (a.titre || a.texte)).slice(0, brief.nombre)
       .map(a => ({ titre: String(a.titre || '').trim(), texte: String(a.texte || '').trim() }));
     if (!propre.length) throw new Error('Réponse vide de l’IA. Réessayez.');
