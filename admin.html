@@ -376,7 +376,7 @@
   }
   // Sections ouvertes : fermées à la toute première visite, puis dernier état mémorisé sur l'appareil
   const CLE_SECTIONS = 'qp-sections', CLE_DEFIL = 'qp-defilement';
-  const ORDRE_SECTIONS = ['textes', 'dispo', 'boutons', 'design', 'logo', 'home', 'seo', 'partage'];
+  const ORDRE_SECTIONS = ['textes', 'dispo', 'boutons', 'design', 'fond', 'logo', 'home', 'seo', 'partage'];
   let sectionsOuvertes = (() => {
     try { const v = JSON.parse(localStorage.getItem(CLE_SECTIONS)); return Array.isArray(v) ? new Set(v) : new Set(); }
     catch (e) { return new Set(); }
@@ -437,8 +437,9 @@
       else vign.appendChild(el('img', { src: url, alt: '' }));
     }
     const fichier = el('input', { type: 'file', accept: 'image/*', class: 'cache' });
-    fichier.addEventListener('change', async () => {
-      const f = fichier.files[0]; if (!f) return;
+    const camera = el('input', { type: 'file', accept: 'image/*', capture: 'environment', class: 'cache' });
+    const traiter = async (entree) => {
+      const f = entree.files[0]; if (!f) return;
       try {
         const png = !reglages.fond && /png|svg|webp/i.test(f.type);
         const type = png ? 'image/png' : 'image/jpeg';
@@ -449,13 +450,16 @@
         obj[cle] = chemin;
         majVign(); changement();
       } catch (e) { alert(e.message); }
-      fichier.value = '';
-    });
-    const choisir = el('button', { type: 'button', class: 'btn btn-mini', text: 'Choisir…', onclick: () => fichier.click() });
+      entree.value = '';
+    };
+    fichier.addEventListener('change', () => traiter(fichier));
+    camera.addEventListener('change', () => traiter(camera));
+    const choisir = el('button', { type: 'button', class: 'btn btn-mini', text: reglages.photo ? '🖼 Galerie…' : 'Choisir…', onclick: () => fichier.click() });
+    const prendre = reglages.photo ? el('button', { type: 'button', class: 'btn btn-mini', text: '📷 Prendre une photo', onclick: () => camera.click() }) : null;
     const retirer = el('button', { type: 'button', class: 'btn btn-mini', text: 'Retirer', onclick: () => { obj[cle] = ''; majVign(); changement(); } });
     majVign();
     return el('div', {}, [el('span', { class: 'etiq', text: etiquette }),
-      el('div', { class: 'image-ligne' }, [vign, el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' }, [choisir, retirer]), fichier])]);
+      el('div', { class: 'image-ligne' }, [vign, el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' }, [prendre, choisir, retirer].filter(Boolean)), fichier, camera])]);
   }
 
   /* ---------------- Modèles de boutons ---------------- */
@@ -572,10 +576,14 @@
       bascule('Encadrer le contenu (carte)', d, 'carte'),
       bascule('Tous les boutons en icônes rondes', d, 'tousRonds'),
       bascule('Noms sous les icônes', d, 'nomsReseaux'),
-      bascule('Icônes aux couleurs du thème', d, 'reseauxTheme'),
-      el('div', { style: 'height:12px' }),
-      choixImage('Image de fond', d, 'imageFond', { nom: 'fond', max: 1600, fond: true }),
-      el('span', { class: 'etiq', text: 'Assombrir l’image de fond' }), voile
+      bascule('Icônes aux couleurs du thème', d, 'reseauxTheme')
+    ]));
+
+    /* Image de fond */
+    f.appendChild(section('fond', 'Image de fond', false, [
+      el('div', { class: 'aide', style: 'margin:0 0 12px', text: 'Photo affichée derrière la page contact. Elle sert aussi aux cartes de visite, à l’atelier logo et à l’aperçu de partage. Astuce : photo en format portrait, sujet bien éclairé.' }),
+      choixImage('Photo', d, 'imageFond', { nom: 'fond', max: 1600, fond: true, photo: true }),
+      el('span', { class: 'etiq', text: 'Assombrir l’image (meilleure lisibilité du texte)' }), voile
     ]));
 
     /* Référencement Google */
@@ -1682,9 +1690,9 @@
         alerte.innerHTML = '';
         if (o.sourceIA === 'fond' && !aFond) alerte.appendChild(el('div', { class: 'alerte' }, [
           el('b', { text: 'Aucune image de fond pour l’instant.' }),
-          el('div', { text: 'Ajoutez d’abord une photo dans Design → Image de fond.' }),
-          el('button', { type: 'button', class: 'btn btn-mini', text: 'Aller à Design', onclick: () => {
-            fermer(); const d = document.querySelector('details[data-id=design]');
+          el('div', { text: 'Ajoutez d’abord une photo dans la section « Image de fond » (galerie ou appareil photo).' }),
+          el('button', { type: 'button', class: 'btn btn-mini', text: 'Aller à Image de fond', onclick: () => {
+            fermer(); const d = document.querySelector('details[data-id=fond]');
             if (d) { d.open = true; d.scrollIntoView({ behavior: 'smooth', block: 'start' }); } } })]));
         go.disabled = o.sourceIA === 'fond' && !aFond;
       };
@@ -1944,7 +1952,7 @@
       champTexte('Titre', a, 'titre', { ph: 'Qui sommes-nous ?' }),
       (() => { const c = champTexte('Texte', a, 'texte', { multi: true, ph: 'Votre texte…' }); c.querySelector('textarea').rows = 5; return c; })(),
       segments('Mise en page', HOME_STYLES, a, 'style'),
-      choixImage('Image', a, 'image', { nom: 'article', max: 1600, fond: true }),
+      choixImage('Image', a, 'image', { nom: 'article', max: 1600, fond: true, photo: true }),
       el('div', { class: 'bc-actions' }, [
         el('button', { type: 'button', class: 'btn btn-mini', text: '↑', disabled: i === 0, onclick: () => deplacer(-1) }),
         el('button', { type: 'button', class: 'btn btn-mini', text: '↓', disabled: i === n - 1, onclick: () => deplacer(1) }),
