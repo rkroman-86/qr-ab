@@ -23,10 +23,12 @@
     .ok{color:var(--ok)} .err{color:var(--err)}
     a{color:var(--prim);font-weight:600;word-break:break-all}
     small{display:block;color:var(--d);margin-top:-8px;margin-bottom:14px;font-size:.8rem}
+    select.choix-langue{width:auto;min-height:34px;padding:4px 8px;border-radius:8px;font:inherit;font-weight:700;font-size:.85rem}
   </style>
 </head>
 <body>
 <form id="f">
+  <div data-langue style="float:right"></div>
   <h1>Installation de l'éditeur</h1>
   <p>À faire une seule fois (ou pour changer le mot de passe). Le jeton GitHub est chiffré avec le mot de passe, puis enregistré dans le dépôt.</p>
 
@@ -37,13 +39,14 @@
   <label><span>Jeton GitHub (fine-grained)</span><input id="jeton" type="password" required autocomplete="off" placeholder="github_pat_…"></label>
   <label><span>Clé API Anthropic (facultatif, pour la rédaction IA)</span><input id="cleia" type="password" autocomplete="off" placeholder="sk-ant-…"></label>
   <small>Se crée sur console.anthropic.com. Peut aussi être ajoutée plus tard depuis l'éditeur.</small>
-  <label><span>Mot de passe pour Alex</span><input id="mdp" type="password" required minlength="10" autocomplete="new-password"></label>
+  <label><span>Mot de passe de l’éditeur (pour le client)</span><input id="mdp" type="password" required minlength="10" autocomplete="new-password"></label>
   <small>10 caractères minimum. Préférez une phrase : « soleil-terrasse-2026 ».</small>
   <label><span>Confirmer le mot de passe</span><input id="mdp2" type="password" required autocomplete="new-password"></label>
   <button id="go">Chiffrer et enregistrer</button>
   <div id="msg"></div>
 </form>
 
+<script src="i18n.js"></script>
 <script src="commun.js"></script>
 <script>
   const d = depotDepuisURL();

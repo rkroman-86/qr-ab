@@ -110,6 +110,7 @@
 
     .bouton-carte{border:1px solid var(--ligne);border-radius:14px;padding:12px;margin-bottom:12px;background:var(--bg)}
     .bouton-carte.masque{opacity:.55}
+    select.choix-langue{width:auto;min-height:36px;padding:6px 8px;border-radius:10px;font-weight:700;font-size:.85rem;background:var(--bg);border:1px solid var(--ligne);color:var(--txt)}
     .modale-fond{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.55);display:flex;align-items:flex-end;justify-content:center}
     @media (min-width:700px){.modale-fond{align-items:center}}
     .modale{width:100%;max-width:560px;max-height:92dvh;display:flex;flex-direction:column;background:var(--panneau);color:var(--txt);
@@ -202,6 +203,7 @@
 <!-- ================= Connexion ================= -->
 <div id="connexion">
   <form class="boite" id="form-connexion">
+    <div data-langue style="float:right"></div>
     <h1>Modifier la page</h1>
     <p>Entrez le mot de passe pour accéder à l'éditeur.</p>
     <label class="champ"><span>Mot de passe</span>
@@ -221,6 +223,7 @@
       <button type="button" data-vue="edit" class="actif">Modifier</button>
       <button type="button" data-vue="apercu">Aperçu</button>
     </div>
+    <span data-langue></span>
     <button type="button" class="btn btn-mini" id="btn-deconnexion">Quitter</button>
   </div>
 
@@ -235,6 +238,7 @@
   </div>
 </div>
 
+<script src="i18n.js"></script>
 <script src="commun.js"></script>
 <script src="qrcode.js"></script>
 <script>
@@ -297,7 +301,7 @@
   });
 
   $('#btn-deconnexion').addEventListener('click', () => {
-    if (modifie && !confirm('Des modifications ne sont pas enregistrées. Se déconnecter quand même ?')) return;
+    if (modifie && !confirm(t('Des modifications ne sont pas enregistrées. Se déconnecter quand même ?'))) return;
     try { sessionStorage.removeItem(CLE_STOCK); localStorage.removeItem(CLE_STOCK); } catch (e) {}
     modifie = false;
     location.reload();
@@ -449,7 +453,7 @@
         imagesAEnvoyer[chemin] = data.split(',')[1];
         obj[cle] = chemin;
         majVign(); changement();
-      } catch (e) { alert(e.message); }
+      } catch (e) { alert(t(e.message)); }
       entree.value = '';
     };
     fichier.addEventListener('change', () => traiter(fichier));
@@ -502,7 +506,8 @@
       .concat([el('option', { value: 'vide', text: '➕ Bouton vide' })]));
     choixAjout.addEventListener('change', () => {
       const k = choixAjout.value; if (!k) return;
-      const m = k === 'vide' ? { icone: '', texte: 'Nouveau bouton', type: 'lien', couleur: '' } : MODELES[k];
+      const m0 = k === 'vide' ? { icone: '', texte: 'Nouveau bouton', type: 'lien', couleur: '' } : MODELES[k];
+      const m = Object.assign({}, m0, { texte: t(m0.texte) }, m0.message ? { message: t(m0.message) } : {});
       cfg.boutons.push(Object.assign({ icone: '', texte: '', type: 'lien', valeur: '', message: '', couleur: '' }, m));
       construireFormulaire(); changement();
       const cartes = document.querySelectorAll('.bouton-carte');
@@ -1115,7 +1120,7 @@
     const btnCopier = el('button', { type: 'button', class: 'btn btn-mini', text: 'Copier le lien' });
     btnCopier.addEventListener('click', async () => {
       try { await navigator.clipboard.writeText(URL_PUBLIQUE); btnCopier.textContent = '✓ Copié'; }
-      catch (e) { prompt('Lien de la page :', URL_PUBLIQUE); }
+      catch (e) { prompt(t('Lien de la page :'), URL_PUBLIQUE); }
       setTimeout(() => (btnCopier.textContent = 'Copier le lien'), 2000);
     });
 
@@ -1155,7 +1160,7 @@
           grilleModeles.appendChild(b);
         }
         await afficherChoisi();
-      } catch (e) { alert('Impossible de créer la carte : ' + e.message); }
+      } catch (e) { alert(t('Impossible de créer la carte : ' + e.message)); }
       btnCarte.disabled = false; btnCarte.textContent = 'Actualiser les modèles';
     });
 
@@ -1209,7 +1214,7 @@
       text: plein ? 'Maximum atteint (' + HOME_MAX_ARTICLES + ' articles)' : '＋ Ajouter un article (' + h.articles.length + '/' + HOME_MAX_ARTICLES + ')' });
     ajouter.addEventListener('click', () => {
       if (h.articles.length >= HOME_MAX_ARTICLES) return;
-      h.articles.push({ titre: 'Nouvel article', texte: '', image: '', style: 'texte' });
+      h.articles.push({ titre: t('Nouvel article'), texte: '', image: '', style: 'texte' });
       vueApercu = 'home';
       construireFormulaire(); changement();
       const cartes = document.querySelectorAll('.article-carte');
@@ -1763,7 +1768,7 @@
         fermer();
         construireFormulaire(); changement();
         const e = $('#etat'); e.className = 'etat'; e.textContent = 'Nouveau logo : cliquez sur Enregistrer pour publier';
-      } catch (e) { alert('Impossible de créer l’image : ' + e.message); utiliser.disabled = false; }
+      } catch (e) { alert(t('Impossible de créer l’image : ' + e.message)); utiliser.disabled = false; }
     });
 
     boite.append(
@@ -1958,7 +1963,7 @@
         el('button', { type: 'button', class: 'btn btn-mini', text: '↓', disabled: i === n - 1, onclick: () => deplacer(1) }),
         el('span', { class: 'esp' }),
         el('button', { type: 'button', class: 'btn btn-mini', text: '🗑 Supprimer', disabled: n <= 1, onclick: () => {
-          if (!confirm('Supprimer la pancarte « ' + (a.titre || 'sans titre') + ' » ?')) return;
+          if (!confirm(t('Supprimer la pancarte « ' + (a.titre || t('sans titre')) + ' » ?'))) return;
           cfg.home.articles.splice(i, 1); construireFormulaire(); changement();
         } })
       ])
@@ -2025,7 +2030,7 @@
         masquer,
         el('span', { class: 'esp' }),
         el('button', { type: 'button', class: 'btn btn-mini', text: '🗑 Supprimer', onclick: () => {
-          if (!confirm('Supprimer le bouton « ' + (b.texte || 'sans titre') + ' » ?')) return;
+          if (!confirm(t('Supprimer le bouton « ' + (b.texte || t('sans titre')) + ' » ?'))) return;
           cfg.boutons.splice(i, 1); construireFormulaire(); changement();
         } })
       ])
