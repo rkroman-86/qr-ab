@@ -374,11 +374,23 @@
     (enfants || []).forEach(c => c && n.appendChild(typeof c === 'string' ? document.createTextNode(c) : c));
     return n;
   }
-  let sectionsOuvertes = null; // mémorise l'état ouvert/fermé entre deux reconstructions
+  // Sections ouvertes : fermées à la toute première visite, puis dernier état mémorisé sur l'appareil
+  const CLE_SECTIONS = 'qp-sections', CLE_DEFIL = 'qp-defilement';
+  const ORDRE_SECTIONS = ['textes', 'dispo', 'boutons', 'design', 'logo', 'home', 'seo', 'partage'];
+  let sectionsOuvertes = (() => {
+    try { const v = JSON.parse(localStorage.getItem(CLE_SECTIONS)); return Array.isArray(v) ? new Set(v) : new Set(); }
+    catch (e) { return new Set(); }
+  })();
+  function memoriserSections() {
+    const f = document.getElementById('formulaire');
+    sectionsOuvertes = new Set([...f.querySelectorAll('details.section[open]')].map(x => x.dataset.id));
+    try { localStorage.setItem(CLE_SECTIONS, JSON.stringify([...sectionsOuvertes])); } catch (e) {}
+  }
   function section(id, titre, ouvert, contenu) {
     const d = el('details', { class: 'section' }, [el('summary', { text: titre }), el('div', { class: 'section-corps' }, contenu)]);
     d.dataset.id = id;
-    d.open = sectionsOuvertes ? sectionsOuvertes.has(id) : ouvert;
+    d.open = sectionsOuvertes.has(id);
+    d.addEventListener('toggle', memoriserSections);
     return d;
   }
   function champTexte(etiquette, obj, cle, opts) {
@@ -466,7 +478,6 @@
 
   function construireFormulaire() {
     const f = $('#formulaire');
-    if (f.children.length) sectionsOuvertes = new Set([...f.querySelectorAll('details.section[open]')].map(x => x.dataset.id));
     const defil = window.scrollY;
     f.innerHTML = '';
     requestAnimationFrame(() => window.scrollTo(0, defil));
@@ -578,7 +589,27 @@
     f.appendChild(el('p', { style: 'text-align:center;color:var(--doux);font-size:.88rem;margin:18px 0' }, [
       'Page publique : ', el('a', { class: 'lien', href: urlPublique, target: '_blank', rel: 'noopener', text: 'ouvrir ↗' })
     ]));
+
+    /* Ordre d'affichage des sections */
+    const pied = f.lastElementChild;
+    ORDRE_SECTIONS.forEach(id => { const d = f.querySelector(':scope > details[data-id="' + id + '"]'); if (d) f.insertBefore(d, pied); });
+
+    /* Au premier affichage après chargement : on revient où l'on était */
+    if (!positionRestauree) {
+      positionRestauree = true;
+      let y = 0;
+      try { y = Number(localStorage.getItem(CLE_DEFIL)) || 0; } catch (e) {}
+      if (y) requestAnimationFrame(() => requestAnimationFrame(() => window.scrollTo(0, y)));
+    }
   }
+
+  let positionRestauree = false;
+  let minuteDefil = null;
+  window.addEventListener('scroll', () => {
+    if (document.body.dataset.vue === 'apercu' || $('#editeur').classList.contains('cache')) return;
+    clearTimeout(minuteDefil);
+    minuteDefil = setTimeout(() => { try { localStorage.setItem(CLE_DEFIL, String(Math.round(window.scrollY))); } catch (e) {} }, 250);
+  }, { passive: true });
 
   function caseAfficher(b, carte) {
     const c = el('input', { type: 'checkbox', checked: !b.masque });
