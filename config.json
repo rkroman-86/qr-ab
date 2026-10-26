@@ -20,7 +20,7 @@
     "nomsReseaux": false,
     "reseauxTheme": false,
     "tousRonds": true,
-    "disposition": "droite"
+    "disposition": "cotes"
   },
   "boutons": [
     {
@@ -178,9 +178,9 @@
     "sourceIA": "description",
     "forme": "rond",
     "transparent": true,
-    "bordure": "epaisse",
-    "effet": "metal",
-    "palette": "theme",
+    "bordure": "aucune",
+    "effet": "mat",
+    "palette": "clair",
     "cFond": "#111111",
     "cMotif": "#c9a45c",
     "cTexte": "#c9a45c",
