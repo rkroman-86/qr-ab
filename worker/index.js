@@ -32,7 +32,7 @@ const TARIFS_DEFAUT = { prixAnnuel: 1800, prixTexte: 40, prixPicto: 70, prixFond
 const TYPES_IA = ['texte', 'picto', 'fond'];      // fond = une génération de 2 images de fond
 const MODELE_IMAGE = '@cf/black-forest-labs/flux-2-klein-9b';
 const FOND_L = 864, FOND_H = 1536;               // portrait 9:16 (téléphone)
-const FONDS_MAX = 24;                            // images gardées dans la galerie d'un client
+const MEDIAS_MAX = 40;                           // images gardées par genre (fond, logo, article) dans la médiathèque d'un client
 let PRIX_ANNUEL = TARIFS_DEFAUT.prixAnnuel;     // centimes HT
 const RECHARGE_MIN = 500;                       // centimes HT
 const TVA = 20;                                 // %, ajoutée aux montants HT au moment du paiement
@@ -227,6 +227,7 @@ async function apiClient(request, env, slug, route) {
       const type = typeImage(octets);
       if (!type) throw new ErreurAPI(415, 'Format d’image non accepté (JPEG, PNG ou WebP).');
       await env.CLIENTS.put(cle, octets, { metadata: { type } });
+      await ajouterMedias(env, slug, [{ chemin, genre: genreImage(chemin), source: /^images\/logo-/.test(chemin) ? 'logo' : 'photo', le: new Date().toISOString() }]);
     } else {
       const max = chemin === 'config.json' ? TAILLE_MAX['config.json'] : TAILLE_MAX.html;
       if (octets.length > max) throw new ErreurAPI(413, 'Contenu trop volumineux.');
@@ -338,17 +339,21 @@ async function apiClient(request, env, slug, route) {
   }
 
   /* ---------- Images de fond par l'IA ---------- */
-  if (route === 'fonds' && m === 'GET') return json({ fonds: await lireFonds(env, slug) });
-  if (route === 'fonds' && m === 'DELETE') {
+  /* ---------- Médiathèque : toutes les images du client (IA, photos, logos) ---------- */
+  if ((route === 'medias' || route === 'fonds') && m === 'GET') {
+    const medias = await lireMedias(env, slug);
+    return json(route === 'fonds' ? { fonds: medias.filter(x => x.genre === 'fond') } : { medias });
+  }
+  if ((route === 'medias' || route === 'fonds') && m === 'DELETE') {
     const { chemin } = await corpsJSON(request);
-    let fonds = await lireFonds(env, slug);
-    if (!fonds.some(x => x.chemin === chemin)) throw new ErreurAPI(404, 'Image introuvable.');
-    fonds = fonds.filter(x => x.chemin !== chemin);
-    await env.CLIENTS.put('site:' + slug + ':fonds-ia', JSON.stringify(fonds));
-    // l'image n'est effacée que si la page publiée ne l'utilise pas
+    let medias = await lireMedias(env, slug);
+    if (!medias.some(x => x.chemin === chemin)) throw new ErreurAPI(404, 'Image introuvable.');
+    medias = medias.filter(x => x.chemin !== chemin);
+    await env.CLIENTS.put('site:' + slug + ':medias', JSON.stringify(medias));
+    // le fichier n'est effacé que si la page publiée ne l'utilise pas
     const cfg = await env.CLIENTS.get('site:' + slug + ':config.json') || '';
     if (!cfg.includes(chemin)) await env.CLIENTS.delete('img:' + slug + ':' + chemin.slice(7));
-    return json({ fonds });
+    return json(route === 'fonds' ? { fonds: medias.filter(x => x.genre === 'fond') } : { medias });
   }
   if (route === 'fond' && m === 'POST') {
     if (!actif(compte)) throw new ErreurAPI(402, compte.plan === 'essai'
@@ -376,22 +381,17 @@ async function apiClient(request, env, slug, route) {
       if (!type) continue;
       const chemin = 'images/fond-ia-' + base + '-' + (i + 1) + (type === 'image/png' ? '.png' : type === 'image/webp' ? '.webp' : '.jpg');
       await env.CLIENTS.put('img:' + slug + ':' + chemin.slice(7), octets, { metadata: { type } });
-      nouvelles.push({ chemin, le: new Date().toISOString(), ambiance, idee });
+      nouvelles.push({ chemin, genre: 'fond', source: 'ia', le: new Date().toISOString(), ambiance, idee });
     }
     if (!nouvelles.length) throw new ErreurAPI(502, 'La création d’images a échoué. Réessayez dans un instant (rien n’a été décompté).');
 
-    let fonds = nouvelles.concat(await lireFonds(env, slug));
-    for (const vieux of fonds.slice(FONDS_MAX)) {                     // galerie limitée : on retire les plus anciennes
-      const cfgTexte = await env.CLIENTS.get('site:' + slug + ':config.json') || '';
-      if (!cfgTexte.includes(vieux.chemin)) await env.CLIENTS.delete('img:' + slug + ':' + vieux.chemin.slice(7));
-    }
-    fonds = fonds.slice(0, FONDS_MAX);
-    await env.CLIENTS.put('site:' + slug + ':fonds-ia', JSON.stringify(fonds));
+    const medias = await ajouterMedias(env, slug, nouvelles);
+    const fonds = medias.filter(x => x.genre === 'fond');
 
     const frais = (await lireCompte(env, slug)) || compte;
     facturer(frais, 'fond', mode);
     await ecrireCompte(env, frais);
-    return json({ nouvelles, fonds, compte: await resumeAvecOffre(env, frais) });
+    return json({ nouvelles, fonds, medias, compte: await resumeAvecOffre(env, frais) });
   }
 
   if (route === 'demande' && m === 'POST') {
@@ -419,8 +419,52 @@ const AMBIANCES_FOND = {
   aquarelle: 'delicate watercolor illustration, soft washes of color, paper texture',
   luxe: 'luxury editorial photograph, refined materials, dark tones with golden accents'
 };
-async function lireFonds(env, slug) {
-  try { return JSON.parse(await env.CLIENTS.get('site:' + slug + ':fonds-ia') || '[]'); } catch (e) { return []; }
+function genreImage(chemin) {
+  const n = String(chemin).slice(7);
+  if (/^fond/.test(n)) return 'fond';
+  if (/^logo/.test(n)) return 'logo';
+  return 'article';
+}
+/* Médiathèque : liste des images d'un client, les plus récentes d'abord.
+   À la première lecture, on reprend les images déjà stockées (avant cette fonction) et l'ancienne galerie des fonds IA. */
+async function lireMedias(env, slug) {
+  const t = await env.CLIENTS.get('site:' + slug + ':medias');
+  if (t) { try { return JSON.parse(t); } catch (e) { return []; } }
+  const vus = new Set(), liste = [];
+  let anciens = [];
+  try { anciens = JSON.parse(await env.CLIENTS.get('site:' + slug + ':fonds-ia') || '[]'); } catch (e) {}
+  for (const f of anciens) { vus.add(f.chemin); liste.push(Object.assign({ genre: 'fond', source: 'ia' }, f)); }
+  let curseur;
+  do {
+    const l = await env.CLIENTS.list({ prefix: 'img:' + slug + ':', cursor: curseur });
+    for (const k of l.keys) {
+      const chemin = 'images/' + k.name.slice(('img:' + slug + ':').length);
+      if (vus.has(chemin)) continue;
+      const horo = (chemin.match(/-(\d{13})/) || [])[1];
+      liste.push({ chemin, genre: genreImage(chemin), source: /fond-ia-/.test(chemin) ? 'ia' : /^images\/logo-/.test(chemin) ? 'logo' : 'photo',
+        le: horo ? new Date(Number(horo)).toISOString() : new Date(0).toISOString() });
+    }
+    curseur = l.list_complete ? null : l.cursor;
+  } while (curseur);
+  liste.sort((a, b) => String(b.le).localeCompare(String(a.le)));
+  await env.CLIENTS.put('site:' + slug + ':medias', JSON.stringify(liste));
+  await env.CLIENTS.delete('site:' + slug + ':fonds-ia');
+  return liste;
+}
+/* Ajoute des images (sans doublon) ; au-delà de MEDIAS_MAX par genre, les plus anciennes non utilisées sont effacées */
+async function ajouterMedias(env, slug, nouvelles) {
+  const chemins = new Set(nouvelles.map(x => x.chemin));
+  let medias = nouvelles.concat((await lireMedias(env, slug)).filter(x => !chemins.has(x.chemin)));
+  const cfg = await env.CLIENTS.get('site:' + slug + ':config.json') || '';
+  const parGenre = {};
+  const garder = [];
+  for (const x of medias) {
+    parGenre[x.genre] = (parGenre[x.genre] || 0) + 1;
+    if (parGenre[x.genre] > MEDIAS_MAX && !cfg.includes(x.chemin)) { await env.CLIENTS.delete('img:' + slug + ':' + x.chemin.slice(7)); continue; }
+    garder.push(x);
+  }
+  await env.CLIENTS.put('site:' + slug + ':medias', JSON.stringify(garder));
+  return garder;
 }
 /* Claude rédige la description de l'image (en anglais, sans texte dans l'image) à partir de l'activité */
 async function descriptionFond(env, cfg, ambiance, idee) {
@@ -721,6 +765,7 @@ async function importer(env, slug, source) {
   // Les liens qui pointaient vers l'ancienne adresse GitHub pointent désormais vers le nouveau site
   const nouveau = texteCfg.split(base).join('https://' + slug + '.' + DOMAINE + '/');
   await env.CLIENTS.put('site:' + slug + ':config.json', nouveau);
+  await env.CLIENTS.delete('site:' + slug + ':medias');   // la médiathèque sera reconstruite avec les images importées
   // Les pages pré-rendues seront régénérées au prochain « Enregistrer » ; d'ici là, page de démarrage
   for (const n of ['index.html', 'accueil.html', 'sitemap.xml']) await env.CLIENTS.delete('site:' + slug + ':' + n);
   return { ok: true, images: copiees, echecs: ratees };

@@ -166,10 +166,14 @@
     .motif-plus .plus{width:100%;aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:1.8rem;color:var(--prim);border:1px dashed var(--prim);border-radius:10px}
     .ia-boite{border:1px solid color-mix(in srgb,var(--prim) 35%,var(--ligne));background:color-mix(in srgb,var(--prim) 5%,var(--bg));border-radius:14px;padding:14px;margin:6px 0 18px}
     .ia-titre{display:block;font-size:1rem}
-    .galerie-fonds{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:8px;margin-top:6px}
+    .galerie-fonds{display:grid;grid-template-columns:repeat(auto-fill,minmax(68px,1fr));gap:8px;margin-top:6px;max-height:min(330px,45vh);overflow-y:auto;overscroll-behavior:contain;padding:2px}
     .fond-ia{position:relative;aspect-ratio:9/16;border-radius:10px;border:2px solid var(--ligne);background:var(--bg) center/cover no-repeat;padding:0;cursor:pointer}
     .fond-ia.actif{border-color:var(--prim);box-shadow:0 0 0 2px color-mix(in srgb,var(--prim) 35%,transparent)}
     .fond-coche{position:absolute;left:6px;bottom:6px;width:22px;height:22px;border-radius:50%;background:var(--prim);color:#fff;font-size:.8rem;display:grid;place-items:center}
+    .fond-ia.carre{aspect-ratio:1/1;background-size:contain;background-color:var(--panneau)}
+    .fond-badge{position:absolute;left:5px;top:5px;font-size:.65rem;font-weight:700;padding:1px 5px;border-radius:6px;background:rgba(0,0,0,.6);color:#fff}
+    .mes-images{margin:10px 0 4px}
+    .mes-images summary{cursor:pointer;font-size:.85rem;font-weight:600;color:var(--doux);margin-bottom:6px}
     .fond-suppr{position:absolute;right:4px;top:4px;width:24px;height:24px;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;font-size:1rem;line-height:1;display:grid;place-items:center}
     .ia-relecture{margin-top:14px;padding-top:12px;border-top:1px dashed var(--ligne)}
     .ia-art{background:var(--panneau);border:1px solid var(--ligne);border-radius:12px;padding:10px;margin-bottom:10px;display:flex;flex-direction:column;gap:8px}
@@ -689,6 +693,52 @@
   }
 
   /* Choix d'image : logo ou fond */
+  /* ---------------- Médiathèque (mode Cloudflare) ---------------- */
+  let medias = null, chargementMedias = null;
+  function chargerMedias() {
+    if (!CF || medias || chargementMedias) return;
+    chargementMedias = appelAPI('medias', jetonCF).then(r => r.json())
+      .then(j => { medias = j.medias || []; })
+      .catch(() => { medias = []; })
+      .finally(() => { chargementMedias = null; construireFormulaire(); });
+  }
+  function galerieImages(genre, obj, cle) {
+    const box = el('div', { class: 'galerie-fonds' });
+    const l = (medias || []).filter(x => x.genre === genre);
+    // photos chargées mais pas encore enregistrées : visibles tout de suite
+    const attente = Object.keys(imagesAEnvoyer).filter(p => genreImage(p) === genre && !l.some(x => x.chemin === p));
+    const tout = attente.map(p => ({ chemin: p, source: 'photo', attente: true })).concat(l);
+    if (!medias) { box.appendChild(el('div', { class: 'aide', text: 'Chargement de vos images…' })); chargerMedias(); return box; }
+    if (!tout.length) { box.appendChild(el('div', { class: 'aide', text: 'Vos images (photos, galerie, IA) apparaîtront ici pour être réutilisées.' })); return box; }
+    tout.forEach(m => {
+      const actif = obj[cle] === m.chemin;
+      const v = el('button', { type: 'button', class: 'fond-ia' + (genre === 'logo' ? ' carre' : '') + (actif ? ' actif' : ''), title: actif ? 'Image utilisée' : 'Utiliser cette image' });
+      v.style.backgroundImage = 'url("' + (imagesLocales[m.chemin] || m.chemin) + '")';
+      v.addEventListener('click', () => { obj[cle] = m.chemin; changement(); construireFormulaire(); });
+      if (m.source === 'ia') v.appendChild(el('span', { class: 'fond-badge', text: 'IA' }));
+      if (actif) v.appendChild(el('span', { class: 'fond-coche', text: '✓' }));
+      if (!m.attente) {
+        const x = el('span', { class: 'fond-suppr', role: 'button', 'aria-label': 'Supprimer de mes images', text: '×' });
+        x.addEventListener('click', async e => {
+          e.stopPropagation();
+          if (!confirm(t(actif ? 'Cette image est utilisée sur votre page. La retirer de « Mes images » ? (elle reste affichée tant que vous ne la changez pas)' : 'Supprimer définitivement cette image ?'))) return;
+          try {
+            const r = await appelAPI('medias', jetonCF, { method: 'DELETE', body: JSON.stringify({ chemin: m.chemin }) });
+            medias = (await r.json()).medias;
+            construireFormulaire();
+          } catch (er) { alert(er.message); }
+        });
+        v.appendChild(x);
+      }
+      box.appendChild(v);
+    });
+    return box;
+  }
+  function genreImage(chemin) {
+    const n = String(chemin).replace(/^images\//, '');
+    return /^fond/.test(n) ? 'fond' : /^logo/.test(n) ? 'logo' : 'article';
+  }
+
   function choixImage(etiquette, obj, cle, reglages) {
     const vign = el('div', { class: 'vignette' });
     function majVign() {
@@ -713,6 +763,7 @@
         imagesAEnvoyer[chemin] = data.split(',')[1];
         obj[cle] = chemin;
         majVign(); changement();
+        if (CF) construireFormulaire();
       } catch (e) { alert(t(e.message)); }
       entree.value = '';
     };
@@ -722,16 +773,17 @@
     const prendre = reglages.photo ? el('button', { type: 'button', class: 'btn btn-mini', text: '📷 Prendre une photo', onclick: () => camera.click() }) : null;
     const retirer = el('button', { type: 'button', class: 'btn btn-mini', text: 'Retirer', onclick: () => { obj[cle] = ''; majVign(); changement(); } });
     majVign();
+    const genre = reglages.nom === 'fond' ? 'fond' : reglages.nom === 'logo' ? 'logo' : 'article';
     return el('div', {}, [el('span', { class: 'etiq', text: etiquette }),
-      el('div', { class: 'image-ligne' }, [vign, el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' }, [prendre, choisir, retirer].filter(Boolean)), fichier, camera])]);
+      el('div', { class: 'image-ligne' }, [vign, el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' }, [prendre, choisir, retirer].filter(Boolean)), fichier, camera]),
+      ...(CF ? [el('details', { class: 'mes-images', open: genre !== 'article' ? true : undefined }, [el('summary', { text: 'Mes images' }), galerieImages(genre, obj, cle)])] : [])]);
   }
 
   /* ---------------- Atelier « fond par l'IA » (Cloudflare) ---------------- */
   const AMBIANCES_FOND = { photo: 'Photo réaliste', lumineux: 'Lumineux', nuit: 'Ambiance nuit', minimal: 'Minimaliste', aquarelle: 'Aquarelle', luxe: 'Luxe' };
-  const etatFond = { ambiance: 'photo', idee: '', fonds: null, enCours: false };
+  const etatFond = { ambiance: 'photo', idee: '', enCours: false, message: null };
   function atelierFond() {
     const boite = el('div', { class: 'ia-boite', style: 'margin-top:16px' });
-    const galerie = el('div', { class: 'galerie-fonds' });
     const msg = el('div', { class: 'msg' });
 
     const puces = el('div', { class: 'puces' });
@@ -744,62 +796,29 @@
     idee.addEventListener('input', () => { etatFond.idee = idee.value; });
     const go = el('button', { type: 'button', class: 'btn btn-prim btn-plein', text: etatFond.enCours ? 'L’IA peint vos images…' : '✨ Créer 2 images' });
     go.disabled = etatFond.enCours;
+    if (etatFond.message) { msg.className = 'msg ' + etatFond.message.classe; msg.textContent = etatFond.message.texte; }
     go.addEventListener('click', async () => {
       etatFond.enCours = true; go.disabled = true; go.textContent = 'L’IA peint vos images… (≈ 20 s)'; msg.className = 'msg'; msg.textContent = '';
       try {
         const r = await appelAPI('fond', jetonCF, { method: 'POST', body: JSON.stringify({ ambiance: etatFond.ambiance, idee: etatFond.idee }) });
         const j = await r.json();
-        etatFond.fonds = j.fonds;
+        medias = j.medias;
         afficherAbonnement(j.compte);
-        msg.className = 'msg ok'; msg.textContent = '✓ ' + j.nouvelles.length + (j.nouvelles.length > 1 ? ' nouvelles images ajoutées' : ' nouvelle image ajoutée') + ' à votre galerie : touchez-en une pour l’utiliser.';
+        etatFond.message = { classe: 'ok', texte: '✓ ' + j.nouvelles.length + (j.nouvelles.length > 1 ? ' nouvelles images ajoutées' : ' nouvelle image ajoutée') + ' dans « Mes images » ci-dessus : touchez-en une pour l’utiliser.' };
       } catch (e) {
-        msg.className = 'msg err'; msg.textContent = e.message === 'Failed to fetch' ? 'Connexion impossible.' : e.message;
+        etatFond.message = { classe: 'err', texte: e.message === 'Failed to fetch' ? 'Connexion impossible.' : e.message };
         if (e.status === 402) ouvrirAbonnement('quota', e.message);
       }
-      etatFond.enCours = false; go.disabled = false; go.textContent = '✨ Créer 2 images';
-      remplirGalerie();
+      etatFond.enCours = false;
+      construireFormulaire();
     });
-
-    function remplirGalerie() {
-      galerie.innerHTML = '';
-      const l = etatFond.fonds || [];
-      if (!l.length) { galerie.appendChild(el('div', { class: 'aide', text: etatFond.fonds ? 'Vos images créées par l’IA apparaîtront ici.' : 'Chargement de votre galerie…' })); return; }
-      l.forEach(f => {
-        const actif = cfg.design.imageFond === f.chemin;
-        const v = el('button', { type: 'button', class: 'fond-ia' + (actif ? ' actif' : ''), title: actif ? 'Image utilisée' : 'Utiliser cette image', 'aria-label': actif ? 'Image utilisée' : 'Utiliser cette image' });
-        v.style.backgroundImage = 'url("' + f.chemin + '")';
-        v.addEventListener('click', () => {
-          cfg.design.imageFond = f.chemin;
-          changement();
-          construireFormulaire();                       // met à jour la vignette « Photo » et la galerie
-        });
-        const x = el('span', { class: 'fond-suppr', role: 'button', 'aria-label': 'Supprimer de la galerie', text: '×' });
-        x.addEventListener('click', async e => {
-          e.stopPropagation();
-          if (!confirm(t('Supprimer cette image de votre galerie ?'))) return;
-          try {
-            const r = await appelAPI('fonds', jetonCF, { method: 'DELETE', body: JSON.stringify({ chemin: f.chemin }) });
-            etatFond.fonds = (await r.json()).fonds;
-            remplirGalerie();
-          } catch (er) { alert(er.message); }
-        });
-        if (actif) v.appendChild(el('span', { class: 'fond-coche', text: '✓' }));
-        v.appendChild(x);
-        galerie.appendChild(v);
-      });
-    }
-    if (!etatFond.fonds) {
-      appelAPI('fonds', jetonCF).then(r => r.json()).then(j => { etatFond.fonds = j.fonds; remplirGalerie(); }).catch(() => { etatFond.fonds = []; remplirGalerie(); });
-    }
-    remplirGalerie();
 
     boite.append(
       el('b', { class: 'ia-titre', text: '✨ Créer un fond avec l’IA' }),
-      el('div', { class: 'aide', style: 'margin:4px 0 12px', text: 'L’IA crée 2 images à partir de votre activité. Elles restent dans votre galerie : choisissez-en une maintenant ou plus tard.' }),
+      el('div', { class: 'aide', style: 'margin:4px 0 12px', text: 'L’IA crée 2 images à partir de votre activité. Elles s’ajoutent à « Mes images » : choisissez-en une maintenant ou plus tard.' }),
       el('span', { class: 'etiq', text: 'Ambiance' }), puces,
       el('label', { class: 'champ', style: 'margin-top:10px' }, [el('span', { text: 'Votre idée (facultatif)' }), idee]),
-      go, quotaIA('fond'), msg,
-      el('span', { class: 'etiq', style: 'margin-top:14px;display:block' }, [ 'Ma galerie' ]), galerie
+      go, quotaIA('fond'), msg
     );
     return boite;
   }
@@ -2006,6 +2025,21 @@
       const im = el('img', { alt: '', src: svgEnURL(composerLogo(Object.assign({}, o, { texte: 'aucun', bordure: 'aucune' }), motif)) });
       const b = el('button', { type: 'button', class: 'motif-v' + (o.choix === cle ? ' actif' : '') }, [el('span', { class: 'damier' }, [im]), el('b', { text: nom })]);
       b.addEventListener('click', () => { o.choix = cle; construire(); });
+      if (/^ia\d+$/.test(cle)) {                        // pictos IA : supprimables
+        const x = el('span', { class: 'fond-suppr', role: 'button', 'aria-label': 'Supprimer ce picto', text: '×' });
+        x.addEventListener('click', e => {
+          e.stopPropagation();
+          if (!confirm(t('Supprimer ce pictogramme ? (le logo déjà enregistré ne change pas)'))) return;
+          const i = Number(cle.slice(2));
+          o.motifs.splice(i, 1);
+          const choisi = /^ia\d+$/.test(o.choix) ? Number(o.choix.slice(2)) : null;
+          if (choisi === i) o.choix = 'mono';
+          else if (choisi !== null && choisi > i) o.choix = 'ia' + (choisi - 1);
+          changement(); construire(); rafraichir();
+        });
+        b.style.position = 'relative';
+        b.appendChild(x);
+      }
       return b;
     }
 
@@ -2025,7 +2059,7 @@
         try {
           const b64 = o.sourceIA === 'fond' && aFond ? (await imageFondReduite(1024, .85)).split(',')[1] : null;
           const nouveaux = await creerMotifsIA(o, b64);
-          o.motifs = o.motifs.concat(nouveaux).slice(-9);
+          o.motifs = o.motifs.concat(nouveaux).slice(-60);   // historique des pictos (les 60 derniers)
           o.choix = 'ia' + (o.motifs.length - nouveaux.length);
           changement();
           construire();
@@ -2390,7 +2424,7 @@
     btn.disabled = true; etat.className = 'etat'; etat.textContent = 'Enregistrement…';
     try {
       // 1. images d'abord, pour que la page ne pointe jamais vers une image absente
-      const chemins = Object.keys(imagesAEnvoyer).filter(p => JSON.stringify(cfg).includes(p));
+      const chemins = Object.keys(imagesAEnvoyer).filter(p => CF || JSON.stringify(cfg).includes(p));
       for (const p of chemins) {
         etat.textContent = 'Envoi de l’image…';
         await gh.ecrire(p, imagesAEnvoyer[p], 'Image : ' + p, null);
@@ -2418,6 +2452,7 @@
       } catch (e) {
         console.warn('Référencement non mis à jour', e);
       }
+      if (CF && chemins.length) { medias = null; construireFormulaire(); }   // les photos envoyées apparaissent dans « Mes images »
       modifie = false;
       etat.className = 'etat ok';
       etat.textContent = CF ? '✓ Publié. Visible sur la page d’ici une minute.' : '✓ Publié. Visible sur la page d’ici 1 à 2 minutes.';
