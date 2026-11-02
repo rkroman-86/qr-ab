@@ -67,6 +67,14 @@
   .ou::before,.ou::after{content:"";flex:1;height:1px;background:var(--ligne)}
 
   .points{list-style:none;margin:0 0 18px;padding:0;display:grid;gap:6px;font-size:.9rem;color:var(--doux)}
+  .lien{border:0;background:none;color:var(--doux);font:inherit;font-size:.9rem;text-decoration:underline;padding:8px 0;cursor:pointer;display:block;margin:6px auto 0}
+  .info{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--panneau);border:1px solid var(--ligne);font-size:.92rem}
+  .info.ok{border-color:var(--ok)}
+  .accord{font-size:.82rem;margin:-8px 0 14px;min-height:1.2em;color:var(--doux)}
+  .accord.ok{color:var(--ok)} .accord.ko{color:var(--err)}
+  /* Écran « nouveau mot de passe » (lien reçu par e-mail) */
+  body.reinit header .onglets, body.reinit .rail, body.reinit .points-nav{display:none}
+  #ecran-reinit{flex:1;overflow-y:auto;padding:18px 20px calc(24px + env(safe-area-inset-bottom))}
   .points li::before{content:"✓";color:var(--accent);font-weight:700;margin-right:8px}
 
   /* ---------- Points de navigation ---------- */
@@ -102,6 +110,19 @@
         <label><span>Mot de passe</span><input type="password" id="cx-mdp" autocomplete="current-password" required></label>
         <button class="prim" id="cx-btn">Se connecter</button>
         <div class="msg" id="cx-msg"></div>
+        <button type="button" class="lien" id="vers-oubli">Mot de passe oublié ?</button>
+      </form>
+
+      <form id="f-oubli" hidden>
+        <h1 style="font-size:1.25rem">Mot de passe oublié</h1>
+        <p class="sous">Indiquez l’adresse de votre page ou votre e-mail : nous vous envoyons un lien pour choisir un nouveau mot de passe.</p>
+        <label><span>Adresse de la page ou e-mail</span>
+          <input type="text" id="oubli-id" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="120" placeholder="votre-nom ou vous@exemple.fr" required>
+        </label>
+        <button class="prim" id="oubli-btn">Recevoir le lien</button>
+        <div class="msg" id="oubli-msg"></div>
+        <div class="info ok" id="oubli-ok" hidden></div>
+        <button type="button" class="lien" id="retour-cx">← Retour à la connexion</button>
       </form>
 
       <div class="bascule">Pas encore de page ? <button type="button" data-aller="1">Créer ma page →</button></div>
@@ -126,6 +147,8 @@
         <label><span>Nom de votre activité</span><input type="text" id="in-titre" maxlength="80" placeholder="Ex. Chauffeur Privé Paris"></label>
         <label><span>E-mail</span><input type="email" id="in-email" autocomplete="email" required></label>
         <label><span>Mot de passe (10 caractères minimum)</span><input type="password" id="in-mdp" autocomplete="new-password" minlength="10" required></label>
+        <label><span>Confirmez le mot de passe</span><input type="password" id="in-mdp2" autocomplete="new-password" minlength="10" required></label>
+        <div class="accord" id="in-accord"></div>
         <label class="case"><input type="checkbox" id="in-cgu"> <span>J’accepte les conditions d’utilisation du service.</span></label>
         <button class="prim" id="in-btn">Créer ma page</button>
         <div class="msg" id="in-msg"></div>
@@ -135,6 +158,21 @@
     </div>
   </section>
 </div>
+
+<main id="ecran-reinit" hidden>
+  <div class="carte-in">
+    <h1>Nouveau mot de passe</h1>
+    <p class="sous" id="re-sous">Vérification du lien…</p>
+    <form id="f-re" hidden>
+      <label><span>Nouveau mot de passe (10 caractères minimum)</span><input type="password" id="re-mdp" autocomplete="new-password" minlength="10" required></label>
+      <label><span>Confirmez le mot de passe</span><input type="password" id="re-mdp2" autocomplete="new-password" minlength="10" required></label>
+      <div class="accord" id="re-accord"></div>
+      <button class="prim" id="re-btn">Enregistrer et ouvrir ma page</button>
+      <div class="msg" id="re-msg"></div>
+    </form>
+    <button type="button" class="lien" id="re-retour" hidden>Refaire une demande</button>
+  </div>
+</main>
 
 <nav class="points-nav" aria-label="Pancartes">
   <button type="button" data-i="0" aria-label="Se connecter" aria-current="true"></button>
@@ -155,7 +193,7 @@
   /* Une seule page connue : on l'ouvre directement, sauf demande explicite */
   const params = new URLSearchParams(location.search);
   const connues = lire();
-  if (connues.length === 1 && !params.has('choisir') && !location.hash) { location.replace('/app/' + connues[0] + '/'); return; }
+  if (connues.length === 1 && !params.has('choisir') && !params.has('reinit') && !location.hash) { location.replace('/app/' + connues[0] + '/'); return; }
 
   /* ---------- Pancartes : glisser ou boutons ---------- */
   let courante = 0;
@@ -169,7 +207,7 @@
     document.querySelectorAll('.onglets button').forEach(b => b.setAttribute('aria-selected', String(Number(b.dataset.i) === i)));
     document.querySelectorAll('.points-nav button').forEach(b => b.setAttribute('aria-current', String(Number(b.dataset.i) === i)));
     $('#curseur').style.transform = 'translateX(' + (i * 100) + '%)';
-    history.replaceState(null, '', location.pathname + location.search + (i === 1 ? '#creer' : '#connexion'));
+    if (!document.body.classList.contains('reinit')) history.replaceState(null, '', location.pathname + location.search + (i === 1 ? '#creer' : '#connexion'));
   }
   let attente = null;
   rail.addEventListener('scroll', () => {
@@ -180,7 +218,7 @@
   document.querySelectorAll('[data-i],[data-aller]').forEach(b => b.addEventListener('click', () => aller(Number(b.dataset.i ?? b.dataset.aller))));
 
   // Première pancarte : inscription si demandé, ou si aucune page n'est connue sur cet appareil
-  const depart = location.hash === '#creer' ? 1 : location.hash === '#connexion' ? 0 : (connues.length ? 0 : 1);
+  const depart = location.hash === '#creer' ? 1 : (location.hash === '#connexion' || location.hash === '#oubli') ? 0 : (connues.length ? 0 : 1);
   requestAnimationFrame(() => aller(depart, false));
 
   /* ---------- Mes pages (déjà ouvertes sur cet appareil) ---------- */
@@ -232,6 +270,82 @@
     }
   });
 
+  /* ---------- Les deux saisies du mot de passe doivent être identiques ---------- */
+  function suivreAccord(a, b, zone, erreur) {
+    const maj = () => {
+      if (erreur) erreur.textContent = '';             // l'ancien message d'erreur ne doit pas contredire la coche verte
+      const x = a.value, y = b.value;
+      if (!y) { zone.className = 'accord'; zone.textContent = ''; return; }
+      const ok = x === y;
+      zone.className = 'accord ' + (ok ? 'ok' : 'ko');
+      zone.textContent = ok ? (x.length >= 10 ? '✓ Les deux mots de passe sont identiques' : 'Identiques, mais 10 caractères minimum') : 'Les deux mots de passe ne sont pas identiques';
+    };
+    a.addEventListener('input', maj); b.addEventListener('input', maj);
+  }
+  function verifierAccord(a, b) {
+    if (a.value.length < 10) return 'Mot de passe : 10 caractères minimum.';
+    if (a.value !== b.value) return 'Les deux mots de passe ne sont pas identiques.';
+    return null;
+  }
+  suivreAccord($('#in-mdp'), $('#in-mdp2'), $('#in-accord'), $('#in-msg'));
+
+  /* ---------- Mot de passe oublié ---------- */
+  function montrerOubli(oui) {
+    $('#f-cx').hidden = oui; $('#f-oubli').hidden = !oui;
+    $('#pages').hidden = oui || !lire().length; $('#ou').hidden = oui || !lire().length;
+    if (oui) { $('#oubli-id').value = $('#cx-nom').value || ''; setTimeout(() => $('#oubli-id').focus(), 50); }
+  }
+  $('#vers-oubli').addEventListener('click', () => montrerOubli(true));
+  $('#retour-cx').addEventListener('click', () => { montrerOubli(false); history.replaceState(null, '', location.pathname + '#connexion'); });
+  if (location.hash === '#oubli') montrerOubli(true);
+  $('#f-oubli').addEventListener('submit', async e => {
+    e.preventDefault();
+    const msg = $('#oubli-msg'), btn = $('#oubli-btn'), ok = $('#oubli-ok');
+    msg.textContent = ''; ok.hidden = true;
+    btn.disabled = true; btn.textContent = 'Envoi…';
+    try {
+      const r = await fetch('/api/mdp-oublie', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ identifiant: $('#oubli-id').value }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.erreur || 'Erreur');
+      ok.textContent = '✉️ ' + j.message; ok.hidden = false;
+    } catch (err) { msg.textContent = err.message === 'Failed to fetch' ? 'Pas de connexion internet.' : err.message; }
+    btn.disabled = false; btn.textContent = 'Recevoir le lien';
+  });
+
+  /* ---------- Lien reçu par e-mail : ?reinit=… ---------- */
+  const jetonReinit = params.get('reinit');
+  if (jetonReinit) {
+    document.body.classList.add('reinit');
+    $('#ecran-reinit').hidden = false;
+    history.replaceState(null, '', '/app');               // le jeton ne reste pas dans l'historique
+    suivreAccord($('#re-mdp'), $('#re-mdp2'), $('#re-accord'), $('#re-msg'));
+    const echec = m => { $('#re-sous').textContent = m; $('#f-re').hidden = true; $('#re-retour').hidden = false; };
+    $('#re-retour').addEventListener('click', () => { location.href = '/app?choisir#oubli'; });
+    fetch('/api/mdp-reinit', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jeton: jetonReinit, verifier: true }) })
+      .then(r => r.json().then(j => ({ r, j })))
+      .then(({ r, j }) => {
+        if (!r.ok) return echec(j.erreur || 'Lien invalide.');
+        $('#re-sous').textContent = 'Pour la page ' + j.slug + '.qrbc.app';
+        $('#f-re').hidden = false; $('#re-mdp').focus();
+      })
+      .catch(() => echec('Pas de connexion internet.'));
+    $('#f-re').addEventListener('submit', async e => {
+      e.preventDefault();
+      const msg = $('#re-msg'), btn = $('#re-btn');
+      const err = verifierAccord($('#re-mdp'), $('#re-mdp2'));
+      if (err) { msg.textContent = err; return; }
+      msg.textContent = ''; btn.disabled = true; btn.textContent = 'Enregistrement…';
+      try {
+        const r = await fetch('/api/mdp-reinit', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jeton: jetonReinit, mdp: $('#re-mdp').value }) });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(j.erreur || 'Erreur');
+        try { localStorage.setItem('qp-jeton:' + j.slug, j.jeton); sessionStorage.setItem('qp-jeton:' + j.slug, j.jeton); } catch (x) {}
+        memoriser(j.slug);
+        location.href = '/app/' + j.slug + '/';
+      } catch (er) { msg.textContent = er.message; btn.disabled = false; btn.textContent = 'Enregistrer et ouvrir ma page'; }
+    });
+  }
+
   /* ---------- Inscription dans l'appli ---------- */
   const inNom = $('#in-nom'), dispo = $('#in-dispo');
   let minuterie = null;
@@ -254,6 +368,8 @@
     e.preventDefault();
     const msg = $('#in-msg'), btn = $('#in-btn');
     msg.textContent = '';
+    const errMdp = verifierAccord($('#in-mdp'), $('#in-mdp2'));
+    if (errMdp) { msg.textContent = errMdp; $('#in-mdp2').focus(); return; }
     if (!$('#in-cgu').checked) { msg.textContent = 'Merci d’accepter les conditions d’utilisation.'; return; }
     const slug = inNom.value.trim(), mdp = $('#in-mdp').value;
     btn.disabled = true; btn.textContent = 'Création de votre page…';

@@ -553,6 +553,13 @@
       form.appendChild(autre);
     }
   }
+  if (CF) {
+    // Mot de passe oublié : formulaire de l'appli (fonctionne aussi depuis nomclient.qrbc.app/admin)
+    const form = $('#form-connexion');
+    const racine = APP ? '' : 'https://' + location.hostname.split('.').slice(1).join('.');
+    if (form) form.insertBefore(el('a', { href: racine + '/app?choisir#oubli', text: 'Mot de passe oublié ?',
+      style: 'display:block;margin:12px 0 0;text-align:center;color:var(--doux);font-size:.9rem' }), document.getElementById('msg-connexion').nextSibling);
+  }
   function memoriserPageApp() {
     if (!APP) return;
     try {

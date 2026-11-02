@@ -31,6 +31,8 @@ const RECHARGE_MIN = 500;                       // centimes HT
 const TVA = 20;                                 // %, ajoutée aux montants HT au moment du paiement
 const RENOUVELER_AVANT = 30;                    // jours avant l'échéance où le renouvellement est proposé
 const STRIPE_API = 'https://api.stripe.com/v1';
+const RESEND_API = 'https://api.resend.com';
+const DUREE_LIEN_MDP = 3600;                    // secondes de validité d'un lien « mot de passe oublié »
 const QUOTAS_IA = { essai: { texte: 2, picto: 2 }, payant: { texte: 10, picto: 5 } };
 const PRIX_IA = { texte: 40, picto: 70 };       // centimes, débités du crédit au-delà du quota
 // Le type d'appel est décidé par le serveur d'après l'outil demandé, jamais par le client
@@ -76,6 +78,8 @@ async function racine(request, env, url) {
   if (p === '/api/inscription' && request.method === 'POST') return inscription(request, env);
   if (p === '/api/stripe/webhook' && request.method === 'POST') return webhookStripe(request, env);
   if (p.startsWith('/api/gestion/')) return gestion(request, env, p.slice('/api/gestion/'.length));
+  if (p === '/api/mdp-oublie' && request.method === 'POST') return mdpOublie(request, env);
+  if (p === '/api/mdp-reinit' && request.method === 'POST') return mdpReinit(request, env);
   if (p === '/api/disponible') {
     const slug = (url.searchParams.get('nom') || '').toLowerCase();
     const err = erreurSlug(slug);
@@ -367,11 +371,12 @@ async function creerCompte(env, o) {
   if (await env.CLIENTS.get('compte:' + o.slug)) throw new ErreurAPI(409, 'Ce nom est déjà pris.');
   const maintenant = Date.now();
   const compte = Object.assign({
-    slug: o.slug, email: o.email || '', plan: o.plan, version: 1, cree: new Date(maintenant).toISOString(),
+    slug: o.slug, email: String(o.email || '').trim().toLowerCase(), plan: o.plan, version: 1, cree: new Date(maintenant).toISOString(),
     finEssai: o.plan === 'essai' ? new Date(maintenant + JOURS_ESSAI * 86400000).toISOString() : null,
     payeJusqua: null, note: o.note || ''
   }, await hacherMdp(o.mdp));
   await ecrireCompte(env, compte);
+  await indexerEmail(env, compte.email, o.slug, true);
   if (!(await env.CLIENTS.get('site:' + o.slug + ':config.json'))) {
     await env.CLIENTS.put('site:' + o.slug + ':config.json', JSON.stringify({ titre: o.titre || '' }, null, 2));
   }
@@ -393,6 +398,19 @@ async function gestion(request, env, action) {
     throw new ErreurAPI(401, 'Accès refusé.');
   }
   const d = request.method === 'POST' ? await corpsJSON(request) : {};
+
+  if (action === 'email') {
+    if (request.method === 'GET') return json(await etatEmail(env));
+    if (d.deconnecter) { await env.CLIENTS.delete('config:email'); return json(await etatEmail(env)); }
+    if (d.test) {
+      const conf = await lireEmail(env);
+      if (!conf) throw new ErreurAPI(400, 'Connectez d’abord le service d’e-mails.');
+      await envoyerEmail(env, conf, String(d.test), 'Test d’envoi qrbc', '<p>Les e-mails de qrbc.app fonctionnent ✓</p>', 'Les e-mails de qrbc.app fonctionnent.');
+      return json({ ok: true });
+    }
+    await connecterEmail(env, String(d.cle || '').trim(), String(d.expediteur || '').trim());
+    return json(await etatEmail(env));
+  }
 
   if (action === 'stripe') {
     if (request.method === 'GET') return json(await etatStripe(env));
@@ -435,6 +453,13 @@ async function gestion(request, env, action) {
     if (d.prolongerEssai) compte.finEssai = new Date(Math.max(Date.now(), Date.parse(compte.finEssai || 0) || 0) + Number(d.prolongerEssai) * 86400000).toISOString();
     if (d.payeJusqua !== undefined) compte.payeJusqua = d.payeJusqua || null;
     if (d.note !== undefined) compte.note = String(d.note);
+    if (d.email !== undefined) {
+      const nouvel = String(d.email).trim().toLowerCase();
+      if (nouvel && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nouvel)) throw new ErreurAPI(400, 'Adresse e-mail invalide.');
+      await indexerEmail(env, compte.email, compte.slug, false);
+      compte.email = nouvel;
+      await indexerEmail(env, nouvel, compte.slug, true);
+    }
     if (d.mdp) { verifierForceMdp(d.mdp); Object.assign(compte, await hacherMdp(String(d.mdp)), { version: (compte.version || 1) + 1 }); }
     await ecrireCompte(env, compte);
     return json({ ok: true, compte: resumeCompte(compte) });
@@ -485,6 +510,8 @@ async function gestion(request, env, action) {
         curseur = l.list_complete ? null : l.cursor;
       } while (curseur);
     }
+    const ancien = await lireCompte(env, slug);
+    if (ancien) await indexerEmail(env, ancien.email, slug, false);
     await env.CLIENTS.delete('compte:' + slug);
     return json({ ok: true });
   }
@@ -519,6 +546,144 @@ async function importer(env, slug, source) {
   // Les pages pré-rendues seront régénérées au prochain « Enregistrer » ; d'ici là, page de démarrage
   for (const n of ['index.html', 'accueil.html', 'sitemap.xml']) await env.CLIENTS.delete('site:' + slug + ':' + n);
   return { ok: true, images: copiees, echecs: ratees };
+}
+
+/* ===================== Mot de passe oublié ===================== */
+/* Réponse identique que le compte existe ou non : on ne révèle jamais quelles pages ou adresses sont inscrites. */
+const REPONSE_NEUTRE = { ok: true, message: 'Si une page correspond, un e-mail avec un lien de réinitialisation vient d’être envoyé à l’adresse enregistrée. Pensez à vérifier les indésirables.' };
+
+async function mdpOublie(request, env) {
+  await limiter(env, 'oubli:' + ip(request) + ':' + new Date().toISOString().slice(0, 13), 5, 7200, 'Trop de demandes. Réessayez dans une heure.');
+  const d = await corpsJSON(request);
+  const saisie = String(d.identifiant || '').trim().toLowerCase().replace(/\.qrbc\.app\/?$/, '').replace(/^https?:\/\//, '');
+  if (!saisie) throw new ErreurAPI(400, 'Indiquez l’adresse de votre page ou votre e-mail.');
+  const conf = await lireEmail(env);
+  if (!conf) throw new ErreurAPI(503, 'La récupération par e-mail n’est pas encore disponible. Contactez le support.');
+
+  let slugs = [];
+  if (saisie.includes('@')) slugs = await slugsParEmail(env, saisie);
+  else if (!erreurSlug(saisie)) slugs = [saisie];
+
+  const liens = [];
+  let email = null;
+  for (const slug of slugs.slice(0, 10)) {
+    const compte = await lireCompte(env, slug);
+    if (!compte || !compte.email || compte.plan === 'suspendu') continue;
+    const sien = compte.email.trim().toLowerCase();
+    if (email && sien !== email) continue;
+    email = sien;
+    // pas plus de 3 liens par heure et par page, même si la limite par connexion est contournée
+    try { await limiter(env, 'oubli-page:' + slug + ':' + new Date().toISOString().slice(0, 13), 3, 7200, ''); } catch (e) { continue; }
+    const jeton = b64url(crypto.getRandomValues(new Uint8Array(32)));
+    await env.CLIENTS.put('reinit:' + await empreinte(jeton), JSON.stringify({ slug, v: compte.version || 1 }), { expirationTtl: DUREE_LIEN_MDP });
+    liens.push({ slug, url: 'https://' + DOMAINE + '/app?reinit=' + jeton });
+  }
+  if (email && liens.length) {
+    const html = '<div style="font:16px/1.5 system-ui,sans-serif;color:#1b1a17;max-width:480px">' +
+      '<p>Bonjour,</p><p>Vous avez demandé à changer le mot de passe de ' + (liens.length > 1 ? 'vos pages' : 'votre page') + ' qrbc.</p>' +
+      liens.map(l => '<p style="margin:18px 0"><a href="' + l.url + '" style="display:inline-block;background:#d9572b;color:#fff;text-decoration:none;padding:12px 18px;border-radius:10px;font-weight:700">' +
+        'Nouveau mot de passe pour ' + esc(l.slug) + '.qrbc.app</a></p>').join('') +
+      '<p style="color:#6a665d;font-size:14px">Ce lien est valable 1 heure et ne sert qu’une fois. Si vous n’êtes pas à l’origine de cette demande, ignorez cet e-mail : votre mot de passe actuel reste valable.</p></div>';
+    const texteBrut = 'Vous avez demandé à changer votre mot de passe qrbc.\n\n' + liens.map(l => l.slug + '.qrbc.app : ' + l.url).join('\n') +
+      '\n\nLien valable 1 heure, à usage unique. Si vous n’êtes pas à l’origine de cette demande, ignorez cet e-mail.';
+    try { await envoyerEmail(env, conf, email, 'Nouveau mot de passe — qrbc', html, texteBrut); }
+    catch (e) { console.error('envoi e-mail', e.message); }
+  }
+  return json(REPONSE_NEUTRE);
+}
+
+async function mdpReinit(request, env) {
+  await limiter(env, 'reinit:' + ip(request) + ':' + new Date().toISOString().slice(0, 13), 10, 7200, 'Trop d’essais. Réessayez dans une heure.');
+  const d = await corpsJSON(request);
+  const jeton = String(d.jeton || '');
+  if (!/^[A-Za-z0-9_-]{30,60}$/.test(jeton)) throw new ErreurAPI(400, 'Lien invalide.');
+  const cle = 'reinit:' + await empreinte(jeton);
+  const t = await env.CLIENTS.get(cle);
+  if (!t) throw new ErreurAPI(410, 'Ce lien a expiré ou a déjà servi. Refaites une demande.');
+  const info = JSON.parse(t);
+  if (d.verifier) return json({ ok: true, slug: info.slug });       // affichage du formulaire uniquement
+  verifierForceMdp(d.mdp);
+  const compte = await lireCompte(env, info.slug);
+  if (!compte || (compte.version || 1) !== info.v) { await env.CLIENTS.delete(cle); throw new ErreurAPI(410, 'Ce lien n’est plus valable. Refaites une demande.'); }
+  await env.CLIENTS.delete(cle);                                     // usage unique
+  Object.assign(compte, await hacherMdp(String(d.mdp)), { version: (compte.version || 1) + 1 });   // déconnecte les autres appareils
+  await ecrireCompte(env, compte);
+  const session = await signerSession(env, { s: compte.slug, v: compte.version, e: Math.floor(Date.now() / 1000) + 30 * 86400 });
+  return json({ ok: true, slug: compte.slug, jeton: session });
+}
+
+async function empreinte(t) {
+  return b64url(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(t))));
+}
+
+/* Index e-mail → pages, pour retrouver ses pages à partir de l'adresse */
+async function indexerEmail(env, email, slug, ajouter) {
+  email = String(email || '').trim().toLowerCase();
+  if (!email) return;
+  const cle = 'email:' + email;
+  let l = [];
+  try { l = JSON.parse(await env.CLIENTS.get(cle) || '[]'); } catch (e) {}
+  l = l.filter(x => x !== slug);
+  if (ajouter) l.push(slug);
+  if (l.length) await env.CLIENTS.put(cle, JSON.stringify(l)); else await env.CLIENTS.delete(cle);
+}
+async function slugsParEmail(env, email) {
+  const t = await env.CLIENTS.get('email:' + email);
+  if (t) return JSON.parse(t);
+  // comptes créés avant l'index : on parcourt une fois, puis on mémorise
+  if (await env.CLIENTS.get('index-email-fait')) return [];
+  let curseur;
+  do {
+    const l = await env.CLIENTS.list({ prefix: 'compte:', cursor: curseur });
+    for (const k of l.keys) { const c = await lireCompte(env, k.name.slice(7)); if (c && c.email) await indexerEmail(env, c.email, c.slug, true); }
+    curseur = l.list_complete ? null : l.cursor;
+  } while (curseur);
+  await env.CLIENTS.put('index-email-fait', '1');
+  const t2 = await env.CLIENTS.get('email:' + email);
+  return t2 ? JSON.parse(t2) : [];
+}
+
+/* ===================== E-mails (Resend) ===================== */
+async function lireEmail(env) {
+  const t = await env.CLIENTS.get('config:email');
+  if (!t) return null;
+  const c = JSON.parse(t);
+  return Object.assign({}, c, { cle: await dechiffrer(env, c.cle) });
+}
+async function etatEmail(env) {
+  const t = await env.CLIENTS.get('config:email');
+  if (!t) return { connecte: false };
+  const c = JSON.parse(t);
+  return { connecte: true, expediteur: c.expediteur, domaine: c.domaine, statutDomaine: c.statutDomaine, fin: c.fin, le: c.le };
+}
+async function connecterEmail(env, cle, expediteur) {
+  if (!/^re_[A-Za-z0-9_]{10,}$/.test(cle)) throw new ErreurAPI(400, 'Clé Resend attendue : re_…');
+  expediteur = expediteur || 'qrbc <noreply@' + DOMAINE + '>';
+  const m = expediteur.match(/<?([^\s<>@]+@([^\s<>@]+))>?\s*$/);
+  if (!m) throw new ErreurAPI(400, 'Expéditeur invalide. Exemple : qrbc <noreply@qrbc.app>');
+  const domaine = m[2].toLowerCase();
+  let r, j;
+  try {
+    r = await fetch((env.RESEND_API || RESEND_API) + '/domains', { headers: { authorization: 'Bearer ' + cle } });
+    j = await r.json().catch(() => ({}));
+  } catch (e) { throw new ErreurAPI(502, 'Resend injoignable.'); }
+  if (!r.ok) throw new ErreurAPI(400, 'Resend refuse cette clé : ' + ((j && j.message) || r.status));
+  const d = ((j && j.data) || []).find(x => String(x.name).toLowerCase() === domaine);
+  if (!d) throw new ErreurAPI(400, 'Le domaine ' + domaine + ' n’est pas ajouté dans Resend (Domains → Add domain).');
+  await env.CLIENTS.put('config:email', JSON.stringify({
+    expediteur, domaine, statutDomaine: d.status, fin: cle.slice(-4), le: new Date().toISOString(), cle: await chiffrer(env, cle)
+  }));
+}
+async function envoyerEmail(env, conf, a, sujet, html, texteBrut) {
+  const r = await fetch((env.RESEND_API || RESEND_API) + '/emails', {
+    method: 'POST',
+    headers: { authorization: 'Bearer ' + conf.cle, 'content-type': 'application/json' },
+    body: JSON.stringify({ from: conf.expediteur, to: [a], subject: sujet, html, text: texteBrut })
+  });
+  if (!r.ok) {
+    const j = await r.json().catch(() => ({}));
+    throw new ErreurAPI(502, 'Envoi impossible : ' + ((j && j.message) || r.status));
+  }
 }
 
 /* ===================== Stripe ===================== */

@@ -64,6 +64,20 @@
       <p class="infos">La clé est vérifiée auprès de Stripe, puis rangée chiffrée : elle ne sera plus jamais affichée. Le webhook et le taux de TVA à 20 % sont créés automatiquement.</p>
     </div>
 
+    <div class="boite" id="b-email">
+      <h2>E-mails (Resend)</h2>
+      <div id="email-etat" class="infos">…</div>
+      <form id="f-email">
+        <label><span>Clé API Resend</span><input type="password" id="email-cle" autocomplete="off" spellcheck="false" placeholder="re_…"></label>
+        <label><span>Expéditeur</span><input type="text" id="email-exp" spellcheck="false" value="qrbc <noreply@qrbc.app>"></label>
+        <button class="prim" id="email-btn">Connecter</button>
+        <button type="button" id="email-test" class="cache">Envoyer un e-mail de test</button>
+        <button type="button" id="email-off" class="danger cache">Déconnecter</button>
+      </form>
+      <div class="msg" id="m-email"></div>
+      <p class="infos">Sert à envoyer les liens « mot de passe oublié ». Le domaine qrbc.app doit être ajouté et vérifié dans Resend. La clé est rangée chiffrée.</p>
+    </div>
+
     <form class="boite" id="f-creer">
       <h2>Créer un compte (test, démo, client offert)</h2>
       <div class="g2">
@@ -136,9 +150,44 @@
     catch (err) { m.className = 'msg err'; m.textContent = err.message; }
   });
 
+  async function chargerEmail(etat) {
+    const e = etat || await api('email');
+    const z = $('#email-etat');
+    if (!e.connecte) {
+      z.innerHTML = '<span class="badge b-inactif">non connecté</span> « Mot de passe oublié » indisponible pour les clients.';
+      $('#email-btn').textContent = 'Connecter'; $('#email-test').classList.add('cache'); $('#email-off').classList.add('cache');
+      return;
+    }
+    const verifie = e.statutDomaine === 'verified';
+    z.innerHTML = '<span class="badge ' + (verifie ? 'b-payant' : 'b-essai') + '"></span> <b></b> · clé …' + e.fin;
+    z.querySelector('.badge').textContent = verifie ? 'domaine vérifié' : 'domaine : ' + (e.statutDomaine || '?');
+    z.querySelector('b').textContent = e.expediteur;
+    $('#email-btn').textContent = 'Remplacer la clé'; $('#email-test').classList.remove('cache'); $('#email-off').classList.remove('cache');
+  }
+  $('#f-email').addEventListener('submit', async e => {
+    e.preventDefault();
+    const m = $('#m-email'), cle = $('#email-cle').value.trim();
+    if (!cle) return;
+    m.className = 'msg'; m.textContent = 'Vérification auprès de Resend…';
+    try { await chargerEmail(await api('email', { cle, expediteur: $('#email-exp').value.trim() })); $('#email-cle').value = ''; m.className = 'msg ok'; m.textContent = '✓ Service d’e-mails connecté.'; }
+    catch (err) { m.className = 'msg err'; m.textContent = err.message; }
+  });
+  $('#email-test').addEventListener('click', async () => {
+    const a = prompt('Envoyer un e-mail de test à :');
+    if (!a) return;
+    const m = $('#m-email'); m.className = 'msg'; m.textContent = 'Envoi…';
+    try { await api('email', { test: a }); m.className = 'msg ok'; m.textContent = '✓ E-mail envoyé à ' + a + '.'; }
+    catch (err) { m.className = 'msg err'; m.textContent = err.message; }
+  });
+  $('#email-off').addEventListener('click', async () => {
+    if (!confirm('Déconnecter le service d’e-mails ?')) return;
+    try { await chargerEmail(await api('email', { deconnecter: true })); } catch (err) { $('#m-email').textContent = err.message; }
+  });
+
   async function charger() {
     const { comptes } = await api('liste');
     chargerStripe().catch(() => {});
+    chargerEmail().catch(() => {});
     $('#f-connexion').classList.add('cache'); $('#zone').classList.remove('cache');
     const n = p => comptes.filter(c => c.plan === p).length;
     $('#stats').innerHTML = '<span>Total <b>' + comptes.length + '</b></span><span>Gratuits <b>' + n('gratuit') + '</b></span><span>Essais <b>' + n('essai') +
@@ -200,6 +249,10 @@
     bouton('Nouveau mot de passe', () => {
       const m = prompt('Nouveau mot de passe pour ' + c.slug + ' (10 caractères minimum) :');
       return m ? api('modifier', { nom: c.slug, mdp: m }) : null;
+    });
+    bouton(c.email ? 'E-mail' : 'Ajouter un e-mail', () => {
+      const v = prompt('E-mail de ' + c.slug + ' (sert à récupérer le mot de passe) :', c.email || '');
+      return v === null ? null : api('modifier', { nom: c.slug, email: v.trim() });
     });
     bouton('Note', () => {
       const n = prompt('Note interne :', c.note || '');

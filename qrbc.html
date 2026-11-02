@@ -102,6 +102,8 @@
         <label><span>Nom de votre activité</span><input type="text" id="titre" maxlength="80" placeholder="Ex. Chauffeur Privé Paris"></label>
         <label><span>E-mail</span><input type="email" id="email" autocomplete="email" required></label>
         <label><span>Mot de passe (10 caractères minimum)</span><input type="password" id="mdp" autocomplete="new-password" minlength="10" required></label>
+        <label><span>Confirmez le mot de passe</span><input type="password" id="mdp2" autocomplete="new-password" minlength="10" required></label>
+        <div class="dispo" id="accord" style="margin:-8px 0 14px"></div>
         <label class="case"><input type="checkbox" id="cgu"> <span>J’accepte les conditions d’utilisation du service.</span></label>
         <button id="btn">Créer ma page</button>
         <div class="msg" id="msg"></div>
@@ -141,6 +143,14 @@
     }, 350);
   });
 
+  const majAccord = () => {
+    const a = $('#mdp').value, b = $('#mdp2').value, z = $('#accord');
+    if (!b) { z.className = 'dispo'; z.textContent = ''; return; }
+    z.className = 'dispo ' + (a === b ? 'ok' : 'ko');
+    z.textContent = a === b ? '✓ Les deux mots de passe sont identiques' : 'Les deux mots de passe ne sont pas identiques';
+  };
+  $('#mdp').addEventListener('input', majAccord); $('#mdp2').addEventListener('input', majAccord);
+
   /* ---------- Installation de l'appli ---------- */
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
   const dejaInstallee = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
@@ -168,6 +178,8 @@
     e.preventDefault();
     const msg = $('#msg'), btn = $('#btn');
     msg.className = 'msg'; msg.textContent = '';
+    if ($('#mdp').value.length < 10) { msg.className = 'msg err'; msg.textContent = 'Mot de passe : 10 caractères minimum.'; return; }
+    if ($('#mdp').value !== $('#mdp2').value) { msg.className = 'msg err'; msg.textContent = 'Les deux mots de passe ne sont pas identiques.'; $('#mdp2').focus(); return; }
     if (!$('#cgu').checked) { msg.className = 'msg err'; msg.textContent = 'Merci d’accepter les conditions d’utilisation.'; return; }
     btn.disabled = true; msg.textContent = 'Création de votre page…';
     try {
