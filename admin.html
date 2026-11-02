@@ -166,6 +166,11 @@
     .motif-plus .plus{width:100%;aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:1.8rem;color:var(--prim);border:1px dashed var(--prim);border-radius:10px}
     .ia-boite{border:1px solid color-mix(in srgb,var(--prim) 35%,var(--ligne));background:color-mix(in srgb,var(--prim) 5%,var(--bg));border-radius:14px;padding:14px;margin:6px 0 18px}
     .ia-titre{display:block;font-size:1rem}
+    .galerie-fonds{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:8px;margin-top:6px}
+    .fond-ia{position:relative;aspect-ratio:9/16;border-radius:10px;border:2px solid var(--ligne);background:var(--bg) center/cover no-repeat;padding:0;cursor:pointer}
+    .fond-ia.actif{border-color:var(--prim);box-shadow:0 0 0 2px color-mix(in srgb,var(--prim) 35%,transparent)}
+    .fond-coche{position:absolute;left:6px;bottom:6px;width:22px;height:22px;border-radius:50%;background:var(--prim);color:#fff;font-size:.8rem;display:grid;place-items:center}
+    .fond-suppr{position:absolute;right:4px;top:4px;width:24px;height:24px;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;font-size:1rem;line-height:1;display:grid;place-items:center}
     .ia-relecture{margin-top:14px;padding-top:12px;border-top:1px dashed var(--ligne)}
     .ia-art{background:var(--panneau);border:1px solid var(--ligne);border-radius:12px;padding:10px;margin-bottom:10px;display:flex;flex-direction:column;gap:8px}
     .ia-art input{font-weight:700}
@@ -418,7 +423,7 @@
     const r = resteIA(type), c = compteCF;
     if (!r) return { t: '' };
     if (r.illimite) return { t: 'IA illimitée (compte offert)' };
-    const nom = type === 'texte' ? ['rédaction', 'rédactions'] : ['création de motifs', 'créations de motifs'];
+    const nom = type === 'texte' ? ['rédaction', 'rédactions'] : type === 'fond' ? ['création d’images', 'créations d’images'] : ['création de motifs', 'créations de motifs'];
     if (!c.actif) return { t: c.plan === 'essai' ? 'Essai terminé.' : 'Abonnement inactif.', vide: true, lien: c.plan === 'essai' ? 'S’abonner' : 'Renouveler' };
     if (r.inclus > 0) return { t: (c.plan === 'essai' ? 'Essai : ' : 'Cette année : ') + r.inclus + ' ' + (r.inclus > 1 ? nom[1] : nom[0]) + ' sur ' + r.total + ' restante' + (r.inclus > 1 ? 's' : '') };
     if (r.parCredit > 0) return { t: 'Quota utilisé · ' + euros(r.prix) + ' par ' + nom[0] + ' sur votre crédit (' + euros(r.credit) + ')' };
@@ -462,10 +467,11 @@
 
     if (c.ia && !c.ia.illimite) {
       const ligne = (lib, val) => el('div', { class: 'compteur' }, [el('span', { text: lib }), el('b', { text: val })]);
-      const rt = resteIA('texte'), rp = resteIA('picto');
+      const rt = resteIA('texte'), rp = resteIA('picto'), rf = c.ia.fond ? resteIA('fond') : null;
       fen.append(
         ligne('Rédactions IA restantes', rt.inclus + ' / ' + rt.total),
         ligne('Créations de motifs restantes', rp.inclus + ' / ' + rp.total));
+      if (rf) fen.append(ligne('Créations d’images de fond restantes', rf.inclus + ' / ' + rf.total));
       if (c.plan === 'payant') fen.append(ligne('Crédit IA', euros(c.ia.credit)));
     }
 
@@ -507,8 +513,8 @@
         el('div', { class: 'aide', text: ttc(c.offre.prixAnnuel) + ' TTC (TVA ' + c.offre.tva + ' %). Soit ' + euros(Math.round(c.offre.prixAnnuel / 12)) + ' HT par mois, le prix d’un café.' }),
         el('ul', {}, [
           el('li', { text: 'Votre page, votre QR code et vos cartes de visite' }),
-          ...((q.texte || q.picto) ? [el('li', { text: [q.texte ? q.texte + (q.texte > 1 ? ' rédactions IA' : ' rédaction IA') : '', q.picto ? q.picto + (q.picto > 1 ? ' créations de motifs' : ' création de motifs') : ''].filter(Boolean).join(' et ') + ' incluses par an' })] : []),
-          el('li', { text: ((q.texte || q.picto) ? 'Au-delà : ' : 'IA à la demande : ') + euros(c.ia.prix.texte) + ' HT la rédaction, ' + euros(c.ia.prix.picto) + ' HT la création de motifs' })
+          ...((q.texte || q.picto || q.fond) ? [el('li', { text: [q.texte ? q.texte + (q.texte > 1 ? ' rédactions IA' : ' rédaction IA') : '', q.picto ? q.picto + (q.picto > 1 ? ' créations de motifs' : ' création de motifs') : '', q.fond ? q.fond + (q.fond > 1 ? ' créations d’images de fond' : ' création d’images de fond') : ''].filter(Boolean).join(', ').replace(/, ([^,]*)$/, ' et $1') + ' incluses par an' })] : []),
+          el('li', { text: ((q.texte || q.picto || q.fond) ? 'Au-delà : ' : 'IA à la demande : ') + euros(c.ia.prix.texte) + ' HT la rédaction, ' + euros(c.ia.prix.picto) + ' HT la création de motifs' + (c.ia.prix.fond != null ? ', ' + euros(c.ia.prix.fond) + ' HT la création d’images de fond (2 images)' : '') })
         ]),
         ...(ren && ren.deduction ? [el('div', { class: 'aide', style: 'margin-bottom:10px', text: 'Crédit déduit : −' + euros(ren.deduction) + ' HT → à payer ' + euros(ren.aPayer) + ' HT (' + ttc(ren.aPayer) + ' TTC)' })] : []),
         c.demande && c.demande.genre === 'abonnement' && !c.offre.enLigne ? attente : btn,
@@ -720,6 +726,84 @@
       el('div', { class: 'image-ligne' }, [vign, el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' }, [prendre, choisir, retirer].filter(Boolean)), fichier, camera])]);
   }
 
+  /* ---------------- Atelier « fond par l'IA » (Cloudflare) ---------------- */
+  const AMBIANCES_FOND = { photo: 'Photo réaliste', lumineux: 'Lumineux', nuit: 'Ambiance nuit', minimal: 'Minimaliste', aquarelle: 'Aquarelle', luxe: 'Luxe' };
+  const etatFond = { ambiance: 'photo', idee: '', fonds: null, enCours: false };
+  function atelierFond() {
+    const boite = el('div', { class: 'ia-boite', style: 'margin-top:16px' });
+    const galerie = el('div', { class: 'galerie-fonds' });
+    const msg = el('div', { class: 'msg' });
+
+    const puces = el('div', { class: 'puces' });
+    Object.keys(AMBIANCES_FOND).forEach(k => {
+      const b = el('button', { type: 'button', class: 'puce' + (etatFond.ambiance === k ? ' actif' : ''), text: AMBIANCES_FOND[k] });
+      b.addEventListener('click', () => { etatFond.ambiance = k; puces.querySelectorAll('.puce').forEach(x => x.classList.toggle('actif', x === b)); });
+      puces.appendChild(b);
+    });
+    const idee = el('textarea', { rows: 2, value: etatFond.idee, placeholder: 'Ex. : van noir devant la tour Eiffel au coucher du soleil' });
+    idee.addEventListener('input', () => { etatFond.idee = idee.value; });
+    const go = el('button', { type: 'button', class: 'btn btn-prim btn-plein', text: etatFond.enCours ? 'L’IA peint vos images…' : '✨ Créer 2 images' });
+    go.disabled = etatFond.enCours;
+    go.addEventListener('click', async () => {
+      etatFond.enCours = true; go.disabled = true; go.textContent = 'L’IA peint vos images… (≈ 20 s)'; msg.className = 'msg'; msg.textContent = '';
+      try {
+        const r = await appelAPI('fond', jetonCF, { method: 'POST', body: JSON.stringify({ ambiance: etatFond.ambiance, idee: etatFond.idee }) });
+        const j = await r.json();
+        etatFond.fonds = j.fonds;
+        afficherAbonnement(j.compte);
+        msg.className = 'msg ok'; msg.textContent = '✓ ' + j.nouvelles.length + (j.nouvelles.length > 1 ? ' nouvelles images ajoutées' : ' nouvelle image ajoutée') + ' à votre galerie : touchez-en une pour l’utiliser.';
+      } catch (e) {
+        msg.className = 'msg err'; msg.textContent = e.message === 'Failed to fetch' ? 'Connexion impossible.' : e.message;
+        if (e.status === 402) ouvrirAbonnement('quota', e.message);
+      }
+      etatFond.enCours = false; go.disabled = false; go.textContent = '✨ Créer 2 images';
+      remplirGalerie();
+    });
+
+    function remplirGalerie() {
+      galerie.innerHTML = '';
+      const l = etatFond.fonds || [];
+      if (!l.length) { galerie.appendChild(el('div', { class: 'aide', text: etatFond.fonds ? 'Vos images créées par l’IA apparaîtront ici.' : 'Chargement de votre galerie…' })); return; }
+      l.forEach(f => {
+        const actif = cfg.design.imageFond === f.chemin;
+        const v = el('button', { type: 'button', class: 'fond-ia' + (actif ? ' actif' : ''), title: actif ? 'Image utilisée' : 'Utiliser cette image', 'aria-label': actif ? 'Image utilisée' : 'Utiliser cette image' });
+        v.style.backgroundImage = 'url("' + f.chemin + '")';
+        v.addEventListener('click', () => {
+          cfg.design.imageFond = f.chemin;
+          changement();
+          construireFormulaire();                       // met à jour la vignette « Photo » et la galerie
+        });
+        const x = el('span', { class: 'fond-suppr', role: 'button', 'aria-label': 'Supprimer de la galerie', text: '×' });
+        x.addEventListener('click', async e => {
+          e.stopPropagation();
+          if (!confirm(t('Supprimer cette image de votre galerie ?'))) return;
+          try {
+            const r = await appelAPI('fonds', jetonCF, { method: 'DELETE', body: JSON.stringify({ chemin: f.chemin }) });
+            etatFond.fonds = (await r.json()).fonds;
+            remplirGalerie();
+          } catch (er) { alert(er.message); }
+        });
+        if (actif) v.appendChild(el('span', { class: 'fond-coche', text: '✓' }));
+        v.appendChild(x);
+        galerie.appendChild(v);
+      });
+    }
+    if (!etatFond.fonds) {
+      appelAPI('fonds', jetonCF).then(r => r.json()).then(j => { etatFond.fonds = j.fonds; remplirGalerie(); }).catch(() => { etatFond.fonds = []; remplirGalerie(); });
+    }
+    remplirGalerie();
+
+    boite.append(
+      el('b', { class: 'ia-titre', text: '✨ Créer un fond avec l’IA' }),
+      el('div', { class: 'aide', style: 'margin:4px 0 12px', text: 'L’IA crée 2 images à partir de votre activité. Elles restent dans votre galerie : choisissez-en une maintenant ou plus tard.' }),
+      el('span', { class: 'etiq', text: 'Ambiance' }), puces,
+      el('label', { class: 'champ', style: 'margin-top:10px' }, [el('span', { text: 'Votre idée (facultatif)' }), idee]),
+      go, quotaIA('fond'), msg,
+      el('span', { class: 'etiq', style: 'margin-top:14px;display:block' }, [ 'Ma galerie' ]), galerie
+    );
+    return boite;
+  }
+
   /* ---------------- Modèles de boutons ---------------- */
   const MODELES = {
     avis:      { icone: '⭐', texte: 'Laisser un avis Google', type: 'avis', couleur: '#4285F4' },
@@ -842,7 +926,8 @@
     f.appendChild(section('fond', 'Image de fond', false, [
       el('div', { class: 'aide', style: 'margin:0 0 12px', text: 'Photo affichée derrière la page contact. Elle sert aussi aux cartes de visite, à l’atelier logo et à l’aperçu de partage. Astuce : photo en format portrait, sujet bien éclairé.' }),
       choixImage('Photo', d, 'imageFond', { nom: 'fond', max: 1600, fond: true, photo: true }),
-      el('span', { class: 'etiq', text: 'Assombrir l’image (meilleure lisibilité du texte)' }), voile
+      el('span', { class: 'etiq', text: 'Assombrir l’image (meilleure lisibilité du texte)' }), voile,
+      ...(CF ? [atelierFond()] : [])
     ]));
 
     /* Référencement Google */

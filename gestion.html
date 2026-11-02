@@ -56,7 +56,7 @@
   .carte-tete .titre{font-size:.85rem;color:var(--doux)}
   .donnees{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:.88rem;margin:0}
   .donnees dt{color:var(--doux)} .donnees dd{margin:0;overflow-wrap:anywhere}
-  .ia{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:10px;border-radius:10px;background:var(--bg)}
+  .ia{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;padding:10px;border-radius:10px;background:var(--bg)}
   .ia label{margin:0}
   .ia input{min-height:38px;padding:7px 9px}
   .ia .credit{grid-column:1/-1;display:flex;justify-content:space-between;align-items:baseline;font-size:.9rem;border-top:1px solid var(--ligne);padding-top:8px}
@@ -120,10 +120,15 @@
         <span></span>
         <label><span>Prix d’une rédaction de textes (€ HT)</span><input type="text" inputmode="decimal" id="t-prixTexte"></label>
         <label><span>Prix d’une création de pictos (€ HT)</span><input type="text" inputmode="decimal" id="t-prixPicto"></label>
+        <label><span>Prix d’une création d’images de fond, 2 images (€ HT)</span><input type="text" inputmode="decimal" id="t-prixFond"></label>
+        <span></span>
         <label><span>Essai 14 jours : rédactions offertes</span><input type="number" min="0" step="1" id="t-essaiTexte"></label>
         <label><span>Essai 14 jours : créations de pictos offertes</span><input type="number" min="0" step="1" id="t-essaiPicto"></label>
+        <label><span>Essai 14 jours : créations d’images de fond offertes</span><input type="number" min="0" step="1" id="t-essaiFond"></label>
+        <span></span>
         <label><span>Abonnement : rédactions incluses par an</span><input type="number" min="0" step="1" id="t-payantTexte"></label>
         <label><span>Abonnement : créations de pictos incluses par an</span><input type="number" min="0" step="1" id="t-payantPicto"></label>
+        <label><span>Abonnement : créations d’images de fond incluses par an</span><input type="number" min="0" step="1" id="t-payantFond"></label>
       </div>
       <div class="infos" id="t-apercu"></div>
       <button class="prim">Enregistrer les tarifs</button>
@@ -215,10 +220,11 @@
   });
 
   /* ---------- Tarifs et quotas ---------- */
-  const CHAMPS_TARIFS = ['prixAnnuel', 'prixTexte', 'prixPicto', 'essaiTexte', 'essaiPicto', 'payantTexte', 'payantPicto'];
+  const CHAMPS_TARIFS = ['prixAnnuel', 'prixTexte', 'prixPicto', 'prixFond', 'essaiTexte', 'essaiPicto', 'essaiFond', 'payantTexte', 'payantPicto', 'payantFond'];
   const versChamps = t => ({
-    prixAnnuel: t.prixAnnuel / 100, prixTexte: t.prixTexte / 100, prixPicto: t.prixPicto / 100,
-    essaiTexte: t.essai.texte, essaiPicto: t.essai.picto, payantTexte: t.payant.texte, payantPicto: t.payant.picto
+    prixAnnuel: t.prixAnnuel / 100, prixTexte: t.prixTexte / 100, prixPicto: t.prixPicto / 100, prixFond: t.prixFond / 100,
+    essaiTexte: t.essai.texte, essaiPicto: t.essai.picto, essaiFond: t.essai.fond,
+    payantTexte: t.payant.texte, payantPicto: t.payant.picto, payantFond: t.payant.fond
   });
   let tarifsDefaut = null;
   function remplirTarifs(t) {
@@ -230,8 +236,8 @@
     const n = k => Number(String($('#t-' + k).value).replace(',', '.'));
     const e = x => isFinite(x) ? x.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }) : '?';
     $('#t-apercu').textContent = 'Le client voit : ' + e(n('prixAnnuel')) + ' HT/an (' + e(n('prixAnnuel') * 1.2) + ' TTC, soit ' + e(n('prixAnnuel') / 12) + ' HT/mois) · essai : ' +
-      n('essaiTexte') + ' rédaction(s) + ' + n('essaiPicto') + ' picto(s) · abonnement : ' + n('payantTexte') + ' + ' + n('payantPicto') + ' par an · au-delà ' +
-      e(n('prixTexte')) + ' / ' + e(n('prixPicto')) + ' HT';
+      n('essaiTexte') + ' rédaction(s) + ' + n('essaiPicto') + ' picto(s) + ' + n('essaiFond') + ' fond(s) · abonnement : ' + n('payantTexte') + ' + ' + n('payantPicto') + ' + ' + n('payantFond') +
+      ' par an · au-delà ' + e(n('prixTexte')) + ' / ' + e(n('prixPicto')) + ' / ' + e(n('prixFond')) + ' HT';
   }
   CHAMPS_TARIFS.forEach(k => $('#t-' + k).addEventListener('input', apercuTarifs));
   async function chargerTarifs() { const r = await api('tarifs'); tarifsDefaut = r.defaut; remplirTarifs(r.tarifs); }
@@ -371,12 +377,12 @@
         const lab = el('label', {}, [el('span', { text: lib }), input]);
         return { lab, input };
       };
-      const t = champ('Rédactions restantes', ia.texte), pz = champ('Pictos restants', ia.picto);
+      const t = champ('Rédactions restantes', ia.texte), pz = champ('Pictos restants', ia.picto), fd = champ('Fonds restants', ia.fond || { inclus: 0, utilises: 0 });
       const maj = el('button', { type: 'button', text: 'Mettre à jour les IA gratuites' });
       maj.disabled = true;
-      [t.input, pz.input].forEach(i => i.addEventListener('input', () => { maj.disabled = false; maj.className = 'prim'; }));
-      maj.addEventListener('click', () => action(() => api('modifier', { nom: c.slug, restantTexte: Number(t.input.value), restantPicto: Number(pz.input.value) })));
-      boiteIA.append(t.lab, pz.lab);
+      [t.input, pz.input, fd.input].forEach(i => i.addEventListener('input', () => { maj.disabled = false; maj.className = 'prim'; }));
+      maj.addEventListener('click', () => action(() => api('modifier', { nom: c.slug, restantTexte: Number(t.input.value), restantPicto: Number(pz.input.value), restantFond: Number(fd.input.value) })));
+      boiteIA.append(t.lab, pz.lab, fd.lab);
       boiteIA.append(el('div', { class: 'credit' }, [el('span', { text: 'Crédit IA restant' }), el('b', { text: euros(ia.credit) })]));
       boiteIA.append(maj);
     } else boiteIA.append(el('div', { class: 'illimite', text: 'IA désactivée (compte ' + etat + ')' }));

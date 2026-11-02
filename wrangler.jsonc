@@ -8,6 +8,8 @@
     { "pattern": "*.qrbc.app/*", "zone_name": "qrbc.app" },
     { "pattern": "qrbc.app/*", "zone_name": "qrbc.app" }
   ],
+  // Workers AI : création des images de fond (FLUX.2 klein 9B)
+  "ai": { "binding": "AI" },
   "kv_namespaces": [
     { "binding": "CLIENTS", "id": "ee57108f16d740f3a5667ca9982e0dab" }
   ],

@@ -27,7 +27,12 @@ const MODELES_IA = ['claude-sonnet-5-5'];
    essai   : 2 textes + 2 pictos pour toute la durée de l'essai
    payant  : 10 textes + 5 pictos par année d'abonnement, puis crédit prépayé */
 // Tarifs et quotas : réglables dans /gestion (config:tarifs) ; valeurs par défaut ci-dessous
-const TARIFS_DEFAUT = { prixAnnuel: 1800, prixTexte: 40, prixPicto: 70, essai: { texte: 2, picto: 2 }, payant: { texte: 10, picto: 5 } };
+const TARIFS_DEFAUT = { prixAnnuel: 1800, prixTexte: 40, prixPicto: 70, prixFond: 70,
+  essai: { texte: 2, picto: 2, fond: 1 }, payant: { texte: 10, picto: 5, fond: 2 } };
+const TYPES_IA = ['texte', 'picto', 'fond'];      // fond = une génération de 2 images de fond
+const MODELE_IMAGE = '@cf/black-forest-labs/flux-2-klein-9b';
+const FOND_L = 864, FOND_H = 1536;               // portrait 9:16 (téléphone)
+const FONDS_MAX = 24;                            // images gardées dans la galerie d'un client
 let PRIX_ANNUEL = TARIFS_DEFAUT.prixAnnuel;     // centimes HT
 const RECHARGE_MIN = 500;                       // centimes HT
 const TVA = 20;                                 // %, ajoutée aux montants HT au moment du paiement
@@ -36,21 +41,21 @@ const STRIPE_API = 'https://api.stripe.com/v1';
 const RESEND_API = 'https://api.resend.com';
 const DUREE_LIEN_MDP = 3600;                    // secondes de validité d'un lien « mot de passe oublié »
 let QUOTAS_IA = { essai: TARIFS_DEFAUT.essai, payant: TARIFS_DEFAUT.payant };
-let PRIX_IA = { texte: TARIFS_DEFAUT.prixTexte, picto: TARIFS_DEFAUT.prixPicto };   // centimes HT, débités du crédit au-delà du quota
+let PRIX_IA = { texte: TARIFS_DEFAUT.prixTexte, picto: TARIFS_DEFAUT.prixPicto, fond: TARIFS_DEFAUT.prixFond };   // centimes HT, débités du crédit au-delà du quota
 
 async function lireTarifs(env) {
   let t = {};
   try { t = JSON.parse(await env.CLIENTS.get('config:tarifs') || '{}'); } catch (e) {}
   const D = TARIFS_DEFAUT;
   return {
-    prixAnnuel: t.prixAnnuel ?? D.prixAnnuel, prixTexte: t.prixTexte ?? D.prixTexte, prixPicto: t.prixPicto ?? D.prixPicto,
+    prixAnnuel: t.prixAnnuel ?? D.prixAnnuel, prixTexte: t.prixTexte ?? D.prixTexte, prixPicto: t.prixPicto ?? D.prixPicto, prixFond: t.prixFond ?? D.prixFond,
     essai: Object.assign({}, D.essai, t.essai), payant: Object.assign({}, D.payant, t.payant)
   };
 }
 async function chargerTarifs(env) {
   const t = await lireTarifs(env);
   PRIX_ANNUEL = t.prixAnnuel;
-  PRIX_IA = { texte: t.prixTexte, picto: t.prixPicto };
+  PRIX_IA = { texte: t.prixTexte, picto: t.prixPicto, fond: t.prixFond };
   QUOTAS_IA = { essai: t.essai, payant: t.payant };
   return t;
 }
@@ -332,6 +337,63 @@ async function apiClient(request, env, slug, route) {
     return json({ paye: session.payment_status === 'paid', etat, compte: await resumeAvecOffre(env, frais) });
   }
 
+  /* ---------- Images de fond par l'IA ---------- */
+  if (route === 'fonds' && m === 'GET') return json({ fonds: await lireFonds(env, slug) });
+  if (route === 'fonds' && m === 'DELETE') {
+    const { chemin } = await corpsJSON(request);
+    let fonds = await lireFonds(env, slug);
+    if (!fonds.some(x => x.chemin === chemin)) throw new ErreurAPI(404, 'Image introuvable.');
+    fonds = fonds.filter(x => x.chemin !== chemin);
+    await env.CLIENTS.put('site:' + slug + ':fonds-ia', JSON.stringify(fonds));
+    // l'image n'est effacée que si la page publiée ne l'utilise pas
+    const cfg = await env.CLIENTS.get('site:' + slug + ':config.json') || '';
+    if (!cfg.includes(chemin)) await env.CLIENTS.delete('img:' + slug + ':' + chemin.slice(7));
+    return json({ fonds });
+  }
+  if (route === 'fond' && m === 'POST') {
+    if (!actif(compte)) throw new ErreurAPI(402, compte.plan === 'essai'
+      ? 'Votre essai est terminé : abonnez-vous pour continuer à utiliser l’IA.'
+      : 'Abonnement inactif : l’IA est désactivée.', compte.plan === 'essai' ? 'essai_termine' : 'abonnement_inactif');
+    if (!env.AI) throw new ErreurAPI(503, 'La création d’images n’est pas encore activée sur le serveur.');
+    const mode = modeFacturation(compte, 'fond');
+    const jour = new Date().toISOString().slice(0, 10);
+    await limiter(env, 'ia:' + slug + ':' + jour, IA_PAR_JOUR, 86400 * 2, 'Limite quotidienne de l’IA atteinte. Réessayez demain.');
+    const dd = await corpsJSON(request);
+    const ambiance = AMBIANCES_FOND[dd.ambiance] ? dd.ambiance : 'photo';
+    const idee = String(dd.idee || '').slice(0, 300);
+    let cfg = {};
+    try { cfg = JSON.parse(await env.CLIENTS.get('site:' + slug + ':config.json') || '{}'); } catch (e) {}
+    const description = await descriptionFond(env, cfg, ambiance, idee);
+
+    // 2 images en parallèle, graines différentes ; on garde celles qui réussissent
+    const base = Date.now();
+    const essais = await Promise.allSettled([1, 2].map(i => genererImage(env, description, (base + i * 7919) % 2147483647)));
+    const nouvelles = [];
+    for (let i = 0; i < essais.length; i++) {
+      if (essais[i].status !== 'fulfilled') { console.error('image', essais[i].reason && essais[i].reason.message); continue; }
+      const octets = essais[i].value;
+      const type = typeImage(octets);
+      if (!type) continue;
+      const chemin = 'images/fond-ia-' + base + '-' + (i + 1) + (type === 'image/png' ? '.png' : type === 'image/webp' ? '.webp' : '.jpg');
+      await env.CLIENTS.put('img:' + slug + ':' + chemin.slice(7), octets, { metadata: { type } });
+      nouvelles.push({ chemin, le: new Date().toISOString(), ambiance, idee });
+    }
+    if (!nouvelles.length) throw new ErreurAPI(502, 'La création d’images a échoué. Réessayez dans un instant (rien n’a été décompté).');
+
+    let fonds = nouvelles.concat(await lireFonds(env, slug));
+    for (const vieux of fonds.slice(FONDS_MAX)) {                     // galerie limitée : on retire les plus anciennes
+      const cfgTexte = await env.CLIENTS.get('site:' + slug + ':config.json') || '';
+      if (!cfgTexte.includes(vieux.chemin)) await env.CLIENTS.delete('img:' + slug + ':' + vieux.chemin.slice(7));
+    }
+    fonds = fonds.slice(0, FONDS_MAX);
+    await env.CLIENTS.put('site:' + slug + ':fonds-ia', JSON.stringify(fonds));
+
+    const frais = (await lireCompte(env, slug)) || compte;
+    facturer(frais, 'fond', mode);
+    await ecrireCompte(env, frais);
+    return json({ nouvelles, fonds, compte: await resumeAvecOffre(env, frais) });
+  }
+
   if (route === 'demande' && m === 'POST') {
     const dd = await corpsJSON(request);
     const genre = dd.genre === 'recharge' ? 'recharge' : 'abonnement';
@@ -346,6 +408,56 @@ async function apiClient(request, env, slug, route) {
   }
 
   throw new ErreurAPI(404, 'Action inconnue.');
+}
+
+/* ===================== Images de fond ===================== */
+const AMBIANCES_FOND = {
+  photo: 'realistic professional photograph, natural light, shallow depth of field',
+  lumineux: 'bright airy photograph, soft daylight, light pastel tones, clean and optimistic',
+  nuit: 'cinematic night photograph, city lights, deep blues and warm highlights, elegant mood',
+  minimal: 'minimalist composition, large calm empty areas, soft gradients, subtle texture',
+  aquarelle: 'delicate watercolor illustration, soft washes of color, paper texture',
+  luxe: 'luxury editorial photograph, refined materials, dark tones with golden accents'
+};
+async function lireFonds(env, slug) {
+  try { return JSON.parse(await env.CLIENTS.get('site:' + slug + ':fonds-ia') || '[]'); } catch (e) { return []; }
+}
+/* Claude rédige la description de l'image (en anglais, sans texte dans l'image) à partir de l'activité */
+async function descriptionFond(env, cfg, ambiance, idee) {
+  const style = AMBIANCES_FOND[ambiance];
+  const activite = [cfg.titre, cfg.sousTitre, cfg.home && cfg.home.ia && cfg.home.ia.description, cfg.home && cfg.home.ia && cfg.home.ia.zone].filter(Boolean).join(' — ');
+  const secours = (idee || activite || 'a welcoming local business') + '. ' + style + '. Vertical background image, no text, no letters, no logos, no watermark.';
+  if (!env.ANTHROPIC_KEY) return secours;
+  try {
+    const r = await fetch(env.ANTHROPIC_URL || 'https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-api-key': env.ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({
+        model: MODELES_IA[0], max_tokens: 300,
+        system: 'You write prompts for an image generation model. Output ONLY the prompt, in English, 40 to 80 words, no quotes. ' +
+          'The image is a vertical (9:16) background for a small business mobile page: buttons and text will be overlaid in the middle, ' +
+          'so keep the center calm and uncluttered. Describe a concrete scene evoking the business (place, objects, atmosphere), ' +
+          'never a close-up portrait of a person. Forbid any text: always end with "no text, no letters, no logos, no watermark".',
+        messages: [{ role: 'user', content: 'Business: ' + (activite || '(not specified)') + '\nStyle: ' + style + (idee ? '\nClient idea: ' + idee : '') }]
+      })
+    });
+    if (!r.ok) return secours;
+    const j = await r.json();
+    const texte = (j.content || []).filter(c => c.type === 'text').map(c => c.text).join(' ').trim();
+    return texte.length > 20 ? texte.slice(0, 1200) : secours;
+  } catch (e) { return secours; }
+}
+/* FLUX.2 klein 9B sur Workers AI : entrée multipart, sortie image en base64 */
+async function genererImage(env, prompt, graine) {
+  const form = new FormData();
+  form.append('prompt', prompt);
+  form.append('width', String(FOND_L));
+  form.append('height', String(FOND_H));
+  form.append('seed', String(graine));
+  const corps = new Response(form);                // FormData n'expose pas sa frontière : on la récupère ainsi
+  const r = await env.AI.run(MODELE_IMAGE, { multipart: { body: corps.body, contentType: corps.headers.get('content-type') } });
+  if (!r || !r.image) throw new Error('réponse sans image');
+  return deb64(r.image);
 }
 
 async function imageClient(env, slug, nom) {
@@ -435,8 +547,9 @@ async function gestion(request, env, action) {
       prixAnnuel: centimes(d.prixAnnuel, 'Abonnement annuel'),
       prixTexte: centimes(d.prixTexte, 'Prix d’une rédaction'),
       prixPicto: centimes(d.prixPicto, 'Prix d’une création de motifs'),
-      essai: { texte: entier(d.essaiTexte, 'Rédactions de l’essai'), picto: entier(d.essaiPicto, 'Motifs de l’essai') },
-      payant: { texte: entier(d.payantTexte, 'Rédactions de l’abonnement'), picto: entier(d.payantPicto, 'Motifs de l’abonnement') }
+      prixFond: centimes(d.prixFond, 'Prix d’une génération d’images de fond'),
+      essai: { texte: entier(d.essaiTexte, 'Rédactions de l’essai'), picto: entier(d.essaiPicto, 'Motifs de l’essai'), fond: entier(d.essaiFond, 'Fonds de l’essai') },
+      payant: { texte: entier(d.payantTexte, 'Rédactions de l’abonnement'), picto: entier(d.payantPicto, 'Motifs de l’abonnement'), fond: entier(d.payantFond, 'Fonds de l’abonnement') }
     };
     if (t.prixAnnuel < 100) throw new ErreurAPI(400, 'Abonnement annuel : 1 € minimum (paiement par carte).');
     t.le = new Date().toISOString();
@@ -506,8 +619,8 @@ async function gestion(request, env, action) {
     if (d.payeJusqua !== undefined) compte.payeJusqua = d.payeJusqua || null;
     if (d.note !== undefined) compte.note = String(d.note);
     // IA gratuites restantes : on repart de zéro utilisation et on ajuste l'écart avec le quota de la formule
-    for (const type of ['texte', 'picto']) {
-      const v = d[type === 'texte' ? 'restantTexte' : 'restantPicto'];
+    for (const type of TYPES_IA) {
+      const v = d['restant' + type[0].toUpperCase() + type.slice(1)];
       if (v === undefined) continue;
       const n = Number(v);
       if (!Number.isInteger(n) || n < 0 || n > 1000) throw new ErreurAPI(400, 'IA restantes : nombre entier entre 0 et 1 000.');
@@ -944,6 +1057,7 @@ function resumeCompte(c) {
       illimite: c.plan === 'gratuit',
       texte: { utilises: ia.texte || 0, inclus: q ? Math.max(0, q.texte + ((ia.bonus && ia.bonus.texte) || 0)) : null },
       picto: { utilises: ia.picto || 0, inclus: q ? Math.max(0, q.picto + ((ia.bonus && ia.bonus.picto) || 0)) : null },
+      fond: { utilises: ia.fond || 0, inclus: q ? Math.max(0, (q.fond || 0) + ((ia.bonus && ia.bonus.fond) || 0)) : null },
       credit: c.credit || 0,                       // centimes
       prix: PRIX_IA
     },
@@ -959,11 +1073,13 @@ function modeFacturation(c, type) {
   const q = QUOTAS_IA[c.plan];
   const utilises = (c.ia && c.ia[type]) || 0;
   const bonus = (c.ia && c.ia.bonus && c.ia.bonus[type]) || 0;
-  if (q && utilises < q[type] + bonus) return 'inclus';
+  if (q && utilises < (q[type] || 0) + bonus) return 'inclus';
   if (c.plan === 'payant' && (c.credit || 0) >= PRIX_IA[type]) return 'credit';
-  const n = q ? q[type] : 0, np = QUOTAS_IA.payant[type];
-  const nom = k => type === 'texte' ? (k > 1 ? 'rédactions IA' : 'rédaction IA') : (k > 1 ? 'créations de motifs IA' : 'création de motifs IA');
-  const unite = euros(PRIX_IA[type]) + ' HT ' + (type === 'texte' ? 'la rédaction' : 'la création de motifs');
+  const n = q ? (q[type] || 0) : 0, np = QUOTAS_IA.payant[type] || 0;
+  const nom = k => type === 'texte' ? (k > 1 ? 'rédactions IA' : 'rédaction IA')
+    : type === 'fond' ? (k > 1 ? 'créations d’images de fond' : 'création d’images de fond')
+    : (k > 1 ? 'créations de motifs IA' : 'création de motifs IA');
+  const unite = euros(PRIX_IA[type]) + ' HT ' + (type === 'texte' ? 'la rédaction' : type === 'fond' ? 'la création (2 images)' : 'la création de motifs');
   if (c.plan === 'essai') {
     const offre = np > 0 ? 'Abonnez-vous dès maintenant pour en obtenir ' + np + ' par an (' + euros(PRIX_ANNUEL) + ' HT/an).'
       : 'Abonnez-vous dès maintenant (' + euros(PRIX_ANNUEL) + ' HT/an), puis ' + unite + '.';
