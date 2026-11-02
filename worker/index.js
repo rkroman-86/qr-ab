@@ -435,8 +435,8 @@ async function descriptionFond(env, cfg, ambiance, idee) {
       body: JSON.stringify({
         model: MODELES_IA[0], max_tokens: 300,
         system: 'You write prompts for an image generation model. Output ONLY the prompt, in English, 40 to 80 words, no quotes. ' +
-          'The image is a vertical (9:16) background for a small business mobile page: buttons and text will be overlaid in the middle, ' +
-          'so keep the center calm and uncluttered. Describe a concrete scene evoking the business (place, objects, atmosphere), ' +
+          'The image is a vertical (9:16) background for a small business mobile page, composed freely (any framing). ' +
+          'Describe a concrete scene evoking the business (place, objects, atmosphere), ' +
           'never a close-up portrait of a person. Forbid any text: always end with "no text, no letters, no logos, no watermark".',
         messages: [{ role: 'user', content: 'Business: ' + (activite || '(not specified)') + '\nStyle: ' + style + (idee ? '\nClient idea: ' + idee : '') }]
       })
