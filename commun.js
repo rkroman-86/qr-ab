@@ -696,6 +696,14 @@ function clientCloudflare(jeton) {
 }
 
 /* Redimensionne une image avant envoi (mobile = photos lourdes) */
+function imageUniforme(cv) {
+  const p = document.createElement('canvas'); p.width = 48; p.height = 48;
+  const x = p.getContext('2d'); x.drawImage(cv, 0, 0, 48, 48);
+  const d = x.getImageData(0, 0, 48, 48).data;
+  let min = 765, max = 0, alphaMax = 0;
+  for (let i = 0; i < d.length; i += 4) { const v = d[i] + d[i + 1] + d[i + 2]; if (v < min) min = v; if (v > max) max = v; if (d[i + 3] > alphaMax) alphaMax = d[i + 3]; }
+  return alphaMax === 0 || max - min < 6;
+}
 function reduireImage(fichier, maxCote, typeSortie, qualite) {
   return new Promise((ok, ko) => {
     const url = URL.createObjectURL(fichier);
@@ -705,8 +713,13 @@ function reduireImage(fichier, maxCote, typeSortie, qualite) {
       const cv = document.createElement('canvas');
       cv.width = Math.round(img.width * k);
       cv.height = Math.round(img.height * k);
-      cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+      const ctx = cv.getContext('2d');
+      // Le JPEG n'a pas de transparence : sans fond, les zones transparentes (captures d'écran PNG) deviennent noires
+      if (typeSortie !== 'image/png') { ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, cv.width, cv.height); }
+      ctx.drawImage(img, 0, 0, cv.width, cv.height);
       URL.revokeObjectURL(url);
+      // Image entièrement d'une seule couleur : capture protégée (écran noir) ou image vide
+      if (imageUniforme(cv)) { ko(new Error('Cette image est vide ou entièrement noire (capture d’un écran protégé ?). Choisissez une autre image.')); return; }
       ok(cv.toDataURL(typeSortie, qualite));
     };
     img.onerror = () => { URL.revokeObjectURL(url); ko(new Error('Image illisible')); };
