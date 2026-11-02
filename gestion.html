@@ -64,6 +64,25 @@
       <p class="infos">La clé est vérifiée auprès de Stripe, puis rangée chiffrée : elle ne sera plus jamais affichée. Le webhook et le taux de TVA à 20 % sont créés automatiquement.</p>
     </div>
 
+    <form class="boite" id="f-tarifs">
+      <h2>Tarifs et quotas IA</h2>
+      <div class="g2">
+        <label><span>Abonnement annuel (€ HT)</span><input type="text" inputmode="decimal" id="t-prixAnnuel"></label>
+        <span></span>
+        <label><span>Prix d’une rédaction de textes (€ HT)</span><input type="text" inputmode="decimal" id="t-prixTexte"></label>
+        <label><span>Prix d’une création de pictos (€ HT)</span><input type="text" inputmode="decimal" id="t-prixPicto"></label>
+        <label><span>Essai 14 jours : rédactions offertes</span><input type="number" min="0" step="1" id="t-essaiTexte"></label>
+        <label><span>Essai 14 jours : créations de pictos offertes</span><input type="number" min="0" step="1" id="t-essaiPicto"></label>
+        <label><span>Abonnement : rédactions incluses par an</span><input type="number" min="0" step="1" id="t-payantTexte"></label>
+        <label><span>Abonnement : créations de pictos incluses par an</span><input type="number" min="0" step="1" id="t-payantPicto"></label>
+      </div>
+      <div class="infos" id="t-apercu"></div>
+      <button class="prim">Enregistrer les tarifs</button>
+      <button type="button" id="t-defaut">Valeurs d’origine</button>
+      <div class="msg" id="m-tarifs"></div>
+      <p class="infos">Appliqué partout (appli, offres, messages, paiements) dans la minute. Les abonnements en cours gardent ce qui a déjà été payé ; les quotas restants suivent les nouvelles valeurs.</p>
+    </form>
+
     <div class="boite" id="b-email">
       <h2>E-mails (Resend)</h2>
       <div id="email-etat" class="infos">…</div>
@@ -150,6 +169,36 @@
     catch (err) { m.className = 'msg err'; m.textContent = err.message; }
   });
 
+  /* ---------- Tarifs et quotas ---------- */
+  const CHAMPS_TARIFS = ['prixAnnuel', 'prixTexte', 'prixPicto', 'essaiTexte', 'essaiPicto', 'payantTexte', 'payantPicto'];
+  const versChamps = t => ({
+    prixAnnuel: t.prixAnnuel / 100, prixTexte: t.prixTexte / 100, prixPicto: t.prixPicto / 100,
+    essaiTexte: t.essai.texte, essaiPicto: t.essai.picto, payantTexte: t.payant.texte, payantPicto: t.payant.picto
+  });
+  let tarifsDefaut = null;
+  function remplirTarifs(t) {
+    const v = versChamps(t);
+    CHAMPS_TARIFS.forEach(k => { $('#t-' + k).value = k.startsWith('prix') ? v[k].toFixed(2).replace('.', ',') : String(v[k]); });
+    apercuTarifs();
+  }
+  function apercuTarifs() {
+    const n = k => Number(String($('#t-' + k).value).replace(',', '.'));
+    const e = x => isFinite(x) ? x.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }) : '?';
+    $('#t-apercu').textContent = 'Le client voit : ' + e(n('prixAnnuel')) + ' HT/an (' + e(n('prixAnnuel') * 1.2) + ' TTC, soit ' + e(n('prixAnnuel') / 12) + ' HT/mois) · essai : ' +
+      n('essaiTexte') + ' rédaction(s) + ' + n('essaiPicto') + ' picto(s) · abonnement : ' + n('payantTexte') + ' + ' + n('payantPicto') + ' par an · au-delà ' +
+      e(n('prixTexte')) + ' / ' + e(n('prixPicto')) + ' HT';
+  }
+  CHAMPS_TARIFS.forEach(k => $('#t-' + k).addEventListener('input', apercuTarifs));
+  async function chargerTarifs() { const r = await api('tarifs'); tarifsDefaut = r.defaut; remplirTarifs(r.tarifs); }
+  $('#t-defaut').addEventListener('click', () => { if (tarifsDefaut) { remplirTarifs(tarifsDefaut); $('#m-tarifs').textContent = 'Valeurs d’origine remises : cliquez sur Enregistrer pour les appliquer.'; } });
+  $('#f-tarifs').addEventListener('submit', async e => {
+    e.preventDefault();
+    const m = $('#m-tarifs'); m.className = 'msg'; m.textContent = 'Enregistrement…';
+    const corps = {}; CHAMPS_TARIFS.forEach(k => { corps[k] = $('#t-' + k).value.trim(); });
+    try { const r = await api('tarifs', corps); remplirTarifs(r.tarifs); m.className = 'msg ok'; m.textContent = '✓ Tarifs enregistrés.'; await charger(); }
+    catch (err) { m.className = 'msg err'; m.textContent = err.message; }
+  });
+
   async function chargerEmail(etat) {
     const e = etat || await api('email');
     const z = $('#email-etat');
@@ -188,6 +237,7 @@
     const { comptes } = await api('liste');
     chargerStripe().catch(() => {});
     chargerEmail().catch(() => {});
+    if (!tarifsDefaut) chargerTarifs().catch(() => {});
     $('#f-connexion').classList.add('cache'); $('#zone').classList.remove('cache');
     const n = p => comptes.filter(c => c.plan === p).length;
     $('#stats').innerHTML = '<span>Total <b>' + comptes.length + '</b></span><span>Gratuits <b>' + n('gratuit') + '</b></span><span>Essais <b>' + n('essai') +
@@ -236,7 +286,7 @@
     if (c.plan !== 'gratuit') bouton((c.plan === 'payant' ? 'Renouveler' : 'Abonner') + ' 1 an (' + euros(c.renouvellement.aPayer) + ')', () => {
       const r = c.renouvellement;
       const txt = 'Paiement reçu pour ' + c.slug + ' ?\n\nAbonnement : ' + euros(r.prix) + ' HT' +
-        (r.deduction ? '\nCrédit non consommé déduit : −' + euros(r.deduction) : '') + '\nÀ encaisser : ' + euros(r.aPayer) + ' HT\n\nLes quotas IA repartent à zéro (10 textes, 5 pictos).';
+        (r.deduction ? '\nCrédit non consommé déduit : −' + euros(r.deduction) : '') + '\nÀ encaisser : ' + euros(r.aPayer) + ' HT\n\nLes quotas IA repartent à zéro (' + c.offre.quotasPayant.texte + ' textes, ' + c.offre.quotasPayant.picto + ' pictos).';
       return confirm(txt) ? api('abonner', { nom: c.slug }) : null;
     });
     if (c.plan === 'payant') bouton('Créditer…', () => {

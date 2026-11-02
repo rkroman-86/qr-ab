@@ -507,8 +507,8 @@
         el('div', { class: 'aide', text: ttc(c.offre.prixAnnuel) + ' TTC (TVA ' + c.offre.tva + ' %). Soit ' + euros(Math.round(c.offre.prixAnnuel / 12)) + ' HT par mois, le prix d’un café.' }),
         el('ul', {}, [
           el('li', { text: 'Votre page, votre QR code et vos cartes de visite' }),
-          el('li', { text: q.texte + ' rédactions IA et ' + q.picto + ' créations de motifs par an' }),
-          el('li', { text: 'Au-delà : ' + euros(c.ia.prix.texte) + ' la rédaction, ' + euros(c.ia.prix.picto) + ' la création de motifs' })
+          ...((q.texte || q.picto) ? [el('li', { text: [q.texte ? q.texte + (q.texte > 1 ? ' rédactions IA' : ' rédaction IA') : '', q.picto ? q.picto + (q.picto > 1 ? ' créations de motifs' : ' création de motifs') : ''].filter(Boolean).join(' et ') + ' incluses par an' })] : []),
+          el('li', { text: ((q.texte || q.picto) ? 'Au-delà : ' : 'IA à la demande : ') + euros(c.ia.prix.texte) + ' HT la rédaction, ' + euros(c.ia.prix.picto) + ' HT la création de motifs' })
         ]),
         ...(ren && ren.deduction ? [el('div', { class: 'aide', style: 'margin-bottom:10px', text: 'Crédit déduit : −' + euros(ren.deduction) + ' HT → à payer ' + euros(ren.aPayer) + ' HT (' + ttc(ren.aPayer) + ' TTC)' })] : []),
         c.demande && c.demande.genre === 'abonnement' && !c.offre.enLigne ? attente : btn,
@@ -520,16 +520,16 @@
       const btn = el('button', { type: 'button', class: 'btn btn-prim', text: 'Recharger' });
       btn.addEventListener('click', () => {
         const v = Number(String(montant.value).replace(',', '.'));
-        if (!(v >= c.offre.rechargeMin / 100)) { alert('5 € HT minimum.'); return; }
+        if (!(v >= c.offre.rechargeMin / 100)) { alert(euros(c.offre.rechargeMin) + ' HT minimum.'); return; }
         demander({ genre: 'recharge', montant: v }, btn);
       });
       const ren = c.renouvellement;
       fen.append(el('div', { class: 'offre' }, [
         el('b', { text: 'Recharger le crédit IA (montant HT)' }),
-        el('div', { class: 'aide', style: 'margin-top:4px', text: euros(c.ia.prix.texte) + ' la rédaction, ' + euros(c.ia.prix.picto) + ' la création de motifs. ' +
+        el('div', { class: 'aide', style: 'margin-top:4px', text: euros(c.ia.prix.texte) + ' HT la rédaction, ' + euros(c.ia.prix.picto) + ' HT la création de motifs. ' +
           'Le crédit non utilisé est déduit de votre prochain renouvellement' + (ren && ren.deduction ? ' (prochain paiement : ' + euros(ren.aPayer) + ' HT au lieu de ' + prixAn + ').' : '.') }),
         c.demande && c.demande.genre === 'recharge' && !c.offre.enLigne ? attente : el('div', { class: 'ligne-recharge' }, [montant, el('span', { style: 'align-self:center', text: '€ HT' }), btn]),
-        el('div', { class: 'aide', style: 'margin-top:6px', text: 'TVA ' + c.offre.tva + ' % ajoutée au paiement (5 € HT = ' + ttc(500) + ' TTC).' })
+        el('div', { class: 'aide', style: 'margin-top:6px', text: 'TVA ' + c.offre.tva + ' % ajoutée au paiement (' + euros(c.offre.rechargeMin) + ' HT = ' + ttc(c.offre.rechargeMin) + ' TTC).' })
       ]));
     }
     fen.append(fermer);

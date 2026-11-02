@@ -26,15 +26,34 @@ const MODELES_IA = ['claude-sonnet-5-5'];
    gratuit : illimité (comptes offerts, démos)
    essai   : 2 textes + 2 pictos pour toute la durée de l'essai
    payant  : 10 textes + 5 pictos par année d'abonnement, puis crédit prépayé */
-const PRIX_ANNUEL = 1800;                       // centimes HT
+// Tarifs et quotas : réglables dans /gestion (config:tarifs) ; valeurs par défaut ci-dessous
+const TARIFS_DEFAUT = { prixAnnuel: 1800, prixTexte: 40, prixPicto: 70, essai: { texte: 2, picto: 2 }, payant: { texte: 10, picto: 5 } };
+let PRIX_ANNUEL = TARIFS_DEFAUT.prixAnnuel;     // centimes HT
 const RECHARGE_MIN = 500;                       // centimes HT
 const TVA = 20;                                 // %, ajoutée aux montants HT au moment du paiement
 const RENOUVELER_AVANT = 30;                    // jours avant l'échéance où le renouvellement est proposé
 const STRIPE_API = 'https://api.stripe.com/v1';
 const RESEND_API = 'https://api.resend.com';
 const DUREE_LIEN_MDP = 3600;                    // secondes de validité d'un lien « mot de passe oublié »
-const QUOTAS_IA = { essai: { texte: 2, picto: 2 }, payant: { texte: 10, picto: 5 } };
-const PRIX_IA = { texte: 40, picto: 70 };       // centimes, débités du crédit au-delà du quota
+let QUOTAS_IA = { essai: TARIFS_DEFAUT.essai, payant: TARIFS_DEFAUT.payant };
+let PRIX_IA = { texte: TARIFS_DEFAUT.prixTexte, picto: TARIFS_DEFAUT.prixPicto };   // centimes HT, débités du crédit au-delà du quota
+
+async function lireTarifs(env) {
+  let t = {};
+  try { t = JSON.parse(await env.CLIENTS.get('config:tarifs') || '{}'); } catch (e) {}
+  const D = TARIFS_DEFAUT;
+  return {
+    prixAnnuel: t.prixAnnuel ?? D.prixAnnuel, prixTexte: t.prixTexte ?? D.prixTexte, prixPicto: t.prixPicto ?? D.prixPicto,
+    essai: Object.assign({}, D.essai, t.essai), payant: Object.assign({}, D.payant, t.payant)
+  };
+}
+async function chargerTarifs(env) {
+  const t = await lireTarifs(env);
+  PRIX_ANNUEL = t.prixAnnuel;
+  PRIX_IA = { texte: t.prixTexte, picto: t.prixPicto };
+  QUOTAS_IA = { essai: t.essai, payant: t.payant };
+  return t;
+}
 // Le type d'appel est décidé par le serveur d'après l'outil demandé, jamais par le client
 const OUTILS_IA = { proposer_articles: 'texte', proposer_motifs: 'picto' };
 const ITERATIONS = 100000;                    // maximum accepté par PBKDF2 dans les Workers
@@ -50,6 +69,7 @@ const TAILLE_MAX = { 'config.json': 512 * 1024, html: 768 * 1024, image: 3 * 102
 export default {
   async fetch(request, env) {
     try {
+      await chargerTarifs(env);
       const url = new URL(request.url);
       const host = url.hostname.toLowerCase();
       if (host === DOMAINE || host === 'www.' + DOMAINE) return await racine(request, env, url);
@@ -318,7 +338,7 @@ async function apiClient(request, env, slug, route) {
     const montant = genre === 'recharge' ? Math.round(Number(dd.montant) * 100) : prixRenouvellement(compte).aPayer;
     if (genre === 'recharge') {
       if (compte.plan !== 'payant' || !actif(compte)) throw new ErreurAPI(400, 'La recharge est réservée aux abonnés.');
-      if (!(montant >= RECHARGE_MIN) || montant > 50000) throw new ErreurAPI(400, 'Montant de recharge : 5 € minimum.');
+      if (!(montant >= RECHARGE_MIN) || montant > 50000) throw new ErreurAPI(400, 'Montant de recharge : 5 € HT minimum.');
     }
     compte.demande = { genre, montant, le: new Date().toISOString() };
     await ecrireCompte(env, compte);
@@ -398,6 +418,32 @@ async function gestion(request, env, action) {
     throw new ErreurAPI(401, 'Accès refusé.');
   }
   const d = request.method === 'POST' ? await corpsJSON(request) : {};
+
+  if (action === 'tarifs') {
+    if (request.method === 'GET') return json({ tarifs: await lireTarifs(env), defaut: TARIFS_DEFAUT });
+    const centimes = (v, nom) => {
+      const n = Math.round(Number(String(v).replace(',', '.')) * 100);
+      if (!Number.isFinite(n) || n < 0 || n > 100000) throw new ErreurAPI(400, nom + ' : montant entre 0 et 1 000 €.');
+      return n;
+    };
+    const entier = (v, nom) => {
+      const n = Number(v);
+      if (!Number.isInteger(n) || n < 0 || n > 1000) throw new ErreurAPI(400, nom + ' : nombre entier entre 0 et 1 000.');
+      return n;
+    };
+    const t = {
+      prixAnnuel: centimes(d.prixAnnuel, 'Abonnement annuel'),
+      prixTexte: centimes(d.prixTexte, 'Prix d’une rédaction'),
+      prixPicto: centimes(d.prixPicto, 'Prix d’une création de motifs'),
+      essai: { texte: entier(d.essaiTexte, 'Rédactions de l’essai'), picto: entier(d.essaiPicto, 'Motifs de l’essai') },
+      payant: { texte: entier(d.payantTexte, 'Rédactions de l’abonnement'), picto: entier(d.payantPicto, 'Motifs de l’abonnement') }
+    };
+    if (t.prixAnnuel < 100) throw new ErreurAPI(400, 'Abonnement annuel : 1 € minimum (paiement par carte).');
+    t.le = new Date().toISOString();
+    await env.CLIENTS.put('config:tarifs', JSON.stringify(t));
+    await chargerTarifs(env);
+    return json({ tarifs: await lireTarifs(env), defaut: TARIFS_DEFAUT });
+  }
 
   if (action === 'email') {
     if (request.method === 'GET') return json(await etatEmail(env));
@@ -894,12 +940,20 @@ function modeFacturation(c, type) {
   const q = QUOTAS_IA[c.plan];
   const utilises = (c.ia && c.ia[type]) || 0;
   if (q && utilises < q[type]) return 'inclus';
-  const nom = type === 'texte' ? 'textes IA' : 'pictogrammes IA';
-  if (c.plan === 'essai') throw new ErreurAPI(402,
-    'Vos ' + q[type] + ' ' + nom + ' d’essai sont utilisés. Abonnez-vous dès maintenant pour en obtenir ' + QUOTAS_IA.payant[type] + ' par an.', 'essai_epuise');
   if (c.plan === 'payant' && (c.credit || 0) >= PRIX_IA[type]) return 'credit';
-  throw new ErreurAPI(402, 'Vos ' + q[type] + ' ' + nom + ' de l’année sont utilisés. Rechargez votre crédit (5 € minimum) pour continuer.', 'credit_insuffisant');
+  const n = q ? q[type] : 0, np = QUOTAS_IA.payant[type];
+  const nom = k => type === 'texte' ? (k > 1 ? 'rédactions IA' : 'rédaction IA') : (k > 1 ? 'créations de motifs IA' : 'création de motifs IA');
+  const unite = euros(PRIX_IA[type]) + ' HT ' + (type === 'texte' ? 'la rédaction' : 'la création de motifs');
+  if (c.plan === 'essai') {
+    const offre = np > 0 ? 'Abonnez-vous dès maintenant pour en obtenir ' + np + ' par an (' + euros(PRIX_ANNUEL) + ' HT/an).'
+      : 'Abonnez-vous dès maintenant (' + euros(PRIX_ANNUEL) + ' HT/an), puis ' + unite + '.';
+    throw new ErreurAPI(402, (n > 0 ? (n > 1 ? 'Vos ' + n + ' ' + nom(n) + ' d’essai sont utilisées. ' : 'Votre ' + nom(1) + ' d’essai est utilisée. ')
+      : 'La ' + nom(1) + ' n’est pas incluse dans l’essai. ') + offre, 'essai_epuise');
+  }
+  throw new ErreurAPI(402, (n > 0 ? (n > 1 ? 'Vos ' + n + ' ' + nom(n) + ' de l’année sont utilisées. ' : 'Votre ' + nom(1) + ' de l’année est utilisée. ')
+    : 'La ' + nom(1) + ' n’est pas incluse dans l’abonnement. ') + 'Rechargez votre crédit (' + euros(RECHARGE_MIN) + ' HT minimum, ' + unite + ').', 'credit_insuffisant');
 }
+function euros(c) { return ((c || 0) / 100).toFixed(2).replace('.', ',').replace(',00', '') + ' €'; }
 function facturer(c, type, mode) {
   if (mode === 'illimite' || mode === 'inclus') { c.ia = c.ia || {}; c.ia[type] = (c.ia[type] || 0) + 1; }
   if (mode === 'illimite') return;
