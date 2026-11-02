@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Gestion qrbc</title>
+<style>
+  :root{--bg:#f4f4f6;--panneau:#fff;--ligne:#e4e4e9;--txt:#17171c;--doux:#6b6b76;--prim:#1f6feb;--ok:#1a7f37;--err:#cf222e;--alerte:#9a6700}
+  @media (prefers-color-scheme: dark){:root{--bg:#0e0f12;--panneau:#17181d;--ligne:#2a2c33;--txt:#ececf1;--doux:#9a9aa6;--prim:#4c8dff}}
+  *{box-sizing:border-box}
+  body{margin:0;font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--txt)}
+  .page{max-width:900px;margin:0 auto;padding:16px}
+  h1{font-size:1.3rem;margin:4px 0 16px}
+  h2{font-size:1.05rem;margin:0 0 12px}
+  .boite{background:var(--panneau);border:1px solid var(--ligne);border-radius:14px;padding:16px;margin-bottom:16px}
+  input,select{width:100%;padding:10px;border:1px solid var(--ligne);border-radius:9px;background:var(--bg);color:inherit;font:inherit;min-height:42px}
+  label{display:block;margin-bottom:10px}
+  label>span{display:block;font-size:.78rem;font-weight:600;color:var(--doux);margin-bottom:4px}
+  .g2{display:grid;gap:0 12px;grid-template-columns:1fr}
+  @media (min-width:640px){.g2{grid-template-columns:1fr 1fr}}
+  button{padding:10px 14px;border:1px solid var(--ligne);border-radius:9px;background:var(--panneau);color:inherit;font:inherit;cursor:pointer;min-height:40px}
+  button.prim{background:var(--prim);border-color:var(--prim);color:#fff;font-weight:600}
+  button.danger{color:var(--err)}
+  .msg{font-size:.9rem;margin-top:8px;min-height:1.2em;white-space:pre-line}
+  .err{color:var(--err)} .ok{color:var(--ok)}
+  .cache{display:none !important}
+  .compte{border-top:1px solid var(--ligne);padding:12px 0}
+  .compte:first-child{border-top:0}
+  .ligne1{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline}
+  .slug{font-weight:700}
+  .badge{font-size:.75rem;font-weight:600;padding:2px 8px;border-radius:99px;border:1px solid var(--ligne)}
+  .b-gratuit{color:var(--prim)} .b-essai{color:var(--alerte)} .b-payant{color:var(--ok)} .b-inactif{color:var(--err);border-color:var(--err)}
+  .infos{color:var(--doux);font-size:.85rem;margin:4px 0 8px}
+  .actions{display:flex;flex-wrap:wrap;gap:6px}
+  .actions button,.actions a{font-size:.85rem;padding:6px 10px;min-height:34px}
+  .actions a{border:1px solid var(--ligne);border-radius:9px;color:inherit;text-decoration:none;display:inline-flex;align-items:center}
+  .stats{display:flex;gap:16px;flex-wrap:wrap;color:var(--doux);font-size:.9rem;margin-bottom:10px}
+  .stats b{color:var(--txt)}
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Gestion qrbc</h1>
+
+  <form class="boite" id="f-connexion">
+    <label><span>Jeton de gestion (secret ADMIN_TOKEN)</span><input type="password" id="jeton" autocomplete="current-password" required></label>
+    <button class="prim">Entrer</button>
+    <div class="msg" id="m-connexion"></div>
+  </form>
+
+  <div id="zone" class="cache">
+    <form class="boite" id="f-creer">
+      <h2>Créer un compte (test, démo, client offert)</h2>
+      <div class="g2">
+        <label><span>Adresse (nom.qrbc.app)</span><input type="text" id="c-nom" autocapitalize="none" spellcheck="false" placeholder="alexvtc" required></label>
+        <label><span>Nom de l’activité</span><input type="text" id="c-titre" placeholder="Chauffeur Privé Paris"></label>
+        <label><span>E-mail du client</span><input type="email" id="c-email"></label>
+        <label><span>Mot de passe de l’éditeur (10 car. min.)</span><input type="text" id="c-mdp" autocomplete="off" required></label>
+        <label><span>Formule</span><select id="c-plan"><option value="gratuit">Gratuit (offert, sans limite)</option><option value="essai">Essai 14 jours</option><option value="payant">Payant</option></select></label>
+        <label><span>Note interne</span><input type="text" id="c-note" placeholder="client test, vidéo démo…"></label>
+      </div>
+      <label><span>Importer une page GitHub existante (facultatif)</span><input type="url" id="c-import" placeholder="https://rkroman-86.github.io/qr-ab/"></label>
+      <button class="prim">Créer</button>
+      <div class="msg" id="m-creer"></div>
+    </form>
+
+    <div class="boite">
+      <h2>Comptes</h2>
+      <div class="stats" id="stats"></div>
+      <div id="liste"></div>
+      <div class="msg" id="m-liste"></div>
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+  const $ = s => document.querySelector(s);
+  let jeton = '';
+  try { jeton = sessionStorage.getItem('qrbc-gestion') || ''; } catch (e) {}
+
+  async function api(action, corps) {
+    const r = await fetch('/api/gestion/' + action, {
+      method: corps ? 'POST' : 'GET',
+      headers: { 'content-type': 'application/json', authorization: 'Bearer ' + jeton },
+      body: corps ? JSON.stringify(corps) : undefined
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { const e = new Error(j.erreur || r.statusText); e.status = r.status; throw e; }
+    return j;
+  }
+  const date = d => d ? new Date(d).toLocaleDateString('fr-FR') : '—';
+  const jours = d => Math.ceil((Date.parse(d) - Date.now()) / 86400000);
+
+  async function charger() {
+    const { comptes } = await api('liste');
+    $('#f-connexion').classList.add('cache'); $('#zone').classList.remove('cache');
+    const n = p => comptes.filter(c => c.plan === p).length;
+    $('#stats').innerHTML = '<span>Total <b>' + comptes.length + '</b></span><span>Gratuits <b>' + n('gratuit') + '</b></span><span>Essais <b>' + n('essai') +
+      '</b></span><span>Payants <b>' + n('payant') + '</b></span><span>Inactifs <b>' + comptes.filter(c => !c.actif).length + '</b></span>';
+    const liste = $('#liste'); liste.innerHTML = '';
+    if (!comptes.length) liste.textContent = 'Aucun compte pour l’instant.';
+    comptes.forEach(c => liste.appendChild(ligne(c)));
+  }
+
+  function ligne(c) {
+    const d = document.createElement('div'); d.className = 'compte';
+    const site = 'https://' + c.slug + '.qrbc.app/';
+    let etat = c.plan;
+    if (c.plan === 'essai' && c.actif) etat = 'essai · ' + jours(c.finEssai) + ' j';
+    if (c.plan === 'payant' && c.payeJusqua) etat = 'payant → ' + date(c.payeJusqua);
+    d.innerHTML = '<div class="ligne1"><span class="slug"></span><span class="badge b-' + (c.actif ? c.plan : 'inactif') + '"></span></div><div class="infos"></div><div class="actions"></div>';
+    d.querySelector('.slug').textContent = c.slug + '.qrbc.app';
+    d.querySelector('.badge').textContent = c.actif ? etat : etat + ' · inactif';
+    d.querySelector('.infos').textContent = [c.email, 'créé le ' + date(c.cree), c.note].filter(Boolean).join(' · ');
+    const a = d.querySelector('.actions');
+    const lien = (t, h) => { const x = document.createElement('a'); x.textContent = t; x.href = h; x.target = '_blank'; x.rel = 'noopener'; a.appendChild(x); };
+    const bouton = (t, f, cls) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = t; if (cls) b.className = cls; b.onclick = () => action(f); a.appendChild(b); };
+    lien('Voir la page', site);
+    lien('Éditeur', site + 'admin');
+    if (c.plan !== 'gratuit') bouton('Passer en gratuit', () => api('modifier', { nom: c.slug, plan: 'gratuit' }));
+    if (c.plan === 'essai') bouton('+14 j d’essai', () => api('modifier', { nom: c.slug, prolongerEssai: 14 }));
+    bouton('Payé 1 an', () => {
+      const base = Math.max(Date.now(), Date.parse(c.payeJusqua || 0) || 0);
+      const fin = new Date(base); fin.setFullYear(fin.getFullYear() + 1);
+      return api('modifier', { nom: c.slug, plan: 'payant', payeJusqua: fin.toISOString() });
+    });
+    if (c.plan !== 'suspendu') bouton('Suspendre', () => api('modifier', { nom: c.slug, plan: 'suspendu' }));
+    bouton('Nouveau mot de passe', () => {
+      const m = prompt('Nouveau mot de passe pour ' + c.slug + ' (10 caractères minimum) :');
+      return m ? api('modifier', { nom: c.slug, mdp: m }) : null;
+    });
+    bouton('Note', () => {
+      const n = prompt('Note interne :', c.note || '');
+      return n === null ? null : api('modifier', { nom: c.slug, note: n });
+    });
+    bouton('Supprimer', () => {
+      const conf = prompt('Suppression définitive de la page et des images.\nTapez « ' + c.slug + ' » pour confirmer :');
+      return conf ? api('supprimer', { nom: c.slug, confirmation: conf }) : null;
+    }, 'danger');
+    return d;
+  }
+
+  async function action(f) {
+    const m = $('#m-liste'); m.className = 'msg'; m.textContent = '…';
+    try { const p = f(); if (!p) { m.textContent = ''; return; } await p; m.textContent = ''; await charger(); }
+    catch (e) { m.className = 'msg err'; m.textContent = e.message; }
+  }
+
+  $('#f-connexion').addEventListener('submit', async e => {
+    e.preventDefault();
+    jeton = $('#jeton').value.trim();
+    const m = $('#m-connexion'); m.className = 'msg'; m.textContent = 'Vérification…';
+    try { await charger(); try { sessionStorage.setItem('qrbc-gestion', jeton); } catch (x) {} m.textContent = ''; }
+    catch (err) { m.className = 'msg err'; m.textContent = err.message; }
+  });
+
+  $('#c-nom').addEventListener('input', e => { e.target.value = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''); });
+
+  $('#f-creer').addEventListener('submit', async e => {
+    e.preventDefault();
+    const m = $('#m-creer'); m.className = 'msg'; m.textContent = 'Création…';
+    try {
+      const corps = { nom: $('#c-nom').value, titre: $('#c-titre').value, email: $('#c-email').value, mdp: $('#c-mdp').value, plan: $('#c-plan').value, note: $('#c-note').value };
+      if ($('#c-import').value.trim()) corps.importer = $('#c-import').value.trim();
+      const res = await api('creer', corps);
+      m.className = 'msg ok';
+      let t = '✓ Créé : https://' + corps.nom + '.qrbc.app/admin\nOuvrez l’éditeur et cliquez sur Enregistrer une fois pour générer les pages Google.';
+      if (res.import && res.import.ok) t += '\nImport : ' + res.import.images.length + ' image(s) copiée(s)' + (res.import.echecs.length ? ', ' + res.import.echecs.length + ' en échec' : '') + '.';
+      if (res.import && !res.import.ok) { m.className = 'msg err'; t += '\n⚠ Import raté : ' + res.import.erreur + ' (le compte est créé, page vierge).'; }
+      m.textContent = t;
+      e.target.reset();
+      await charger();
+    } catch (err) { m.className = 'msg err'; m.textContent = err.message; }
+  });
+
+  if (jeton) charger().catch(() => { try { sessionStorage.removeItem('qrbc-gestion'); } catch (e) {} });
+})();
+</script>
+</body>
+</html>

@@ -43,3 +43,27 @@ Il suffit de lui envoyer le lien `…/admin.html` et le mot de passe. Il modifie
 - **Jeton expiré** : Alex verra « Accès refusé ». Il faut alors créer un nouveau jeton et relancer `setup.html`.
 - **Historique** : chaque enregistrement crée une version dans GitHub (onglet *Commits*), ce qui permet de revenir en arrière.
 - **Sécurité** : le fichier chiffré est public, d'où l'importance d'un mot de passe solide. Le jeton ne donne accès qu'à ce dépôt.
+
+---
+
+# Version Cloudflare (qrbc.app) — tous les clients sur un seul service
+
+Le même code tourne aussi sur Cloudflare. L'éditeur détecte tout seul où il est ouvert :
+- sur `github.io` : fonctionnement ci-dessus (jeton GitHub chiffré), inchangé ;
+- sur `nomclient.qrbc.app` : tout passe par le Worker `worker/index.js` (mot de passe vérifié côté serveur, clé IA cachée).
+
+| Adresse | Rôle |
+|---|---|
+| `https://qrbc.app/` | Présentation + inscription (essai gratuit 14 jours) |
+| `https://qrbc.app/gestion` | Gestion des comptes (Roman) |
+| `https://nomclient.qrbc.app/` | Page publique du client (cible du QR) |
+| `https://nomclient.qrbc.app/admin` | Éditeur du client |
+
+**Formules** : `gratuit` (offert, sans limite), `essai` (14 jours), `payant` (jusqu'à une date), `suspendu`.
+Essai ou abonnement terminé : la page publique affiche « Page en pause » et l'éditeur ne peut plus publier.
+
+**Secrets du Worker** (Paramètres → Variables et secrets, type « Secret ») :
+`SESSION_SECRET` (longue chaîne aléatoire), `ADMIN_TOKEN` (accès à /gestion), `ANTHROPIC_KEY` (rédaction IA).
+
+**Déploiement** : chaque push sur `main` redéploie le Worker (Workers Builds). Configuration dans `wrangler.jsonc`,
+fichiers communs rassemblés par `build.sh`.

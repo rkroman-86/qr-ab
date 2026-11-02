@@ -18,6 +18,8 @@
     body{font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--txt)}
     button,input,select,textarea{font:inherit;color:inherit}
     .cache{display:none !important}
+    .abo{font-size:.78rem;font-weight:600;padding:3px 9px;border-radius:99px;background:var(--bg);border:1px solid var(--ligne);color:var(--doux);white-space:nowrap}
+    .abo-alerte{color:var(--err);border-color:var(--err)}
 
     /* ---------- Connexion ---------- */
     #connexion{min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:24px 16px}
@@ -219,6 +221,7 @@
 <div id="editeur" class="cache">
   <div class="barre">
     <h1>Éditeur</h1>
+    <span id="abonnement" class="abo cache"></span>
     <div class="onglets">
       <button type="button" data-vue="edit" class="actif">Modifier</button>
       <button type="button" data-vue="apercu">Aperçu</button>
@@ -246,6 +249,8 @@
   'use strict';
   const $ = s => document.querySelector(s);
   const CLE_STOCK = 'qp-jeton';
+  const CF = modeCloudflare();   // nomclient.qrbc.app : tout passe par le Worker
+  let jetonCF = null;
 
   let depot = depotDepuisURL();
   let gh = null;
@@ -268,8 +273,9 @@
   }
 
   async function demarrer(jeton) {
-    gh = clientGitHub(jeton, depot);
-    await gh.verifier();
+    gh = CF ? clientCloudflare(jeton) : clientGitHub(jeton, depot);
+    const info = await gh.verifier();
+    if (CF) { jetonCF = jeton; afficherAbonnement(info.compte); }
     const f = await gh.lire('config.json');
     shaConfig = f ? f.sha : null;
     cfg = normaliser(fusion(CONFIG_DEFAUT, f ? JSON.parse(f.texte) : {}));
@@ -284,6 +290,17 @@
     const msg = $('#msg-connexion'), btn = $('#btn-connexion');
     msg.className = 'msg'; msg.textContent = 'Vérification…'; btn.disabled = true;
     try {
+      if (CF) {
+        const r = await appelAPI('connexion', null, { method: 'POST', body: JSON.stringify({ mdp: $('#mdp').value, rester: $('#rester').checked }) });
+        const { jeton } = await r.json();
+        secrets = { github: '', anthropic: 'serveur' };
+        await demarrer(jeton);
+        try {
+          sessionStorage.setItem(CLE_STOCK, jeton);
+          if ($('#rester').checked) localStorage.setItem(CLE_STOCK, jeton);
+        } catch (err) {}
+        return;
+      }
       const auth = await lireAuth();
       let brut;
       try { brut = await dechiffrerJeton(auth, $('#mdp').value); }
@@ -296,7 +313,7 @@
       } catch (err) {}
     } catch (err) {
       msg.className = 'msg err';
-      msg.textContent = err.status === 401 ? 'Accès refusé : le jeton GitHub a expiré ou a été révoqué.' : err.message;
+      msg.textContent = err.status === 401 && !CF ? 'Accès refusé : le jeton GitHub a expiré ou a été révoqué.' : err.message;
     } finally { btn.disabled = false; }
   });
 
@@ -311,9 +328,29 @@
     let j = null;
     try { j = sessionStorage.getItem(CLE_STOCK) || localStorage.getItem(CLE_STOCK); } catch (e) {}
     if (!j) return;
-    try { await lireAuth(); secrets = lireSecret(j); await demarrer(secrets.github); }
+    try {
+      if (CF) { secrets = { github: '', anthropic: 'serveur' }; await demarrer(j); }
+      else { await lireAuth(); secrets = lireSecret(j); await demarrer(secrets.github); }
+    }
     catch (e) { try { sessionStorage.removeItem(CLE_STOCK); localStorage.removeItem(CLE_STOCK); } catch (x) {} }
   })();
+
+  /* ---------------- Abonnement (mode Cloudflare) ---------------- */
+  function afficherAbonnement(c) {
+    const b = $('#abonnement');
+    if (!b || !c) return;
+    const jours = d => Math.max(0, Math.ceil((Date.parse(d) - Date.now()) / 86400000));
+    let txt = '', classe = 'abo';
+    if (c.plan === 'essai' && c.actif) { const n = jours(c.finEssai); txt = 'Essai gratuit : ' + n + (n > 1 ? ' jours restants' : ' jour restant'); if (n <= 3) classe += ' abo-alerte'; }
+    else if (!c.actif) { txt = c.plan === 'essai' ? 'Essai terminé : publication bloquée' : 'Abonnement inactif'; classe += ' abo-alerte'; }
+    else if (c.plan === 'gratuit') txt = 'Compte offert';
+    b.textContent = txt;
+    b.className = txt ? classe : 'abo cache';
+  }
+  if (CF) {
+    const sous = document.querySelector('#form-connexion p');
+    if (sous) sous.textContent = 'Page ' + location.hostname + ' — entrez votre mot de passe.';
+  }
 
   /* ---------------- Onglets mobile ---------------- */
   // Mémorise la position de défilement de chaque onglet (Modifier / Aperçu)
@@ -1239,6 +1276,21 @@
 
   /* =============== Rédaction des articles par l'IA =============== */
   const MODELE_IA = 'claude-sonnet-5-5';
+  /* GitHub : appel direct avec la clé du client. Cloudflare : le Worker garde la clé. */
+  async function appelIA(corps) {
+    if (!CF) return fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-api-key': secrets.anthropic, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+      body: JSON.stringify(corps)
+    });
+    const r = await fetch('/api/ia', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + jetonCF }, body: JSON.stringify(corps) });
+    if (!r.ok) {
+      let j = null;
+      try { j = await r.clone().json(); } catch (e) {}
+      if (j && j.erreur) throw new Error(j.erreur);           // erreur du Worker (session, quota, abonnement)
+    }
+    return r;
+  }
   const TONS_IA = { pro: 'Professionnel', chaleureux: 'Chaleureux', luxe: 'Haut de gamme', dynamique: 'Dynamique', simple: 'Simple et direct' };
 
   function moyensDeContact() {
@@ -1285,15 +1337,7 @@
       'Nombre de pancartes : ' + brief.nombre
     ].filter(Boolean).join('\n');
 
-    const r = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': secrets.anthropic,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
+    const r = await appelIA({
         model: MODELE_IA,
         max_tokens: 3000,
         system: systeme,
@@ -1327,12 +1371,11 @@
         }],
         tool_choice: { type: 'auto' },
         messages: [{ role: 'user', content: infos }]
-      })
     });
     let j = null;
     try { j = await r.json(); } catch (e) {}
     if (!r.ok) {
-      const m = (j && j.error && j.error.message) || r.statusText;
+      const m = (j && j.error && j.error.message) || (j && j.erreur) || r.statusText;
       if (r.status === 401) throw new Error('Clé API refusée. Vérifiez-la ou remplacez-la.');
       if (r.status === 429) throw new Error('Trop de demandes. Réessayez dans une minute.');
       if (r.status === 529 || r.status >= 500) throw new Error('Le service IA est surchargé. Réessayez dans un instant.');
@@ -1579,21 +1622,17 @@
       'Propose 3 pictogrammes.'
     ].filter(Boolean).join('\n');
     const contenu = photoB64 ? [{ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: photoB64 } }, { type: 'text', text: demande }] : demande;
-    const r = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-api-key': secrets.anthropic, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-      body: JSON.stringify({
+    const r = await appelIA({
         model: MODELE_IA, max_tokens: 8000, system: systeme,
         tools: [{ name: 'proposer_motifs', description: 'Renvoie les pictogrammes en SVG.',
           input_schema: { type: 'object', properties: { motifs: { type: 'array', items: { type: 'object', properties: { nom: { type: 'string' }, svg: { type: 'string' } }, required: ['svg'] } } }, required: ['motifs'] } }],
         tool_choice: { type: 'auto' },
         messages: [{ role: 'user', content: contenu }]
-      })
     });
     let j = null;
     try { j = await r.json(); } catch (e) {}
     if (!r.ok) {
-      const m = (j && j.error && j.error.message) || r.statusText;
+      const m = (j && j.error && j.error.message) || (j && j.erreur) || r.statusText;
       if (r.status === 401) throw new Error('Clé API refusée.');
       if (r.status === 429) throw new Error('Trop de demandes. Réessayez dans une minute.');
       if (r.status >= 500) throw new Error('Le service IA est surchargé. Réessayez dans un instant.');
@@ -2074,10 +2113,10 @@
       }
       modifie = false;
       etat.className = 'etat ok';
-      etat.textContent = '✓ Publié. Visible sur la page d’ici 1 à 2 minutes.';
+      etat.textContent = CF ? '✓ Publié. Visible sur la page d’ici une minute.' : '✓ Publié. Visible sur la page d’ici 1 à 2 minutes.';
     } catch (e) {
       etat.className = 'etat err';
-      etat.textContent = e.status === 401 ? 'Accès refusé : jeton expiré. Prévenez Roman.' : 'Échec : ' + e.message;
+      etat.textContent = e.status === 401 && !CF ? 'Accès refusé : jeton expiré. Prévenez Roman.' : 'Échec : ' + e.message;
       btn.disabled = false;
     }
   });

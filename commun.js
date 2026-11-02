@@ -655,6 +655,37 @@ function clientGitHub(jeton, depot) {
   };
 }
 
+/* =========================================================
+   Mode Cloudflare (nomclient.qrbc.app) : le Worker stocke tout
+   ========================================================= */
+function modeCloudflare() { return !location.hostname.endsWith('.github.io') && location.protocol !== 'file:'; }
+
+async function appelAPI(chemin, jeton, init) {
+  init = init || {};
+  const entetes = { 'content-type': 'application/json' };
+  if (jeton) entetes.authorization = 'Bearer ' + jeton;
+  const r = await fetch('/api/' + chemin, Object.assign({ cache: 'no-store' }, init, { headers: entetes }));
+  if (!r.ok) {
+    let msg = r.status + ' ' + r.statusText;
+    try { const j = await r.json(); if (j.erreur) msg = j.erreur; } catch (e) {}
+    const err = new Error(msg); err.status = r.status; throw err;
+  }
+  return r;
+}
+
+/* Même interface que clientGitHub : l'enregistrement de l'éditeur ne change pas */
+function clientCloudflare(jeton) {
+  return {
+    async verifier() { return (await appelAPI('compte', jeton)).json(); },
+    async lire(chemin) { return (await appelAPI('fichier?chemin=' + encodeURIComponent(chemin), jeton)).json(); },
+    async sha(chemin) { const f = await this.lire(chemin); return f ? f.sha : null; },
+    async ecrire(chemin, contenuB64) {
+      const r = await appelAPI('fichier', jeton, { method: 'PUT', body: JSON.stringify({ chemin, contenu: contenuB64 }) });
+      return (await r.json()).sha;
+    }
+  };
+}
+
 /* Redimensionne une image avant envoi (mobile = photos lourdes) */
 function reduireImage(fichier, maxCote, typeSortie, qualite) {
   return new Promise((ok, ko) => {

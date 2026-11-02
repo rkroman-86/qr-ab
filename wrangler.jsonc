@@ -1,0 +1,26 @@
+// Configuration du Worker qrbc-router (déployé automatiquement depuis GitHub)
+{
+  "name": "qrbc-router",
+  "main": "worker/index.js",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": true,
+  "routes": [
+    { "pattern": "*.qrbc.app/*", "zone_name": "qrbc.app" },
+    { "pattern": "qrbc.app/*", "zone_name": "qrbc.app" }
+  ],
+  "kv_namespaces": [
+    { "binding": "CLIENTS", "id": "ee57108f16d740f3a5667ca9982e0dab" }
+  ],
+  // Fichiers communs à tous les clients (copiés dans dist/ par build.sh)
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "run_worker_first": true,
+    "html_handling": "none",
+    "not_found_handling": "none"
+  },
+  "build": { "command": "sh build.sh" },
+  "observability": { "enabled": true }
+  // Secrets à définir dans le tableau de bord (jamais dans ce fichier) :
+  // SESSION_SECRET, ADMIN_TOKEN, ANTHROPIC_KEY
+}
