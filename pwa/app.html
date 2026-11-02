@@ -25,7 +25,9 @@
   .marque{display:flex;align-items:center;gap:10px;margin-bottom:16px}
   .marque img{width:36px;height:36px;border-radius:9px}
   .marque b{font-size:1.2rem;letter-spacing:-.02em}
-  .marque span{color:var(--accent)}
+  .marque > b span{color:var(--accent)}
+  .langue{margin-left:auto}
+  .langue select{background:var(--panneau);color:var(--txt);border:1px solid var(--ligne);border-radius:9px;padding:6px 8px;font:inherit;font-size:.85rem;font-weight:600}
   .onglets{position:relative;display:grid;grid-template-columns:1fr 1fr;background:var(--panneau);border:1px solid var(--ligne);border-radius:12px;padding:4px}
   .onglets button{position:relative;z-index:1;border:0;background:none;color:var(--doux);font:inherit;font-weight:600;font-size:.95rem;padding:10px 6px;border-radius:9px;cursor:pointer;transition:color .2s}
   .onglets button[aria-selected="true"]{color:var(--txt)}
@@ -85,7 +87,7 @@
 </head>
 <body>
 <header>
-  <div class="marque"><img src="/icon-192.png" alt=""><b>qrbc<span>.</span></b></div>
+  <div class="marque"><img src="/icon-192.png" alt=""><b>qrbc<span>.</span></b><span class="langue" data-langue></span></div>
   <div class="onglets" role="tablist">
     <div class="curseur" id="curseur"></div>
     <button type="button" role="tab" data-i="0" aria-selected="true">Se connecter</button>
@@ -179,6 +181,7 @@
   <button type="button" data-i="1" aria-label="Créer ma page" aria-current="false"></button>
 </nav>
 
+<script src="/i18n.js"></script>
 <script>
 (function () {
   const $ = s => document.querySelector(s);
