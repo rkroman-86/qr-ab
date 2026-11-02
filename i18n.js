@@ -82,7 +82,8 @@
     'Session expirée : reconnectez-vous.': ['Session expired: please sign in again.', 'Сеанс истёк: войдите снова.'],
     'Requête invalide.': ['Invalid request.', 'Неверный запрос.'],
     'Erreur interne': ['Internal error', 'Внутренняя ошибка'],
-    'Cette image est vide ou entièrement noire (capture d’un écran protégé ?). Choisissez une autre image.': ['This image is empty or completely black (screenshot of a protected screen?). Please choose another image.', 'Изображение пустое или полностью чёрное (снимок защищённого экрана?). Выберите другое изображение.'],
+    'Cette image ne peut pas être lue sur cet appareil. Essayez une autre image (JPEG ou PNG de moins de 3 Mo).': ['This image cannot be read on this device. Try another image (JPEG or PNG under 3 MB).', 'Это изображение не читается на этом устройстве. Попробуйте другое (JPEG или PNG до 3 МБ).'],
+    'Image illisible': ['Unreadable image', 'Изображение не читается'],
 
     /* --- Connexion / barre --- */
     'Éditeur de la page': ['Page editor', 'Редактор страницы'],

@@ -695,36 +695,60 @@ function clientCloudflare(jeton) {
   };
 }
 
-/* Redimensionne une image avant envoi (mobile = photos lourdes) */
 function imageUniforme(cv) {
-  const p = document.createElement('canvas'); p.width = 48; p.height = 48;
-  const x = p.getContext('2d'); x.drawImage(cv, 0, 0, 48, 48);
-  const d = x.getImageData(0, 0, 48, 48).data;
-  let min = 765, max = 0, alphaMax = 0;
-  for (let i = 0; i < d.length; i += 4) { const v = d[i] + d[i + 1] + d[i + 2]; if (v < min) min = v; if (v > max) max = v; if (d[i + 3] > alphaMax) alphaMax = d[i + 3]; }
-  return alphaMax === 0 || max - min < 6;
+  const p = document.createElement('canvas'); p.width = 96; p.height = 96;
+  const x = p.getContext('2d'); x.drawImage(cv, 0, 0, 96, 96);
+  const d = x.getImageData(0, 0, 96, 96).data;
+  let min = 765, max = 0;
+  for (let i = 0; i < d.length; i += 4) { const v = d[i] + d[i + 1] + d[i + 2]; if (v < min) min = v; if (v > max) max = v; }
+  return max - min < 3;
 }
-function reduireImage(fichier, maxCote, typeSortie, qualite) {
-  return new Promise((ok, ko) => {
-    const url = URL.createObjectURL(fichier);
+
+/* Redimensionne une image avant envoi (mobile = photos lourdes).
+   Certains téléphones Android rendent un canvas vide (noir) pour de grandes images ou des captures d'écran :
+   on essaie donc plusieurs méthodes, et en dernier recours on garde le fichier d'origine tel quel. */
+async function reduireImage(fichier, maxCote, typeSortie, qualite) {
+  const dessiner = (source, l, h) => {
+    const k = Math.min(1, maxCote / Math.max(l, h));
+    const cv = document.createElement('canvas');
+    cv.width = Math.max(1, Math.round(l * k));
+    cv.height = Math.max(1, Math.round(h * k));
+    const ctx = cv.getContext('2d');
+    // Le JPEG n'a pas de transparence : sans fond, les zones transparentes deviendraient noires
+    if (typeSortie !== 'image/png') { ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, cv.width, cv.height); }
+    ctx.drawImage(source, 0, 0, cv.width, cv.height);
+    return cv;
+  };
+  // 1. Décodage complet par le navigateur (plus fiable sur mobile), orientation de l'appareil photo respectée
+  if (typeof createImageBitmap === 'function') {
+    try {
+      const bmp = await createImageBitmap(fichier, { imageOrientation: 'from-image' });
+      const cv = dessiner(bmp, bmp.width, bmp.height);
+      if (bmp.close) bmp.close();
+      if (!imageUniforme(cv)) return cv.toDataURL(typeSortie, qualite);
+    } catch (e) { /* méthode suivante */ }
+  }
+  // 2. Méthode classique, en attendant la fin du décodage avant de dessiner
+  const url = URL.createObjectURL(fichier);
+  try {
     const img = new Image();
-    img.onload = () => {
-      const k = Math.min(1, maxCote / Math.max(img.width, img.height));
-      const cv = document.createElement('canvas');
-      cv.width = Math.round(img.width * k);
-      cv.height = Math.round(img.height * k);
-      const ctx = cv.getContext('2d');
-      // Le JPEG n'a pas de transparence : sans fond, les zones transparentes (captures d'écran PNG) deviennent noires
-      if (typeSortie !== 'image/png') { ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, cv.width, cv.height); }
-      ctx.drawImage(img, 0, 0, cv.width, cv.height);
-      URL.revokeObjectURL(url);
-      // Image entièrement d'une seule couleur : capture protégée (écran noir) ou image vide
-      if (imageUniforme(cv)) { ko(new Error('Cette image est vide ou entièrement noire (capture d’un écran protégé ?). Choisissez une autre image.')); return; }
-      ok(cv.toDataURL(typeSortie, qualite));
-    };
-    img.onerror = () => { URL.revokeObjectURL(url); ko(new Error('Image illisible')); };
     img.src = url;
-  });
+    if (img.decode) await img.decode();
+    else await new Promise((ok, ko) => { img.onload = ok; img.onerror = ko; });
+    const cv = dessiner(img, img.naturalWidth || img.width, img.naturalHeight || img.height);
+    if (!imageUniforme(cv)) return cv.toDataURL(typeSortie, qualite);
+  } catch (e) { /* méthode suivante */ }
+  finally { URL.revokeObjectURL(url); }
+  // 3. Dernier recours : le fichier d'origine, sans conversion (formats acceptés par le serveur, 3 Mo maximum)
+  if (/^image\/(jpeg|png|webp)$/.test(fichier.type) && fichier.size <= 3 * 1024 * 1024) {
+    return await new Promise((ok, ko) => {
+      const r = new FileReader();
+      r.onload = () => ok(r.result);
+      r.onerror = () => ko(new Error('Image illisible'));
+      r.readAsDataURL(fichier);
+    });
+  }
+  throw new Error('Cette image ne peut pas être lue sur cet appareil. Essayez une autre image (JPEG ou PNG de moins de 3 Mo).');
 }
 
 
