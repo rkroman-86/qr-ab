@@ -52,6 +52,18 @@
   </form>
 
   <div id="zone" class="cache">
+    <div class="boite" id="b-stripe">
+      <h2>Paiements en ligne (Stripe)</h2>
+      <div id="stripe-etat" class="infos">…</div>
+      <form id="f-stripe">
+        <label><span>Clé secrète Stripe</span><input type="password" id="stripe-cle" autocomplete="off" spellcheck="false" placeholder="sk_test_… ou sk_live_…"></label>
+        <button class="prim" id="stripe-btn">Connecter Stripe</button>
+        <button type="button" id="stripe-off" class="danger cache">Déconnecter</button>
+      </form>
+      <div class="msg" id="m-stripe"></div>
+      <p class="infos">La clé est vérifiée auprès de Stripe, puis rangée chiffrée : elle ne sera plus jamais affichée. Le webhook et le taux de TVA à 20 % sont créés automatiquement.</p>
+    </div>
+
     <form class="boite" id="f-creer">
       <h2>Créer un compte (test, démo, client offert)</h2>
       <div class="g2">
@@ -95,8 +107,38 @@
   const euros = c => ((c || 0) / 100).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
   const jours = d => Math.ceil((Date.parse(d) - Date.now()) / 86400000);
 
+  async function chargerStripe(etat) {
+    const e = etat || await api('stripe');
+    const z = $('#stripe-etat');
+    if (!e.connecte) {
+      z.innerHTML = '<span class="badge b-inactif">non connecté</span> Les clients voient « Demande d’abonnement » ; vous encaissez à la main.';
+      $('#stripe-btn').textContent = 'Connecter Stripe'; $('#stripe-off').classList.add('cache');
+      return;
+    }
+    const mode = e.mode === 'live' ? '<span class="badge b-payant">paiements réels</span>' : '<span class="badge b-essai">mode test (fausses cartes)</span>';
+    z.innerHTML = mode + ' <b></b> · clé …' + e.fin + ' · TVA ' + e.tva + ' %<br><small></small>';
+    z.querySelector('b').textContent = e.compte || '';
+    z.querySelector('small').textContent = e.dernierWebhook ? 'Dernière notification Stripe : ' + new Date(e.dernierWebhook.le).toLocaleString('fr-FR') + ' (' + e.dernierWebhook.type + ')' : 'Aucune notification Stripe reçue pour l’instant.';
+    $('#stripe-btn').textContent = 'Remplacer la clé'; $('#stripe-off').classList.remove('cache');
+  }
+  $('#f-stripe').addEventListener('submit', async e => {
+    e.preventDefault();
+    const m = $('#m-stripe'), cle = $('#stripe-cle').value.trim();
+    if (!cle) return;
+    m.className = 'msg'; m.textContent = 'Vérification auprès de Stripe…';
+    try { await chargerStripe(await api('stripe', { cle })); $('#stripe-cle').value = ''; m.className = 'msg ok'; m.textContent = '✓ Stripe connecté.'; }
+    catch (err) { m.className = 'msg err'; m.textContent = err.message; }
+  });
+  $('#stripe-off').addEventListener('click', async () => {
+    if (!confirm('Déconnecter Stripe ? Les clients ne pourront plus payer en ligne.')) return;
+    const m = $('#m-stripe');
+    try { await chargerStripe(await api('stripe', { deconnecter: true })); m.className = 'msg'; m.textContent = 'Stripe déconnecté.'; }
+    catch (err) { m.className = 'msg err'; m.textContent = err.message; }
+  });
+
   async function charger() {
     const { comptes } = await api('liste');
+    chargerStripe().catch(() => {});
     $('#f-connexion').classList.add('cache'); $('#zone').classList.remove('cache');
     const n = p => comptes.filter(c => c.plan === p).length;
     $('#stats').innerHTML = '<span>Total <b>' + comptes.length + '</b></span><span>Gratuits <b>' + n('gratuit') + '</b></span><span>Essais <b>' + n('essai') +

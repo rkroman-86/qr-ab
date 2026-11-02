@@ -27,7 +27,10 @@ const MODELES_IA = ['claude-sonnet-5-5'];
    essai   : 2 textes + 2 pictos pour toute la durée de l'essai
    payant  : 10 textes + 5 pictos par année d'abonnement, puis crédit prépayé */
 const PRIX_ANNUEL = 1800;                       // centimes HT
-const RECHARGE_MIN = 500;                       // centimes
+const RECHARGE_MIN = 500;                       // centimes HT
+const TVA = 20;                                 // %, ajoutée aux montants HT au moment du paiement
+const RENOUVELER_AVANT = 30;                    // jours avant l'échéance où le renouvellement est proposé
+const STRIPE_API = 'https://api.stripe.com/v1';
 const QUOTAS_IA = { essai: { texte: 2, picto: 2 }, payant: { texte: 10, picto: 5 } };
 const PRIX_IA = { texte: 40, picto: 70 };       // centimes, débités du crédit au-delà du quota
 // Le type d'appel est décidé par le serveur d'après l'outil demandé, jamais par le client
@@ -71,6 +74,7 @@ class ErreurAPI extends Error {
 async function racine(request, env, url) {
   const p = url.pathname;
   if (p === '/api/inscription' && request.method === 'POST') return inscription(request, env);
+  if (p === '/api/stripe/webhook' && request.method === 'POST') return webhookStripe(request, env);
   if (p.startsWith('/api/gestion/')) return gestion(request, env, p.slice('/api/gestion/'.length));
   if (p === '/api/disponible') {
     const slug = (url.searchParams.get('nom') || '').toLowerCase();
@@ -163,13 +167,13 @@ async function apiClient(request, env, slug, route) {
     if (!compte || !(await verifierMdp(compte, String(mdp || '')))) throw new ErreurAPI(401, 'Mot de passe incorrect.');
     const duree = rester ? 30 * 86400 : 12 * 3600;
     const jeton = await signerSession(env, { s: slug, v: compte.version || 1, e: Math.floor(Date.now() / 1000) + duree });
-    return json({ jeton, compte: resumeCompte(compte) });
+    return json({ jeton, compte: await resumeAvecOffre(env, compte) });
   }
 
   // Tout le reste exige une session valide pour CE sous-domaine
   const compte = await exigerSession(request, env, slug);
 
-  if (route === 'compte' && m === 'GET') return json({ compte: resumeCompte(compte) });
+  if (route === 'compte' && m === 'GET') return json({ compte: await resumeAvecOffre(env, compte) });
 
   if (route === 'fichier' && m === 'GET') {
     const chemin = new URL(request.url).searchParams.get('chemin') || '';
@@ -243,11 +247,62 @@ async function apiClient(request, env, slug, route) {
       const frais = (await lireCompte(env, slug)) || compte;
       facturer(frais, type, mode);
       await ecrireCompte(env, frais);
-      h['x-qrbc-compte'] = encodeURIComponent(JSON.stringify(resumeCompte(frais)));
+      h['x-qrbc-compte'] = encodeURIComponent(JSON.stringify(await resumeAvecOffre(env, frais)));
     }
     // Une clé refusée côté serveur ne doit pas ressembler à une session expirée pour le client
     const status = r.status === 401 || r.status === 403 ? 502 : r.status;
     return new Response(txt, { status, headers: h });
+  }
+
+  /* ---------- Paiement en ligne (Stripe Checkout) ---------- */
+  if (route === 'paiement' && m === 'POST') {
+    const dd = await corpsJSON(request);
+    const genre = dd.genre === 'recharge' ? 'recharge' : 'abonnement';
+    let montant, deduction = 0, libelle;
+    if (genre === 'abonnement') {
+      if (compte.plan === 'gratuit') throw new ErreurAPI(400, 'Ce compte est offert : rien à payer.');
+      if (compte.plan === 'payant' && actif(compte) && Date.parse(compte.payeJusqua) - Date.now() > RENOUVELER_AVANT * 86400000)
+        throw new ErreurAPI(400, 'Le renouvellement sera possible ' + RENOUVELER_AVANT + ' jours avant l’échéance.');
+      const r = prixRenouvellement(compte);
+      montant = r.aPayer; deduction = r.deduction;
+      if (montant <= 0) {                                   // le crédit couvre toute l'année
+        appliquerAbonnement(compte, 0, deduction, 'payé avec le crédit');
+        await ecrireCompte(env, compte);
+        return json({ applique: true, compte: await resumeAvecOffre(env, compte) });
+      }
+      libelle = 'Abonnement qrbc 1 an — ' + slug + '.' + DOMAINE + (deduction ? ' (crédit déduit : ' + (deduction / 100).toFixed(2).replace('.', ',') + ' € HT)' : '');
+    } else {
+      if (compte.plan !== 'payant' || !actif(compte)) throw new ErreurAPI(400, 'La recharge est réservée aux abonnés.');
+      montant = Math.round(Number(dd.montant) * 100);
+      if (!(montant >= RECHARGE_MIN) || montant > 50000) throw new ErreurAPI(400, 'Montant de recharge : 5 € HT minimum.');
+      libelle = 'Crédit IA qrbc — ' + slug + '.' + DOMAINE;
+    }
+    const st = await lireStripe(env);
+    if (!st) throw new ErreurAPI(503, 'Le paiement en ligne n’est pas encore ouvert.');
+    const retour = retourSur(dd.retour, slug);
+    const session = await stripe(env, st, 'POST', '/checkout/sessions', {
+      mode: 'payment',
+      client_reference_id: slug,
+      customer_email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(compte.email || '') ? compte.email : undefined,
+      line_items: [{ quantity: 1, tax_rates: [st.taxRate], price_data: { currency: 'eur', unit_amount: montant, product_data: { name: libelle } } }],
+      metadata: { slug, genre, montant: String(montant), deduction: String(deduction) },
+      payment_intent_data: { metadata: { slug, genre }, description: libelle },
+      invoice_creation: { enabled: true },
+      success_url: retour + (retour.includes('?') ? '&' : '?') + 'paiement=ok&session_id={CHECKOUT_SESSION_ID}',
+      cancel_url: retour + (retour.includes('?') ? '&' : '?') + 'paiement=annule'
+    });
+    return json({ url: session.url });
+  }
+  if (route === 'paiement/verifier' && m === 'GET') {
+    const id = new URL(request.url).searchParams.get('session') || '';
+    if (!/^cs_(test|live)_[A-Za-z0-9]+$/.test(id)) throw new ErreurAPI(400, 'Session de paiement invalide.');
+    const st = await lireStripe(env);
+    if (!st) throw new ErreurAPI(503, 'Le paiement en ligne n’est pas configuré.');
+    const session = await stripe(env, st, 'GET', '/checkout/sessions/' + id);
+    if (!session.metadata || session.metadata.slug !== slug) throw new ErreurAPI(403, 'Ce paiement concerne une autre page.');
+    const etat = await encaisserSession(env, session);
+    const frais = await lireCompte(env, slug);
+    return json({ paye: session.payment_status === 'paid', etat, compte: await resumeAvecOffre(env, frais) });
   }
 
   if (route === 'demande' && m === 'POST') {
@@ -260,7 +315,7 @@ async function apiClient(request, env, slug, route) {
     }
     compte.demande = { genre, montant, le: new Date().toISOString() };
     await ecrireCompte(env, compte);
-    return json({ ok: true, compte: resumeCompte(compte) });
+    return json({ ok: true, compte: await resumeAvecOffre(env, compte) });
   }
 
   throw new ErreurAPI(404, 'Action inconnue.');
@@ -336,6 +391,13 @@ async function gestion(request, env, action) {
   }
   const d = request.method === 'POST' ? await corpsJSON(request) : {};
 
+  if (action === 'stripe') {
+    if (request.method === 'GET') return json(await etatStripe(env));
+    if (d.deconnecter) { await deconnecterStripe(env); return json(await etatStripe(env)); }
+    await connecterStripe(env, String(d.cle || '').trim());
+    return json(await etatStripe(env));
+  }
+
   if (action === 'liste') {
     const comptes = [];
     let curseur;
@@ -380,14 +442,7 @@ async function gestion(request, env, action) {
     const compte = await lireCompte(env, String(d.nom || ''));
     if (!compte) throw new ErreurAPI(404, 'Compte introuvable.');
     const r = prixRenouvellement(compte);
-    const base = compte.plan === 'payant' && actif(compte) && compte.payeJusqua ? Date.parse(compte.payeJusqua) : Date.now();
-    const fin = new Date(base); fin.setFullYear(fin.getFullYear() + 1);
-    compte.credit = (compte.credit || 0) - r.deduction;
-    compte.plan = 'payant';
-    compte.payeJusqua = fin.toISOString();
-    compte.ia = { texte: 0, picto: 0, depuis: new Date().toISOString() };   // nouvelle année : quotas remis à zéro
-    if (compte.demande && compte.demande.genre === 'abonnement') compte.demande = null;
-    journaliser(compte, 'abonnement', r.aPayer, r.deduction ? 'crédit déduit ' + (r.deduction / 100).toFixed(2) + ' €' : '');
+    appliquerAbonnement(compte, r.aPayer, r.deduction, 'manuel');
     await ecrireCompte(env, compte);
     return json({ ok: true, encaisse: r.aPayer, deduction: r.deduction, compte: resumeCompte(compte) });
   }
@@ -398,7 +453,7 @@ async function gestion(request, env, action) {
     if (!Number.isFinite(montant) || montant === 0 || Math.abs(montant) > 100000) throw new ErreurAPI(400, 'Montant invalide.');
     compte.credit = Math.max(0, (compte.credit || 0) + montant);
     if (montant > 0 && compte.demande && compte.demande.genre === 'recharge') compte.demande = null;
-    journaliser(compte, montant > 0 ? 'recharge' : 'correction', montant, '');
+    journaliser(compte, montant > 0 ? 'recharge' : 'correction', montant, 'manuel');
     await ecrireCompte(env, compte);
     return json({ ok: true, compte: resumeCompte(compte) });
   }
@@ -463,15 +518,180 @@ async function importer(env, slug, source) {
   return { ok: true, images: copiees, echecs: ratees };
 }
 
+/* ===================== Stripe ===================== */
+/* La clé est collée une fois dans /gestion : on la vérifie, on crée le taux de TVA et le webhook,
+   puis tout est rangé chiffré dans KV (config:stripe). La clé n'est jamais renvoyée. */
+async function lireStripe(env) {
+  const t = await env.CLIENTS.get('config:stripe');
+  if (!t) return null;
+  const c = JSON.parse(t);
+  return Object.assign({}, c, { cle: await dechiffrer(env, c.cle), whsec: await dechiffrer(env, c.whsec) });
+}
+async function etatStripe(env) {
+  const t = await env.CLIENTS.get('config:stripe');
+  if (!t) return { connecte: false, webhook: 'https://' + DOMAINE + '/api/stripe/webhook' };
+  const c = JSON.parse(t);
+  return { connecte: true, mode: c.mode, compte: c.nomCompte, fin: c.fin, le: c.le, tva: TVA, webhook: c.urlWebhook, dernierWebhook: c.dernierWebhook || null };
+}
+async function connecterStripe(env, cle) {
+  if (!/^(sk|rk)_(test|live)_[A-Za-z0-9]{10,}$/.test(cle)) throw new ErreurAPI(400, 'Clé attendue : sk_test_… (essais) ou sk_live_… (paiements réels).');
+  const st = { cle, mode: cle.includes('_live_') ? 'live' : 'test' };
+  let compteStripe;
+  try { compteStripe = await stripe(env, st, 'GET', '/account'); }
+  catch (e) { throw new ErreurAPI(400, 'Stripe refuse cette clé : ' + e.message); }
+  await deconnecterStripe(env);                               // remplace proprement une ancienne connexion
+  const taux = await stripe(env, st, 'POST', '/tax_rates', {
+    display_name: 'TVA', percentage: String(TVA), inclusive: 'false', country: 'FR', jurisdiction: 'FR', description: 'TVA France ' + TVA + ' %'
+  });
+  const urlWebhook = 'https://' + DOMAINE + '/api/stripe/webhook';
+  const wh = await stripe(env, st, 'POST', '/webhook_endpoints', {
+    url: urlWebhook, enabled_events: ['checkout.session.completed', 'checkout.session.async_payment_succeeded'],
+    description: 'qrbc : activation des abonnements et recharges'
+  });
+  const nom = (compteStripe.settings && compteStripe.settings.dashboard && compteStripe.settings.dashboard.display_name) ||
+    (compteStripe.business_profile && compteStripe.business_profile.name) || compteStripe.email || compteStripe.id;
+  await env.CLIENTS.put('config:stripe', JSON.stringify({
+    mode: st.mode, nomCompte: nom, fin: cle.slice(-4), le: new Date().toISOString(),
+    taxRate: taux.id, webhookId: wh.id, urlWebhook,
+    cle: await chiffrer(env, cle), whsec: await chiffrer(env, wh.secret)
+  }));
+}
+async function deconnecterStripe(env) {
+  const st = await lireStripe(env).catch(() => null);
+  if (st && st.webhookId) { try { await stripe(env, st, 'DELETE', '/webhook_endpoints/' + st.webhookId); } catch (e) {} }
+  await env.CLIENTS.delete('config:stripe');
+}
+
+/* Appel à l'API Stripe (corps en x-www-form-urlencoded, notation à crochets) */
+async function stripe(env, st, methode, chemin, params) {
+  const corps = params ? formulaire(params) : null;
+  const r = await fetch((env.STRIPE_API || STRIPE_API) + chemin + (methode === 'GET' && corps ? '?' + corps : ''), {
+    method: methode,
+    headers: { authorization: 'Bearer ' + st.cle, 'content-type': 'application/x-www-form-urlencoded', 'stripe-version': '2024-06-20' },
+    body: methode === 'GET' ? undefined : corps
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new ErreurAPI(502, (j.error && j.error.message) || ('Stripe ' + r.status));
+  return j;
+}
+function formulaire(o, prefixe, sortie) {
+  sortie = sortie || [];
+  for (const k of Object.keys(o)) {
+    const v = o[k], cle = prefixe ? prefixe + '[' + k + ']' : k;
+    if (v === undefined || v === null) continue;
+    if (typeof v === 'object') formulaire(v, cle, sortie);
+    else sortie.push(encodeURIComponent(cle) + '=' + encodeURIComponent(String(v)));
+  }
+  return sortie.join('&');
+}
+
+/* Notification signée de Stripe : on vérifie la signature avant de toucher à quoi que ce soit */
+async function webhookStripe(request, env) {
+  const brut = await request.text();
+  const st = await lireStripe(env);
+  if (!st) return json({ erreur: 'non configuré' }, 400);
+  const entete = request.headers.get('stripe-signature') || '';
+  const parts = {};
+  entete.split(',').forEach(x => { const i = x.indexOf('='); if (i > 0) (parts[x.slice(0, i)] = parts[x.slice(0, i)] || []).push(x.slice(i + 1)); });
+  const t = Number((parts.t || [])[0]);
+  if (!t || Math.abs(Date.now() / 1000 - t) > 300) return json({ erreur: 'horodatage invalide' }, 400);
+  const cle = await crypto.subtle.importKey('raw', new TextEncoder().encode(st.whsec), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const sig = new Uint8Array(await crypto.subtle.sign('HMAC', cle, new TextEncoder().encode(t + '.' + brut)));
+  const attendu = [...sig].map(b => b.toString(16).padStart(2, '0')).join('');
+  let ok = false;
+  for (const v of parts.v1 || []) if (await egaliteSure(v, attendu)) ok = true;
+  if (!ok) return json({ erreur: 'signature invalide' }, 400);
+
+  const evt = JSON.parse(brut);
+  if (evt.type === 'checkout.session.completed' || evt.type === 'checkout.session.async_payment_succeeded') {
+    await encaisserSession(env, evt.data.object);
+  }
+  try {
+    const conf = JSON.parse(await env.CLIENTS.get('config:stripe'));
+    conf.dernierWebhook = { le: new Date().toISOString(), type: evt.type };
+    await env.CLIENTS.put('config:stripe', JSON.stringify(conf));
+  } catch (e) {}
+  return json({ recu: true });
+}
+
+/* Applique un paiement Checkout réussi, une seule fois (webhook et retour du client peuvent arriver tous les deux) */
+async function encaisserSession(env, session) {
+  if (!session || session.payment_status !== 'paid') return 'non payé';
+  const md = session.metadata || {};
+  const compte = await lireCompte(env, md.slug);
+  if (!compte) return 'compte introuvable';
+  if ((compte.refsPayees || []).includes(session.id)) return 'déjà appliqué';
+  const montant = Number(md.montant) || 0;
+  const ttc = (session.amount_total / 100).toFixed(2) + ' € TTC';
+  if (md.genre === 'abonnement') appliquerAbonnement(compte, montant, Number(md.deduction) || 0, 'Stripe · ' + ttc, session.id);
+  else if (md.genre === 'recharge') appliquerRecharge(compte, montant, 'Stripe · ' + ttc, session.id);
+  else return 'genre inconnu';
+  await ecrireCompte(env, compte);
+  return 'appliqué';
+}
+
+/* Retour après paiement : seulement vers nos propres adresses (pas de redirection ouverte) */
+function retourSur(demande, slug) {
+  const defaut = 'https://' + DOMAINE + '/app/' + slug + '/';
+  try {
+    const u = new URL(String(demande || ''));
+    const ok = u.protocol === 'https:' && (u.hostname === DOMAINE || u.hostname === slug + '.' + DOMAINE);
+    return ok ? u.origin + u.pathname : defaut;
+  } catch (e) { return defaut; }
+}
+
+/* Chiffrement des secrets rangés dans KV (clé dérivée de SESSION_SECRET) */
+async function cleCoffre(env) {
+  if (!env.SESSION_SECRET) throw new ErreurAPI(503, 'SESSION_SECRET manquant.');
+  const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('coffre:' + env.SESSION_SECRET));
+  return crypto.subtle.importKey('raw', h, 'AES-GCM', false, ['encrypt', 'decrypt']);
+}
+async function chiffrer(env, texte) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await cleCoffre(env), new TextEncoder().encode(texte)));
+  return b64(iv) + '.' + b64(ct);
+}
+async function dechiffrer(env, valeur) {
+  const [iv, ct] = String(valeur).split('.');
+  return new TextDecoder().decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: deb64(iv) }, await cleCoffre(env), deb64(ct)));
+}
+
+async function resumeAvecOffre(env, c) {
+  const r = resumeCompte(c);
+  r.offre.enLigne = !!(await env.CLIENTS.get('config:stripe'));
+  return r;
+}
+
 /* ===================== Comptes ===================== */
 async function lireCompte(env, slug) {
   if (!slug) return null;
   const t = await env.CLIENTS.get('compte:' + slug);
   return t ? JSON.parse(t) : null;
 }
+/* Une année d'abonnement de plus ; le crédit utilisé en déduction est retiré */
+function appliquerAbonnement(compte, montantHT, deduction, source, ref) {
+  const base = compte.plan === 'payant' && actif(compte) && compte.payeJusqua ? Date.parse(compte.payeJusqua) : Date.now();
+  const fin = new Date(base); fin.setFullYear(fin.getFullYear() + 1);
+  const deduit = Math.min(deduction || 0, compte.credit || 0);
+  compte.credit = (compte.credit || 0) - deduit;
+  compte.plan = 'payant';
+  compte.payeJusqua = fin.toISOString();
+  compte.ia = { texte: 0, picto: 0, depuis: new Date().toISOString() };   // nouvelle année : quotas remis à zéro
+  if (compte.demande && compte.demande.genre === 'abonnement') compte.demande = null;
+  journaliser(compte, 'abonnement', montantHT, [source, deduit ? 'crédit déduit ' + (deduit / 100).toFixed(2) + ' €' : ''].filter(Boolean).join(' · '), ref);
+}
+function appliquerRecharge(compte, montantHT, source, ref) {
+  compte.credit = (compte.credit || 0) + montantHT;
+  if (compte.demande && compte.demande.genre === 'recharge') compte.demande = null;
+  journaliser(compte, 'recharge', montantHT, source, ref);
+}
+
 /* Historique des encaissements (50 derniers), utile pour la comptabilité */
-function journaliser(c, genre, montant, note) {
-  c.paiements = (c.paiements || []).concat([{ le: new Date().toISOString(), genre, montant, note }]).slice(-50);
+function journaliser(c, genre, montant, note, ref) {
+  const ligne = { le: new Date().toISOString(), genre, montant, note };
+  if (ref) ligne.ref = ref;
+  c.paiements = (c.paiements || []).concat([ligne]).slice(-50);
+  if (ref) c.refsPayees = (c.refsPayees || []).concat([ref]).slice(-200);   // anti-double application
 }
 async function ecrireCompte(env, c) { await env.CLIENTS.put('compte:' + c.slug, JSON.stringify(c)); }
 
@@ -494,7 +714,7 @@ function resumeCompte(c) {
       credit: c.credit || 0,                       // centimes
       prix: PRIX_IA
     },
-    offre: { prixAnnuel: PRIX_ANNUEL, rechargeMin: RECHARGE_MIN, quotasPayant: QUOTAS_IA.payant },
+    offre: { prixAnnuel: PRIX_ANNUEL, rechargeMin: RECHARGE_MIN, quotasPayant: QUOTAS_IA.payant, tva: TVA, renouvelerAvant: RENOUVELER_AVANT },
     renouvellement: prixRenouvellement(c),
     demande: c.demande || null
   };

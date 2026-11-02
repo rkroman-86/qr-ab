@@ -303,7 +303,7 @@
   async function demarrer(jeton) {
     gh = CF ? clientCloudflare(jeton) : clientGitHub(jeton, depot);
     const info = await gh.verifier();
-    if (CF) { jetonCF = jeton; afficherAbonnement(info.compte); }
+    if (CF) { jetonCF = jeton; afficherAbonnement(info.compte); setTimeout(retourPaiement, 0); }
     const f = await gh.lire('config.json');
     shaConfig = f ? f.sha : null;
     cfg = normaliser(fusion(CONFIG_DEFAUT, f ? JSON.parse(f.texte) : {}));
@@ -384,6 +384,26 @@
   }
   $('#abonnement').addEventListener('click', () => ouvrirAbonnement());
 
+  /* Retour de la page de paiement Stripe : ?paiement=ok&session_id=… ou ?paiement=annule */
+  async function retourPaiement() {
+    const q = new URLSearchParams(location.search);
+    const etat = q.get('paiement');
+    if (!etat) return;
+    history.replaceState(null, '', location.pathname + location.hash);
+    if (etat === 'annule') { ouvrirAbonnement(null, 'Paiement annulé : rien n’a été débité.'); return; }
+    const id = q.get('session_id') || '';
+    for (let essai = 0; essai < 5; essai++) {             // la confirmation de la banque peut prendre quelques secondes
+      try {
+        const r = await appelAPI('paiement/verifier?session=' + encodeURIComponent(id), jetonCF);
+        const j = await r.json();
+        afficherAbonnement(j.compte);
+        if (j.paye) { ouvrirAbonnement(null, null, '✓ Paiement reçu, merci ! Votre compte est à jour.'); return; }
+      } catch (e) { ouvrirAbonnement(null, e.message); return; }
+      await new Promise(ok => setTimeout(ok, 2000));
+    }
+    ouvrirAbonnement(null, 'Paiement en cours de confirmation par votre banque. Votre compte se mettra à jour automatiquement.');
+  }
+
   /* Ce qu'il reste d'IA pour un type ('texte' ou 'picto') */
   function resteIA(type) {
     const c = compteCF;
@@ -420,7 +440,7 @@
   function majQuotas() { document.querySelectorAll('.quota-ia').forEach(remplirQuota); }
 
   /* Fenêtre « Mon abonnement » : compteurs, offre d'abonnement, recharge */
-  function ouvrirAbonnement(code, message) {
+  function ouvrirAbonnement(code, message, succes) {
     const c = compteCF;
     if (!c) return;
     const ancien = document.getElementById('fen-abo'); if (ancien) ancien.remove();
@@ -438,6 +458,7 @@
       c.plan === 'payant' ? (c.payeJusqua ? (c.actif ? 'Jusqu’au ' : 'Terminé le ') + date(c.payeJusqua) + '.' : '') :
       c.plan === 'gratuit' ? 'Toutes les fonctions sont incluses.' : '' }));
     if (message) fen.append(el('div', { class: 'alerte-abo', text: message }));
+    if (succes) fen.append(el('div', { class: 'alerte-abo', style: 'border-color:var(--ok)', text: succes }));
 
     if (c.ia && !c.ia.illimite) {
       const ligne = (lib, val) => el('div', { class: 'compteur' }, [el('span', { text: lib }), el('b', { text: val })]);
@@ -451,46 +472,64 @@
     const attente = c.demande ? el('div', { class: 'attente', text: '⏳ Demande ' + (c.demande.genre === 'recharge' ? 'de recharge de ' : 'd’abonnement : ') + euros(c.demande.montant) +
       ' HT envoyée le ' + date(c.demande.le) + '. Le paiement en ligne arrive très bientôt : nous vous contactons' + (c.email ? ' à ' + c.email : '') + ' pour le règlement.' }) : null;
 
+    const ttc = ht => euros(Math.round(ht * (100 + c.offre.tva) / 100));
+    // Paiement en ligne si Stripe est branché, sinon simple demande (encaissement manuel)
     async function demander(corps, bouton) {
       bouton.disabled = true;
+      const texte = bouton.textContent;
       try {
+        if (c.offre.enLigne) {
+          if (modifie && !confirm(t('Des modifications ne sont pas enregistrées. Continuer vers le paiement ?'))) { bouton.disabled = false; return; }
+          bouton.textContent = 'Ouverture du paiement sécurisé…';
+          corps.retour = location.origin + location.pathname;
+          const r = await appelAPI('paiement', jetonCF, { method: 'POST', body: JSON.stringify(corps) });
+          const j = await r.json();
+          if (j.url) { modifie = false; location.href = j.url; return; }
+          if (j.applique) { afficherAbonnement(j.compte); ouvrirAbonnement(null, null, '✓ Abonnement renouvelé grâce à votre crédit.'); return; }
+        }
         const r = await appelAPI('demande', jetonCF, { method: 'POST', body: JSON.stringify(corps) });
         afficherAbonnement((await r.json()).compte);
         ouvrirAbonnement();
-      } catch (e) { bouton.disabled = false; alert(e.message); }
+      } catch (e) { bouton.disabled = false; bouton.textContent = texte; alert(e.message); }
     }
 
-    const abonnable = c.plan === 'essai' || (c.plan === 'payant' && !c.actif);
+    const finProche = c.plan === 'payant' && c.actif && c.payeJusqua && (Date.parse(c.payeJusqua) - Date.now()) < c.offre.renouvelerAvant * 86400000;
+    const abonnable = c.plan === 'essai' || (c.plan === 'payant' && !c.actif) || finProche;
     if (abonnable) {
       const q = c.offre.quotasPayant;
-      const btn = el('button', { type: 'button', class: 'btn btn-prim btn-plein', text: c.plan === 'essai' && c.actif ? 'S’abonner sans attendre la fin de l’essai' : 'S’abonner' });
+      const ren0 = c.renouvellement;
+      const libBtn = ren0 && ren0.aPayer <= 0 ? 'Renouveler avec mon crédit' : (finProche ? 'Renouveler pour un an' : c.plan === 'essai' && c.actif ? 'S’abonner sans attendre la fin de l’essai' : 'S’abonner');
+      const btn = el('button', { type: 'button', class: 'btn btn-prim btn-plein', text: libBtn });
       btn.addEventListener('click', () => demander({ genre: 'abonnement' }, btn));
       const ren = c.renouvellement;
       fen.append(el('div', { class: 'offre' }, [
         el('div', { class: 'prix', text: prixAn + ' HT / an' }),
-        el('div', { class: 'aide', text: 'Soit ' + euros(Math.round(c.offre.prixAnnuel / 12)) + ' HT par mois, le prix d’un café.' }),
+        el('div', { class: 'aide', text: ttc(c.offre.prixAnnuel) + ' TTC (TVA ' + c.offre.tva + ' %). Soit ' + euros(Math.round(c.offre.prixAnnuel / 12)) + ' HT par mois, le prix d’un café.' }),
         el('ul', {}, [
           el('li', { text: 'Votre page, votre QR code et vos cartes de visite' }),
           el('li', { text: q.texte + ' rédactions IA et ' + q.picto + ' créations de motifs par an' }),
           el('li', { text: 'Au-delà : ' + euros(c.ia.prix.texte) + ' la rédaction, ' + euros(c.ia.prix.picto) + ' la création de motifs' })
         ]),
-        ren && ren.deduction ? el('div', { class: 'aide', style: 'margin-bottom:10px', text: 'Crédit déduit : −' + euros(ren.deduction) + ' → à payer ' + euros(ren.aPayer) + ' HT' }) : null,
-        c.demande && c.demande.genre === 'abonnement' ? attente : btn
+        ...(ren && ren.deduction ? [el('div', { class: 'aide', style: 'margin-bottom:10px', text: 'Crédit déduit : −' + euros(ren.deduction) + ' HT → à payer ' + euros(ren.aPayer) + ' HT (' + ttc(ren.aPayer) + ' TTC)' })] : []),
+        c.demande && c.demande.genre === 'abonnement' && !c.offre.enLigne ? attente : btn,
+        ...(c.offre.enLigne ? [el('div', { class: 'aide', style: 'margin-top:8px;text-align:center', text: '🔒 Paiement sécurisé par Stripe : carte, Apple Pay, Google Pay. Facture envoyée par e-mail.' })] : [])
       ]));
-    } else if (c.plan === 'payant') {
+    }
+    if (c.plan === 'payant' && c.actif) {
       const montant = el('input', { type: 'number', min: c.offre.rechargeMin / 100, step: 1, value: c.offre.rechargeMin / 100, inputmode: 'decimal' });
       const btn = el('button', { type: 'button', class: 'btn btn-prim', text: 'Recharger' });
       btn.addEventListener('click', () => {
         const v = Number(String(montant.value).replace(',', '.'));
-        if (!(v >= c.offre.rechargeMin / 100)) { alert('5 € minimum.'); return; }
+        if (!(v >= c.offre.rechargeMin / 100)) { alert('5 € HT minimum.'); return; }
         demander({ genre: 'recharge', montant: v }, btn);
       });
       const ren = c.renouvellement;
       fen.append(el('div', { class: 'offre' }, [
-        el('b', { text: 'Recharger le crédit IA' }),
+        el('b', { text: 'Recharger le crédit IA (montant HT)' }),
         el('div', { class: 'aide', style: 'margin-top:4px', text: euros(c.ia.prix.texte) + ' la rédaction, ' + euros(c.ia.prix.picto) + ' la création de motifs. ' +
           'Le crédit non utilisé est déduit de votre prochain renouvellement' + (ren && ren.deduction ? ' (prochain paiement : ' + euros(ren.aPayer) + ' HT au lieu de ' + prixAn + ').' : '.') }),
-        c.demande && c.demande.genre === 'recharge' ? attente : el('div', { class: 'ligne-recharge' }, [montant, el('span', { style: 'align-self:center', text: '€' }), btn])
+        c.demande && c.demande.genre === 'recharge' && !c.offre.enLigne ? attente : el('div', { class: 'ligne-recharge' }, [montant, el('span', { style: 'align-self:center', text: '€ HT' }), btn]),
+        el('div', { class: 'aide', style: 'margin-top:6px', text: 'TVA ' + c.offre.tva + ' % ajoutée au paiement (5 € HT = ' + ttc(500) + ' TTC).' })
       ]));
     }
     fen.append(fermer);
