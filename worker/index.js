@@ -288,6 +288,9 @@ async function apiClient(request, env, slug, route) {
       metadata: { slug, genre, montant: String(montant), deduction: String(deduction) },
       payment_intent_data: { metadata: { slug, genre }, description: libelle },
       invoice_creation: { enabled: true },
+      // Stripe active par défaut « Managed Payments » (Stripe vendeur, TVA mondiale, frais en plus) :
+      // on facture nous-mêmes avec notre taux de TVA, donc désactivé pour nos sessions
+      managed_payments: { enabled: false },
       success_url: retour + (retour.includes('?') ? '&' : '?') + 'paiement=ok&session_id={CHECKOUT_SESSION_ID}',
       cancel_url: retour + (retour.includes('?') ? '&' : '?') + 'paiement=annule'
     });
