@@ -13,72 +13,182 @@
 <meta name="apple-mobile-web-app-title" content="qrbc">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <style>
-  :root{--fond:#1b1a17;--panneau:#24221f;--ligne:#38352f;--txt:#f6f4ef;--doux:#a19c92;--accent:#d9572b;--err:#ff8a80}
+  :root{--fond:#1b1a17;--panneau:#24221f;--ligne:#38352f;--txt:#f6f4ef;--doux:#a19c92;--accent:#d9572b;--ok:#6fcf8f;--err:#ff8a80}
   *{box-sizing:border-box}
-  html,body{margin:0;min-height:100%}
+  [hidden]{display:none !important}
+  html,body{margin:0;height:100%;overflow:hidden}
   body{font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--fond);color:var(--txt);
-    min-height:100dvh;display:flex;flex-direction:column;padding:max(24px,env(safe-area-inset-top)) 20px max(24px,env(safe-area-inset-bottom))}
-  .haut{display:flex;align-items:center;gap:12px;margin:8px 0 36px}
-  .haut img{width:44px;height:44px;border-radius:11px}
-  .haut b{font-size:1.35rem;letter-spacing:-.02em}
-  .haut span{color:var(--accent)}
-  main{width:100%;max-width:420px;margin:0 auto;flex:1}
-  h1{font-size:1.6rem;line-height:1.15;letter-spacing:-.02em;margin:0 0 8px}
-  p.sous{color:var(--doux);margin:0 0 24px}
+    display:flex;flex-direction:column;height:100dvh;-webkit-tap-highlight-color:transparent}
+
+  /* ---------- En-tête : logo + choix de la pancarte ---------- */
+  header{flex:none;padding:max(16px,env(safe-area-inset-top)) 20px 10px;max-width:520px;width:100%;margin:0 auto}
+  .marque{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+  .marque img{width:36px;height:36px;border-radius:9px}
+  .marque b{font-size:1.2rem;letter-spacing:-.02em}
+  .marque span{color:var(--accent)}
+  .onglets{position:relative;display:grid;grid-template-columns:1fr 1fr;background:var(--panneau);border:1px solid var(--ligne);border-radius:12px;padding:4px}
+  .onglets button{position:relative;z-index:1;border:0;background:none;color:var(--doux);font:inherit;font-weight:600;font-size:.95rem;padding:10px 6px;border-radius:9px;cursor:pointer;transition:color .2s}
+  .onglets button[aria-selected="true"]{color:var(--txt)}
+  .curseur{position:absolute;z-index:0;top:4px;bottom:4px;left:4px;width:calc(50% - 4px);border-radius:9px;background:var(--ligne);transition:transform .25s ease}
+
+  /* ---------- Les pancartes : glisser, elles s'aimantent ---------- */
+  .rail{flex:1;min-height:0;display:flex;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;overscroll-behavior-x:contain;scrollbar-width:none}
+  .rail::-webkit-scrollbar{display:none}
+  .carte{flex:0 0 100%;width:100%;scroll-snap-align:center;scroll-snap-stop:always;overflow-y:auto;overscroll-behavior-y:contain;
+    padding:18px 20px calc(24px + env(safe-area-inset-bottom))}
+  .carte-in{max-width:480px;margin:0 auto;display:flex;flex-direction:column;min-height:100%}
+  h1{font-size:1.55rem;line-height:1.15;letter-spacing:-.02em;margin:6px 0 6px}
+  p.sous{color:var(--doux);margin:0 0 20px;font-size:.95rem}
+  label{display:block;margin-bottom:14px}
   label>span{display:block;font-size:.8rem;font-weight:600;color:var(--doux);margin-bottom:6px}
+  input[type=text],input[type=email],input[type=password]{width:100%;border:1px solid var(--ligne);border-radius:12px;background:var(--panneau);color:inherit;font:inherit;padding:13px 14px;outline:none;min-height:50px}
+  input:focus{border-color:var(--accent)}
   .adresse{display:flex;border:1px solid var(--ligne);border-radius:12px;background:var(--panneau);overflow:hidden}
   .adresse:focus-within{border-color:var(--accent)}
-  .adresse input{flex:1;min-width:0;border:0;background:transparent;color:inherit;font:inherit;padding:14px;outline:none;min-height:52px}
-  .adresse em{font-style:normal;display:flex;align-items:center;padding:0 14px;color:var(--doux)}
-  button.prim{width:100%;margin-top:16px;padding:15px;border:0;border-radius:12px;background:var(--accent);color:#fff;font:inherit;font-weight:700;min-height:54px;cursor:pointer}
+  .adresse input{border:0;border-radius:0;background:transparent;min-width:0;flex:1}
+  .adresse em{font-style:normal;display:flex;align-items:center;padding:0 14px;color:var(--doux);white-space:nowrap}
+  .dispo{font-size:.82rem;margin-top:6px;min-height:1.2em;color:var(--doux)}
+  .dispo.ok{color:var(--ok)} .dispo.ko{color:var(--err)}
+  .case{display:flex;gap:10px;align-items:flex-start;font-size:.9rem;color:var(--doux)}
+  .case input{margin-top:4px;width:18px;height:18px;accent-color:var(--accent)}
+  button.prim{width:100%;margin-top:6px;padding:15px;border:0;border-radius:12px;background:var(--accent);color:#fff;font:inherit;font-weight:700;min-height:54px;cursor:pointer}
   button.prim:disabled{opacity:.55}
   .msg{min-height:1.3em;margin-top:10px;font-size:.92rem;color:var(--err)}
-  .pages{display:grid;gap:8px;margin:0 0 28px}
-  .pages h2{font-size:.8rem;font-weight:600;color:var(--doux);margin:0 0 2px;text-transform:uppercase;letter-spacing:.06em}
-  .page{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px;border:1px solid var(--ligne);border-radius:12px;background:var(--panneau);color:inherit;text-decoration:none}
+  .bascule{margin-top:auto;padding-top:28px;text-align:center;color:var(--doux);font-size:.92rem}
+  .bascule button{border:0;background:none;color:var(--txt);font:inherit;font-weight:600;text-decoration:underline;padding:6px;cursor:pointer}
+
+  .pages{display:grid;gap:8px;margin:0 0 22px}
+  .pages h2{font-size:.75rem;font-weight:600;color:var(--doux);margin:0 0 2px;text-transform:uppercase;letter-spacing:.07em}
+  .page{display:flex;align-items:center;gap:10px;padding:12px 14px;border:1px solid var(--ligne);border-radius:12px;background:var(--panneau);color:inherit;text-decoration:none}
+  .page span{flex:1;min-width:0}
   .page small{color:var(--doux)}
-  .page .x{border:0;background:none;color:var(--doux);font-size:1.2rem;padding:4px 8px;cursor:pointer}
-  .bas{text-align:center;color:var(--doux);font-size:.92rem;margin-top:32px}
-  .bas a{color:var(--txt)}
+  .page .x{border:0;background:none;color:var(--doux);font-size:1.3rem;line-height:1;padding:4px 8px;cursor:pointer}
+  .ou{display:flex;align-items:center;gap:10px;color:var(--doux);font-size:.8rem;margin:0 0 16px}
+  .ou::before,.ou::after{content:"";flex:1;height:1px;background:var(--ligne)}
+
+  .points{list-style:none;margin:0 0 18px;padding:0;display:grid;gap:6px;font-size:.9rem;color:var(--doux)}
+  .points li::before{content:"✓";color:var(--accent);font-weight:700;margin-right:8px}
+
+  /* ---------- Points de navigation ---------- */
+  .points-nav{flex:none;display:flex;justify-content:center;gap:8px;padding:6px 0 max(10px,env(safe-area-inset-bottom))}
+  .points-nav button{width:8px;height:8px;padding:0;border:0;border-radius:99px;background:var(--ligne);cursor:pointer;transition:width .25s,background .25s}
+  .points-nav button[aria-current="true"]{width:22px;background:var(--accent)}
 </style>
 </head>
 <body>
-<div class="haut"><img src="/icon-192.png" alt=""><b>qrbc<span>.</span></b></div>
-<main>
-  <div class="pages" id="pages" hidden><h2>Mes pages</h2></div>
+<header>
+  <div class="marque"><img src="/icon-192.png" alt=""><b>qrbc<span>.</span></b></div>
+  <div class="onglets" role="tablist">
+    <div class="curseur" id="curseur"></div>
+    <button type="button" role="tab" data-i="0" aria-selected="true">Se connecter</button>
+    <button type="button" role="tab" data-i="1" aria-selected="false">Créer ma page</button>
+  </div>
+</header>
 
-  <h1 id="titre">Ouvrir ma page</h1>
-  <p class="sous">Entrez l’adresse de votre page pour la modifier.</p>
-  <form id="f">
-    <label><span>Adresse de la page</span>
-      <div class="adresse"><input id="nom" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="30" placeholder="votre-nom" required><em>.qrbc.app</em></div>
-    </label>
-    <button class="prim" id="btn">Continuer</button>
-    <div class="msg" id="msg"></div>
-  </form>
+<div class="rail" id="rail">
+  <!-- ===== Pancarte 1 : connexion ===== -->
+  <section class="carte" aria-label="Se connecter">
+    <div class="carte-in">
+      <h1>Bon retour</h1>
+      <p class="sous">Connectez-vous pour modifier votre page.</p>
 
-  <p class="bas">Pas encore de page ? <a href="/#inscription">Essai gratuit de 14 jours</a></p>
-</main>
+      <div class="pages" id="pages" hidden><h2>Mes pages</h2></div>
+      <div class="ou" id="ou" hidden>ou une autre page</div>
+
+      <form id="f-cx" autocomplete="on">
+        <label><span>Adresse de la page</span>
+          <div class="adresse"><input type="text" id="cx-nom" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="30" placeholder="votre-nom" required><em>.qrbc.app</em></div>
+        </label>
+        <label><span>Mot de passe</span><input type="password" id="cx-mdp" autocomplete="current-password" required></label>
+        <button class="prim" id="cx-btn">Se connecter</button>
+        <div class="msg" id="cx-msg"></div>
+      </form>
+
+      <div class="bascule">Pas encore de page ? <button type="button" data-aller="1">Créer ma page →</button></div>
+    </div>
+  </section>
+
+  <!-- ===== Pancarte 2 : inscription ===== -->
+  <section class="carte" aria-label="Créer ma page">
+    <div class="carte-in">
+      <h1>Votre page en 2 minutes</h1>
+      <p class="sous">14 jours gratuits, sans carte bancaire.</p>
+      <ul class="points">
+        <li>Une page mobile à votre nom, avec QR code</li>
+        <li>Cartes de visite prêtes à imprimer</li>
+        <li>Textes et logo avec l’aide de l’IA</li>
+      </ul>
+      <form id="f-in" autocomplete="on">
+        <label><span>Adresse de votre page</span>
+          <div class="adresse"><input type="text" id="in-nom" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="30" placeholder="votre-nom" required><em>.qrbc.app</em></div>
+          <div class="dispo" id="in-dispo"></div>
+        </label>
+        <label><span>Nom de votre activité</span><input type="text" id="in-titre" maxlength="80" placeholder="Ex. Chauffeur Privé Paris"></label>
+        <label><span>E-mail</span><input type="email" id="in-email" autocomplete="email" required></label>
+        <label><span>Mot de passe (10 caractères minimum)</span><input type="password" id="in-mdp" autocomplete="new-password" minlength="10" required></label>
+        <label class="case"><input type="checkbox" id="in-cgu"> <span>J’accepte les conditions d’utilisation du service.</span></label>
+        <button class="prim" id="in-btn">Créer ma page</button>
+        <div class="msg" id="in-msg"></div>
+      </form>
+
+      <div class="bascule">Déjà une page ? <button type="button" data-aller="0">← Se connecter</button></div>
+    </div>
+  </section>
+</div>
+
+<nav class="points-nav" aria-label="Pancartes">
+  <button type="button" data-i="0" aria-label="Se connecter" aria-current="true"></button>
+  <button type="button" data-i="1" aria-label="Créer ma page" aria-current="false"></button>
+</nav>
+
 <script>
 (function () {
   const $ = s => document.querySelector(s);
+  const rail = $('#rail');
   const lire = () => { try { return JSON.parse(localStorage.getItem('qrbc-pages')) || []; } catch (e) { return []; } };
-  const ecrire = l => { try { localStorage.setItem('qrbc-pages', JSON.stringify(l)); } catch (e) {} };
-  const ouvrir = slug => location.href = '/app/' + slug + '/';
+  const ecrire = l => { try { localStorage.setItem('qrbc-pages', JSON.stringify(l.slice(0, 10))); } catch (e) {} };
+  const memoriser = slug => ecrire([slug].concat(lire().filter(s => s !== slug)));
+  const nettoyer = v => v.toLowerCase().replace(/[^a-z0-9-]/g, '');
 
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
 
-  // Une seule page connue : on l'ouvre directement (sauf si l'utilisateur veut changer de page)
-  const pages = lire();
-  const choisir = new URLSearchParams(location.search).has('choisir');
-  if (pages.length === 1 && !choisir) { location.replace('/app/' + pages[0] + '/'); return; }
+  /* Une seule page connue : on l'ouvre directement, sauf demande explicite */
+  const params = new URLSearchParams(location.search);
+  const connues = lire();
+  if (connues.length === 1 && !params.has('choisir') && !location.hash) { location.replace('/app/' + connues[0] + '/'); return; }
 
+  /* ---------- Pancartes : glisser ou boutons ---------- */
+  let courante = 0;
+  function aller(i, doux) {
+    rail.scrollTo({ left: i * rail.clientWidth, behavior: doux === false ? 'auto' : 'smooth' });
+    marquer(i);
+  }
+  function marquer(i) {
+    if (i === courante && document.body.dataset.init) return;
+    courante = i; document.body.dataset.init = '1';
+    document.querySelectorAll('.onglets button').forEach(b => b.setAttribute('aria-selected', String(Number(b.dataset.i) === i)));
+    document.querySelectorAll('.points-nav button').forEach(b => b.setAttribute('aria-current', String(Number(b.dataset.i) === i)));
+    $('#curseur').style.transform = 'translateX(' + (i * 100) + '%)';
+    history.replaceState(null, '', location.pathname + location.search + (i === 1 ? '#creer' : '#connexion'));
+  }
+  let attente = null;
+  rail.addEventListener('scroll', () => {
+    clearTimeout(attente);
+    attente = setTimeout(() => marquer(Math.round(rail.scrollLeft / rail.clientWidth)), 60);
+  }, { passive: true });
+  window.addEventListener('resize', () => aller(courante, false));
+  document.querySelectorAll('[data-i],[data-aller]').forEach(b => b.addEventListener('click', () => aller(Number(b.dataset.i ?? b.dataset.aller))));
+
+  // Première pancarte : inscription si demandé, ou si aucune page n'est connue sur cet appareil
+  const depart = location.hash === '#creer' ? 1 : location.hash === '#connexion' ? 0 : (connues.length ? 0 : 1);
+  requestAnimationFrame(() => aller(depart, false));
+
+  /* ---------- Mes pages (déjà ouvertes sur cet appareil) ---------- */
   function afficherPages() {
     const box = $('#pages');
     box.querySelectorAll('.page').forEach(n => n.remove());
     const l = lire();
-    box.hidden = !l.length;
-    $('#titre').textContent = l.length ? 'Ouvrir une autre page' : 'Ouvrir ma page';
+    box.hidden = !l.length; $('#ou').hidden = !l.length;
     l.forEach(slug => {
       const a = document.createElement('a');
       a.className = 'page'; a.href = '/app/' + slug + '/';
@@ -91,21 +201,74 @@
   }
   afficherPages();
 
-  const nom = $('#nom');
-  nom.addEventListener('input', () => { const v = nom.value.toLowerCase().replace(/[^a-z0-9-]/g, ''); if (v !== nom.value) nom.value = v; });
+  /* ---------- Connexion directe : adresse + mot de passe ---------- */
+  async function connecter(slug, mdp) {
+    const r = await fetch('/app/' + slug + '/api/connexion', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mdp, rester: true })
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.erreur || 'Connexion impossible.');
+    // même clé que l'éditeur : il démarre déjà connecté
+    try { localStorage.setItem('qp-jeton:' + slug, j.jeton); sessionStorage.setItem('qp-jeton:' + slug, j.jeton); } catch (e) {}
+    memoriser(slug);
+    location.href = '/app/' + slug + '/';
+  }
 
-  $('#f').addEventListener('submit', async e => {
+  const cxNom = $('#cx-nom');
+  cxNom.addEventListener('input', () => { const v = nettoyer(cxNom.value); if (v !== cxNom.value) cxNom.value = v; });
+  $('#f-cx').addEventListener('submit', async e => {
     e.preventDefault();
-    const slug = nom.value.trim(), msg = $('#msg'), btn = $('#btn');
+    const slug = cxNom.value.trim(), msg = $('#cx-msg'), btn = $('#cx-btn');
     msg.textContent = '';
     if (slug.length < 3) { msg.textContent = 'Adresse trop courte.'; return; }
-    btn.disabled = true;
+    btn.disabled = true; btn.textContent = 'Connexion…';
     try {
-      const r = await fetch('/api/disponible?nom=' + encodeURIComponent(slug));
-      const j = await r.json();
-      if (j.disponible || j.raison) { msg.textContent = 'Aucune page à cette adresse.'; btn.disabled = false; return; }
-      ouvrir(slug);
-    } catch (err) { msg.textContent = 'Connexion impossible. Vérifiez votre réseau.'; btn.disabled = false; }
+      const d = await (await fetch('/api/disponible?nom=' + encodeURIComponent(slug))).json();
+      if (d.disponible || d.raison) throw new Error('Aucune page à cette adresse.');
+      await connecter(slug, $('#cx-mdp').value);
+    } catch (err) {
+      msg.textContent = err.message === 'Failed to fetch' ? 'Pas de connexion internet.' : err.message;
+      btn.disabled = false; btn.textContent = 'Se connecter';
+    }
+  });
+
+  /* ---------- Inscription dans l'appli ---------- */
+  const inNom = $('#in-nom'), dispo = $('#in-dispo');
+  let minuterie = null;
+  inNom.addEventListener('input', () => {
+    const v = nettoyer(inNom.value);
+    if (v !== inNom.value) inNom.value = v;
+    dispo.className = 'dispo'; dispo.textContent = v ? v + '.qrbc.app' : '';
+    clearTimeout(minuterie);
+    if (v.length < 3) return;
+    minuterie = setTimeout(async () => {
+      try {
+        const j = await (await fetch('/api/disponible?nom=' + encodeURIComponent(v))).json();
+        if (inNom.value !== v) return;
+        dispo.className = 'dispo ' + (j.disponible ? 'ok' : 'ko');
+        dispo.textContent = j.disponible ? '✓ ' + v + '.qrbc.app est disponible' : (j.raison || 'Ce nom est déjà pris.');
+      } catch (e) {}
+    }, 350);
+  });
+  $('#f-in').addEventListener('submit', async e => {
+    e.preventDefault();
+    const msg = $('#in-msg'), btn = $('#in-btn');
+    msg.textContent = '';
+    if (!$('#in-cgu').checked) { msg.textContent = 'Merci d’accepter les conditions d’utilisation.'; return; }
+    const slug = inNom.value.trim(), mdp = $('#in-mdp').value;
+    btn.disabled = true; btn.textContent = 'Création de votre page…';
+    try {
+      const r = await fetch('/api/inscription', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ nom: slug, titre: $('#in-titre').value, email: $('#in-email').value, mdp, cgu: true })
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.erreur || 'Erreur');
+      await connecter(slug, mdp);
+    } catch (err) {
+      msg.textContent = err.message === 'Failed to fetch' ? 'Pas de connexion internet.' : err.message;
+      btn.disabled = false; btn.textContent = 'Créer ma page';
+    }
   });
 })();
 </script>

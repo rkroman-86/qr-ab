@@ -161,7 +161,8 @@
       document.body.appendChild(b);
     }
   });
-  if (dejaInstallee) location.replace('/app');   // ouverte depuis l'icône : direct dans l'appli
+  // ouverte depuis l'icône : tout se passe dans l'appli (connexion et inscription)
+  if (dejaInstallee) location.replace('/app' + (/inscription|creer/.test(location.hash) ? '#creer' : ''));
 
   $('#inscription').addEventListener('submit', async e => {
     e.preventDefault();
