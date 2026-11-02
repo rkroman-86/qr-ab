@@ -20,6 +20,33 @@
     .cache{display:none !important}
     .abo{font-size:.78rem;font-weight:600;padding:3px 9px;border-radius:99px;background:var(--bg);border:1px solid var(--ligne);color:var(--doux);white-space:nowrap}
     .abo-alerte{color:var(--err);border-color:var(--err)}
+    button.abo{cursor:pointer;font-family:inherit;min-width:0;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto}
+    @media (max-width:560px){
+      /* téléphone : le badge d'abonnement passe sur sa propre ligne, sous la barre */
+      .barre{flex-wrap:wrap;row-gap:8px}
+      .barre h1{flex:1 1 0;min-width:0}
+      button.abo{order:10;flex:1 1 100%;text-align:center;padding:5px 9px}
+    }
+    @media (max-width:400px){ .barre h1{display:none} }
+    .quota-ia{font-size:.8rem;color:var(--doux);margin:8px 0 0;text-align:center}
+    .quota-ia.vide{color:var(--err)}
+    .quota-ia button{border:0;background:none;color:var(--prim);font:inherit;font-weight:600;padding:0 0 0 4px;cursor:pointer;text-decoration:underline}
+    #fen-abo{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center}
+    @media (min-width:640px){#fen-abo{align-items:center}}
+    #fen-abo .fen{box-sizing:border-box;background:var(--panneau);color:var(--txt);width:min(100vw,440px);max-width:100%;max-height:92dvh;overflow:auto;border-radius:18px 18px 0 0;padding:22px 20px calc(20px + env(safe-area-inset-bottom))}
+    @media (min-width:640px){#fen-abo .fen{border-radius:18px}}
+    #fen-abo h2{margin:0 0 4px;font-size:1.2rem}
+    #fen-abo .sous{color:var(--doux);margin:0 0 16px;font-size:.92rem}
+    #fen-abo .alerte-abo{background:var(--bg);border:1px solid var(--err);color:var(--txt);border-radius:12px;padding:12px;margin:0 0 16px;font-size:.92rem}
+    #fen-abo .compteur{display:flex;justify-content:space-between;padding:10px 0;border-top:1px solid var(--ligne);font-size:.95rem}
+    #fen-abo .compteur b{font-variant-numeric:tabular-nums}
+    #fen-abo .offre{margin-top:16px;padding:16px;border-radius:14px;border:1px solid var(--prim);background:var(--bg)}
+    #fen-abo .offre .prix{font-size:1.5rem;font-weight:800;letter-spacing:-.02em}
+    #fen-abo .offre ul{margin:8px 0 12px;padding-left:18px;color:var(--doux);font-size:.9rem}
+    #fen-abo .ligne-recharge{display:flex;gap:8px;margin-top:10px}
+    #fen-abo .ligne-recharge input{flex:1;min-width:0}
+    #fen-abo .attente{margin-top:14px;padding:12px;border-radius:12px;background:var(--bg);font-size:.9rem}
+    #fen-abo .fermer{margin-top:14px}
 
     /* ---------- Connexion ---------- */
     #connexion{min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:24px 16px}
@@ -221,7 +248,7 @@
 <div id="editeur" class="cache">
   <div class="barre">
     <h1>Éditeur</h1>
-    <span id="abonnement" class="abo cache"></span>
+    <button type="button" id="abonnement" class="abo cache" title="Mon abonnement"></button>
     <div class="onglets">
       <button type="button" data-vue="edit" class="actif">Modifier</button>
       <button type="button" data-vue="apercu">Aperçu</button>
@@ -338,16 +365,136 @@
   })();
 
   /* ---------------- Abonnement (mode Cloudflare) ---------------- */
+  let compteCF = null;
+  const euros = c => ((c || 0) / 100).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
   function afficherAbonnement(c) {
+    if (c) compteCF = c;
+    c = compteCF;
     const b = $('#abonnement');
     if (!b || !c) return;
     const jours = d => Math.max(0, Math.ceil((Date.parse(d) - Date.now()) / 86400000));
     let txt = '', classe = 'abo';
-    if (c.plan === 'essai' && c.actif) { const n = jours(c.finEssai); txt = 'Essai gratuit : ' + n + (n > 1 ? ' jours restants' : ' jour restant'); if (n <= 3) classe += ' abo-alerte'; }
-    else if (!c.actif) { txt = c.plan === 'essai' ? 'Essai terminé : publication bloquée' : 'Abonnement inactif'; classe += ' abo-alerte'; }
+    if (c.plan === 'essai' && c.actif) { const n = jours(c.finEssai); txt = 'Essai gratuit : ' + n + (n > 1 ? ' jours' : ' jour'); if (n <= 3) classe += ' abo-alerte'; }
+    else if (!c.actif) { txt = c.plan === 'essai' ? 'Essai terminé' : 'Abonnement inactif'; classe += ' abo-alerte'; }
     else if (c.plan === 'gratuit') txt = 'Compte offert';
+    else if (c.plan === 'payant') txt = 'Abonné' + (c.payeJusqua ? ' · ' + new Date(c.payeJusqua).toLocaleDateString('fr-FR') : '');
     b.textContent = txt;
     b.className = txt ? classe : 'abo cache';
+    majQuotas();
+  }
+  $('#abonnement').addEventListener('click', () => ouvrirAbonnement());
+
+  /* Ce qu'il reste d'IA pour un type ('texte' ou 'picto') */
+  function resteIA(type) {
+    const c = compteCF;
+    if (!c || !c.ia) return null;
+    if (c.ia.illimite) return { illimite: true };
+    const q = c.ia[type];
+    const inclus = q.inclus == null ? 0 : Math.max(0, q.inclus - q.utilises);
+    const parCredit = c.plan === 'payant' ? Math.floor((c.ia.credit || 0) / c.ia.prix[type]) : 0;
+    return { inclus, total: q.inclus, parCredit, prix: c.ia.prix[type], credit: c.ia.credit || 0 };
+  }
+  function texteQuota(type) {
+    const r = resteIA(type), c = compteCF;
+    if (!r) return { t: '' };
+    if (r.illimite) return { t: 'IA illimitée (compte offert)' };
+    const nom = type === 'texte' ? ['rédaction', 'rédactions'] : ['création de motifs', 'créations de motifs'];
+    if (!c.actif) return { t: c.plan === 'essai' ? 'Essai terminé.' : 'Abonnement inactif.', vide: true, lien: c.plan === 'essai' ? 'S’abonner' : 'Renouveler' };
+    if (r.inclus > 0) return { t: (c.plan === 'essai' ? 'Essai : ' : 'Cette année : ') + r.inclus + ' ' + (r.inclus > 1 ? nom[1] : nom[0]) + ' sur ' + r.total + ' restante' + (r.inclus > 1 ? 's' : '') };
+    if (r.parCredit > 0) return { t: 'Quota utilisé · ' + euros(r.prix) + ' par ' + nom[0] + ' sur votre crédit (' + euros(r.credit) + ')' };
+    if (c.plan === 'essai') return { t: 'Vos ' + nom[1] + ' d’essai sont utilisées.', vide: true, lien: 'S’abonner' };
+    return { t: 'Quota de l’année utilisé.', vide: true, lien: 'Recharger' };
+  }
+  function quotaIA(type) {
+    const n = el('div', { class: 'quota-ia' });
+    n.dataset.type = type;
+    remplirQuota(n);
+    return n;
+  }
+  function remplirQuota(n) {
+    const q = texteQuota(n.dataset.type);
+    n.textContent = q.t;
+    n.className = 'quota-ia' + (q.vide ? ' vide' : '') + (q.t ? '' : ' cache');
+    if (q.lien) n.appendChild(el('button', { type: 'button', text: q.lien, onclick: () => ouvrirAbonnement() }));
+  }
+  function majQuotas() { document.querySelectorAll('.quota-ia').forEach(remplirQuota); }
+
+  /* Fenêtre « Mon abonnement » : compteurs, offre d'abonnement, recharge */
+  function ouvrirAbonnement(code, message) {
+    const c = compteCF;
+    if (!c) return;
+    const ancien = document.getElementById('fen-abo'); if (ancien) ancien.remove();
+    const fond = el('div', { id: 'fen-abo' });
+    const fen = el('div', { class: 'fen' });
+    fond.appendChild(fen);
+    fond.addEventListener('click', e => { if (e.target === fond) fond.remove(); });
+    const fermer = el('button', { type: 'button', class: 'btn btn-plein fermer', text: 'Fermer', onclick: () => fond.remove() });
+    const prixAn = euros(c.offre.prixAnnuel);
+    const titres = { gratuit: 'Compte offert', essai: c.actif ? 'Essai gratuit' : 'Essai terminé', payant: c.actif ? 'Abonnement actif' : 'Abonnement expiré', suspendu: 'Compte suspendu' };
+    fen.append(el('h2', { text: titres[c.plan] || 'Mon abonnement' }));
+    const date = d => new Date(d).toLocaleDateString('fr-FR');
+    fen.append(el('p', { class: 'sous', text:
+      c.plan === 'essai' ? (c.actif ? 'Jusqu’au ' + date(c.finEssai) + '. Votre page reste en ligne pendant tout l’essai.' : 'Votre page est en pause. Abonnez-vous pour la remettre en ligne.') :
+      c.plan === 'payant' ? (c.payeJusqua ? (c.actif ? 'Jusqu’au ' : 'Terminé le ') + date(c.payeJusqua) + '.' : '') :
+      c.plan === 'gratuit' ? 'Toutes les fonctions sont incluses.' : '' }));
+    if (message) fen.append(el('div', { class: 'alerte-abo', text: message }));
+
+    if (c.ia && !c.ia.illimite) {
+      const ligne = (lib, val) => el('div', { class: 'compteur' }, [el('span', { text: lib }), el('b', { text: val })]);
+      const rt = resteIA('texte'), rp = resteIA('picto');
+      fen.append(
+        ligne('Rédactions IA restantes', rt.inclus + ' / ' + rt.total),
+        ligne('Créations de motifs restantes', rp.inclus + ' / ' + rp.total));
+      if (c.plan === 'payant') fen.append(ligne('Crédit IA', euros(c.ia.credit)));
+    }
+
+    const attente = c.demande ? el('div', { class: 'attente', text: '⏳ Demande ' + (c.demande.genre === 'recharge' ? 'de recharge de ' : 'd’abonnement : ') + euros(c.demande.montant) +
+      ' HT envoyée le ' + date(c.demande.le) + '. Le paiement en ligne arrive très bientôt : nous vous contactons' + (c.email ? ' à ' + c.email : '') + ' pour le règlement.' }) : null;
+
+    async function demander(corps, bouton) {
+      bouton.disabled = true;
+      try {
+        const r = await appelAPI('demande', jetonCF, { method: 'POST', body: JSON.stringify(corps) });
+        afficherAbonnement((await r.json()).compte);
+        ouvrirAbonnement();
+      } catch (e) { bouton.disabled = false; alert(e.message); }
+    }
+
+    const abonnable = c.plan === 'essai' || (c.plan === 'payant' && !c.actif);
+    if (abonnable) {
+      const q = c.offre.quotasPayant;
+      const btn = el('button', { type: 'button', class: 'btn btn-prim btn-plein', text: c.plan === 'essai' && c.actif ? 'S’abonner sans attendre la fin de l’essai' : 'S’abonner' });
+      btn.addEventListener('click', () => demander({ genre: 'abonnement' }, btn));
+      const ren = c.renouvellement;
+      fen.append(el('div', { class: 'offre' }, [
+        el('div', { class: 'prix', text: prixAn + ' HT / an' }),
+        el('div', { class: 'aide', text: 'Soit ' + euros(Math.round(c.offre.prixAnnuel / 12)) + ' HT par mois, le prix d’un café.' }),
+        el('ul', {}, [
+          el('li', { text: 'Votre page, votre QR code et vos cartes de visite' }),
+          el('li', { text: q.texte + ' rédactions IA et ' + q.picto + ' créations de motifs par an' }),
+          el('li', { text: 'Au-delà : ' + euros(c.ia.prix.texte) + ' la rédaction, ' + euros(c.ia.prix.picto) + ' la création de motifs' })
+        ]),
+        ren && ren.deduction ? el('div', { class: 'aide', style: 'margin-bottom:10px', text: 'Crédit déduit : −' + euros(ren.deduction) + ' → à payer ' + euros(ren.aPayer) + ' HT' }) : null,
+        c.demande && c.demande.genre === 'abonnement' ? attente : btn
+      ]));
+    } else if (c.plan === 'payant') {
+      const montant = el('input', { type: 'number', min: c.offre.rechargeMin / 100, step: 1, value: c.offre.rechargeMin / 100, inputmode: 'decimal' });
+      const btn = el('button', { type: 'button', class: 'btn btn-prim', text: 'Recharger' });
+      btn.addEventListener('click', () => {
+        const v = Number(String(montant.value).replace(',', '.'));
+        if (!(v >= c.offre.rechargeMin / 100)) { alert('5 € minimum.'); return; }
+        demander({ genre: 'recharge', montant: v }, btn);
+      });
+      const ren = c.renouvellement;
+      fen.append(el('div', { class: 'offre' }, [
+        el('b', { text: 'Recharger le crédit IA' }),
+        el('div', { class: 'aide', style: 'margin-top:4px', text: euros(c.ia.prix.texte) + ' la rédaction, ' + euros(c.ia.prix.picto) + ' la création de motifs. ' +
+          'Le crédit non utilisé est déduit de votre prochain renouvellement' + (ren && ren.deduction ? ' (prochain paiement : ' + euros(ren.aPayer) + ' HT au lieu de ' + prixAn + ').' : '.') }),
+        c.demande && c.demande.genre === 'recharge' ? attente : el('div', { class: 'ligne-recharge' }, [montant, el('span', { style: 'align-self:center', text: '€' }), btn])
+      ]));
+    }
+    fen.append(fermer);
+    document.body.appendChild(fond);
   }
   if (CF) {
     const sous = document.querySelector('#form-connexion p');
@@ -1311,8 +1458,13 @@
     if (!r.ok) {
       let j = null;
       try { j = await r.clone().json(); } catch (e) {}
-      if (j && j.erreur) throw new Error(j.erreur);           // erreur du Worker (session, quota, abonnement)
+      if (j && j.erreur) {                                     // erreur du Worker (session, quota, abonnement)
+        if (j.code) ouvrirAbonnement(j.code, j.erreur);
+        throw new Error(j.erreur);
+      }
     }
+    const maj = r.headers.get('x-qrbc-compte');
+    if (maj) { try { afficherAbonnement(JSON.parse(decodeURIComponent(maj))); } catch (e) {} }
     return r;
   }
   const TONS_IA = { pro: 'Professionnel', chaleureux: 'Chaleureux', luxe: 'Haut de gamme', dynamique: 'Dynamique', simple: 'Simple et direct' };
@@ -1736,7 +1888,7 @@
       const idee = el('textarea', { rows: 2, value: o.idee, placeholder: 'Ex. : un van vu de face, élégant' });
       idee.addEventListener('input', () => { o.idee = idee.value; });
       const msg = el('div', { class: 'msg' });
-      const go = el('button', { type: 'button', class: 'btn btn-prim btn-plein', text: '✨ Créer 3 motifs (quelques centimes)' });
+      const go = el('button', { type: 'button', class: 'btn btn-prim btn-plein', text: (CF ? '✨ Créer 3 motifs' : '✨ Créer 3 motifs (quelques centimes)') });
       go.addEventListener('click', async () => {
         go.disabled = true; go.textContent = 'L’IA dessine…'; msg.className = 'msg'; msg.textContent = '';
         try {
@@ -1748,7 +1900,7 @@
           construire();
         } catch (e) {
           msg.className = 'msg err'; msg.textContent = e.message === 'Failed to fetch' ? 'Connexion impossible au service IA.' : e.message;
-          go.disabled = false; go.textContent = '✨ Créer 3 motifs (quelques centimes)';
+          go.disabled = false; go.textContent = (CF ? '✨ Créer 3 motifs' : '✨ Créer 3 motifs (quelques centimes)');
         }
       });
       const src = el('div');
@@ -1769,7 +1921,7 @@
         el('div', { class: 'aide', style: 'margin:4px 0 10px', text: 'Un seul appel : vous gardez les motifs et changez ensuite forme, couleurs et effets gratuitement.' }),
         src, alerte,
         el('label', { class: 'champ' }, [el('span', { text: 'Votre idée (facultatif)' }), idee]),
-        puces('Style du motif', LOGO_MOTIFS_IA, 'styleMotif'), go, msg);
+        puces('Style du motif', LOGO_MOTIFS_IA, 'styleMotif'), go, ...(CF ? [quotaIA('picto')] : []), msg);
       return p;
     }
 
@@ -1911,7 +2063,7 @@
         el('label', { class: 'champ' }, [el('span', { text: '3. Nombre de pancartes' }), nb]),
         el('label', { class: 'champ' }, [el('span', { text: 'Ton' }), ton])
       ]),
-      go, msg, zoneRelecture);
+      go, ...(CF ? [quotaIA('texte')] : []), msg, zoneRelecture);
     return boite;
   }
 

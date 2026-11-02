@@ -19,8 +19,19 @@
 
 const DOMAINE = 'qrbc.app';
 const JOURS_ESSAI = 14;
-const IA_PAR_JOUR = 30;                       // appels IA max par client et par jour
+const IA_PAR_JOUR = 30;                       // garde-fou anti-abus, par client et par jour
 const MODELES_IA = ['claude-sonnet-5-5'];
+
+/* ---------- Offre et IA ----------
+   gratuit : illimité (comptes offerts, démos)
+   essai   : 2 textes + 2 pictos pour toute la durée de l'essai
+   payant  : 10 textes + 5 pictos par année d'abonnement, puis crédit prépayé */
+const PRIX_ANNUEL = 1800;                       // centimes HT
+const RECHARGE_MIN = 500;                       // centimes
+const QUOTAS_IA = { essai: { texte: 2, picto: 2 }, payant: { texte: 10, picto: 5 } };
+const PRIX_IA = { texte: 40, picto: 70 };       // centimes, débités du crédit au-delà du quota
+// Le type d'appel est décidé par le serveur d'après l'outil demandé, jamais par le client
+const OUTILS_IA = { proposer_articles: 'texte', proposer_motifs: 'picto' };
 const ITERATIONS = 100000;                    // maximum accepté par PBKDF2 dans les Workers
 const RESERVES = new Set(['www', 'api', 'admin', 'app', 'mail', 'smtp', 'gestion', 'static', 'cdn', 'qrbc',
   'support', 'aide', 'help', 'blog', 'docs', 'status', 'billing', 'paiement', 'compte', 'login', 'inscription',
@@ -46,14 +57,14 @@ export default {
       return texte('qrbc-router OK');
     } catch (e) {
       console.error(e);
-      if (e instanceof ErreurAPI) return json({ erreur: e.message }, e.status);
+      if (e instanceof ErreurAPI) return json({ erreur: e.message, code: e.code }, e.status);
       return json({ erreur: 'Erreur interne' }, 500);
     }
   }
 };
 
 class ErreurAPI extends Error {
-  constructor(status, message) { super(message); this.status = status; }
+  constructor(status, message, code) { super(message); this.status = status; this.code = code; }
 }
 
 /* ===================== Domaine principal ===================== */
@@ -203,26 +214,53 @@ async function apiClient(request, env, slug, route) {
   }
 
   if (route === 'ia' && m === 'POST') {
-    if (!actif(compte)) throw new ErreurAPI(402, 'Abonnement inactif : la rédaction IA est désactivée.');
+    if (!actif(compte)) throw new ErreurAPI(402, compte.plan === 'essai'
+      ? 'Votre essai est terminé : abonnez-vous pour continuer à utiliser l’IA.'
+      : 'Abonnement inactif : l’IA est désactivée.', compte.plan === 'essai' ? 'essai_termine' : 'abonnement_inactif');
     if (!env.ANTHROPIC_KEY) throw new ErreurAPI(503, 'La rédaction IA n’est pas encore activée sur le serveur.');
-    const jour = new Date().toISOString().slice(0, 10);
-    await limiter(env, 'ia:' + slug + ':' + jour, IA_PAR_JOUR, 86400 * 2, 'Limite quotidienne de l’IA atteinte. Réessayez demain.');
     const d = await corpsJSON(request);
     if (!MODELES_IA.includes(d.model)) throw new ErreurAPI(400, 'Modèle non autorisé.');
+    const outils = Array.isArray(d.tools) ? d.tools : [];
+    const type = outils.length === 1 ? OUTILS_IA[outils[0] && outils[0].name] : null;
+    if (!type) throw new ErreurAPI(400, 'Demande IA non reconnue.');
+    const mode = modeFacturation(compte, type);          // lève 402 si rien n'est disponible
+    const jour = new Date().toISOString().slice(0, 10);
+    await limiter(env, 'ia:' + slug + ':' + jour, IA_PAR_JOUR, 86400 * 2, 'Limite quotidienne de l’IA atteinte. Réessayez demain.');
     const corps = {
       model: d.model,
-      max_tokens: Math.min(Number(d.max_tokens) || 1000, 8000),
-      system: d.system, tools: d.tools, tool_choice: d.tool_choice, messages: d.messages
+      max_tokens: Math.min(Number(d.max_tokens) || 1000, type === 'picto' ? 8000 : 4000),
+      system: d.system, tools: outils, tool_choice: d.tool_choice, messages: d.messages
     };
-    const r = await fetch('https://api.anthropic.com/v1/messages', {
+    const r = await fetch(env.ANTHROPIC_URL || 'https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-api-key': env.ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify(corps)
     });
     const txt = await r.text();
+    const h = { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' };
+    if (r.ok) {
+      // On ne compte qu'une réponse réussie ; on relit le compte pour ne pas écraser une écriture concurrente
+      const frais = (await lireCompte(env, slug)) || compte;
+      facturer(frais, type, mode);
+      await ecrireCompte(env, frais);
+      h['x-qrbc-compte'] = encodeURIComponent(JSON.stringify(resumeCompte(frais)));
+    }
     // Une clé refusée côté serveur ne doit pas ressembler à une session expirée pour le client
     const status = r.status === 401 || r.status === 403 ? 502 : r.status;
-    return new Response(txt, { status, headers: { 'content-type': 'application/json; charset=utf-8' } });
+    return new Response(txt, { status, headers: h });
+  }
+
+  if (route === 'demande' && m === 'POST') {
+    const dd = await corpsJSON(request);
+    const genre = dd.genre === 'recharge' ? 'recharge' : 'abonnement';
+    const montant = genre === 'recharge' ? Math.round(Number(dd.montant) * 100) : prixRenouvellement(compte).aPayer;
+    if (genre === 'recharge') {
+      if (compte.plan !== 'payant' || !actif(compte)) throw new ErreurAPI(400, 'La recharge est réservée aux abonnés.');
+      if (!(montant >= RECHARGE_MIN) || montant > 50000) throw new ErreurAPI(400, 'Montant de recharge : 5 € minimum.');
+    }
+    compte.demande = { genre, montant, le: new Date().toISOString() };
+    await ecrireCompte(env, compte);
+    return json({ ok: true, compte: resumeCompte(compte) });
   }
 
   throw new ErreurAPI(404, 'Action inconnue.');
@@ -303,7 +341,7 @@ async function gestion(request, env, action) {
     let curseur;
     do {
       const l = await env.CLIENTS.list({ prefix: 'compte:', cursor: curseur });
-      for (const k of l.keys) { const c = await lireCompte(env, k.name.slice(7)); if (c) comptes.push(resumeCompte(c)); }
+      for (const k of l.keys) { const c = await lireCompte(env, k.name.slice(7)); if (c) comptes.push(Object.assign(resumeCompte(c), { paiements: c.paiements || [] })); }
       curseur = l.list_complete ? null : l.cursor;
     } while (curseur);
     comptes.sort((a, b) => String(b.cree).localeCompare(String(a.cree)));
@@ -335,6 +373,41 @@ async function gestion(request, env, action) {
     if (d.mdp) { verifierForceMdp(d.mdp); Object.assign(compte, await hacherMdp(String(d.mdp)), { version: (compte.version || 1) + 1 }); }
     await ecrireCompte(env, compte);
     return json({ ok: true, compte: resumeCompte(compte) });
+  }
+
+  /* Paiement reçu (manuel en attendant Stripe) : abonnement ou recharge */
+  if (action === 'abonner') {
+    const compte = await lireCompte(env, String(d.nom || ''));
+    if (!compte) throw new ErreurAPI(404, 'Compte introuvable.');
+    const r = prixRenouvellement(compte);
+    const base = compte.plan === 'payant' && actif(compte) && compte.payeJusqua ? Date.parse(compte.payeJusqua) : Date.now();
+    const fin = new Date(base); fin.setFullYear(fin.getFullYear() + 1);
+    compte.credit = (compte.credit || 0) - r.deduction;
+    compte.plan = 'payant';
+    compte.payeJusqua = fin.toISOString();
+    compte.ia = { texte: 0, picto: 0, depuis: new Date().toISOString() };   // nouvelle année : quotas remis à zéro
+    if (compte.demande && compte.demande.genre === 'abonnement') compte.demande = null;
+    journaliser(compte, 'abonnement', r.aPayer, r.deduction ? 'crédit déduit ' + (r.deduction / 100).toFixed(2) + ' €' : '');
+    await ecrireCompte(env, compte);
+    return json({ ok: true, encaisse: r.aPayer, deduction: r.deduction, compte: resumeCompte(compte) });
+  }
+  if (action === 'crediter') {
+    const compte = await lireCompte(env, String(d.nom || ''));
+    if (!compte) throw new ErreurAPI(404, 'Compte introuvable.');
+    const montant = Math.round(Number(d.euros) * 100);
+    if (!Number.isFinite(montant) || montant === 0 || Math.abs(montant) > 100000) throw new ErreurAPI(400, 'Montant invalide.');
+    compte.credit = Math.max(0, (compte.credit || 0) + montant);
+    if (montant > 0 && compte.demande && compte.demande.genre === 'recharge') compte.demande = null;
+    journaliser(compte, montant > 0 ? 'recharge' : 'correction', montant, '');
+    await ecrireCompte(env, compte);
+    return json({ ok: true, compte: resumeCompte(compte) });
+  }
+  if (action === 'annuler-demande') {
+    const compte = await lireCompte(env, String(d.nom || ''));
+    if (!compte) throw new ErreurAPI(404, 'Compte introuvable.');
+    compte.demande = null;
+    await ecrireCompte(env, compte);
+    return json({ ok: true });
   }
 
   if (action === 'importer') {
@@ -396,6 +469,10 @@ async function lireCompte(env, slug) {
   const t = await env.CLIENTS.get('compte:' + slug);
   return t ? JSON.parse(t) : null;
 }
+/* Historique des encaissements (50 derniers), utile pour la comptabilité */
+function journaliser(c, genre, montant, note) {
+  c.paiements = (c.paiements || []).concat([{ le: new Date().toISOString(), genre, montant, note }]).slice(-50);
+}
 async function ecrireCompte(env, c) { await env.CLIENTS.put('compte:' + c.slug, JSON.stringify(c)); }
 
 function actif(c) {
@@ -406,7 +483,45 @@ function actif(c) {
   return false;
 }
 function resumeCompte(c) {
-  return { slug: c.slug, email: c.email, plan: c.plan, actif: actif(c), finEssai: c.finEssai, payeJusqua: c.payeJusqua, cree: c.cree, note: c.note || '' };
+  const q = QUOTAS_IA[c.plan];
+  const ia = c.ia || {};
+  return {
+    slug: c.slug, email: c.email, plan: c.plan, actif: actif(c), finEssai: c.finEssai, payeJusqua: c.payeJusqua, cree: c.cree, note: c.note || '',
+    ia: {
+      illimite: c.plan === 'gratuit',
+      texte: { utilises: ia.texte || 0, inclus: q ? q.texte : null },
+      picto: { utilises: ia.picto || 0, inclus: q ? q.picto : null },
+      credit: c.credit || 0,                       // centimes
+      prix: PRIX_IA
+    },
+    offre: { prixAnnuel: PRIX_ANNUEL, rechargeMin: RECHARGE_MIN, quotasPayant: QUOTAS_IA.payant },
+    renouvellement: prixRenouvellement(c),
+    demande: c.demande || null
+  };
+}
+
+/* Inclus dans le quota, débité du crédit, ou refus avec l'offre adaptée */
+function modeFacturation(c, type) {
+  if (c.plan === 'gratuit') return 'illimite';
+  const q = QUOTAS_IA[c.plan];
+  const utilises = (c.ia && c.ia[type]) || 0;
+  if (q && utilises < q[type]) return 'inclus';
+  const nom = type === 'texte' ? 'textes IA' : 'pictogrammes IA';
+  if (c.plan === 'essai') throw new ErreurAPI(402,
+    'Vos ' + q[type] + ' ' + nom + ' d’essai sont utilisés. Abonnez-vous dès maintenant pour en obtenir ' + QUOTAS_IA.payant[type] + ' par an.', 'essai_epuise');
+  if (c.plan === 'payant' && (c.credit || 0) >= PRIX_IA[type]) return 'credit';
+  throw new ErreurAPI(402, 'Vos ' + q[type] + ' ' + nom + ' de l’année sont utilisés. Rechargez votre crédit (5 € minimum) pour continuer.', 'credit_insuffisant');
+}
+function facturer(c, type, mode) {
+  if (mode === 'illimite' || mode === 'inclus') { c.ia = c.ia || {}; c.ia[type] = (c.ia[type] || 0) + 1; }
+  if (mode === 'illimite') return;
+  if (mode === 'credit') c.credit = Math.max(0, (c.credit || 0) - PRIX_IA[type]);
+  c.ia.depense = (c.ia.depense || 0) + (mode === 'credit' ? PRIX_IA[type] : 0);
+}
+/* Le crédit non consommé est déduit du paiement annuel suivant */
+function prixRenouvellement(c) {
+  const deduction = Math.min(c.credit || 0, PRIX_ANNUEL);
+  return { prix: PRIX_ANNUEL, deduction, aPayer: PRIX_ANNUEL - deduction };
 }
 
 function verifierForceMdp(m) {

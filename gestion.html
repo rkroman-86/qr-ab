@@ -37,6 +37,8 @@
   .actions a{border:1px solid var(--ligne);border-radius:9px;color:inherit;text-decoration:none;display:inline-flex;align-items:center}
   .stats{display:flex;gap:16px;flex-wrap:wrap;color:var(--doux);font-size:.9rem;margin-bottom:10px}
   .stats b{color:var(--txt)}
+  .demande{font-size:.88rem;font-weight:600;color:var(--alerte);margin:0 0 8px}
+  details.infos summary{cursor:pointer}
 </style>
 </head>
 <body>
@@ -90,6 +92,7 @@
     return j;
   }
   const date = d => d ? new Date(d).toLocaleDateString('fr-FR') : '—';
+  const euros = c => ((c || 0) / 100).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
   const jours = d => Math.ceil((Date.parse(d) - Date.now()) / 86400000);
 
   async function charger() {
@@ -97,7 +100,10 @@
     $('#f-connexion').classList.add('cache'); $('#zone').classList.remove('cache');
     const n = p => comptes.filter(c => c.plan === p).length;
     $('#stats').innerHTML = '<span>Total <b>' + comptes.length + '</b></span><span>Gratuits <b>' + n('gratuit') + '</b></span><span>Essais <b>' + n('essai') +
-      '</b></span><span>Payants <b>' + n('payant') + '</b></span><span>Inactifs <b>' + comptes.filter(c => !c.actif).length + '</b></span>';
+      '</b></span><span>Payants <b>' + n('payant') + '</b></span><span>Inactifs <b>' + comptes.filter(c => !c.actif).length + '</b></span>' +
+      '<span>Demandes de paiement <b>' + comptes.filter(c => c.demande).length + '</b></span>';
+    // les demandes de paiement en attente d'abord
+    comptes.sort((a, b) => (b.demande ? 1 : 0) - (a.demande ? 1 : 0));
     const liste = $('#liste'); liste.innerHTML = '';
     if (!comptes.length) liste.textContent = 'Aucun compte pour l’instant.';
     comptes.forEach(c => liste.appendChild(ligne(c)));
@@ -113,6 +119,22 @@
     d.querySelector('.slug').textContent = c.slug + '.qrbc.app';
     d.querySelector('.badge').textContent = c.actif ? etat : etat + ' · inactif';
     d.querySelector('.infos').textContent = [c.email, 'créé le ' + date(c.cree), c.note].filter(Boolean).join(' · ');
+    const ia = c.ia || {};
+    const usage = ia.illimite ? 'IA illimitée' :
+      'IA : textes ' + ia.texte.utilises + '/' + (ia.texte.inclus ?? '–') + ' · pictos ' + ia.picto.utilises + '/' + (ia.picto.inclus ?? '–') + ' · crédit ' + euros(ia.credit);
+    const infos2 = document.createElement('div'); infos2.className = 'infos'; infos2.textContent = usage;
+    d.insertBefore(infos2, d.querySelector('.actions'));
+    if (c.demande) {
+      const dm = document.createElement('div'); dm.className = 'demande';
+      dm.textContent = '⏳ Demande ' + (c.demande.genre === 'recharge' ? 'de recharge : ' : 'd’abonnement : ') + euros(c.demande.montant) + ' HT — le ' + date(c.demande.le);
+      d.insertBefore(dm, d.querySelector('.actions'));
+    }
+    if (c.paiements && c.paiements.length) {
+      const pz = document.createElement('details'); pz.className = 'infos';
+      pz.innerHTML = '<summary>Encaissements (' + c.paiements.length + ')</summary>';
+      c.paiements.slice().reverse().forEach(x => { const l = document.createElement('div'); l.textContent = date(x.le) + ' · ' + x.genre + ' · ' + euros(x.montant) + (x.note ? ' · ' + x.note : ''); pz.appendChild(l); });
+      d.insertBefore(pz, d.querySelector('.actions'));
+    }
     const a = d.querySelector('.actions');
     const lien = (t, h) => { const x = document.createElement('a'); x.textContent = t; x.href = h; x.target = '_blank'; x.rel = 'noopener'; a.appendChild(x); };
     const bouton = (t, f, cls) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = t; if (cls) b.className = cls; b.onclick = () => action(f); a.appendChild(b); };
@@ -120,11 +142,18 @@
     lien('Éditeur', '/app/' + c.slug + '/');
     if (c.plan !== 'gratuit') bouton('Passer en gratuit', () => api('modifier', { nom: c.slug, plan: 'gratuit' }));
     if (c.plan === 'essai') bouton('+14 j d’essai', () => api('modifier', { nom: c.slug, prolongerEssai: 14 }));
-    bouton('Payé 1 an', () => {
-      const base = Math.max(Date.now(), Date.parse(c.payeJusqua || 0) || 0);
-      const fin = new Date(base); fin.setFullYear(fin.getFullYear() + 1);
-      return api('modifier', { nom: c.slug, plan: 'payant', payeJusqua: fin.toISOString() });
+    if (c.plan !== 'gratuit') bouton((c.plan === 'payant' ? 'Renouveler' : 'Abonner') + ' 1 an (' + euros(c.renouvellement.aPayer) + ')', () => {
+      const r = c.renouvellement;
+      const txt = 'Paiement reçu pour ' + c.slug + ' ?\n\nAbonnement : ' + euros(r.prix) + ' HT' +
+        (r.deduction ? '\nCrédit non consommé déduit : −' + euros(r.deduction) : '') + '\nÀ encaisser : ' + euros(r.aPayer) + ' HT\n\nLes quotas IA repartent à zéro (10 textes, 5 pictos).';
+      return confirm(txt) ? api('abonner', { nom: c.slug }) : null;
     });
+    if (c.plan === 'payant') bouton('Créditer…', () => {
+      const proposition = c.demande && c.demande.genre === 'recharge' ? (c.demande.montant / 100).toFixed(2) : '5';
+      const v = prompt('Montant reçu à créditer pour ' + c.slug + ' (€, 5 minimum ; négatif pour corriger) :', proposition);
+      return v ? api('crediter', { nom: c.slug, euros: Number(String(v).replace(',', '.')) }) : null;
+    });
+    if (c.demande) bouton('Ignorer la demande', () => api('annuler-demande', { nom: c.slug }));
     if (c.plan !== 'suspendu') bouton('Suspendre', () => api('modifier', { nom: c.slug, plan: 'suspendu' }));
     bouton('Nouveau mot de passe', () => {
       const m = prompt('Nouveau mot de passe pour ' + c.slug + ' (10 caractères minimum) :');
