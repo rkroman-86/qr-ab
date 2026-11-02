@@ -470,7 +470,13 @@ async function gestion(request, env, action) {
     let curseur;
     do {
       const l = await env.CLIENTS.list({ prefix: 'compte:', cursor: curseur });
-      for (const k of l.keys) { const c = await lireCompte(env, k.name.slice(7)); if (c) comptes.push(Object.assign(resumeCompte(c), { paiements: c.paiements || [] })); }
+      for (const k of l.keys) {
+        const c = await lireCompte(env, k.name.slice(7));
+        if (!c) continue;
+        let titre = '';
+        try { titre = (JSON.parse(await env.CLIENTS.get('site:' + c.slug + ':config.json') || '{}').titre) || ''; } catch (e) {}
+        comptes.push(Object.assign(resumeCompte(c), { paiements: c.paiements || [], titre, depenseIA: (c.ia && c.ia.depense) || 0 }));
+      }
       curseur = l.list_complete ? null : l.cursor;
     } while (curseur);
     comptes.sort((a, b) => String(b.cree).localeCompare(String(a.cree)));
@@ -499,6 +505,19 @@ async function gestion(request, env, action) {
     if (d.prolongerEssai) compte.finEssai = new Date(Math.max(Date.now(), Date.parse(compte.finEssai || 0) || 0) + Number(d.prolongerEssai) * 86400000).toISOString();
     if (d.payeJusqua !== undefined) compte.payeJusqua = d.payeJusqua || null;
     if (d.note !== undefined) compte.note = String(d.note);
+    // IA gratuites restantes : on repart de zéro utilisation et on ajuste l'écart avec le quota de la formule
+    for (const type of ['texte', 'picto']) {
+      const v = d[type === 'texte' ? 'restantTexte' : 'restantPicto'];
+      if (v === undefined) continue;
+      const n = Number(v);
+      if (!Number.isInteger(n) || n < 0 || n > 1000) throw new ErreurAPI(400, 'IA restantes : nombre entier entre 0 et 1 000.');
+      const q = QUOTAS_IA[compte.plan];
+      if (!q) throw new ErreurAPI(400, 'Ce compte n’a pas de quota (offert ou suspendu).');
+      compte.ia = compte.ia || {};
+      compte.ia.bonus = compte.ia.bonus || {};
+      compte.ia[type] = 0;
+      compte.ia.bonus[type] = n - q[type];
+    }
     if (d.email !== undefined) {
       const nouvel = String(d.email).trim().toLowerCase();
       if (nouvel && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nouvel)) throw new ErreurAPI(400, 'Adresse e-mail invalide.');
@@ -923,8 +942,8 @@ function resumeCompte(c) {
     slug: c.slug, email: c.email, plan: c.plan, actif: actif(c), finEssai: c.finEssai, payeJusqua: c.payeJusqua, cree: c.cree, note: c.note || '',
     ia: {
       illimite: c.plan === 'gratuit',
-      texte: { utilises: ia.texte || 0, inclus: q ? q.texte : null },
-      picto: { utilises: ia.picto || 0, inclus: q ? q.picto : null },
+      texte: { utilises: ia.texte || 0, inclus: q ? Math.max(0, q.texte + ((ia.bonus && ia.bonus.texte) || 0)) : null },
+      picto: { utilises: ia.picto || 0, inclus: q ? Math.max(0, q.picto + ((ia.bonus && ia.bonus.picto) || 0)) : null },
       credit: c.credit || 0,                       // centimes
       prix: PRIX_IA
     },
@@ -939,7 +958,8 @@ function modeFacturation(c, type) {
   if (c.plan === 'gratuit') return 'illimite';
   const q = QUOTAS_IA[c.plan];
   const utilises = (c.ia && c.ia[type]) || 0;
-  if (q && utilises < q[type]) return 'inclus';
+  const bonus = (c.ia && c.ia.bonus && c.ia.bonus[type]) || 0;
+  if (q && utilises < q[type] + bonus) return 'inclus';
   if (c.plan === 'payant' && (c.credit || 0) >= PRIX_IA[type]) return 'credit';
   const n = q ? q[type] : 0, np = QUOTAS_IA.payant[type];
   const nom = k => type === 'texte' ? (k > 1 ? 'rédactions IA' : 'rédaction IA') : (k > 1 ? 'créations de motifs IA' : 'création de motifs IA');
