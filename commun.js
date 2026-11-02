@@ -549,6 +549,8 @@ function rendrePage(cfgBrut, racine, opts) {
 /* Dossier du site, quelle que soit la façon d'ouvrir l'éditeur :
    …/qr-ab/admin.html, …/qr-ab/admin, …/qr-ab/admin/ → …/qr-ab/ */
 function dossierSite() {
+  const app = pageApp();
+  if (app) return 'https://' + app + '.' + location.hostname.replace(/^www\./, '') + '/';
   let p = location.pathname.replace(/\/(admin|setup|index|accueil)(\.html)?\/?$/i, '/');
   if (!p.endsWith('/')) p = p.replace(/[^/]*$/, '');
   return location.origin + p;
@@ -658,13 +660,20 @@ function clientGitHub(jeton, depot) {
 /* =========================================================
    Mode Cloudflare (nomclient.qrbc.app) : le Worker stocke tout
    ========================================================= */
+/* Dans l'appli installée, l'éditeur est servi depuis qrbc.app/app/<page>/ */
+function pageApp() {
+  const m = location.pathname.match(/^\/app\/([a-z0-9-]{3,30})\//);
+  return m ? m[1] : null;
+}
+function baseAPI() { const a = pageApp(); return a ? '/app/' + a + '/api/' : '/api/'; }
+
 function modeCloudflare() { return !location.hostname.endsWith('.github.io') && location.protocol !== 'file:'; }
 
 async function appelAPI(chemin, jeton, init) {
   init = init || {};
   const entetes = { 'content-type': 'application/json' };
   if (jeton) entetes.authorization = 'Bearer ' + jeton;
-  const r = await fetch('/api/' + chemin, Object.assign({ cache: 'no-store' }, init, { headers: entetes }));
+  const r = await fetch(baseAPI() + chemin, Object.assign({ cache: 'no-store' }, init, { headers: entetes }));
   if (!r.ok) {
     let msg = r.status + ' ' + r.statusText;
     try { const j = await r.json(); if (j.erreur) msg = j.erreur; } catch (e) {}

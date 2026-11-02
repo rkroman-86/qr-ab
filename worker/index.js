@@ -26,6 +26,8 @@ const RESERVES = new Set(['www', 'api', 'admin', 'app', 'mail', 'smtp', 'gestion
   'support', 'aide', 'help', 'blog', 'docs', 'status', 'billing', 'paiement', 'compte', 'login', 'inscription',
   'demo', 'dev', 'staging', 'test', 'ns1', 'ns2', 'ftp', 'webmail', 'contact']);
 const FICHIERS_STATIQUES = new Set(['/admin.html', '/commun.js', '/i18n.js', '/qrcode.js']);
+// Appli installable (PWA) servie depuis qrbc.app
+const FICHIERS_PWA = new Set(['/manifest.webmanifest', '/sw.js', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/apple-touch-icon.png', '/favicon.png']);
 const FICHIERS_SITE = new Set(['config.json', 'index.html', 'accueil.html', 'sitemap.xml']);
 const TAILLE_MAX = { 'config.json': 512 * 1024, html: 768 * 1024, image: 3 * 1024 * 1024 };
 
@@ -67,7 +69,26 @@ async function racine(request, env, url) {
   }
   if (p === '/' || p === '/index.html') return statique(env, request, '/qrbc.html');
   if (p === '/gestion' || p === '/gestion.html') return statique(env, request, '/gestion.html', true);
-  if (FICHIERS_STATIQUES.has(p)) return statique(env, request, p);
+  if (p === '/app' || p === '/app/') return statique(env, request, '/app.html', true);
+  if (p === '/favicon.ico') return statique(env, request, '/favicon.png');
+  if (p === '/sw.js') {
+    // le service worker doit toujours être relu, sinon les mises à jour de l'appli tardent
+    const r = await statique(env, request, '/sw.js');
+    const h = new Headers(r.headers); h.set('cache-control', 'no-cache');
+    return new Response(r.body, { status: r.status, headers: h });
+  }
+  if (FICHIERS_PWA.has(p) || FICHIERS_STATIQUES.has(p)) return statique(env, request, p);
+
+  // Éditeur dans l'appli : /app/<page>/…  (même origine que l'appli installée)
+  const m = p.match(/^\/app\/([a-z0-9-]{3,30})(\/.*)?$/);
+  if (m) {
+    const slug = m[1], reste = m[2] || '';
+    if (!reste) return Response.redirect(url.origin + '/app/' + slug + '/', 301);
+    if (reste.startsWith('/api/')) return apiClient(request, env, slug, reste.slice(5));
+    if (reste === '/' || reste === '/admin.html') return statique(env, request, '/admin.html', true);
+    if (FICHIERS_STATIQUES.has(reste)) return statique(env, request, reste);
+    if (reste.startsWith('/images/')) return imageClient(env, slug, reste.slice('/images/'.length));
+  }
   return texte('Page introuvable', 404);
 }
 
@@ -89,16 +110,7 @@ async function siteClient(request, env, url, slug) {
     const c = await env.CLIENTS.get('site:' + slug + ':config.json');
     return new Response(c || '{}', { headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } });
   }
-  if (p.startsWith('/images/')) {
-    const nom = p.slice('/images/'.length);
-    if (!nomImageValide(nom)) return texte('Introuvable', 404);
-    const { value, metadata } = await env.CLIENTS.getWithMetadata('img:' + slug + ':' + nom, { type: 'arrayBuffer' });
-    if (!value) return texte('Introuvable', 404);
-    return new Response(value, { headers: {
-      'content-type': (metadata && metadata.type) || 'application/octet-stream',
-      'cache-control': 'public, max-age=31536000, immutable'   // noms d'image horodatés : jamais réécrits
-    } });
-  }
+  if (p.startsWith('/images/')) return imageClient(env, slug, p.slice('/images/'.length));
   const pages = { '/': 'index.html', '/index.html': 'index.html', '/accueil.html': 'accueil.html', '/sitemap.xml': 'sitemap.xml' };
   if (pages[p]) {
     const nom = pages[p];
@@ -216,6 +228,16 @@ async function apiClient(request, env, slug, route) {
   throw new ErreurAPI(404, 'Action inconnue.');
 }
 
+async function imageClient(env, slug, nom) {
+  if (!nomImageValide(nom)) return texte('Introuvable', 404);
+  const { value, metadata } = await env.CLIENTS.getWithMetadata('img:' + slug + ':' + nom, { type: 'arrayBuffer' });
+  if (!value) return texte('Introuvable', 404);
+  return new Response(value, { headers: {
+    'content-type': (metadata && metadata.type) || 'application/octet-stream',
+    'cache-control': 'public, max-age=31536000, immutable'   // noms d'image horodatés : jamais réécrits
+  } });
+}
+
 function cleFichier(slug, chemin) {
   if (FICHIERS_SITE.has(chemin)) return 'site:' + slug + ':' + chemin;
   if (chemin.startsWith('images/') && nomImageValide(chemin.slice(7))) return 'img:' + slug + ':' + chemin.slice(7);
@@ -242,7 +264,7 @@ async function inscription(request, env) {
   verifierForceMdp(d.mdp);
   if (d.cgu !== true) throw new ErreurAPI(400, 'Merci d’accepter les conditions d’utilisation.');
   const compte = await creerCompte(env, { slug, email, mdp: String(d.mdp), plan: 'essai', titre: String(d.titre || '').slice(0, 80) });
-  return json({ ok: true, adresse: 'https://' + slug + '.' + DOMAINE + '/admin', compte: resumeCompte(compte) });
+  return json({ ok: true, adresse: 'https://' + slug + '.' + DOMAINE + '/', editeur: '/app/' + slug + '/', compte: resumeCompte(compte) });
 }
 
 async function creerCompte(env, o) {

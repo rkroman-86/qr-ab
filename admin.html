@@ -248,7 +248,8 @@
 (function(){
   'use strict';
   const $ = s => document.querySelector(s);
-  const CLE_STOCK = 'qp-jeton';
+  const APP = pageApp();          // ouvert dans l'appli qrbc (qrbc.app/app/<page>/)
+  const CLE_STOCK = 'qp-jeton' + (APP ? ':' + APP : '');
   const CF = modeCloudflare();   // nomclient.qrbc.app : tout passe par le Worker
   let jetonCF = null;
 
@@ -295,6 +296,7 @@
         const { jeton } = await r.json();
         secrets = { github: '', anthropic: 'serveur' };
         await demarrer(jeton);
+        memoriserPageApp();
         try {
           sessionStorage.setItem(CLE_STOCK, jeton);
           if ($('#rester').checked) localStorage.setItem(CLE_STOCK, jeton);
@@ -321,7 +323,7 @@
     if (modifie && !confirm(t('Des modifications ne sont pas enregistrées. Se déconnecter quand même ?'))) return;
     try { sessionStorage.removeItem(CLE_STOCK); localStorage.removeItem(CLE_STOCK); } catch (e) {}
     modifie = false;
-    location.reload();
+    if (APP) location.href = '/app?choisir'; else location.reload();
   });
 
   (async function auto() {
@@ -349,7 +351,29 @@
   }
   if (CF) {
     const sous = document.querySelector('#form-connexion p');
-    if (sous) sous.textContent = 'Page ' + location.hostname + ' — entrez votre mot de passe.';
+    if (sous) sous.textContent = 'Page ' + dossierSite().replace(/^https?:\/\//, '').replace(/\/$/, '') + ' — entrez votre mot de passe.';
+  }
+  if (APP) {
+    // Appli installable : manifeste, icônes, service worker, retour au choix de la page
+    const ajouter = (tag, attrs) => { const n = document.createElement(tag); for (const k in attrs) n.setAttribute(k, attrs[k]); document.head.appendChild(n); };
+    ajouter('link', { rel: 'manifest', href: '/manifest.webmanifest' });
+    ajouter('link', { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' });
+    ajouter('meta', { name: 'apple-mobile-web-app-capable', content: 'yes' });
+    ajouter('meta', { name: 'apple-mobile-web-app-title', content: 'qrbc' });
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+    const form = $('#form-connexion');
+    if (form) {
+      const autre = el('a', { href: '/app?choisir', text: '← Autre page', style: 'display:block;margin-top:14px;text-align:center;color:var(--doux);font-size:.9rem' });
+      form.appendChild(autre);
+    }
+  }
+  function memoriserPageApp() {
+    if (!APP) return;
+    try {
+      const l = (JSON.parse(localStorage.getItem('qrbc-pages')) || []).filter(x => x !== APP);
+      l.unshift(APP);
+      localStorage.setItem('qrbc-pages', JSON.stringify(l.slice(0, 10)));
+    } catch (e) {}
   }
 
   /* ---------------- Onglets mobile ---------------- */
@@ -1283,7 +1307,7 @@
       headers: { 'content-type': 'application/json', 'x-api-key': secrets.anthropic, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
       body: JSON.stringify(corps)
     });
-    const r = await fetch('/api/ia', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + jetonCF }, body: JSON.stringify(corps) });
+    const r = await fetch(baseAPI() + 'ia', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + jetonCF }, body: JSON.stringify(corps) });
     if (!r.ok) {
       let j = null;
       try { j = await r.clone().json(); } catch (e) {}

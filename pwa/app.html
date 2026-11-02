@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>qrbc</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#1b1a17">
+<link rel="icon" href="/favicon.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="qrbc">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style>
+  :root{--fond:#1b1a17;--panneau:#24221f;--ligne:#38352f;--txt:#f6f4ef;--doux:#a19c92;--accent:#d9572b;--err:#ff8a80}
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%}
+  body{font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--fond);color:var(--txt);
+    min-height:100dvh;display:flex;flex-direction:column;padding:max(24px,env(safe-area-inset-top)) 20px max(24px,env(safe-area-inset-bottom))}
+  .haut{display:flex;align-items:center;gap:12px;margin:8px 0 36px}
+  .haut img{width:44px;height:44px;border-radius:11px}
+  .haut b{font-size:1.35rem;letter-spacing:-.02em}
+  .haut span{color:var(--accent)}
+  main{width:100%;max-width:420px;margin:0 auto;flex:1}
+  h1{font-size:1.6rem;line-height:1.15;letter-spacing:-.02em;margin:0 0 8px}
+  p.sous{color:var(--doux);margin:0 0 24px}
+  label>span{display:block;font-size:.8rem;font-weight:600;color:var(--doux);margin-bottom:6px}
+  .adresse{display:flex;border:1px solid var(--ligne);border-radius:12px;background:var(--panneau);overflow:hidden}
+  .adresse:focus-within{border-color:var(--accent)}
+  .adresse input{flex:1;min-width:0;border:0;background:transparent;color:inherit;font:inherit;padding:14px;outline:none;min-height:52px}
+  .adresse em{font-style:normal;display:flex;align-items:center;padding:0 14px;color:var(--doux)}
+  button.prim{width:100%;margin-top:16px;padding:15px;border:0;border-radius:12px;background:var(--accent);color:#fff;font:inherit;font-weight:700;min-height:54px;cursor:pointer}
+  button.prim:disabled{opacity:.55}
+  .msg{min-height:1.3em;margin-top:10px;font-size:.92rem;color:var(--err)}
+  .pages{display:grid;gap:8px;margin:0 0 28px}
+  .pages h2{font-size:.8rem;font-weight:600;color:var(--doux);margin:0 0 2px;text-transform:uppercase;letter-spacing:.06em}
+  .page{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px;border:1px solid var(--ligne);border-radius:12px;background:var(--panneau);color:inherit;text-decoration:none}
+  .page small{color:var(--doux)}
+  .page .x{border:0;background:none;color:var(--doux);font-size:1.2rem;padding:4px 8px;cursor:pointer}
+  .bas{text-align:center;color:var(--doux);font-size:.92rem;margin-top:32px}
+  .bas a{color:var(--txt)}
+</style>
+</head>
+<body>
+<div class="haut"><img src="/icon-192.png" alt=""><b>qrbc<span>.</span></b></div>
+<main>
+  <div class="pages" id="pages" hidden><h2>Mes pages</h2></div>
+
+  <h1 id="titre">Ouvrir ma page</h1>
+  <p class="sous">Entrez l’adresse de votre page pour la modifier.</p>
+  <form id="f">
+    <label><span>Adresse de la page</span>
+      <div class="adresse"><input id="nom" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="30" placeholder="votre-nom" required><em>.qrbc.app</em></div>
+    </label>
+    <button class="prim" id="btn">Continuer</button>
+    <div class="msg" id="msg"></div>
+  </form>
+
+  <p class="bas">Pas encore de page ? <a href="/#inscription">Essai gratuit de 14 jours</a></p>
+</main>
+<script>
+(function () {
+  const $ = s => document.querySelector(s);
+  const lire = () => { try { return JSON.parse(localStorage.getItem('qrbc-pages')) || []; } catch (e) { return []; } };
+  const ecrire = l => { try { localStorage.setItem('qrbc-pages', JSON.stringify(l)); } catch (e) {} };
+  const ouvrir = slug => location.href = '/app/' + slug + '/';
+
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+
+  // Une seule page connue : on l'ouvre directement (sauf si l'utilisateur veut changer de page)
+  const pages = lire();
+  const choisir = new URLSearchParams(location.search).has('choisir');
+  if (pages.length === 1 && !choisir) { location.replace('/app/' + pages[0] + '/'); return; }
+
+  function afficherPages() {
+    const box = $('#pages');
+    box.querySelectorAll('.page').forEach(n => n.remove());
+    const l = lire();
+    box.hidden = !l.length;
+    $('#titre').textContent = l.length ? 'Ouvrir une autre page' : 'Ouvrir ma page';
+    l.forEach(slug => {
+      const a = document.createElement('a');
+      a.className = 'page'; a.href = '/app/' + slug + '/';
+      a.innerHTML = '<span><b></b><br><small></small></span><button class="x" type="button" aria-label="Retirer de la liste">×</button>';
+      a.querySelector('b').textContent = slug;
+      a.querySelector('small').textContent = slug + '.qrbc.app';
+      a.querySelector('.x').onclick = e => { e.preventDefault(); ecrire(lire().filter(s => s !== slug)); afficherPages(); };
+      box.appendChild(a);
+    });
+  }
+  afficherPages();
+
+  const nom = $('#nom');
+  nom.addEventListener('input', () => { const v = nom.value.toLowerCase().replace(/[^a-z0-9-]/g, ''); if (v !== nom.value) nom.value = v; });
+
+  $('#f').addEventListener('submit', async e => {
+    e.preventDefault();
+    const slug = nom.value.trim(), msg = $('#msg'), btn = $('#btn');
+    msg.textContent = '';
+    if (slug.length < 3) { msg.textContent = 'Adresse trop courte.'; return; }
+    btn.disabled = true;
+    try {
+      const r = await fetch('/api/disponible?nom=' + encodeURIComponent(slug));
+      const j = await r.json();
+      if (j.disponible || j.raison) { msg.textContent = 'Aucune page à cette adresse.'; btn.disabled = false; return; }
+      ouvrir(slug);
+    } catch (err) { msg.textContent = 'Connexion impossible. Vérifiez votre réseau.'; btn.disabled = false; }
+  });
+})();
+</script>
+</body>
+</html>

@@ -117,7 +117,7 @@
     const lien = (t, h) => { const x = document.createElement('a'); x.textContent = t; x.href = h; x.target = '_blank'; x.rel = 'noopener'; a.appendChild(x); };
     const bouton = (t, f, cls) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = t; if (cls) b.className = cls; b.onclick = () => action(f); a.appendChild(b); };
     lien('Voir la page', site);
-    lien('Éditeur', site + 'admin');
+    lien('Éditeur', '/app/' + c.slug + '/');
     if (c.plan !== 'gratuit') bouton('Passer en gratuit', () => api('modifier', { nom: c.slug, plan: 'gratuit' }));
     if (c.plan === 'essai') bouton('+14 j d’essai', () => api('modifier', { nom: c.slug, prolongerEssai: 14 }));
     bouton('Payé 1 an', () => {

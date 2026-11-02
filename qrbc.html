@@ -6,6 +6,12 @@
 <title>qrbc — votre page QR et vos cartes de visite</title>
 <meta name="description" content="Créez en quelques minutes une page mobile pour votre activité, son QR code et des cartes de visite prêtes à imprimer. Essai gratuit de 14 jours.">
 <link rel="canonical" href="https://qrbc.app/">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#1b1a17">
+<link rel="icon" href="/favicon.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="qrbc">
 <style>
   :root{--bg:#f6f4ef;--panneau:#fff;--ligne:#e3dfd6;--txt:#1b1a17;--doux:#6a665d;--prim:#1b1a17;--prim-txt:#f6f4ef;--accent:#d9572b;--ok:#1a7f37;--err:#cf222e}
   @media (prefers-color-scheme: dark){:root{--bg:#121110;--panneau:#1c1b19;--ligne:#2e2c29;--txt:#f1eee8;--doux:#a19c92;--prim:#f1eee8;--prim-txt:#121110;--accent:#ef7a4f}}
@@ -49,13 +55,25 @@
   .bravo a{display:inline-block;margin-top:10px;padding:13px 20px;border-radius:12px;background:var(--prim);color:var(--prim-txt);text-decoration:none;font-weight:700}
   .bravo code{background:var(--bg);padding:2px 7px;border-radius:6px}
   footer{margin-top:56px;color:var(--doux);font-size:.85rem}
+  .hd-actions{display:flex;align-items:center;gap:14px}
+  .installer{width:auto;min-height:0;padding:8px 14px;border-radius:99px;font-size:.88rem;background:var(--accent);color:#fff}
+  .appli{display:flex;gap:14px;align-items:center;margin-top:30px;padding:14px;border:1px solid var(--ligne);border-radius:14px;background:var(--panneau)}
+  .appli img{width:48px;height:48px;border-radius:12px;flex:none}
+  .appli p{margin:0;font-size:.92rem;color:var(--doux)}
+  .appli b{color:var(--txt)}
+  .ios{position:fixed;left:12px;right:12px;bottom:max(12px,env(safe-area-inset-bottom));padding:16px 16px 14px;border-radius:16px;background:var(--prim);color:var(--prim-txt);
+    box-shadow:0 10px 40px rgba(0,0,0,.35);font-size:.95rem;z-index:10}
+  .ios button{width:auto;min-height:0;padding:6px 12px;margin-top:10px;background:transparent;border:1px solid currentColor;color:inherit;font-size:.85rem}
 </style>
 </head>
 <body>
 <div class="page">
   <header>
     <div class="marque">qrbc<span>.</span></div>
-    <a href="#inscription">Commencer</a>
+    <div class="hd-actions">
+      <a href="/app">Se connecter</a>
+      <button type="button" class="installer" id="installer" hidden>Installer l’appli</button>
+    </div>
   </header>
 
   <div class="grille">
@@ -67,6 +85,10 @@
         <li><div class="num">2</div><div><b>Personnalisez votre page</b><span>Boutons, couleurs, logo, photos, textes rédigés avec l’aide de l’IA</span></div></li>
         <li><div class="num">3</div><div><b>Imprimez vos cartes</b><span>QR code et modèles de cartes de visite prêts à l’impression</span></div></li>
       </ul>
+      <div class="appli">
+        <img src="/icon-192.png" alt="">
+        <p><b>Une appli sur votre écran d’accueil.</b> Modifiez votre page et imprimez vos cartes depuis votre téléphone, sans passer par un navigateur.</p>
+      </div>
     </section>
 
     <form id="inscription" novalidate>
@@ -87,7 +109,8 @@
       <div id="etape-ok" class="bravo" hidden>
         <h2>Votre page est prête 🎉</h2>
         <p class="sous">Adresse : <code id="adr"></code><br>Connectez-vous avec votre mot de passe pour la personnaliser.</p>
-        <a id="lien-admin" href="#">Ouvrir l’éditeur</a>
+        <a id="lien-admin" href="#">Personnaliser ma page</a>
+        <p class="sous" id="conseil-install" style="margin-top:16px" hidden>Astuce : installez l’appli qrbc pour retrouver votre page en un geste.</p>
       </div>
     </form>
   </div>
@@ -118,6 +141,28 @@
     }, 350);
   });
 
+  /* ---------- Installation de l'appli ---------- */
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+  const dejaInstallee = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  let invite = null;
+  const btnInst = $('#installer');
+  const installable = () => !dejaInstallee && (!!invite || ios);
+  window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); invite = e; btnInst.hidden = false; });
+  window.addEventListener('appinstalled', () => { btnInst.hidden = true; invite = null; });
+  if (ios && !dejaInstallee) btnInst.hidden = false;
+  btnInst.addEventListener('click', async () => {
+    if (invite) { invite.prompt(); await invite.userChoice; invite = null; btnInst.hidden = true; return; }
+    if (ios && !document.querySelector('.ios')) {
+      const b = document.createElement('div');
+      b.className = 'ios';
+      b.innerHTML = '<b>Installer qrbc sur iPhone</b><br>Dans Safari, touchez <b>Partager</b> (le carré avec une flèche), puis <b>Sur l’écran d’accueil</b>.<br><button type="button">Compris</button>';
+      b.querySelector('button').onclick = () => b.remove();
+      document.body.appendChild(b);
+    }
+  });
+  if (dejaInstallee) location.replace('/app');   // ouverte depuis l'icône : direct dans l'appli
+
   $('#inscription').addEventListener('submit', async e => {
     e.preventDefault();
     const msg = $('#msg'), btn = $('#btn');
@@ -131,8 +176,14 @@
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j.erreur || 'Erreur');
-      $('#adr').textContent = j.adresse.replace('https://', '').replace('/admin', '');
-      $('#lien-admin').href = j.adresse;
+      const slug = nom.value;
+      $('#adr').textContent = j.adresse.replace('https://', '').replace(/\/$/, '');
+      $('#lien-admin').href = j.editeur;
+      try {
+        const l = (JSON.parse(localStorage.getItem('qrbc-pages')) || []).filter(x => x !== slug);
+        l.unshift(slug); localStorage.setItem('qrbc-pages', JSON.stringify(l.slice(0, 10)));
+      } catch (x) {}
+      $('#conseil-install').hidden = !installable();
       $('#etape-form').hidden = true; $('#etape-ok').hidden = false;
     } catch (err) {
       msg.className = 'msg err'; msg.textContent = err.message;
