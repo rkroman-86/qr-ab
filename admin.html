@@ -1144,10 +1144,20 @@
     cadre:   'Cadre',
     photoHaut: 'Photo en haut',
     minimal: 'Minimal',
+    ticket:  'Ticket',
+    qrXL:    'QR géant',
+    vague:   'Vague',
+    pastille: 'Pastille',
+    nuit:    'Nuit',
+    monogramme: 'Monogramme',
+    viseur:  'Viseur',
+    kraft:   'Kraft',
     vertical: 'Vertical',
-    verso:   'Verso QR'
+    verticalEpure: 'Vertical épuré',
+    verso:   'Verso QR',
+    versoCouleur: 'Verso couleur'
   };
-  const TAILLES_CARTE = { vertical: { W: 1300, H: 2008 } };
+  const TAILLES_CARTE = { vertical: { W: 1300, H: 2008 }, verticalEpure: { W: 1300, H: 2008 } };
 
   function luminance(hex) {
     const rgb = hexVersRgb(hex) || [0, 0, 0];
@@ -1214,8 +1224,18 @@
     if (cfgT.titre) {
       ctx.fillStyle = c.texte;
       ctx.font = policeAjustee(ctx, cfgT.titre, '800', c.titre || 124, 60, largeur, fam);
-      const t = parseInt(ctx.font.match(/(\d+)px/)[1], 10);
-      ctx.fillText(cfgT.titre, ax, y); y += t * 1.18;
+      let t = parseInt(ctx.font.match(/(\d+)px/)[1], 10);
+      if (ctx.measureText(cfgT.titre).width <= largeur) { ctx.fillText(cfgT.titre, ax, y); y += t * 1.18; }
+      else {
+        // trop long même en petit : deux lignes plutôt qu'un titre qui déborde sur le QR ou hors de la carte
+        let lignes;
+        t = Math.min(c.titre || 124, 100);
+        do { ctx.font = '800 ' + t + 'px ' + fam; lignes = coupeLignes(ctx, cfgT.titre, largeur, 2); t -= 4; }
+        while (lignes.some(l => ctx.measureText(l).width > largeur) && t > 40);
+        t += 4;
+        lignes.forEach(l => { ctx.fillText(l, ax, y); y += t * 1.12; });
+        y += t * 0.08;
+      }
     }
     if (cfgT.sousTitre) {
       ctx.font = '400 ' + (c.sous || 54) + 'px ' + fam; ctx.fillStyle = c.texte; ctx.globalAlpha = 0.8;
@@ -1281,7 +1301,210 @@
     ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
   }
 
+  /* Petits outils des nouveaux modèles */
+  const accentLisible = D => luminance(D.d.accent) > 0.6 ? '#1a1a1a' : D.d.accent;      // accent lisible sur fond clair
+  function contraste(a, b) { const la = luminance(a), lb = luminance(b); return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05); }
+  // Accent sur le fond du thème (sans photo) : s'il ressort trop peu, on prend la couleur du texte
+  const accentSurFond = (D, texte) => D.fondImg ? texte : (contraste(D.d.accent, D.d.fond) >= 2.2 ? D.d.accent : D.d.texte);
+  function initiales(titre) {
+    const mots = String(titre || '').split(/[\s'’-]+/).filter(m => m.length > 2 || /^[A-Z0-9]/.test(m));
+    const l = (mots.length ? mots : [String(titre || '?')]).slice(0, 3).map(m => m[0]).join('').toUpperCase();
+    return l || '?';
+  }
+  function aleatoire(graine) { let x = graine >>> 0 || 1; return () => ((x = (x * 1664525 + 1013904223) >>> 0) / 4294967296); }
+  function legendeQR(ctx, D, texte, cx, y, couleur, taille) {
+    ctx.save(); ctx.fillStyle = couleur; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.font = '700 ' + (taille || 40) + 'px ' + D.fam; ctx.fillText(texte, cx, y); ctx.restore();
+  }
+
   const DESSINS_CARTE = {
+    /* Ticket : souche détachable avec le QR, perforation et encoches */
+    ticket(ctx, D) {
+      const { W, H, P } = D;
+      const xs = W - 690;
+      const texte = fondPage(ctx, D, 0, 0, xs, H, 0.45);
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(xs, 0, W - xs, H);
+      ctx.save(); ctx.strokeStyle = '#b9b9c2'; ctx.lineWidth = 7; ctx.setLineDash([26, 22]);
+      ctx.beginPath(); ctx.moveTo(xs, 70); ctx.lineTo(xs, H - 70); ctx.stroke(); ctx.restore();
+      ctx.fillStyle = '#ececf1';
+      [0, H].forEach(cy => { ctx.beginPath(); ctx.arc(xs, cy, 62, 0, Math.PI * 2); ctx.fill(); });
+      const q = 470, qx = xs + (W - xs - q) / 2, qy = (H - q) / 2 - 50;
+      dessinerQR(ctx, URL_PUBLIQUE, qx, qy, q, '#111');
+      legendeQR(ctx, D, 'Scannez-moi', xs + (W - xs) / 2, qy + q + 40, accentLisible(D), 44);
+      let y = P + (D.logo ? dessinerLogo(ctx, D, P, P, 210) + 56 : 50);
+      dessinerTextes(ctx, D, P, y, xs - P - 110, { texte, accent: accentSurFond(D, texte) }, 'left');
+      dessinerPied(ctx, D, P, H - P + 30, texte);
+    },
+    /* QR géant : lisible de loin (comptoir, vitrine, véhicule) */
+    qrXL(ctx, D) {
+      const { W, H } = D;
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
+      const accent = accentLisible(D);
+      const q = H - 170, qx = W - 85 - q, qy = 85;
+      dessinerQR(ctx, URL_PUBLIQUE, qx, qy, q, '#111');
+      ctx.fillStyle = accent; ctx.fillRect(qx - 70, 110, 10, H - 220);
+      const L = qx - 70 - 100 - 60;
+      let y = 100;
+      if (D.logo) { dessinerLogo(ctx, D, 100, y, 170); y += 170 + 46; } else y += 30;
+      ctx.textBaseline = 'top'; ctx.fillStyle = '#111';
+      ctx.font = policeAjustee(ctx, cfg.titre || '', '800', 92, 44, L, D.fam);
+      coupeLignes(ctx, cfg.titre || '', L, 2).forEach(l => { ctx.fillText(l, 100, y); y += parseInt(ctx.font.match(/(\d+)px/)[1], 10) * 1.12; });
+      if (cfg.sousTitre) {
+        ctx.font = '400 42px ' + D.fam; ctx.fillStyle = '#555';
+        coupeLignes(ctx, cfg.sousTitre, L, 2).forEach(l => { ctx.fillText(l, 100, y + 6); y += 54; });
+      }
+      y += 40;
+      dessinerCoords(ctx, Object.assign({}, D, { coords: D.coords.slice(0, 3) }), 100, y, L, { texte: '#111', accent, etiq: 32, val: 44, pas: 98 }, 'left');
+      ctx.fillStyle = accent; ctx.textBaseline = 'alphabetic'; ctx.font = '800 48px ' + D.fam;
+      ctx.fillText('Scannez-moi →', 100, H - 95);
+    },
+    /* Vague : bas de carte ondulé aux couleurs du thème */
+    vague(ctx, D) {
+      const { W, H, P } = D;
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
+      const vague = (y0, amp) => {
+        ctx.beginPath(); ctx.moveTo(0, y0);
+        ctx.bezierCurveTo(W * 0.3, y0 - amp, W * 0.55, y0 + amp, W, y0 - amp * 0.6);
+        ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath();
+      };
+      ctx.save(); vague(H * 0.70, 110); ctx.clip(); ctx.globalAlpha = 0.35; fondAccent(ctx, D, 0, 0, W, H); ctx.restore();
+      ctx.save(); vague(H * 0.78, 90); ctx.clip();
+      if (D.fondImg) fondPage(ctx, D, 0, 0, W, H, 0.35); else fondAccent(ctx, D, 0, 0, W, H);
+      ctx.restore();
+      const q = 470, qx = W - P - q, qy = 120;
+      dessinerBlocQR(ctx, D, qx, qy, q, 'Scannez-moi', true);
+      let y = P + (D.logo ? dessinerLogo(ctx, D, P, P, 190) + 50 : 30);
+      dessinerTextes(ctx, D, P, y, qx - P - 90, { texte: '#1a1a1a', accent: accentLisible(D), enLigne: true, titre: 112 }, 'left');
+      dessinerPied(ctx, D, P, H - 70, D.fondImg ? '#ffffff' : couleurIcone(D.d.accent));
+    },
+    /* Pastille : le QR dans un grand disque de couleur */
+    pastille(ctx, D) {
+      const { W, H, P } = D;
+      const texte = fondPage(ctx, D, 0, 0, W, H, 0.5);
+      const r = 450, cx = W - 470, cy = H / 2;
+      ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.28)'; ctx.shadowBlur = 50; ctx.shadowOffsetY = 12;
+      ctx.fillStyle = D.d.accent; ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+      ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(cx, cy, r - 26, 0, Math.PI * 2); ctx.stroke();
+      const q = 500, hb = Math.round(q * 1.17);
+      dessinerBlocQR(ctx, D, cx - q / 2, cy - hb / 2, q, 'Scannez-moi', false);
+      let y = P + (D.logo ? dessinerLogo(ctx, D, P, P, 210) + 56 : 40);
+      dessinerTextes(ctx, D, P, y, cx - r - P - 70, { texte, accent: accentSurFond(D, texte) }, 'left');
+      dessinerPied(ctx, D, P, H - P + 30, texte);
+    },
+    /* Nuit : fond sombre, lueur néon de la couleur du thème */
+    nuit(ctx, D) {
+      const { W, H, P } = D;
+      const neon = luminance(D.d.accent) < 0.12 ? '#5ad1ff' : D.d.accent;
+      if (D.fondImg) { couvrir(ctx, D.fondImg, 0, 0, W, H); ctx.fillStyle = 'rgba(5,7,14,.78)'; ctx.fillRect(0, 0, W, H); }
+      else { const g = ctx.createLinearGradient(0, 0, W, H); g.addColorStop(0, '#0b0d14'); g.addColorStop(1, '#1b2030'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H); }
+      const halo = ctx.createRadialGradient(W * 0.18, H * 1.05, 40, W * 0.18, H * 1.05, W * 0.75);
+      const rgb = hexVersRgb(neon) || [90, 209, 255];
+      halo.addColorStop(0, 'rgba(' + rgb.join(',') + ',.38)'); halo.addColorStop(1, 'rgba(' + rgb.join(',') + ',0)');
+      ctx.fillStyle = halo; ctx.fillRect(0, 0, W, H);
+      ctx.save(); ctx.strokeStyle = neon; ctx.lineWidth = 6; ctx.shadowColor = neon; ctx.shadowBlur = 30;
+      rectArrondi(ctx, 44, 44, W - 88, H - 88, 46); ctx.stroke(); ctx.restore();
+      const q = 520, qx = W - P - 40 - q, hb = Math.round(q * 1.17), qy = (H - hb) / 2;
+      ctx.save(); ctx.shadowColor = neon; ctx.shadowBlur = 70; ctx.fillStyle = '#fff'; rectArrondi(ctx, qx, qy, q, hb, 36); ctx.fill(); ctx.restore();
+      dessinerBlocQR(ctx, D, qx, qy, q, 'Scannez-moi', false);
+      let y = P + 40 + (D.logo ? dessinerLogo(ctx, D, P + 40, P + 40, 200) + 56 : 30);
+      ctx.save(); ctx.shadowColor = neon; ctx.shadowBlur = 24;
+      dessinerTextes(ctx, D, P + 40, y, qx - P - 140, { texte: '#f2f5ff', accent: neon }, 'left');
+      ctx.restore();
+      dessinerPied(ctx, D, P + 40, H - P - 10, '#f2f5ff');
+    },
+    /* Monogramme : les initiales de l'activité en grand filigrane */
+    monogramme(ctx, D) {
+      const { W, H, P } = D;
+      const texte = fondPage(ctx, D, 0, 0, W, H, 0.5);
+      const mono = initiales(cfg.titre);
+      ctx.save(); ctx.globalAlpha = D.fondImg ? 0.18 : 0.13; ctx.fillStyle = D.fondImg ? '#ffffff' : D.d.accent;
+      ctx.textBaseline = 'alphabetic'; ctx.font = policeAjustee(ctx, mono, '900', 980, 300, W * 0.72, D.fam);
+      ctx.fillText(mono, -30, H + 150); ctx.restore();
+      const q = 540, bx = W - P - q;
+      dessinerBlocQR(ctx, D, bx, (H - q * 1.17) / 2, q, 'Scannez-moi', true);
+      let y = P + (D.logo ? dessinerLogo(ctx, D, P, P, 200) + 56 : 40);
+      dessinerTextes(ctx, D, P, y, bx - P - 90, { texte, accent: accentSurFond(D, texte) }, 'left');
+    },
+    /* Viseur : coins d'appareil photo autour du QR */
+    viseur(ctx, D) {
+      const { W, H, P } = D;
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
+      const accent = accentLisible(D);
+      ctx.fillStyle = accent; ctx.fillRect(0, 0, W, 22);
+      const q = 500, qx = W - P - 40 - q, qy = (H - q) / 2 - 40;
+      dessinerQR(ctx, URL_PUBLIQUE, qx, qy, q, '#111');
+      const e = 70, L = 120, ep = 16;
+      ctx.fillStyle = accent;
+      [[qx - e, qy - e, 1, 1], [qx + q + e, qy - e, -1, 1], [qx - e, qy + q + e, 1, -1], [qx + q + e, qy + q + e, -1, -1]].forEach(([x, y, sx, sy]) => {
+        ctx.fillRect(sx > 0 ? x : x - L, sy > 0 ? y : y - ep, L, ep);
+        ctx.fillRect(sx > 0 ? x : x - ep, sy > 0 ? y : y - L, ep, L);
+      });
+      legendeQR(ctx, D, 'Scannez-moi', qx + q / 2, qy + q + e + 30, accent, 40);
+      let y = P + 20 + (D.logo ? dessinerLogo(ctx, D, P, P + 20, 190) + 52 : 30);
+      dessinerTextes(ctx, D, P, y, qx - e - P - 100, { texte: '#1a1a1a', accent }, 'left');
+      dessinerPied(ctx, D, P, H - P + 30, '#1a1a1a');
+    },
+    /* Kraft : papier recyclé, encre foncée, QR façon tampon */
+    kraft(ctx, D) {
+      const { W, H, P } = D;
+      ctx.fillStyle = '#e6d6b8'; ctx.fillRect(0, 0, W, H);
+      const rnd = aleatoire(7);
+      for (let i = 0; i < 9000; i++) {
+        const v = rnd();
+        ctx.fillStyle = v < 0.5 ? 'rgba(120,90,50,' + (0.05 + rnd() * 0.08) + ')' : 'rgba(255,250,235,' + (0.05 + rnd() * 0.1) + ')';
+        ctx.fillRect(rnd() * W, rnd() * H, 2 + rnd() * 5, 2 + rnd() * 5);
+      }
+      const vig = ctx.createRadialGradient(W / 2, H / 2, H * 0.4, W / 2, H / 2, W * 0.75);
+      vig.addColorStop(0, 'rgba(0,0,0,0)'); vig.addColorStop(1, 'rgba(70,45,15,.22)');
+      ctx.fillStyle = vig; ctx.fillRect(0, 0, W, H);
+      const encre = '#2a2016';
+      const accent = luminance(D.d.accent) < 0.25 ? D.d.accent : '#7a3b1d';
+      const q = 480, qx = W - P - 20 - q, qy = (H - q) / 2 - 30;
+      ctx.save(); ctx.strokeStyle = encre; ctx.lineWidth = 6; ctx.setLineDash([18, 12]);
+      rectArrondi(ctx, qx - 40, qy - 40, q + 80, q + 140, 26); ctx.stroke(); ctx.restore();
+      dessinerQR(ctx, URL_PUBLIQUE, qx, qy, q, encre);
+      legendeQR(ctx, D, 'Scannez-moi', qx + q / 2, qy + q + 26, encre, 38);
+      let y = P + (D.logo ? dessinerLogo(ctx, D, P, P, 190) + 52 : 40);
+      dessinerTextes(ctx, D, P, y, qx - 40 - P - 90, { texte: encre, accent }, 'left');
+      dessinerPied(ctx, D, P, H - P + 30, encre);
+    },
+    /* Vertical épuré : fond blanc, format portrait */
+    verticalEpure(ctx, D) {
+      const { W, H } = D;
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
+      const accent = accentLisible(D);
+      ctx.fillStyle = accent; ctx.fillRect(0, H - 30, W, 30);
+      let y = 140;
+      if (D.logo) { dessinerLogo(ctx, D, (W - 240) / 2, y, 240); y += 240 + 56; } else y += 60;
+      y = dessinerTextes(ctx, D, 110, y, W - 220, { texte: '#1a1a1a', accent, titre: 110, enLigne: true }, 'center');
+      const bas = H - 110;                                   // au-dessus du liseré, légende comprise
+      const q = Math.min(640, bas - y - 160);
+      const qy = y + Math.max(30, (bas - y - q - 90) / 2);
+      dessinerQR(ctx, URL_PUBLIQUE, (W - q) / 2, qy, q, '#111');
+      legendeQR(ctx, D, 'Scannez-moi', W / 2, qy + q + 34, '#777', 44);
+    },
+    /* Verso couleur : dos de carte aux couleurs du thème */
+    versoCouleur(ctx, D) {
+      const { W, H } = D;
+      ctx.fillStyle = D.d.accent; ctx.fillRect(0, 0, W, H);
+      const texte = couleurIcone(D.d.accent);
+      ctx.save(); ctx.globalAlpha = 0.09; ctx.strokeStyle = texte; ctx.lineWidth = 18;
+      for (let x = -H; x < W; x += 90) { ctx.beginPath(); ctx.moveTo(x, H); ctx.lineTo(x + H, 0); ctx.stroke(); }
+      ctx.restore();
+      const q = 820, qx = 150, qy = (H - q) / 2;
+      dessinerBlocQR(ctx, D, qx, qy, q, '', true);
+      const x = qx + q + 110, L = W - x - 120;
+      let y = 260;
+      if (D.logo) { dessinerLogo(ctx, D, x, y - 60, 170); y += 170; }
+      ctx.fillStyle = texte; ctx.textBaseline = 'top';
+      ctx.font = policeAjustee(ctx, cfg.titre || '', '800', 96, 46, L, D.fam);
+      coupeLignes(ctx, cfg.titre || '', L, 2).forEach(l => { ctx.fillText(l, x, y); y += parseInt(ctx.font.match(/(\d+)px/)[1], 10) * 1.12; });
+      y += 30; ctx.fillRect(x, y, 120, 8); y += 50;
+      ctx.font = '500 48px ' + D.fam; ctx.globalAlpha = 0.9;
+      coupeLignes(ctx, 'Scannez pour réserver, appeler ou laisser un avis', L, 3).forEach(l => { ctx.fillText(l, x, y); y += 62; });
+      ctx.globalAlpha = 1;
+    },
+
     photo(ctx, D) {
       const { W, H, P } = D;
       const texte = fondPage(ctx, D, 0, 0, W, H, 0.5);
@@ -1492,7 +1715,7 @@
       zoneCarte.append(
         el('img', { class: 'carte-apercu', alt: 'Carte de visite', src: cv.toDataURL('image/jpeg', 0.85) }),
         el('button', { type: 'button', class: 'btn btn-prim btn-plein', text: '⬇ Télécharger « ' + MODELES_CARTE[choisi] + ' » (JPEG)', onclick: () => telecharger(cv, nomFichierCarte(choisi), 'image/jpeg', 0.95) }),
-        el('div', { class: 'aide', style: 'margin:4px 0 0', text: (choisi === 'vertical' ? 'Format 55 × 85 mm (vertical)' : 'Format 85 × 55 mm') + ', 600 dpi, prêt pour l’imprimeur. Astuce : « Verso QR » fait un beau dos de carte.' }));
+        el('div', { class: 'aide', style: 'margin:4px 0 0', text: (TAILLES_CARTE[choisi] ? 'Format 55 × 85 mm (vertical)' : 'Format 85 × 55 mm') + ', 600 dpi, prêt pour l’imprimeur. Astuce : « Verso QR » fait un beau dos de carte.' }));
     }
 
     const btnCarte = el('button', { type: 'button', class: 'btn btn-prim btn-plein', text: 'Voir les modèles de carte' });
