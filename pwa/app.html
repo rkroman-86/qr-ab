@@ -151,6 +151,8 @@
         <label><span>Mot de passe (10 caractères minimum)</span><input type="password" id="in-mdp" autocomplete="new-password" minlength="10" required></label>
         <label><span>Confirmez le mot de passe</span><input type="password" id="in-mdp2" autocomplete="new-password" minlength="10" required></label>
         <div class="accord" id="in-accord"></div>
+        <label><span>Code promo (facultatif)</span><input type="text" id="in-promo" autocapitalize="none" autocomplete="off" spellcheck="false" maxlength="30">
+          <div class="dispo" id="in-promo-etat"></div></label>
         <label class="case"><input type="checkbox" id="in-cgu"> <span>J’accepte les conditions d’utilisation du service.</span></label>
         <button class="prim" id="in-btn">Créer ma page</button>
         <div class="msg" id="in-msg"></div>
@@ -196,7 +198,7 @@
   /* Une seule page connue : on l'ouvre directement, sauf demande explicite */
   const params = new URLSearchParams(location.search);
   const connues = lire();
-  if (connues.length === 1 && !params.has('choisir') && !params.has('reinit') && !location.hash) { location.replace('/app/' + connues[0] + '/'); return; }
+  if (connues.length === 1 && !params.has('choisir') && !params.has('reinit') && !params.has('promo') && !location.hash) { location.replace('/app/' + connues[0] + '/'); return; }
 
   /* ---------- Pancartes : glisser ou boutons ---------- */
   let courante = 0;
@@ -221,7 +223,7 @@
   document.querySelectorAll('[data-i],[data-aller]').forEach(b => b.addEventListener('click', () => aller(Number(b.dataset.i ?? b.dataset.aller))));
 
   // Première pancarte : inscription si demandé, ou si aucune page n'est connue sur cet appareil
-  const depart = location.hash === '#creer' ? 1 : (location.hash === '#connexion' || location.hash === '#oubli') ? 0 : (connues.length ? 0 : 1);
+  const depart = location.hash === '#creer' || params.has('promo') ? 1 : (location.hash === '#connexion' || location.hash === '#oubli') ? 0 : (connues.length ? 0 : 1);
   requestAnimationFrame(() => aller(depart, false));
 
   /* ---------- Mes pages (déjà ouvertes sur cet appareil) ---------- */
@@ -367,6 +369,28 @@
       } catch (e) {}
     }, 350);
   });
+
+  /* Code promo : prérempli par un lien d'apporteur (?promo=CODE), vérifié en direct */
+  function champPromo(input, zone) {
+    let code = '';
+    try { code = new URLSearchParams(location.search).get('promo') || localStorage.getItem('qrbc-promo') || ''; } catch (e) {}
+    if (code) { input.value = code.trim().toLowerCase(); try { localStorage.setItem('qrbc-promo', input.value); } catch (e) {} }
+    let minu;
+    const verifier = async () => {
+      const v = input.value.trim().toLowerCase();
+      zone.className = 'dispo'; zone.textContent = '';
+      if (!v) return;
+      try {
+        const j = await (await fetch('/api/promo?code=' + encodeURIComponent(v))).json();
+        zone.className = 'dispo ' + (j.valide ? 'ok' : 'ko');
+        zone.textContent = j.valide ? '✓ ' + j.essai + ' jours + ' + j.jours + ' jours offerts' : (j.erreur || 'Code inconnu ou expiré');
+      } catch (e) {}
+    };
+    input.addEventListener('input', () => { input.value = input.value.toLowerCase().replace(/\s/g, ''); clearTimeout(minu); minu = setTimeout(verifier, 400); });
+    if (input.value) verifier();
+    return { valeur: () => input.value.trim().toLowerCase(), oublier: () => { try { localStorage.removeItem('qrbc-promo'); } catch (e) {} } };
+  }
+  const promo = champPromo($('#in-promo'), $('#in-promo-etat'));
   $('#f-in').addEventListener('submit', async e => {
     e.preventDefault();
     const msg = $('#in-msg'), btn = $('#in-btn');
@@ -379,10 +403,11 @@
     try {
       const r = await fetch('/api/inscription', {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ nom: slug, titre: $('#in-titre').value, email: $('#in-email').value, mdp, cgu: true })
+        body: JSON.stringify({ nom: slug, titre: $('#in-titre').value, email: $('#in-email').value, mdp, cgu: true, promo: promo.valeur() })
       });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j.erreur || 'Erreur');
+      promo.oublier();
       await connecter(slug, mdp);
     } catch (err) {
       msg.textContent = err.message === 'Failed to fetch' ? 'Pas de connexion internet.' : err.message;

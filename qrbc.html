@@ -104,6 +104,8 @@
         <label><span>Mot de passe (10 caractères minimum)</span><input type="password" id="mdp" autocomplete="new-password" minlength="10" required></label>
         <label><span>Confirmez le mot de passe</span><input type="password" id="mdp2" autocomplete="new-password" minlength="10" required></label>
         <div class="dispo" id="accord" style="margin:-8px 0 14px"></div>
+        <label><span>Code promo (facultatif)</span><input type="text" id="promo" autocapitalize="none" autocomplete="off" spellcheck="false" maxlength="30">
+          <div class="dispo" id="promo-etat"></div></label>
         <label class="case"><input type="checkbox" id="cgu"> <span>J’accepte les conditions d’utilisation du service.</span></label>
         <button id="btn">Créer ma page</button>
         <div class="msg" id="msg"></div>
@@ -172,8 +174,31 @@
     }
   });
   // ouverte depuis l'icône : tout se passe dans l'appli (connexion et inscription)
-  if (dejaInstallee) location.replace('/app' + (/inscription|creer/.test(location.hash) ? '#creer' : ''));
+  if (dejaInstallee) location.replace('/app' + location.search + (/inscription|creer/.test(location.hash) ? '#creer' : ''));
 
+
+  /* Code promo : prérempli par un lien d'apporteur (?promo=CODE), vérifié en direct */
+  function champPromo(input, zone) {
+    let code = '';
+    try { code = new URLSearchParams(location.search).get('promo') || localStorage.getItem('qrbc-promo') || ''; } catch (e) {}
+    if (code) { input.value = code.trim().toLowerCase(); try { localStorage.setItem('qrbc-promo', input.value); } catch (e) {} }
+    let minu;
+    const verifier = async () => {
+      const v = input.value.trim().toLowerCase();
+      zone.className = 'dispo'; zone.textContent = '';
+      if (!v) return;
+      try {
+        const j = await (await fetch('/api/promo?code=' + encodeURIComponent(v))).json();
+        zone.className = 'dispo ' + (j.valide ? 'ok' : 'ko');
+        zone.textContent = j.valide ? '✓ ' + j.essai + ' jours + ' + j.jours + ' jours offerts' : (j.erreur || 'Code inconnu ou expiré');
+      } catch (e) {}
+    };
+    input.addEventListener('input', () => { input.value = input.value.toLowerCase().replace(/\s/g, ''); clearTimeout(minu); minu = setTimeout(verifier, 400); });
+    if (input.value) verifier();
+    return { valeur: () => input.value.trim().toLowerCase(), oublier: () => { try { localStorage.removeItem('qrbc-promo'); } catch (e) {} } };
+  }
+  const promo = champPromo($('#promo'), $('#promo-etat'));
+  if (new URLSearchParams(location.search).has('promo')) { const f = $('#inscription'); if (f) setTimeout(() => f.scrollIntoView({ block: 'start' }), 300); }
   $('#inscription').addEventListener('submit', async e => {
     e.preventDefault();
     const msg = $('#msg'), btn = $('#btn');
@@ -185,10 +210,11 @@
     try {
       const r = await fetch('/api/inscription', {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ nom: nom.value, titre: $('#titre').value, email: $('#email').value, mdp: $('#mdp').value, cgu: true })
+        body: JSON.stringify({ nom: nom.value, titre: $('#titre').value, email: $('#email').value, mdp: $('#mdp').value, cgu: true, promo: promo.valeur() })
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j.erreur || 'Erreur');
+      promo.oublier();
       const slug = nom.value;
       $('#adr').textContent = j.adresse.replace('https://', '').replace(/\/$/, '');
       $('#lien-admin').href = j.editeur;

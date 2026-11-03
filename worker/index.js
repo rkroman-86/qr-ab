@@ -107,6 +107,7 @@ class ErreurAPI extends Error {
 async function racine(request, env, url) {
   const p = url.pathname;
   if (p === '/api/inscription' && request.method === 'POST') return inscription(request, env);
+  if (p === '/api/promo' && request.method === 'GET') return verifierPromo(request, env);
   if (p === '/api/stripe/webhook' && request.method === 'POST') return webhookStripe(request, env);
   if (p.startsWith('/api/gestion/')) return gestion(request, env, p.slice('/api/gestion/'.length));
   if (p === '/api/mdp-oublie' && request.method === 'POST') return mdpOublie(request, env);
@@ -585,7 +586,13 @@ async function inscription(request, env) {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 200) throw new ErreurAPI(400, 'Adresse e-mail invalide.');
   verifierForceMdp(d.mdp);
   if (d.cgu !== true) throw new ErreurAPI(400, 'Merci d’accepter les conditions d’utilisation.');
-  const compte = await creerCompte(env, { slug, email, mdp: String(d.mdp), plan: 'essai', titre: String(d.titre || '').slice(0, 80) });
+  let promo = null;
+  if (String(d.promo || '').trim()) {
+    promo = (await lirePromos(env)).find(x => x.code === normCode(d.promo) && x.actif);
+    if (!promo) throw new ErreurAPI(400, 'Code promo inconnu ou expiré. Corrigez-le ou laissez le champ vide.');
+  }
+  const compte = await creerCompte(env, { slug, email, mdp: String(d.mdp), plan: 'essai', titre: String(d.titre || '').slice(0, 80),
+    joursBonus: promo ? promo.jours : 0, promo: promo ? { code: promo.code, jours: promo.jours, le: new Date().toISOString() } : null });
   return json({ ok: true, adresse: 'https://' + slug + '.' + DOMAINE + '/', editeur: '/app/' + slug + '/', compte: resumeCompte(compte) });
 }
 
@@ -594,15 +601,29 @@ async function creerCompte(env, o) {
   const maintenant = Date.now();
   const compte = Object.assign({
     slug: o.slug, email: String(o.email || '').trim().toLowerCase(), plan: o.plan, version: 1, cree: new Date(maintenant).toISOString(),
-    finEssai: o.plan === 'essai' ? new Date(maintenant + JOURS_ESSAI * 86400000).toISOString() : null,
+    finEssai: o.plan === 'essai' ? new Date(maintenant + (JOURS_ESSAI + (o.joursBonus || 0)) * 86400000).toISOString() : null,
     payeJusqua: null, note: o.note || ''
-  }, await hacherMdp(o.mdp));
+  }, o.promo ? { promo: o.promo } : {}, await hacherMdp(o.mdp));
   await ecrireCompte(env, compte);
   await indexerEmail(env, compte.email, o.slug, true);
   if (!(await env.CLIENTS.get('site:' + o.slug + ':config.json'))) {
     await env.CLIENTS.put('site:' + o.slug + ':config.json', JSON.stringify({ titre: o.titre || '' }, null, 2));
   }
   return compte;
+}
+
+/* ===================== Codes promo =====================
+   config:promos = [{ code, jours, actif, note, cree }] — jours offerts en plus des 14 jours d'essai.
+   Le code utilisé reste noté sur le compte (suivi et commission des apporteurs). */
+const normCode = c => String(c || '').trim().toLowerCase();
+async function lirePromos(env) {
+  try { const l = JSON.parse(await env.CLIENTS.get('config:promos') || '[]'); return Array.isArray(l) ? l : []; } catch (e) { return []; }
+}
+async function verifierPromo(request, env) {
+  await limiter(env, 'promo:' + ip(request) + ':' + new Date().toISOString().slice(0, 10), 40, 86400 * 2, 'Trop d’essais de code aujourd’hui.');
+  const code = normCode(new URL(request.url).searchParams.get('code'));
+  const x = code ? (await lirePromos(env)).find(p => p.code === code && p.actif) : null;
+  return json(x ? { valide: true, jours: x.jours, essai: JOURS_ESSAI } : { valide: false });
 }
 
 function erreurSlug(slug) {
@@ -669,6 +690,32 @@ async function gestion(request, env, action) {
     return json(await etatStripe(env));
   }
 
+  if (action === 'promos') {
+    let promos = await lirePromos(env);
+    if (request.method === 'POST') {
+      const code = normCode(d.code);
+      const existant = promos.find(x => x.code === code);
+      if (d.op === 'supprimer') {
+        if (!existant) throw new ErreurAPI(404, 'Code introuvable.');
+        promos = promos.filter(x => x.code !== code);
+      } else {
+        if (!/^[a-z0-9][a-z0-9_-]{1,29}$/.test(code)) throw new ErreurAPI(400, 'Code : 2 à 30 caractères, lettres, chiffres, tiret ou souligné.');
+        const jours = Number(d.jours);
+        if (!Number.isInteger(jours) || jours < 0 || jours > 730) throw new ErreurAPI(400, 'Jours offerts : nombre entier entre 0 et 730.');
+        const val = { code, jours, actif: d.actif !== false, note: String(d.note || '').slice(0, 200) };
+        if (d.op === 'ajouter') {
+          if (existant) throw new ErreurAPI(409, 'Ce code existe déjà.');
+          promos.push(Object.assign(val, { cree: new Date().toISOString() }));
+        } else {
+          if (!existant) throw new ErreurAPI(404, 'Code introuvable.');
+          Object.assign(existant, val);
+        }
+      }
+      await env.CLIENTS.put('config:promos', JSON.stringify(promos));
+    }
+    return json({ promos, essai: JOURS_ESSAI });
+  }
+
   if (action === 'liste') {
     const comptes = [];
     let curseur;
@@ -730,6 +777,16 @@ async function gestion(request, env, action) {
       await indexerEmail(env, nouvel, compte.slug, true);
     }
     if (d.mdp) { verifierForceMdp(d.mdp); Object.assign(compte, await hacherMdp(String(d.mdp)), { version: (compte.version || 1) + 1 }); }
+    // Rattacher le client à un code après coup (apporteur oublié) ; ne change pas la date de fin d'essai
+    if (d.promo !== undefined) {
+      const code = normCode(d.promo);
+      if (!code) delete compte.promo;
+      else {
+        const x = (await lirePromos(env)).find(p => p.code === code);
+        if (!x) throw new ErreurAPI(404, 'Code promo introuvable.');
+        compte.promo = { code, jours: 0, le: new Date().toISOString(), manuel: true };
+      }
+    }
     await ecrireCompte(env, compte);
     return json({ ok: true, compte: resumeCompte(compte) });
   }
@@ -1144,7 +1201,7 @@ function resumeCompte(c) {
   const q = QUOTAS_IA[c.plan];
   const ia = c.ia || {};
   return {
-    slug: c.slug, email: c.email, plan: c.plan, actif: actif(c), finEssai: c.finEssai, payeJusqua: c.payeJusqua, cree: c.cree, note: c.note || '',
+    slug: c.slug, email: c.email, plan: c.plan, actif: actif(c), finEssai: c.finEssai, payeJusqua: c.payeJusqua, cree: c.cree, note: c.note || '', promo: c.promo || null,
     ia: {
       illimite: c.plan === 'gratuit',
       texte: { utilises: ia.texte || 0, inclus: q ? Math.max(0, q.texte + ((ia.bonus && ia.bonus.texte) || 0)) : null },

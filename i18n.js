@@ -65,6 +65,10 @@
     'Mot de passe : 10 caractères minimum.': ['Password: at least 10 characters.', 'Пароль: не менее 10 символов.'],
     'Mot de passe trop long.': ['Password too long.', 'Слишком длинный пароль.'],
     'Merci d’accepter les conditions d’utilisation.': ['Please accept the terms of use.', 'Пожалуйста, примите условия использования.'],
+    'Code promo (facultatif)': ['Promo code (optional)', 'Промокод (необязательно)'],
+    'Code inconnu ou expiré': ['Unknown or expired code', 'Неизвестный или просроченный код'],
+    'Code promo inconnu ou expiré. Corrigez-le ou laissez le champ vide.': ['Unknown or expired promo code. Fix it or leave the field empty.', 'Неизвестный или просроченный промокод. Исправьте его или оставьте поле пустым.'],
+    'Trop d’essais de code aujourd’hui.': ['Too many code attempts today.', 'Слишком много попыток ввода кода сегодня.'],
     'Trop d’essais. Réessayez dans une heure.': ['Too many attempts. Try again in an hour.', 'Слишком много попыток. Повторите через час.'],
     'Trop de demandes. Réessayez dans une heure.': ['Too many requests. Try again in an hour.', 'Слишком много запросов. Повторите через час.'],
     'Trop d’inscriptions depuis cette connexion aujourd’hui.': ['Too many sign-ups from this connection today.', 'Слишком много регистраций с этого подключения сегодня.'],
@@ -407,6 +411,7 @@
 
   // Formes dynamiques : [regex sur le français, (m, L, t) => texte]
   const MOTIFS = [
+    [/^✓ (\d+) jours \+ (\d+) jours offerts$/, m => ({ en: '✓ ' + m[1] + ' days + ' + m[2] + ' free days', ru: '✓ ' + m[1] + ' дней + ' + m[2] + ' дней в подарок' })],
     [/^Pancarte (\d+) \/ (\d+)$/, m => ({ en: 'Slide ' + m[1] + ' / ' + m[2], ru: 'Слайд ' + m[1] + ' / ' + m[2] })],
     [/^Pancarte (\d+)$/, m => ({ en: 'Slide ' + m[1], ru: 'Слайд ' + m[1] })],
     [/^＋ Ajouter un article \((\d+)\/(\d+)\)$/, m => ({ en: '＋ Add an article (' + m[1] + '/' + m[2] + ')', ru: '＋ Добавить статью (' + m[1] + '/' + m[2] + ')' })],

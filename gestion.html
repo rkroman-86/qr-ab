@@ -39,6 +39,21 @@
   .stats b{color:var(--txt)}
   .demande{font-size:.88rem;font-weight:600;color:var(--alerte);margin:0 0 8px}
   details.infos summary{cursor:pointer}
+  /* Codes promo */
+  .promo-ajout{display:grid;gap:0 10px;grid-template-columns:1fr 110px}
+  .promo-ajout .note{grid-column:1/-1}
+  @media (min-width:640px){.promo-ajout{grid-template-columns:1.2fr 120px 1.5fr auto;align-items:end}.promo-ajout .note{grid-column:auto}.promo-ajout button{margin-bottom:10px}}
+  .promos{display:flex;flex-direction:column;gap:8px;margin-top:6px}
+  .promo{border:1px solid var(--ligne);border-radius:12px;padding:10px 12px;display:grid;gap:6px}
+  .promo.off{opacity:.6}
+  .promo-tete{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center}
+  .promo-tete .code{font-weight:700;font-family:ui-monospace,Menlo,monospace;font-size:1rem}
+  .promo-tete label{display:flex;align-items:center;gap:6px;margin:0;font-size:.88rem}
+  .promo-tete input[type=checkbox]{width:auto;min-height:0}
+  .promo-tete .jours{width:80px;min-height:34px;padding:6px 8px}
+  .promo-chiffres{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:.85rem;color:var(--doux)}
+  .promo-chiffres b{color:var(--txt)}
+  .promo .actions{margin-top:2px}
   /* Onglets */
   .onglets{display:flex;gap:4px;background:var(--panneau);border:1px solid var(--ligne);border-radius:12px;padding:4px;margin:0 0 16px;position:sticky;top:8px;z-index:5}
   .onglets button{flex:1;border:0;background:none;font-weight:600;color:var(--doux);min-height:40px}
@@ -101,6 +116,19 @@
     </section>
 
     <section id="onglet-reglages" class="cache">
+    <div class="boite" id="b-promos">
+      <h2>Codes promo</h2>
+      <form id="f-promo" class="promo-ajout">
+        <label><span>Code</span><input type="text" id="p-code" autocapitalize="none" spellcheck="false" maxlength="30" placeholder="1moistest" required></label>
+        <label><span>Jours offerts en plus</span><input type="number" id="p-jours" min="0" max="730" step="1" value="30" required></label>
+        <label class="note"><span>Apporteur / note</span><input type="text" id="p-note" maxlength="200" placeholder="Ex. Karim — 20 % la 1re année"></label>
+        <button class="prim">Ajouter</button>
+      </form>
+      <div class="msg" id="m-promo"></div>
+      <div class="promos" id="promos"></div>
+      <p class="infos">Le client qui saisit un code actif à l’inscription a <span id="p-essai">14</span> jours d’essai + les jours du code ; le paiement n’est demandé qu’après. Le code reste noté sur sa fiche (onglet Clients), même si vous le désactivez ensuite. Lien à donner à un apporteur : qrbc.app/?promo=CODE (le code est prérempli).</p>
+    </div>
+
     <div class="boite" id="b-stripe">
       <h2>Paiements en ligne (Stripe)</h2>
       <div id="stripe-etat" class="infos">…</div>
@@ -290,6 +318,7 @@
     const { comptes } = await api('liste');
     chargerStripe().catch(() => {});
     chargerEmail().catch(() => {});
+    chargerPromos().catch(() => {});
     if (!tarifsDefaut) chargerTarifs().catch(() => {});
     $('#f-connexion').classList.add('cache'); $('#zone').classList.remove('cache');
     tousComptes = comptes;
@@ -311,13 +340,69 @@
       if (f === 'inactif' && c.actif) return false;
       if (['essai', 'payant', 'gratuit'].includes(f) && c.plan !== f) return false;
       if (!q) return true;
-      return [c.slug, c.titre, c.email, c.note].some(x => String(x || '').toLowerCase().includes(q));
+      return [c.slug, c.titre, c.email, c.note, c.promo && 'code:' + c.promo.code].some(x => String(x || '').toLowerCase().includes(q));
     }).sort((a, b) => (b.demande ? 1 : 0) - (a.demande ? 1 : 0) || String(b.cree).localeCompare(String(a.cree)));
     if (!garder.length) liste.textContent = tousComptes.length ? 'Aucun client ne correspond.' : 'Aucun compte pour l’instant.';
     garder.forEach(c => liste.appendChild(carte(c)));
   }
   $('#recherche').addEventListener('input', afficherListe);
   $('#filtre').addEventListener('change', afficherListe);
+
+  /* ---------- Codes promo ---------- */
+  let promos = [];
+  async function chargerPromos() {
+    const r = await api('promos');
+    promos = r.promos; $('#p-essai').textContent = r.essai;
+    afficherPromos();
+  }
+  function afficherPromos() {
+    const box = $('#promos'); box.innerHTML = '';
+    if (!promos.length) { box.append(el('div', { class: 'infos', text: 'Aucun code pour l’instant.' })); return; }
+    promos.slice().sort((a, b) => String(b.cree).localeCompare(String(a.cree))).forEach(p => {
+      const clients = tousComptes.filter(c => c.promo && c.promo.code === p.code);
+      const abonnes = clients.filter(c => c.plan === 'payant');
+      const somme = g => clients.reduce((t, c) => t + (c.paiements || []).filter(x => x.genre === g).reduce((u, x) => u + (x.montant || 0), 0), 0);
+      const actif = el('input', { type: 'checkbox' }); actif.checked = !!p.actif;
+      const jrs = el('input', { type: 'number', class: 'jours', min: '0', max: '730', step: '1', value: String(p.jours) });
+      const enreg = (modif) => actionPromo(Object.assign({ op: 'modifier', code: p.code, jours: p.jours, actif: p.actif, note: p.note }, modif));
+      actif.addEventListener('change', () => enreg({ actif: actif.checked }));
+      jrs.addEventListener('change', () => enreg({ jours: Number(jrs.value) }));
+      const lien = 'https://qrbc.app/?promo=' + encodeURIComponent(p.code);
+      box.append(el('div', { class: 'promo' + (p.actif ? '' : ' off') }, [
+        el('div', { class: 'promo-tete' }, [
+          el('span', { class: 'code', text: p.code }),
+          el('label', {}, [el('span', { text: '+' }), jrs, el('span', { text: 'jours' })]),
+          el('label', {}, [actif, el('span', { text: p.actif ? 'Actif' : 'Désactivé' })]),
+          p.note ? el('span', { class: 'infos', style: 'margin:0', text: p.note }) : null
+        ]),
+        el('div', { class: 'promo-chiffres' }, [
+          el('span', {}, ['Inscrits ', el('b', { text: String(clients.length) })]),
+          el('span', {}, ['Abonnés ', el('b', { text: String(abonnes.length) })]),
+          el('span', {}, ['Abonnements encaissés ', el('b', { text: euros(somme('abonnement')) + ' HT' })]),
+          el('span', {}, ['Recharges IA ', el('b', { text: euros(somme('recharge')) + ' HT' })])
+        ]),
+        el('div', { class: 'actions' }, [
+          el('button', { type: 'button', text: 'Voir les clients', onclick: () => { onglet('clients'); $('#filtre').value = ''; $('#recherche').value = 'code:' + p.code; afficherListe(); } }),
+          el('button', { type: 'button', text: 'Copier le lien', onclick: async (e) => { try { await navigator.clipboard.writeText(lien); e.target.textContent = '✓ Copié'; } catch (x) { prompt('Lien à copier :', lien); } } }),
+          el('button', { type: 'button', text: 'Note', onclick: () => { const n = prompt('Apporteur / note pour ' + p.code + ' :', p.note || ''); if (n !== null) enreg({ note: n }); } }),
+          el('button', { type: 'button', class: 'danger', text: 'Supprimer', onclick: () => {
+            if (confirm('Supprimer le code ' + p.code + ' ?' + (clients.length ? '\n' + clients.length + ' client(s) le gardent sur leur fiche.' : ''))) actionPromo({ op: 'supprimer', code: p.code });
+          } })
+        ])
+      ]));
+    });
+  }
+  async function actionPromo(corps) {
+    const m = $('#m-promo'); m.className = 'msg'; m.textContent = '…';
+    try { const r = await api('promos', corps); promos = r.promos; afficherPromos(); m.textContent = ''; return true; }
+    catch (e) { m.className = 'msg err'; m.textContent = e.message; afficherPromos(); return false; }
+  }
+  $('#p-code').addEventListener('input', e => { e.target.value = e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ''); });
+  $('#f-promo').addEventListener('submit', async e => {
+    e.preventDefault();
+    const ok = await actionPromo({ op: 'ajouter', code: $('#p-code').value, jours: Number($('#p-jours').value), note: $('#p-note').value, actif: true });
+    if (ok) { $('#m-promo').className = 'msg ok'; $('#m-promo').textContent = '✓ Code ajouté et actif.'; $('#p-code').value = ''; $('#p-note').value = ''; }
+  });
 
   /* ---------- Onglets ---------- */
   function onglet(nom) {
@@ -364,6 +449,7 @@
     if (c.plan === 'essai') ligneDonnee('Fin d’essai', date(c.finEssai));
     if (c.plan === 'payant') ligneDonnee('Payé jusqu’au', date(c.payeJusqua));
     if (c.depenseIA) ligneDonnee('IA payée', euros(c.depenseIA));
+    ligneDonnee('Code promo', c.promo ? c.promo.code + (c.promo.manuel ? ' (rattaché à la main le ' + date(c.promo.le) + ')' : ' · +' + c.promo.jours + ' j à l’inscription') : '—');
     if (c.note) ligneDonnee('Note', c.note);
     d.append(dl);
 
@@ -419,6 +505,10 @@
     bouton('Nouveau mot de passe', () => {
       const m = prompt('Nouveau mot de passe pour ' + c.slug + ' (10 caractères minimum) :');
       return m ? api('modifier', { nom: c.slug, mdp: m }) : null;
+    });
+    bouton('Code promo', () => {
+      const v = prompt('Code promo de ' + c.slug + ' (suivi de l’apporteur ; laissez vide pour retirer).\nCela ne change pas la date de fin d’essai.', c.promo ? c.promo.code : '');
+      return v === null ? null : api('modifier', { nom: c.slug, promo: v.trim() });
     });
     bouton('Note', () => {
       const n = prompt('Note interne :', c.note || '');
