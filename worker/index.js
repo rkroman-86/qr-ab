@@ -23,7 +23,8 @@ const IA_PAR_JOUR = 30;                       // garde-fou anti-abus, par client
 const MODELES_IA = ['claude-sonnet-5-5', 'claude-haiku-5-5'];
 // Le serveur choisit le modèle selon le travail : rédaction soignée → Sonnet, pictogrammes SVG → Haiku (le moins coûteux)
 const MODELE_PAR_TYPE = { texte: 'claude-sonnet-5-5', picto: 'claude-haiku-5-5' };
-const DUREE_EXPRESS = 30 * 60 * 1000;          // une création express payée reste utilisable 30 min (reprise après une erreur)
+const DUREE_EXPRESS = 30 * 60 * 1000;
+const ESSAIS_EXPRESS = 2;                       // appels IA par étape d'une création express (1 + 1 reprise)          // une création express payée reste utilisable 30 min (reprise après une erreur)
 
 /* ---------- Offre et IA ----------
    gratuit : illimité (comptes offerts, démos)
@@ -285,6 +286,8 @@ async function apiClient(request, env, slug, route) {
     });
     const txt = await r.text();
     const h = { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' };
+    if (!r.ok) console.error('IA', type, slug, r.status, txt.slice(0, 400));   // visible dans Observabilité (Cloudflare)
+    else if (/"stop_reason"\s*:\s*"max_tokens"/.test(txt)) console.error('IA', type, slug, 'réponse coupée (max_tokens)');
     if (r.ok) {
       // On ne compte qu'une réponse réussie ; on relit le compte pour ne pas écraser une écriture concurrente
       const frais = (await lireCompte(env, slug)) || compte;
@@ -417,6 +420,10 @@ async function apiClient(request, env, slug, route) {
   /* ---------- Création express : réserve d'un coup les créations IA (5 pancartes, 3 pictos, 2 images) ----------
      offert : gratuit · essai : la moitié des créations gratuites de l'essai · abonné : PRIX_EXPRESS sur le crédit IA.
      Les 3 étapes suivent (ia texte, ia picto, fond) avec l'en-tête x-qrbc-express : elles ne sont plus décomptées. */
+  if (route === 'express/fin' && m === 'POST') {          // l'éditeur a tout reçu : la réservation est close
+    if (compte.express) { delete compte.express; await ecrireCompte(env, compte); }
+    return json({ ok: true, compte: await resumeAvecOffre(env, compte) });
+  }
   if (route === 'express' && m === 'POST') {
     if (!actif(compte)) throw new ErreurAPI(402, compte.plan === 'essai'
       ? 'Votre essai est terminé : abonnez-vous pour continuer à utiliser l’IA.'
@@ -432,10 +439,12 @@ async function apiClient(request, env, slug, route) {
       compte.ia.depense = (compte.ia.depense || 0) + cout.prix;
     }
     compte.ia.express = (compte.ia.express || 0) + 1;
+    // restant = appels possibles par étape : 1 + 1 reprise (réponse IA reçue mais illisible, coupure réseau…)
+    const n = ESSAIS_EXPRESS;
     const restant = compte.plan === 'essai'
-      ? { texte: cout.essai.texte ? 1 : 0, picto: cout.essai.picto ? 1 : 0, fond: cout.essai.fond && env.AI ? 1 : 0 }
-      : { texte: 1, picto: 1, fond: env.AI ? 1 : 0 };
-    compte.express = { jusqua: new Date(Date.now() + DUREE_EXPRESS).toISOString(), restant };
+      ? { texte: cout.essai.texte ? n : 0, picto: cout.essai.picto ? n : 0, fond: cout.essai.fond && env.AI ? n : 0 }
+      : { texte: n, picto: n, fond: env.AI ? n : 0 };
+    compte.express = { jusqua: new Date(Date.now() + DUREE_EXPRESS).toISOString(), restant, faits: {} };
     await ecrireCompte(env, compte);
     return json({ express: compte.express, compte: await resumeAvecOffre(env, compte) });
   }
@@ -1219,7 +1228,11 @@ function resumeCompte(c) {
 
 /* Inclus dans le quota, débité du crédit, ou refus avec l'offre adaptée */
 function modeFacturation(c, type, express) {
-  if (express && expressEnCours(c) && c.express.restant[type] > 0) return 'express';
+  if (express) {
+    // Une étape de création express ne touche jamais aux créations normales : déjà réglée, ou refusée
+    if (expressEnCours(c) && c.express.restant[type] > 0) return 'express';
+    throw new ErreurAPI(402, 'Les essais de cette étape de la création express sont épuisés. Rien n’a été décompté : écrivez-nous si le problème continue.', 'express_epuise');
+  }
   if (c.plan === 'gratuit') return 'illimite';
   const q = QUOTAS_IA[c.plan];
   const utilises = (c.ia && c.ia[type]) || 0;
@@ -1243,7 +1256,10 @@ function modeFacturation(c, type, express) {
 function euros(c) { return ((c || 0) / 100).toFixed(2).replace('.', ',').replace(',00', '') + ' €'; }
 function facturer(c, type, mode) {
   if (mode === 'express') {                      // déjà payé au lancement de la création express
-    if (c.express && c.express.restant) c.express.restant[type] = Math.max(0, (c.express.restant[type] || 0) - 1);
+    if (c.express && c.express.restant) {
+      c.express.restant[type] = Math.max(0, (c.express.restant[type] || 0) - 1);
+      c.express.faits = Object.assign({}, c.express.faits, { [type]: true });
+    }
     return;
   }
   if (mode === 'illimite' || mode === 'inclus') { c.ia = c.ia || {}; c.ia[type] = (c.ia[type] || 0) + 1; }

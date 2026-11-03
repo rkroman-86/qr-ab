@@ -1025,6 +1025,7 @@
 
     // Informations saisies : nom, description, contacts (avant la rédaction, qui cite les moyens de contact)
     cfg.titre = d.nom;
+    cfg.home.actif = true;                                        // la création express remplit la page Home : on l'active
     Object.assign(cfg.home.ia, { description: d.description, zone: d.zone, ton: d.ton, nombre: NB_EXPRESS });
     contactExpress('tel', d.tel);
     contactExpress('whatsapp', d.tel);
@@ -1091,6 +1092,7 @@
       expressActif = false;
       pied.innerHTML = '';
       if (!rates.length) {
+        appelAPI('express/fin', jetonCF, { method: 'POST', body: '{}' }).then(r => r.json()).then(j => afficherAbonnement(j.compte)).catch(() => {});
         titre.textContent = '✓ Votre site est prêt';
         sous.textContent = '';
         pied.append(el('div', { class: 'cout', text: 'Vérifiez tout : textes, boutons, logo et images (l’aperçu est à jour). Puis appuyez sur « Enregistrer » en bas de l’écran pour publier.' }),
@@ -2232,7 +2234,7 @@
 
     const r = await appelIA({
         model: MODELE_IA,
-        max_tokens: 3000,
+        max_tokens: 4000,
         system: systeme,
         tools: [{
           name: 'proposer_articles',
@@ -2277,8 +2279,13 @@
     }
     const blocs = j.content || [];
     const outil = blocs.find(c => c.type === 'tool_use' && c.input);
-    let liste = outil && Array.isArray(outil.input.articles) ? outil.input.articles : [];
-    let seo = outil && outil.input.seo ? outil.input.seo : null;
+    // Le modèle renvoie parfois un tableau sous forme de texte JSON, ou sous un autre nom : on accepte les deux
+    const lireJSON = v => { if (typeof v !== 'string') return v; try { return JSON.parse(v); } catch (e) { return v; } };
+    const entree = outil ? lireJSON(outil.input) || {} : {};
+    let liste = lireJSON(entree.articles);
+    if (!Array.isArray(liste)) liste = Object.values(entree).map(lireJSON).find(v => Array.isArray(v) && v.some(a => a && (a.titre || a.texte))) || [];
+    let seo = lireJSON(entree.seo);
+    if (!seo || typeof seo !== 'object') seo = null;
     if (!liste.length) {
       // Secours : JSON renvoyé en texte
       const texte = blocs.filter(c => c.type === 'text').map(c => c.text).join('\n');
@@ -2289,7 +2296,7 @@
     }
     const propre = liste.filter(a => a && (a.titre || a.texte)).slice(0, brief.nombre)
       .map(a => ({ titre: String(a.titre || '').trim(), texte: String(a.texte || '').trim() }));
-    if (!propre.length) throw new Error('Réponse vide de l’IA. Réessayez.');
+    if (!propre.length) throw new Error(j.stop_reason === 'max_tokens' ? 'Réponse de l’IA coupée (trop longue). Réessayez.' : 'Réponse vide de l’IA. Réessayez.');
     propositionSeo = seo && (seo.titre || seo.description) ? {
       titre: String(seo.titre || '').trim(), description: String(seo.description || '').trim(),
       motCle: String(seo.motCle || '').trim(), motsCles: Array.isArray(seo.motsCles) ? seo.motsCles.map(String) : []
