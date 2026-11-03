@@ -31,22 +31,35 @@
     .quota-ia{font-size:.8rem;color:var(--doux);margin:8px 0 0;text-align:center}
     .quota-ia.vide{color:var(--err)}
     .quota-ia button{border:0;background:none;color:var(--prim);font:inherit;font-weight:600;padding:0 0 0 4px;cursor:pointer;text-decoration:underline}
-    #fen-abo{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center}
-    @media (min-width:640px){#fen-abo{align-items:center}}
-    #fen-abo .fen{box-sizing:border-box;background:var(--panneau);color:var(--txt);width:min(100vw,440px);max-width:100%;max-height:92dvh;overflow:auto;border-radius:18px 18px 0 0;padding:22px 20px calc(20px + env(safe-area-inset-bottom))}
-    @media (min-width:640px){#fen-abo .fen{border-radius:18px}}
-    #fen-abo h2{margin:0 0 4px;font-size:1.2rem}
-    #fen-abo .sous{color:var(--doux);margin:0 0 16px;font-size:.92rem}
-    #fen-abo .alerte-abo{background:var(--bg);border:1px solid var(--err);color:var(--txt);border-radius:12px;padding:12px;margin:0 0 16px;font-size:.92rem}
-    #fen-abo .compteur{display:flex;justify-content:space-between;padding:10px 0;border-top:1px solid var(--ligne);font-size:.95rem}
-    #fen-abo .compteur b{font-variant-numeric:tabular-nums}
-    #fen-abo .offre{margin-top:16px;padding:16px;border-radius:14px;border:1px solid var(--prim);background:var(--bg)}
-    #fen-abo .offre .prix{font-size:1.5rem;font-weight:800;letter-spacing:-.02em}
-    #fen-abo .offre ul{margin:8px 0 12px;padding-left:18px;color:var(--doux);font-size:.9rem}
-    #fen-abo .ligne-recharge{display:flex;gap:8px;margin-top:10px}
-    #fen-abo .ligne-recharge input{flex:1;min-width:0}
-    #fen-abo .attente{margin-top:14px;padding:12px;border-radius:12px;background:var(--bg);font-size:.9rem}
-    #fen-abo .fermer{margin-top:14px}
+    #fen-abo,#fen-express{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center}
+    @media (min-width:640px){#fen-abo,#fen-express{align-items:center}}
+    #fen-abo .fen,#fen-express .fen{box-sizing:border-box;background:var(--panneau);color:var(--txt);width:min(100vw,440px);max-width:100%;max-height:92dvh;overflow:auto;border-radius:18px 18px 0 0;padding:22px 20px calc(20px + env(safe-area-inset-bottom))}
+    @media (min-width:640px){#fen-abo .fen,#fen-express .fen{border-radius:18px}}
+    #fen-abo h2,#fen-express h2{margin:0 0 4px;font-size:1.2rem}
+    #fen-abo .sous,#fen-express .sous{color:var(--doux);margin:0 0 16px;font-size:.92rem}
+    #fen-abo .alerte-abo,#fen-express .alerte-abo{background:var(--bg);border:1px solid var(--err);color:var(--txt);border-radius:12px;padding:12px;margin:0 0 16px;font-size:.92rem}
+    #fen-abo .compteur,#fen-express .compteur{display:flex;justify-content:space-between;padding:10px 0;border-top:1px solid var(--ligne);font-size:.95rem}
+    #fen-abo .compteur b,#fen-express .compteur b{font-variant-numeric:tabular-nums}
+    #fen-abo .offre,#fen-express .offre{margin-top:16px;padding:16px;border-radius:14px;border:1px solid var(--prim);background:var(--bg)}
+    #fen-abo .offre .prix,#fen-express .offre .prix{font-size:1.5rem;font-weight:800;letter-spacing:-.02em}
+    #fen-abo .offre ul,#fen-express .offre ul{margin:8px 0 12px;padding-left:18px;color:var(--doux);font-size:.9rem}
+    #fen-abo .ligne-recharge,#fen-express .ligne-recharge{display:flex;gap:8px;margin-top:10px}
+    #fen-abo .ligne-recharge input,#fen-express .ligne-recharge input{flex:1;min-width:0}
+    #fen-abo .attente,#fen-express .attente{margin-top:14px;padding:12px;border-radius:12px;background:var(--bg);font-size:.9rem}
+    #fen-abo .fermer,#fen-express .fermer{margin-top:14px}
+    .express-bandeau{display:flex;align-items:center;gap:12px;justify-content:space-between;border:1px solid color-mix(in srgb,var(--prim) 45%,var(--ligne));background:color-mix(in srgb,var(--prim) 8%,var(--panneau));border-radius:14px;padding:12px 14px;margin:0 0 14px}
+    .express-bandeau .btn{flex:none}
+    #fen-express ul{margin:0 0 14px;padding-left:18px;font-size:.92rem;line-height:1.45}
+    #fen-express li{margin:3px 0}
+    #fen-express .cout{padding:12px;border-radius:12px;background:var(--bg);border:1px solid var(--prim);font-size:.95rem;margin:0 0 14px}
+    #fen-express .boutons{display:flex;gap:10px;margin-top:6px}
+    #fen-express .boutons .btn{flex:1}
+    #fen-express .etapes{list-style:none;padding:0;margin:4px 0 14px}
+    #fen-express .etapes li{display:flex;gap:10px;align-items:baseline;padding:8px 0;border-top:1px solid var(--ligne)}
+    #fen-express .etapes .ic{width:1.3em;flex:none;text-align:center}
+    #fen-express .etapes small{color:var(--err);display:block}
+    @keyframes qp-pouls{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--prim) 60%,transparent)}50%{box-shadow:0 0 0 10px transparent}}
+    .pouls{animation:qp-pouls 1.2s ease-in-out 5}
 
     /* ---------- Connexion ---------- */
     #connexion{min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:24px 16px}
@@ -800,7 +813,7 @@
     go.addEventListener('click', async () => {
       etatFond.enCours = true; go.disabled = true; go.textContent = 'L’IA peint vos images… (≈ 20 s)'; msg.className = 'msg'; msg.textContent = '';
       try {
-        const r = await appelAPI('fond', jetonCF, { method: 'POST', body: JSON.stringify({ ambiance: etatFond.ambiance, idee: etatFond.idee }) });
+        const r = await appelAPI('fond', jetonCF, { method: 'POST', body: JSON.stringify({ ambiance: etatFond.ambiance, idee: etatFond.idee, activite: activiteEnCours() }) });
         const j = await r.json();
         medias = j.medias;
         afficherAbonnement(j.compte);
@@ -821,6 +834,291 @@
       go, quotaIA('fond'), msg
     );
     return boite;
+  }
+
+  /* =============== Création express : tout le site en une fois =============== */
+  const NB_EXPRESS = 5;                         // pancartes de la page Home
+  let expressActif = false;                     // une création express tourne (empêche de relancer)
+  const titreParDefaut = () => !cfg.titre || cfg.titre === CONFIG_DEFAUT.titre;
+
+  /* Activité en cours de saisie (pas forcément enregistrée) : sert aux images de fond */
+  function activiteEnCours() {
+    const ia = (cfg.home && cfg.home.ia) || {};
+    return { titre: titreParDefaut() ? '' : cfg.titre, sousTitre: cfg.sousTitre || '', description: ia.description || '', zone: ia.zone || '' };
+  }
+
+  function bandeauExpress() {
+    return el('div', { class: 'express-bandeau' }, [
+      el('div', {}, [
+        el('b', { text: '⚡ Création express' }),
+        el('div', { class: 'aide', style: 'margin:2px 0 0', text: 'Pressé ? Décrivez votre activité : l’IA prépare tout votre site en une minute.' })
+      ]),
+      el('button', { type: 'button', class: 'btn btn-prim', text: 'Créer mon site', onclick: () => ouvrirExpress() })
+    ]);
+  }
+
+  function fenetreExpress() {
+    const ancien = document.getElementById('fen-express'); if (ancien) ancien.remove();
+    const fond = el('div', { id: 'fen-express', role: 'dialog', 'aria-modal': 'true' });
+    const fen = el('div', { class: 'fen' });
+    fond.appendChild(fen);
+    fond.addEventListener('click', e => { if (e.target === fond && !expressActif) fond.remove(); });
+    document.body.appendChild(fond);
+    return { fond, fen, fermer: () => fond.remove() };
+  }
+
+  /* Ce que coûte la création express pour ce compte (texte affiché) */
+  function coutExpressTexte(c) {
+    const x = c.ia.express || {};
+    if (x.enCours) return 'Une création express déjà réglée est en cours : vous pouvez la reprendre sans frais jusqu’à ' +
+      new Date(x.enCours.jusqua).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) + '.';
+    if (x.mode === 'offert') return 'Inclus dans votre compte offert.';
+    if (x.mode === 'essai') {
+      const e = x.essai || {}, p = [];
+      if (e.texte) p.push(e.texte + (e.texte > 1 ? ' rédactions' : ' rédaction'));
+      if (e.picto) p.push(e.picto + (e.picto > 1 ? ' créations de motifs' : ' création de motifs'));
+      if (e.fond) p.push(e.fond + (e.fond > 1 ? ' créations d’images' : ' création d’images'));
+      return 'Coût : la moitié de vos créations IA gratuites de l’essai (' + p.join(', ') + ').';
+    }
+    return 'Coût : ' + euros(x.prix) + ' HT, débités de votre crédit IA (solde : ' + euros(c.ia.credit) + ').';
+  }
+
+  /* 1. Consentement : ce qui va se passer et ce que ça coûte */
+  async function ouvrirExpress() {
+    if (expressActif) return;
+    try { const j = await (await appelAPI('compte', jetonCF)).json(); afficherAbonnement(j.compte); } catch (e) {}
+    const c = compteCF;
+    if (!c || !c.ia) return;
+    if (!c.actif) {
+      ouvrirAbonnement(c.plan === 'essai' ? 'essai_termine' : 'abonnement_inactif',
+        c.plan === 'essai' ? 'Votre essai est terminé : abonnez-vous pour utiliser la création express.' : 'Abonnement inactif : la création express est désactivée.');
+      return;
+    }
+    const x = c.ia.express || {};
+    const avecFond = x.enCours ? x.enCours.restant.fond > 0 : !(x.mode === 'essai' && !(x.essai && x.essai.fond));
+    const avecPicto = x.enCours ? x.enCours.restant.picto > 0 : !(x.mode === 'essai' && !(x.essai && x.essai.picto));
+    const F = fenetreExpress();
+    F.fen.append(
+      el('h2', { text: '⚡ Création express' }),
+      el('p', { class: 'sous', text: 'Un formulaire va s’ouvrir pour créer votre site à partir de la description de votre activité et de votre zone d’action.' }),
+      el('ul', {}, [
+        'L’IA rédige ' + NB_EXPRESS + ' pancartes sur votre activité pour la page Home, ainsi que le référencement Google.',
+        avecPicto ? 'Elle dessine 3 pictogrammes pour votre logo.' : '',
+        avecFond ? 'Elle crée 2 images de fond.' : '',
+        'E-mail de contact : celui de votre inscription' + (c.email ? ' (' + c.email + ')' : '') + '.',
+        'Si vous indiquez un téléphone, les boutons Appeler et WhatsApp sont ajoutés.',
+        'Les pancartes actuelles de la page Home sont remplacées. Vos images et pictogrammes déjà créés sont conservés : les nouveaux s’ajoutent.',
+        'Rien n’est publié tant que vous n’appuyez pas sur Enregistrer.'
+      ].filter(Boolean).map(t => el('li', { text: t })))
+    );
+    if (!x.enCours && !x.possible) {
+      F.fen.append(el('div', { class: 'alerte-abo', text: x.message || 'La création express n’est pas disponible.' }),
+        el('div', { class: 'boutons' }, [
+          el('button', { type: 'button', class: 'btn', text: 'Fermer', onclick: F.fermer }),
+          el('button', { type: 'button', class: 'btn btn-prim', text: x.code === 'credit_insuffisant' ? 'Recharger' : 'S’abonner',
+            onclick: () => { F.fermer(); ouvrirAbonnement(x.code, x.message); } })
+        ]));
+      return;
+    }
+    F.fen.append(el('div', { class: 'cout', text: coutExpressTexte(c) }),
+      el('div', { class: 'boutons' }, [
+        el('button', { type: 'button', class: 'btn', text: 'Fermer', onclick: F.fermer }),
+        el('button', { type: 'button', class: 'btn btn-prim', text: 'Accepter', onclick: () => formulaireExpress(F) })
+      ]));
+  }
+
+  /* 2. Formulaire : nom, activité, zone, téléphone */
+  function formulaireExpress(F) {
+    const ia = cfg.home.ia = Object.assign({ description: '', zone: '', nombre: 4, ton: 'pro' }, cfg.home.ia || {});
+    const telActuel = (cfg.boutons.find(b => b && (b.type === 'tel' || b.type === 'whatsapp') && String(b.valeur || '').trim()) || {}).valeur || '';
+    const nom = el('input', { type: 'text', value: titreParDefaut() ? '' : cfg.titre, placeholder: 'Ex. : Alex VTC', autocomplete: 'organization' });
+    const desc = el('textarea', { rows: 4, value: ia.description, placeholder: 'Ex. : chauffeur privé avec van 7 places, transferts aéroports, excursions, mise à disposition' });
+    const zone = el('input', { type: 'text', value: ia.zone, placeholder: 'Ex. : Nice, Monaco, Cannes et toute la Côte d’Azur' });
+    const tel = el('input', { type: 'tel', value: telActuel, placeholder: 'Ex. : 06 12 34 56 78 (facultatif)', autocomplete: 'tel' });
+    const ton = el('select', {}, Object.keys(TONS_IA).map(k => el('option', { value: k, text: TONS_IA[k], selected: ia.ton === k })));
+    const msg = el('div', { class: 'msg' });
+    const champ = (etiq, n) => el('label', { class: 'champ' }, [el('span', { text: etiq }), n]);
+    F.fen.innerHTML = '';
+    F.fen.append(
+      el('h2', { text: '⚡ Votre activité' }),
+      el('p', { class: 'sous', text: 'Quelques mots suffisent : l’IA s’occupe du reste.' }),
+      champ('Nom de l’entreprise', nom),
+      champ('Votre activité', desc),
+      champ('Zone d’action', zone),
+      champ('Téléphone (Appeler et WhatsApp)', tel),
+      champ('Ton des textes', ton),
+      msg,
+      el('div', { class: 'boutons' }, [
+        el('button', { type: 'button', class: 'btn', text: 'Fermer', onclick: F.fermer }),
+        el('button', { type: 'button', class: 'btn btn-prim', text: 'Confirmer', onclick: confirmer })
+      ]));
+    F.fen.addEventListener('input', () => { msg.textContent = ''; });
+    nom.focus();
+    function confirmer() {
+      msg.className = 'msg err';
+      if (!nom.value.trim()) { msg.textContent = 'Indiquez le nom de votre entreprise.'; nom.focus(); return; }
+      if (desc.value.trim().length < 10) { msg.textContent = 'Décrivez l’activité en quelques mots (10 caractères minimum).'; desc.focus(); return; }
+      const chiffres = tel.value.replace(/\D/g, '');
+      if (tel.value.trim() && (chiffres.length < 8 || chiffres.length > 15)) { msg.textContent = 'Numéro de téléphone incomplet.'; tel.focus(); return; }
+      lancerExpress(F, { nom: nom.value.trim(), description: desc.value.trim(), zone: zone.value.trim(), tel: tel.value.trim(), ton: ton.value });
+    }
+  }
+
+  /* Boutons de contact : complète un bouton vide existant, sinon en ajoute un */
+  function contactExpress(cle, valeur) {
+    if (!valeur) return;
+    const m0 = MODELES[cle];
+    const b = cfg.boutons.find(x => x && x.type === m0.type);
+    if (b) { if (!String(b.valeur || '').trim()) b.valeur = valeur; b.masque = false; return; }
+    const nouveau = Object.assign({ icone: '', texte: '', type: 'lien', valeur: '', message: '', couleur: '' }, m0,
+      { texte: t(m0.texte), valeur }, m0.message ? { message: t(m0.message) } : {});
+    const iRes = cfg.boutons.findIndex(x => x && x.type === 'reseaux');     // avant le bloc des réseaux
+    if (iRes >= 0) cfg.boutons.splice(iRes, 0, nouveau); else cfg.boutons.push(nouveau);
+  }
+
+  /* 3. Réservation (paiement ou crédits d'essai), puis les 3 créations comme dans les menus habituels */
+  async function lancerExpress(F, d) {
+    expressActif = true;
+    F.fen.innerHTML = '';
+    const etapes = {
+      reserve: { nom: 'Réservation de la création express' },
+      texte: { nom: NB_EXPRESS + ' pancartes et référencement Google' },
+      picto: { nom: '3 pictogrammes pour le logo' },
+      fond: { nom: '2 images de fond' }
+    };
+    const liste = el('ul', { class: 'etapes' });
+    const dessiner = () => {
+      liste.innerHTML = '';
+      Object.values(etapes).filter(e => !e.ignore).forEach(e => liste.appendChild(el('li', {}, [
+        el('span', { class: 'ic', text: e.etat === 'ok' ? '✓' : e.etat === 'err' ? '✕' : e.etat === 'cours' ? '⏳' : '·' }),
+        el('span', {}, [document.createTextNode(t(e.nom)), ...(e.erreur ? [el('small', { text: e.erreur })] : [])])
+      ])));
+    };
+    const titre = el('h2', { text: '⚡ Création en cours…' });
+    const sous = el('p', { class: 'sous', text: 'Environ une minute. Gardez cette fenêtre ouverte.' });
+    const pied = el('div');
+    F.fen.append(titre, sous, liste, pied);
+    dessiner();
+
+    // Réservation : débite le crédit (abonné) ou la moitié des créations d'essai, une seule fois
+    etapes.reserve.etat = 'cours'; dessiner();
+    let restant;
+    try {
+      const j = await (await appelAPI('express', jetonCF, { method: 'POST', body: '{}' })).json();
+      afficherAbonnement(j.compte);
+      restant = j.express.restant;
+      etapes.reserve.etat = 'ok';
+      if (j.reprise) etapes.reserve.nom = 'Création express déjà réglée : reprise sans frais';
+    } catch (e) {
+      expressActif = false;
+      etapes.reserve.etat = 'err'; etapes.reserve.erreur = e.message === 'Failed to fetch' ? 'Connexion impossible.' : e.message;
+      titre.textContent = 'Création express impossible'; sous.textContent = '';
+      dessiner();
+      pied.appendChild(el('div', { class: 'boutons' }, [el('button', { type: 'button', class: 'btn', text: 'Fermer', onclick: F.fermer })].concat(e.status === 402
+        ? [el('button', { type: 'button', class: 'btn btn-prim', text: 'Mon abonnement', onclick: () => { F.fermer(); ouvrirAbonnement('quota', e.message); } })] : [])));
+      return;
+    }
+
+    // Informations saisies : nom, description, contacts (avant la rédaction, qui cite les moyens de contact)
+    cfg.titre = d.nom;
+    Object.assign(cfg.home.ia, { description: d.description, zone: d.zone, ton: d.ton, nombre: NB_EXPRESS });
+    contactExpress('tel', d.tel);
+    contactExpress('whatsapp', d.tel);
+    contactExpress('email', compteCF.email || '');
+    changement();
+
+    const faire = (cle, fn) => {
+      if (!restant[cle]) { etapes[cle].ignore = true; return Promise.resolve(); }
+      etapes[cle].etat = 'cours'; dessiner();
+      return fn().then(() => { etapes[cle].etat = 'ok'; }, e => {
+        etapes[cle].etat = 'err'; etapes[cle].erreur = e.message === 'Failed to fetch' ? 'Connexion impossible.' : e.message;
+      }).then(dessiner);
+    };
+    let nouveauxArticles = null;
+    const texte = () => faire('texte', async () => {
+      const articles = await redigerAvecIA({ description: d.description, zone: d.zone, nombre: NB_EXPRESS, ton: d.ton }, true);
+      if (propositionSeo) cfg.seo = Object.assign({}, cfg.seo, { titre: propositionSeo.titre, description: propositionSeo.description, motCle: propositionSeo.motCle, motsCles: propositionSeo.motsCles, zone: d.zone || (cfg.seo && cfg.seo.zone) || '' });
+      propositionSeo = null; proposition = null;
+      nouveauxArticles = articles.map(a => ({ titre: a.titre, texte: a.texte, image: '', style: 'texte' }));
+      cfg.home.articles = nouveauxArticles;
+      cfg.home.actif = true;
+    });
+    const picto = () => faire('picto', async () => {
+      const o = optionsLogo();
+      if (!o.nom || o.nom === CONFIG_DEFAUT.titre) o.nom = d.nom;
+      const nouveaux = await creerMotifsIA(o, null, true);
+      o.motifs = o.motifs.concat(nouveaux).slice(-60);       // même historique que l'atelier logo
+      o.choix = 'ia' + (o.motifs.length - nouveaux.length);
+      if (!cfg.logo) {                                        // pas encore de logo : le premier picto devient le logo
+        const png = await imageEnPNG(svgEnURL(composerLogo(o, o.motifs[o.motifs.length - nouveaux.length])), 1024);
+        const chemin = 'images/logo-' + Date.now() + '.png';
+        imagesLocales[chemin] = png;
+        imagesAEnvoyer[chemin] = png.split(',')[1];
+        cfg.logo = chemin;
+        cfg.design.logoRond = false;
+      }
+    });
+    let images = [];
+    const fond = () => faire('fond', async () => {
+      const r = await appelAPI('fond', jetonCF, { method: 'POST', headers: { 'x-qrbc-express': '1' },
+        body: JSON.stringify({ ambiance: d.ton === 'luxe' ? 'luxe' : 'photo', idee: '', activite: activiteEnCours() }) });
+      const j = await r.json();
+      medias = j.medias;
+      afficherAbonnement(j.compte);
+      images = j.nouvelles.map(n => n.chemin);
+      if (!cfg.design.imageFond && images[0]) cfg.design.imageFond = images[0];   // un fond déjà choisi est gardé
+    });
+
+    const executer = async () => {
+      await texte();                                // d'abord les textes : les dessins s'appuient sur l'activité
+      await Promise.all([picto(), fond()]);
+      // la première pancarte prend une des nouvelles images en plein écran
+      const arts = cfg.home.articles;
+      if (nouveauxArticles && arts === nouveauxArticles && arts[0] && !arts[0].image && images.length)
+        Object.assign(arts[0], { image: images[1] || images[0], style: 'photo' });
+      changement();
+      construireFormulaire();
+    };
+    await executer();
+    terminer();
+
+    function terminer() {
+      const rates = Object.keys(etapes).filter(k => etapes[k].etat === 'err');
+      expressActif = false;
+      pied.innerHTML = '';
+      if (!rates.length) {
+        titre.textContent = '✓ Votre site est prêt';
+        sous.textContent = '';
+        pied.append(el('div', { class: 'cout', text: 'Vérifiez tout : textes, boutons, logo et images (l’aperçu est à jour). Puis appuyez sur « Enregistrer » en bas de l’écran pour publier.' }),
+          el('button', { type: 'button', class: 'btn btn-prim btn-plein', text: 'Vérifier mon site', onclick: finir }));
+        return;
+      }
+      titre.textContent = 'Presque terminé';
+      sous.textContent = 'Une étape n’a pas abouti. Elle est déjà réglée : vous pouvez la relancer sans frais pendant 30 minutes.';
+      pied.append(el('div', { class: 'boutons' }, [
+        el('button', { type: 'button', class: 'btn', text: 'Vérifier mon site', onclick: finir }),
+        el('button', { type: 'button', class: 'btn btn-prim', text: 'Réessayer', onclick: async () => {
+          expressActif = true; pied.innerHTML = ''; titre.textContent = '⚡ Création en cours…';
+          rates.forEach(k => { etapes[k].erreur = ''; });
+          if (rates.includes('texte')) await texte();
+          await Promise.all([rates.includes('picto') ? picto() : null, rates.includes('fond') ? fond() : null]);
+          const arts = cfg.home.articles;
+          if (nouveauxArticles && arts === nouveauxArticles && arts[0] && !arts[0].image && images.length)
+            Object.assign(arts[0], { image: images[1] || images[0], style: 'photo' });
+          changement(); construireFormulaire();
+          terminer();
+        } })
+      ]));
+    }
+    function finir() {
+      F.fermer();
+      vueApercu = cfg.home.actif ? 'home' : 'contact';
+      majApercu();
+      const b = $('#btn-enregistrer');
+      b.classList.remove('pouls'); void b.offsetWidth; b.classList.add('pouls');
+      const e = $('#etat'); e.className = 'etat'; e.textContent = 'Site créé : vérifiez puis cliquez sur Enregistrer';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   }
 
   /* ---------------- Modèles de boutons ---------------- */
@@ -847,6 +1145,7 @@
     f.innerHTML = '';
     requestAnimationFrame(() => window.scrollTo(0, defil));
     const d = cfg.design;
+    if (CF) f.appendChild(bandeauExpress());
 
     /* Textes */
     f.appendChild(section('textes', 'Textes', true, [
@@ -1819,20 +2118,24 @@
   }
 
   /* =============== Rédaction des articles par l'IA =============== */
-  const MODELE_IA = 'claude-sonnet-5-5';
-  /* GitHub : appel direct avec la clé du client. Cloudflare : le Worker garde la clé. */
-  async function appelIA(corps) {
+  const MODELE_IA = 'claude-sonnet-5-5';      // rédaction
+  const MODELE_PICTO = 'claude-haiku-5-5';    // pictogrammes : le modèle le moins coûteux suffit
+  /* GitHub : appel direct avec la clé du client. Cloudflare : le Worker garde la clé.
+     express = étape d'une création express déjà réglée (le serveur ne la décompte pas). */
+  async function appelIA(corps, express) {
     if (!CF) return fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-api-key': secrets.anthropic, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
       body: JSON.stringify(corps)
     });
-    const r = await fetch(baseAPI() + 'ia', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + jetonCF }, body: JSON.stringify(corps) });
+    const entetes = { 'content-type': 'application/json', authorization: 'Bearer ' + jetonCF };
+    if (express) entetes['x-qrbc-express'] = '1';
+    const r = await fetch(baseAPI() + 'ia', { method: 'POST', headers: entetes, body: JSON.stringify(corps) });
     if (!r.ok) {
       let j = null;
       try { j = await r.clone().json(); } catch (e) {}
       if (j && j.erreur) {                                     // erreur du Worker (session, quota, abonnement)
-        if (j.code) ouvrirAbonnement(j.code, j.erreur);
+        if (j.code && !express) ouvrirAbonnement(j.code, j.erreur);
         throw new Error(j.erreur);
       }
     }
@@ -1851,7 +2154,7 @@
     return [...m];
   }
 
-  async function redigerAvecIA(brief) {
+  async function redigerAvecIA(brief, express) {
     const systeme = [
       'Tu es rédacteur web. Tu écris les pancartes de la page d’accueil mobile d’une petite entreprise.',
       'Chaque pancarte occupe tout l’écran d’un téléphone : un titre court et un texte bref.',
@@ -1920,7 +2223,7 @@
         }],
         tool_choice: { type: 'auto' },
         messages: [{ role: 'user', content: infos }]
-    });
+    }, express);
     let j = null;
     try { j = await r.json(); } catch (e) {}
     if (!r.ok) {
@@ -2150,7 +2453,7 @@
   }
 
   /* Un seul appel IA : 3 motifs monochromes, réutilisables à volonté */
-  async function creerMotifsIA(o, photoB64) {
+  async function creerMotifsIA(o, photoB64, express) {
     const systeme = [
       'Tu dessines des pictogrammes vectoriels destinés à des logos.',
       'Chaque pictogramme est un SVG autonome : <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">.',
@@ -2172,12 +2475,12 @@
     ].filter(Boolean).join('\n');
     const contenu = photoB64 ? [{ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: photoB64 } }, { type: 'text', text: demande }] : demande;
     const r = await appelIA({
-        model: MODELE_IA, max_tokens: 8000, system: systeme,
+        model: MODELE_PICTO, max_tokens: 8000, system: systeme,
         tools: [{ name: 'proposer_motifs', description: 'Renvoie les pictogrammes en SVG.',
           input_schema: { type: 'object', properties: { motifs: { type: 'array', items: { type: 'object', properties: { nom: { type: 'string' }, svg: { type: 'string' } }, required: ['svg'] } } }, required: ['motifs'] } }],
         tool_choice: { type: 'auto' },
         messages: [{ role: 'user', content: contenu }]
-    });
+    }, express);
     let j = null;
     try { j = await r.json(); } catch (e) {}
     if (!r.ok) {
@@ -2202,7 +2505,7 @@
     return motifs;
   }
 
-  function ouvrirCreateurLogo() {
+  function optionsLogo() {
     const o = cfg.logoIA = Object.assign({
       motifs: [], choix: 'mono', idee: '', styleMotif: 'silhouette', sourceIA: 'description',
       forme: 'rond', transparent: false, bordure: 'fine', effet: 'brillant', palette: 'theme',
@@ -2210,6 +2513,10 @@
       texte: 'nom', nom: cfg.titre || '', position: 'dessous', police: 'elegante', taille: 100, photoOrigine: false
     }, cfg.logoIA || {});
     if (!Array.isArray(o.motifs)) o.motifs = [];
+    return o;
+  }
+  function ouvrirCreateurLogo() {
+    const o = optionsLogo();
     let photo = null; // motif photo (calculé à l'ouverture, non enregistré)
 
     const fond = el('div', { class: 'modale-fond' });

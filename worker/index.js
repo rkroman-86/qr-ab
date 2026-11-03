@@ -20,14 +20,17 @@
 const DOMAINE = 'qrbc.app';
 const JOURS_ESSAI = 14;
 const IA_PAR_JOUR = 30;                       // garde-fou anti-abus, par client et par jour
-const MODELES_IA = ['claude-sonnet-5-5'];
+const MODELES_IA = ['claude-sonnet-5-5', 'claude-haiku-5-5'];
+// Le serveur choisit le modèle selon le travail : rédaction soignée → Sonnet, pictogrammes SVG → Haiku (le moins coûteux)
+const MODELE_PAR_TYPE = { texte: 'claude-sonnet-5-5', picto: 'claude-haiku-5-5' };
+const DUREE_EXPRESS = 30 * 60 * 1000;          // une création express payée reste utilisable 30 min (reprise après une erreur)
 
 /* ---------- Offre et IA ----------
    gratuit : illimité (comptes offerts, démos)
    essai   : 2 textes + 2 pictos pour toute la durée de l'essai
    payant  : 10 textes + 5 pictos par année d'abonnement, puis crédit prépayé */
 // Tarifs et quotas : réglables dans /gestion (config:tarifs) ; valeurs par défaut ci-dessous
-const TARIFS_DEFAUT = { prixAnnuel: 1800, prixTexte: 40, prixPicto: 70, prixFond: 70,
+const TARIFS_DEFAUT = { prixAnnuel: 1800, prixTexte: 40, prixPicto: 70, prixFond: 70, prixExpress: 150,
   essai: { texte: 2, picto: 2, fond: 1 }, payant: { texte: 10, picto: 5, fond: 2 } };
 const TYPES_IA = ['texte', 'picto', 'fond'];      // fond = une génération de 2 images de fond
 const MODELE_IMAGE = '@cf/black-forest-labs/flux-2-klein-9b';
@@ -42,6 +45,7 @@ const RESEND_API = 'https://api.resend.com';
 const DUREE_LIEN_MDP = 3600;                    // secondes de validité d'un lien « mot de passe oublié »
 let QUOTAS_IA = { essai: TARIFS_DEFAUT.essai, payant: TARIFS_DEFAUT.payant };
 let PRIX_IA = { texte: TARIFS_DEFAUT.prixTexte, picto: TARIFS_DEFAUT.prixPicto, fond: TARIFS_DEFAUT.prixFond };   // centimes HT, débités du crédit au-delà du quota
+let PRIX_EXPRESS = TARIFS_DEFAUT.prixExpress;   // centimes HT, création express pour un abonné (débité du crédit)
 
 async function lireTarifs(env) {
   let t = {};
@@ -49,6 +53,7 @@ async function lireTarifs(env) {
   const D = TARIFS_DEFAUT;
   return {
     prixAnnuel: t.prixAnnuel ?? D.prixAnnuel, prixTexte: t.prixTexte ?? D.prixTexte, prixPicto: t.prixPicto ?? D.prixPicto, prixFond: t.prixFond ?? D.prixFond,
+    prixExpress: t.prixExpress ?? D.prixExpress,
     essai: Object.assign({}, D.essai, t.essai), payant: Object.assign({}, D.payant, t.payant)
   };
 }
@@ -56,6 +61,7 @@ async function chargerTarifs(env) {
   const t = await lireTarifs(env);
   PRIX_ANNUEL = t.prixAnnuel;
   PRIX_IA = { texte: t.prixTexte, picto: t.prixPicto, fond: t.prixFond };
+  PRIX_EXPRESS = t.prixExpress;
   QUOTAS_IA = { essai: t.essai, payant: t.payant };
   return t;
 }
@@ -257,11 +263,11 @@ async function apiClient(request, env, slug, route) {
     const outils = Array.isArray(d.tools) ? d.tools : [];
     const type = outils.length === 1 ? OUTILS_IA[outils[0] && outils[0].name] : null;
     if (!type) throw new ErreurAPI(400, 'Demande IA non reconnue.');
-    const mode = modeFacturation(compte, type);          // lève 402 si rien n'est disponible
+    const mode = modeFacturation(compte, type, request.headers.get('x-qrbc-express') === '1');   // lève 402 si rien n'est disponible
     const jour = new Date().toISOString().slice(0, 10);
     await limiter(env, 'ia:' + slug + ':' + jour, IA_PAR_JOUR, 86400 * 2, 'Limite quotidienne de l’IA atteinte. Réessayez demain.');
     const corps = {
-      model: d.model,
+      model: MODELE_PAR_TYPE[type] || MODELES_IA[0],
       max_tokens: Math.min(Number(d.max_tokens) || 1000, type === 'picto' ? 8000 : 4000),
       system: d.system, tools: outils, tool_choice: d.tool_choice, messages: d.messages
     };
@@ -360,7 +366,7 @@ async function apiClient(request, env, slug, route) {
       ? 'Votre essai est terminé : abonnez-vous pour continuer à utiliser l’IA.'
       : 'Abonnement inactif : l’IA est désactivée.', compte.plan === 'essai' ? 'essai_termine' : 'abonnement_inactif');
     if (!env.AI) throw new ErreurAPI(503, 'La création d’images n’est pas encore activée sur le serveur.');
-    const mode = modeFacturation(compte, 'fond');
+    const mode = modeFacturation(compte, 'fond', request.headers.get('x-qrbc-express') === '1');
     const jour = new Date().toISOString().slice(0, 10);
     await limiter(env, 'ia:' + slug + ':' + jour, IA_PAR_JOUR, 86400 * 2, 'Limite quotidienne de l’IA atteinte. Réessayez demain.');
     const dd = await corpsJSON(request);
@@ -368,6 +374,13 @@ async function apiClient(request, env, slug, route) {
     const idee = String(dd.idee || '').slice(0, 300);
     let cfg = {};
     try { cfg = JSON.parse(await env.CLIENTS.get('site:' + slug + ':config.json') || '{}'); } catch (e) {}
+    // L'éditeur envoie l'activité en cours de saisie (pas encore enregistrée) : elle prime sur la page publiée
+    const act = dd.activite && typeof dd.activite === 'object' ? dd.activite : null;
+    if (act) {
+      const txt = (v, n) => String(v || '').slice(0, n).trim();
+      cfg = Object.assign({}, cfg, { titre: txt(act.titre, 120) || cfg.titre, sousTitre: txt(act.sousTitre, 200) || cfg.sousTitre,
+        home: { ia: { description: txt(act.description, 1500) || (cfg.home && cfg.home.ia && cfg.home.ia.description) || '', zone: txt(act.zone, 300) || (cfg.home && cfg.home.ia && cfg.home.ia.zone) || '' } } });
+    }
     const description = await descriptionFond(env, cfg, ambiance, idee);
 
     // 2 images en parallèle, graines différentes ; on garde celles qui réussissent
@@ -392,6 +405,32 @@ async function apiClient(request, env, slug, route) {
     facturer(frais, 'fond', mode);
     await ecrireCompte(env, frais);
     return json({ nouvelles, fonds, medias, compte: await resumeAvecOffre(env, frais) });
+  }
+
+  /* ---------- Création express : réserve d'un coup les créations IA (5 pancartes, 3 pictos, 2 images) ----------
+     offert : gratuit · essai : la moitié des créations gratuites de l'essai · abonné : PRIX_EXPRESS sur le crédit IA.
+     Les 3 étapes suivent (ia texte, ia picto, fond) avec l'en-tête x-qrbc-express : elles ne sont plus décomptées. */
+  if (route === 'express' && m === 'POST') {
+    if (!actif(compte)) throw new ErreurAPI(402, compte.plan === 'essai'
+      ? 'Votre essai est terminé : abonnez-vous pour continuer à utiliser l’IA.'
+      : 'Abonnement inactif : l’IA est désactivée.', compte.plan === 'essai' ? 'essai_termine' : 'abonnement_inactif');
+    if (!env.ANTHROPIC_KEY) throw new ErreurAPI(503, 'La rédaction IA n’est pas encore activée sur le serveur.');
+    if (expressEnCours(compte)) return json({ express: compte.express, compte: await resumeAvecOffre(env, compte), reprise: true });
+    const cout = coutExpress(compte);
+    if (!cout.possible) throw new ErreurAPI(402, cout.message, cout.code);
+    compte.ia = compte.ia || {};
+    if (compte.plan === 'essai') for (const k of TYPES_IA) compte.ia[k] = (compte.ia[k] || 0) + (cout.essai[k] || 0);
+    if (compte.plan === 'payant') {
+      compte.credit = Math.max(0, (compte.credit || 0) - cout.prix);
+      compte.ia.depense = (compte.ia.depense || 0) + cout.prix;
+    }
+    compte.ia.express = (compte.ia.express || 0) + 1;
+    const restant = compte.plan === 'essai'
+      ? { texte: cout.essai.texte ? 1 : 0, picto: cout.essai.picto ? 1 : 0, fond: cout.essai.fond && env.AI ? 1 : 0 }
+      : { texte: 1, picto: 1, fond: env.AI ? 1 : 0 };
+    compte.express = { jusqua: new Date(Date.now() + DUREE_EXPRESS).toISOString(), restant };
+    await ecrireCompte(env, compte);
+    return json({ express: compte.express, compte: await resumeAvecOffre(env, compte) });
   }
 
   if (route === 'demande' && m === 'POST') {
@@ -592,6 +631,7 @@ async function gestion(request, env, action) {
       prixTexte: centimes(d.prixTexte, 'Prix d’une rédaction'),
       prixPicto: centimes(d.prixPicto, 'Prix d’une création de motifs'),
       prixFond: centimes(d.prixFond, 'Prix d’une génération d’images de fond'),
+      prixExpress: centimes(d.prixExpress ?? (TARIFS_DEFAUT.prixExpress / 100), 'Prix d’une création express'),
       essai: { texte: entier(d.essaiTexte, 'Rédactions de l’essai'), picto: entier(d.essaiPicto, 'Motifs de l’essai'), fond: entier(d.essaiFond, 'Fonds de l’essai') },
       payant: { texte: entier(d.payantTexte, 'Rédactions de l’abonnement'), picto: entier(d.payantPicto, 'Motifs de l’abonnement'), fond: entier(d.payantFond, 'Fonds de l’abonnement') }
     };
@@ -1104,7 +1144,8 @@ function resumeCompte(c) {
       picto: { utilises: ia.picto || 0, inclus: q ? Math.max(0, q.picto + ((ia.bonus && ia.bonus.picto) || 0)) : null },
       fond: { utilises: ia.fond || 0, inclus: q ? Math.max(0, (q.fond || 0) + ((ia.bonus && ia.bonus.fond) || 0)) : null },
       credit: c.credit || 0,                       // centimes
-      prix: PRIX_IA
+      prix: PRIX_IA,
+      express: Object.assign({ prix: PRIX_EXPRESS, enCours: expressEnCours(c) ? c.express : null }, coutExpress(c))
     },
     offre: { prixAnnuel: PRIX_ANNUEL, rechargeMin: RECHARGE_MIN, quotasPayant: QUOTAS_IA.payant, tva: TVA, renouvelerAvant: RENOUVELER_AVANT },
     renouvellement: prixRenouvellement(c),
@@ -1113,7 +1154,8 @@ function resumeCompte(c) {
 }
 
 /* Inclus dans le quota, débité du crédit, ou refus avec l'offre adaptée */
-function modeFacturation(c, type) {
+function modeFacturation(c, type, express) {
+  if (express && expressEnCours(c) && c.express.restant[type] > 0) return 'express';
   if (c.plan === 'gratuit') return 'illimite';
   const q = QUOTAS_IA[c.plan];
   const utilises = (c.ia && c.ia[type]) || 0;
@@ -1136,11 +1178,37 @@ function modeFacturation(c, type) {
 }
 function euros(c) { return ((c || 0) / 100).toFixed(2).replace('.', ',').replace(',00', '') + ' €'; }
 function facturer(c, type, mode) {
+  if (mode === 'express') {                      // déjà payé au lancement de la création express
+    if (c.express && c.express.restant) c.express.restant[type] = Math.max(0, (c.express.restant[type] || 0) - 1);
+    return;
+  }
   if (mode === 'illimite' || mode === 'inclus') { c.ia = c.ia || {}; c.ia[type] = (c.ia[type] || 0) + 1; }
   if (mode === 'illimite') return;
   if (mode === 'credit') c.credit = Math.max(0, (c.credit || 0) - PRIX_IA[type]);
   c.ia.depense = (c.ia.depense || 0) + (mode === 'credit' ? PRIX_IA[type] : 0);
 }
+function expressEnCours(c) {
+  return !!(c.express && c.express.restant && Date.parse(c.express.jusqua) > Date.now() && TYPES_IA.some(k => c.express.restant[k] > 0));
+}
+/* Ce que coûte une création express pour ce compte, et si elle est possible maintenant */
+function coutExpress(c) {
+  if (c.plan === 'gratuit') return { possible: true, mode: 'offert' };
+  if (c.plan === 'essai') {
+    const q = QUOTAS_IA.essai, ia = c.ia || {}, bonus = ia.bonus || {};
+    const essai = {}, manque = [];
+    for (const k of TYPES_IA) {
+      essai[k] = (q[k] || 0) > 0 ? Math.ceil(q[k] / 2) : 0;                // la moitié des créations gratuites de l'essai
+      if ((q[k] || 0) + (bonus[k] || 0) - (ia[k] || 0) < essai[k]) manque.push(k);
+    }
+    if (!essai.texte || manque.length) return { possible: false, mode: 'essai', essai, code: 'essai_epuise',
+      message: 'La création express utilise la moitié de vos créations IA d’essai, et il n’en reste plus assez. Abonnez-vous (' + euros(PRIX_ANNUEL) + ' HT/an) : la création express coûtera alors ' + euros(PRIX_EXPRESS) + ' HT.' };
+    return { possible: true, mode: 'essai', essai };
+  }
+  const ok = (c.credit || 0) >= PRIX_EXPRESS;
+  return { possible: ok, mode: 'credit', prix: PRIX_EXPRESS, code: ok ? undefined : 'credit_insuffisant',
+    message: ok ? undefined : 'La création express coûte ' + euros(PRIX_EXPRESS) + ' HT sur votre crédit IA (solde : ' + euros(c.credit || 0) + '). Rechargez votre crédit (' + euros(RECHARGE_MIN) + ' HT minimum).' };
+}
+
 /* Le crédit non consommé est déduit du paiement annuel suivant */
 function prixRenouvellement(c) {
   const deduction = Math.min(c.credit || 0, PRIX_ANNUEL);

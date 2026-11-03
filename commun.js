@@ -673,6 +673,7 @@ async function appelAPI(chemin, jeton, init) {
   init = init || {};
   const entetes = { 'content-type': 'application/json' };
   if (jeton) entetes.authorization = 'Bearer ' + jeton;
+  Object.assign(entetes, init.headers || {});
   const r = await fetch(baseAPI() + chemin, Object.assign({ cache: 'no-store' }, init, { headers: entetes }));
   if (!r.ok) {
     let msg = r.status + ' ' + r.statusText;

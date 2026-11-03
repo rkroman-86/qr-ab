@@ -121,6 +121,7 @@
         <label><span>Prix d’une rédaction de textes (€ HT)</span><input type="text" inputmode="decimal" id="t-prixTexte"></label>
         <label><span>Prix d’une création de pictos (€ HT)</span><input type="text" inputmode="decimal" id="t-prixPicto"></label>
         <label><span>Prix d’une création d’images de fond, 2 images (€ HT)</span><input type="text" inputmode="decimal" id="t-prixFond"></label>
+        <label><span>Prix d’une création express pour un abonné (€ HT)</span><input type="text" inputmode="decimal" id="t-prixExpress"></label>
         <span></span>
         <label><span>Essai 14 jours : rédactions offertes</span><input type="number" min="0" step="1" id="t-essaiTexte"></label>
         <label><span>Essai 14 jours : créations de pictos offertes</span><input type="number" min="0" step="1" id="t-essaiPicto"></label>
@@ -220,9 +221,9 @@
   });
 
   /* ---------- Tarifs et quotas ---------- */
-  const CHAMPS_TARIFS = ['prixAnnuel', 'prixTexte', 'prixPicto', 'prixFond', 'essaiTexte', 'essaiPicto', 'essaiFond', 'payantTexte', 'payantPicto', 'payantFond'];
+  const CHAMPS_TARIFS = ['prixAnnuel', 'prixTexte', 'prixPicto', 'prixFond', 'prixExpress', 'essaiTexte', 'essaiPicto', 'essaiFond', 'payantTexte', 'payantPicto', 'payantFond'];
   const versChamps = t => ({
-    prixAnnuel: t.prixAnnuel / 100, prixTexte: t.prixTexte / 100, prixPicto: t.prixPicto / 100, prixFond: t.prixFond / 100,
+    prixAnnuel: t.prixAnnuel / 100, prixTexte: t.prixTexte / 100, prixPicto: t.prixPicto / 100, prixFond: t.prixFond / 100, prixExpress: t.prixExpress / 100,
     essaiTexte: t.essai.texte, essaiPicto: t.essai.picto, essaiFond: t.essai.fond,
     payantTexte: t.payant.texte, payantPicto: t.payant.picto, payantFond: t.payant.fond
   });
@@ -237,7 +238,7 @@
     const e = x => isFinite(x) ? x.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }) : '?';
     $('#t-apercu').textContent = 'Le client voit : ' + e(n('prixAnnuel')) + ' HT/an (' + e(n('prixAnnuel') * 1.2) + ' TTC, soit ' + e(n('prixAnnuel') / 12) + ' HT/mois) · essai : ' +
       n('essaiTexte') + ' rédaction(s) + ' + n('essaiPicto') + ' picto(s) + ' + n('essaiFond') + ' fond(s) · abonnement : ' + n('payantTexte') + ' + ' + n('payantPicto') + ' + ' + n('payantFond') +
-      ' par an · au-delà ' + e(n('prixTexte')) + ' / ' + e(n('prixPicto')) + ' / ' + e(n('prixFond')) + ' HT';
+      ' par an · au-delà ' + e(n('prixTexte')) + ' / ' + e(n('prixPicto')) + ' / ' + e(n('prixFond')) + ' HT · création express ' + e(n('prixExpress')) + ' HT (essai : moitié des créations offertes)';
   }
   CHAMPS_TARIFS.forEach(k => $('#t-' + k).addEventListener('input', apercuTarifs));
   async function chargerTarifs() { const r = await api('tarifs'); tarifsDefaut = r.defaut; remplirTarifs(r.tarifs); }
