@@ -333,9 +333,10 @@
     $('#editeur').classList.remove('cache');
     construireFormulaire();
     majApercu();
-    if (!partageAJour()) {
+    if (!partageAJour() || !iconesAJour()) {
       changement();
-      const e = $('#etat'); e.className = 'etat'; e.textContent = 'Nouvelle image d’aperçu des liens (WhatsApp…) : cliquez sur Enregistrer';
+      const e = $('#etat'); e.className = 'etat';
+      e.textContent = !iconesAJour() ? 'Nouveau : votre page s’installe comme une appli. Cliquez sur Enregistrer pour l’activer.' : 'Nouvelle image d’aperçu des liens (WhatsApp…) : cliquez sur Enregistrer';
     }
   }
 
@@ -1250,7 +1251,10 @@
       bascule('Encadrer le contenu (carte)', d, 'carte'),
       bascule('Tous les boutons en icônes rondes', d, 'tousRonds'),
       bascule('Noms sous les icônes', d, 'nomsReseaux'),
-      bascule('Icônes aux couleurs du thème', d, 'reseauxTheme')
+      bascule('Icônes aux couleurs du thème', d, 'reseauxTheme'),
+      ...(CF ? [bascule('Bouton « Installer l’appli » en bas de la page', d, 'installer'),
+        (() => { const c = champTexte('Nom sous l’icône de l’appli (15 caractères max.)', cfg, 'appNom', { ph: nomCourtAppli(cfg.titre) });
+          c.querySelector('input').maxLength = 15; c.style.marginTop = '10px'; return c; })()] : [])
     ]));
 
     /* Image de fond */
@@ -1417,6 +1421,40 @@
     imagesLocales[chemin] = data;
     imagesAEnvoyer[chemin] = data.split(',')[1];
     cfg.partage = { chemin, cle: clePartage(), l: PARTAGE_L, h: PARTAGE_H };
+  }
+
+  /* Icônes de l'appli (page installable) : 192, 512 et 512 « maskable », à partir du logo ou des initiales */
+  function cleIcones() { const d = cfg.design; return [cfg.logo, d.fond, d.accent, cfg.logo ? '' : initiales(cfg.titre)].join('|'); }
+  function iconesAJour() { return !CF || (cfg.appIcones && cfg.appIcones.i512 && cfg.appIcones.cle === cleIcones()); }
+  async function preparerIconesAppli() {
+    if (iconesAJour()) return;
+    const d = cfg.design;
+    const logo = await chargerImage(cfg.logo ? (imagesLocales[cfg.logo] || cfg.logo) : '');
+    const dessiner = (taille, part) => {
+      const cv = document.createElement('canvas'); cv.width = cv.height = taille;
+      const ctx = cv.getContext('2d');
+      if (logo && logo.width) {
+        ctx.fillStyle = d.fond || '#ffffff'; ctx.fillRect(0, 0, taille, taille);
+        const k = Math.min(taille * part / logo.width, taille * part / logo.height);
+        ctx.drawImage(logo, (taille - logo.width * k) / 2, (taille - logo.height * k) / 2, logo.width * k, logo.height * k);
+      } else {
+        const fondI = d.accent || '#2b2620';
+        ctx.fillStyle = fondI; ctx.fillRect(0, 0, taille, taille);
+        const ini = initiales(cfg.titre).slice(0, 2);
+        ctx.fillStyle = luminance(fondI) > 0.55 ? '#111111' : '#ffffff';
+        ctx.font = '700 ' + Math.round(taille * part * (ini.length > 1 ? 0.5 : 0.62)) + 'px system-ui, -apple-system, Roboto, Arial, sans-serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(ini, taille / 2, taille / 2 + taille * 0.02);
+      }
+      return cv.toDataURL('image/png');
+    };
+    const gen = 'images/app-' + Date.now() + '-';
+    const ic = { cle: cleIcones(), i192: gen + '192.png', i512: gen + '512.png', m512: gen + 'm512.png' };
+    let images;
+    try { images = { [ic.i192]: dessiner(192, 0.84), [ic.i512]: dessiner(512, 0.84), [ic.m512]: dessiner(512, 0.62) }; }
+    catch (e) { return; }                        // logo illisible : on garde les icônes précédentes
+    for (const ch in images) { imagesLocales[ch] = images[ch]; imagesAEnvoyer[ch] = images[ch].split(',')[1]; }
+    cfg.appIcones = ic;
   }
 
   function chargerImage(src) {
@@ -1655,11 +1693,6 @@
   function contraste(a, b) { const la = luminance(a), lb = luminance(b); return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05); }
   // Accent sur le fond du thème (sans photo) : s'il ressort trop peu, on prend la couleur du texte
   const accentSurFond = (D, texte) => D.fondImg ? texte : (contraste(D.d.accent, D.d.fond) >= 2.2 ? D.d.accent : D.d.texte);
-  function initiales(titre) {
-    const mots = String(titre || '').split(/[\s'’-]+/).filter(m => m.length > 2 || /^[A-Z0-9]/.test(m));
-    const l = (mots.length ? mots : [String(titre || '?')]).slice(0, 3).map(m => m[0]).join('').toUpperCase();
-    return l || '?';
-  }
   function aleatoire(graine) { let x = graine >>> 0 || 1; return () => ((x = (x * 1664525 + 1013904223) >>> 0) / 4294967296); }
   function legendeQR(ctx, D, texte, cx, y, couleur, taille) {
     ctx.save(); ctx.fillStyle = couleur; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
@@ -3014,6 +3047,7 @@
     try {
       // 0. image d'aperçu des liens, refaite seulement si le fond ou le logo a changé
       try { await preparerImagePartage(); } catch (e) { console.warn('Aperçu des liens non mis à jour', e); }
+      try { await preparerIconesAppli(); } catch (e) { console.warn('Icônes de l’appli non mises à jour', e); }
       // 1. images d'abord, pour que la page ne pointe jamais vers une image absente
       const chemins = Object.keys(imagesAEnvoyer).filter(p => CF || JSON.stringify(cfg).includes(p));
       for (const p of chemins) {

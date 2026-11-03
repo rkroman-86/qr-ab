@@ -152,12 +152,16 @@ async function siteClient(request, env, url, slug) {
   if (p === '/admin' || p === '/admin/' || p === '/admin.html') return statique(env, request, '/admin.html', true);
   if (FICHIERS_STATIQUES.has(p)) return statique(env, request, p);
   if (p === '/robots.txt') return texte('User-agent: *\nAllow: /\nDisallow: /admin\nSitemap: https://' + slug + '.' + DOMAINE + '/sitemap.xml\n');
+  // Page installable comme une appli : service worker propre à la page, icônes qrbc par défaut
+  if (p === '/sw.js') return new Response(SW_PAGE, { headers: { 'content-type': 'application/javascript; charset=utf-8', 'cache-control': 'no-cache' } });
+  if (FICHIERS_PWA.has(p) && /\.png$/.test(p)) return statique(env, request, p);
 
   const compte = await lireCompte(env, slug);
   if (!compte) return pageInfo('Page introuvable', 'Cette adresse n’est pas encore utilisée.', 404);
   if (!actif(compte)) return pageInfo('Page en pause', 'Cette page est momentanément indisponible.', 200);
 
   if (p === '/contact') return Response.redirect(url.origin + '/#contact', 302);
+  if (p === '/manifest.webmanifest') return manifestePage(env, slug);
   if (p === '/config.json') {
     const c = await env.CLIENTS.get('site:' + slug + ':config.json');
     return new Response(c || '{}', { headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } });
@@ -189,9 +193,55 @@ async function pageDemarrage(env, slug, vue) {
     '<title>' + esc(titre) + '</title>' + (desc ? '<meta name="description" content="' + esc(desc) + '">' : '') +
     '<style>html,body{margin:0;height:100%}#page{min-height:100vh;min-height:100dvh;display:flex}' +
     '#page>.qp{min-height:100vh;min-height:100dvh}#page>.qh{height:100vh;height:100dvh}body.mode-home{overflow:hidden}</style>' +
+    '<link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/apple-touch-icon.png">' +
     '</head><body><div id="page"></div><script src="/commun.js"></script>' +
     '<script>window.QP_VUE=' + JSON.stringify(vue) + ';(new Function(BOOT_SITE))();</script></body></html>';
 }
+
+/* Fiche de l'appli d'une page : nom, couleurs et icônes tirés de la configuration enregistrée */
+async function manifestePage(env, slug) {
+  let cfg = {};
+  try { cfg = JSON.parse(await env.CLIENTS.get('site:' + slug + ':config.json') || '{}'); } catch (e) {}
+  const d = cfg.design || {}, ic = cfg.appIcones || {};
+  const couleur = /^#[0-9a-f]{3,8}$/i.test(d.fond || '') ? d.fond : '#f5f1ea';
+  const nom = String(cfg.titre || slug).trim().slice(0, 45);
+  const court = String(cfg.appNom || '').trim().slice(0, 15) || nomCourt(nom);
+  const icones = ic.i192 && ic.i512 ? [
+    { src: '/' + ic.i192, sizes: '192x192', type: 'image/png', purpose: 'any' },
+    { src: '/' + ic.i512, sizes: '512x512', type: 'image/png', purpose: 'any' },
+    { src: '/' + (ic.m512 || ic.i512), sizes: '512x512', type: 'image/png', purpose: 'maskable' }
+  ] : [
+    { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+    { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+    { src: '/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
+  ];
+  const m = {
+    id: '/', name: nom, short_name: court, description: String((cfg.seo && cfg.seo.description) || cfg.sousTitre || '').slice(0, 300),
+    start_url: '/', scope: '/', display: 'standalone', orientation: 'portrait', lang: 'fr',
+    background_color: couleur, theme_color: couleur, icons: icones
+  };
+  return new Response(JSON.stringify(m), { headers: { 'content-type': 'application/manifest+json; charset=utf-8', 'cache-control': 'no-cache' } });
+}
+function nomCourt(t) {
+  if (t.length <= 12) return t;
+  let n = '';
+  for (const m of t.split(/[\s,–-]+/).filter(Boolean)) { if ((n + ' ' + m).trim().length > 12) break; n = (n + ' ' + m).trim(); }
+  return (n.replace(/(\s+(à|a|au|aux|de|du|des|la|le|les|et|en|d’|d'|l’|l'|&))+$/i, '') || n || t.slice(0, 12)).trim();
+}
+/* Service worker d'une page client : réseau d'abord, dernière copie si pas de réseau (appels, WhatsApp… restent accessibles) */
+const SW_PAGE = `const V = 'page-v1';
+self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
+self.addEventListener('fetch', e => {
+  const r = e.request, u = new URL(r.url);
+  if (r.method !== 'GET' || u.origin !== location.origin || u.pathname.startsWith('/api/') || /^\\/admin/.test(u.pathname)) return;
+  const cle = u.origin + (u.pathname === '/index.html' ? '/' : u.pathname);       // config.json?t=… → une seule copie
+  e.respondWith(fetch(r).then(rep => {
+    if (rep.ok && rep.type === 'basic') { const c = rep.clone(); caches.open(V).then(x => x.put(cle, c)); }
+    return rep;
+  }).catch(() => caches.match(cle).then(m => m || (r.mode === 'navigate' ? caches.match(u.origin + '/') : undefined))
+    .then(m => m || new Response('Pas de connexion', { status: 503, headers: { 'content-type': 'text/plain; charset=utf-8' } }))));
+});`;
 
 /* ===================== API d'un client ===================== */
 async function apiClient(request, env, slug, route) {
@@ -235,7 +285,12 @@ async function apiClient(request, env, slug, route) {
       const type = typeImage(octets);
       if (!type) throw new ErreurAPI(415, 'Format d’image non accepté (JPEG, PNG ou WebP).');
       await env.CLIENTS.put(cle, octets, { metadata: { type } });
-      if (/^images\/partage-/.test(chemin)) {
+      if (/^images\/app-\d+-/.test(chemin)) {
+        // icônes de l'appli (3 fichiers d'une même génération) : on efface les générations précédentes
+        const gen = chemin.match(/^images\/(app-\d+-)/)[1];
+        const l = await env.CLIENTS.list({ prefix: 'img:' + slug + ':app-' });
+        for (const k of l.keys) if (!k.name.includes(':' + gen)) await env.CLIENTS.delete(k.name);
+      } else if (/^images\/partage-/.test(chemin)) {
         // image d'aperçu des liens : hors « Mes images », une seule gardée (les précédentes sont effacées)
         const l = await env.CLIENTS.list({ prefix: 'img:' + slug + ':partage-' });
         for (const k of l.keys) if (k.name !== cle) await env.CLIENTS.delete(k.name);
@@ -479,6 +534,7 @@ function genreImage(chemin) {
   if (/^fond/.test(n)) return 'fond';
   if (/^logo/.test(n)) return 'logo';
   if (/^partage/.test(n)) return 'partage';
+  if (/^app-\d+-/.test(n)) return 'appli';
   return 'article';
 }
 /* Médiathèque : liste des images d'un client, les plus récentes d'abord.

@@ -124,7 +124,8 @@ const CONFIG_DEFAUT = {
   design: {
     theme: 'sable', fond: '#f5f1ea', fond2: '#e9e0d2', texte: '#2b2620', accent: '#2b2620',
     imageFond: '', voile: 40, police: 'moderne', forme: 'arrondi', style: 'plein',
-    ombre: true, carte: false, logoRond: false, nomsReseaux: false, reseauxTheme: false, tousRonds: false, disposition: 'centre'
+    ombre: true, carte: false, logoRond: false, nomsReseaux: false, reseauxTheme: false, tousRonds: false, disposition: 'centre',
+    installer: true
   },
   boutons: []
 };
@@ -266,6 +267,17 @@ const CSS_PAGE = `
   padding:9px 18px;border-radius:999px;background:rgba(0,0,0,.38);color:#fff;font-weight:600;font-size:.88rem;text-decoration:none;
   white-space:nowrap;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 4px 14px rgba(0,0,0,.18)}
 .qp-avec-home{padding-top:76px}
+.qp-avec-appli{padding-bottom:72px}
+.qp-appli{position:absolute;bottom:calc(14px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);z-index:4;
+  display:inline-flex;align-items:center;gap:7px;padding:8px 16px;border:0;border-radius:999px;cursor:pointer;
+  background:rgba(0,0,0,.30);color:#fff;font:600 .82rem/1.2 var(--police);white-space:nowrap;
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);opacity:.85}
+.qp-appli svg{width:15px;height:15px;flex:none}
+.qp-aide-appli{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.5);display:flex;align-items:flex-end;justify-content:center;font-family:system-ui,sans-serif}
+.qp-aide-appli>div{background:#fff;color:#1b1b1b;width:min(100%,420px);border-radius:20px 20px 0 0;padding:22px 20px calc(22px + env(safe-area-inset-bottom));box-sizing:border-box}
+.qp-aide-appli b{display:block;font-size:1.1rem;margin-bottom:8px}
+.qp-aide-appli p{margin:0 0 10px;line-height:1.5}
+.qp-aide-appli button{margin-top:6px;width:100%;padding:12px;border:0;border-radius:12px;background:#1b1b1b;color:#fff;font:600 1rem system-ui,sans-serif}
 /* ---------- Page Home : pancartes plein écran ---------- */
 .qh{position:relative;width:100%;height:100%;overflow:hidden;font-family:var(--police);color:var(--texte);background:var(--fond)}
 .qh *{box-sizing:border-box}
@@ -538,8 +550,50 @@ function rendrePage(cfgBrut, racine, opts) {
     page.appendChild(l);
     page.classList.add('qp-avec-home');
   }
+  // « Installer l'appli » : discret, en bas ; seulement sur les pages qrbc (pas une fois installée)
+  if (d.installer !== false && (opts.apercu || (pageInstallable() && !appliInstallee()))) {
+    const b = doc.createElement('button');
+    b.type = 'button';
+    b.className = 'qp-appli';
+    b.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M12 7v7M9 11l3 3 3-3"/></svg>';
+    b.appendChild(doc.createTextNode('Installer l’appli'));
+    if (!opts.apercu) b.addEventListener('click', () => installerAppli(doc));
+    page.appendChild(b);
+    page.classList.add('qp-avec-appli');
+  }
   racine.appendChild(page);
   return cfg;
+}
+
+/* ---------- Page installable comme une appli (PWA) ---------- */
+let QP_INVITE_INSTALL = null;
+function pageInstallable() { return typeof location !== 'undefined' && /\.qrbc\.app$/i.test(location.hostname) && !/^\/(admin|app)\b/.test(location.pathname); }
+function appliInstallee() {
+  try { return window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; } catch (e) { return false; }
+}
+if (typeof window !== 'undefined' && pageInstallable()) {
+  window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); QP_INVITE_INSTALL = e; });
+  window.addEventListener('appinstalled', () => { document.querySelectorAll('.qp-appli').forEach(b => b.remove()); });
+}
+async function installerAppli(doc) {
+  if (QP_INVITE_INSTALL) {                       // Android / Chrome / Edge : fenêtre d'installation native
+    const ev = QP_INVITE_INSTALL; QP_INVITE_INSTALL = null;
+    try { ev.prompt(); const r = await ev.userChoice; if (r && r.outcome === 'accepted') doc.querySelectorAll('.qp-appli').forEach(b => b.remove()); } catch (e) {}
+    return;
+  }
+  const ua = navigator.userAgent || '';
+  const ios = /iPad|iPhone|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+  const mobile = ios || /Android|Mobi/i.test(ua);
+  const txt = ios
+    ? ['Touchez le bouton <b style="display:inline">Partager</b> (le carré avec une flèche vers le haut) dans la barre de Safari.', 'Puis choisissez <b style="display:inline">« Sur l’écran d’accueil »</b> et touchez Ajouter.']
+    : mobile
+      ? ['Ouvrez le menu <b style="display:inline">⋮</b> du navigateur.', 'Puis choisissez <b style="display:inline">« Installer l’application »</b> ou <b style="display:inline">« Ajouter à l’écran d’accueil »</b>.']
+      : ['Cliquez sur l’icône d’installation à droite de la barre d’adresse,', 'ou ouvrez le menu du navigateur et choisissez <b style="display:inline">« Installer »</b>.'];
+  const fond = doc.createElement('div');
+  fond.className = 'qp-aide-appli';
+  fond.innerHTML = '<div><b>Installer l’appli</b><p>' + txt[0] + '</p><p>' + txt[1] + '</p><p style="opacity:.7;font-size:.9rem">L’icône apparaît ensuite avec vos applis : la page s’ouvre en plein écran, même sans réseau.</p><button type="button">J’ai compris</button></div>';
+  fond.addEventListener('click', e => { if (e.target === fond || e.target.tagName === 'BUTTON') fond.remove(); });
+  doc.body.appendChild(fond);
 }
 
 /* =========================================================
@@ -897,6 +951,16 @@ function urlAbsolue(base, p) {
   return base.replace(/\/?$/, '/') + String(p).replace(/^\.?\//, '');
 }
 
+/* Nom sous l'icône de l'appli : court (les téléphones coupent vers 12 caractères) */
+function nomCourtAppli(titre) {
+  const t = String(titre || '').trim() || 'Ma page';
+  if (t.length <= 12) return t;
+  const mots = t.split(/[\s,–-]+/).filter(Boolean);
+  let n = '';
+  for (const m of mots) { if ((n + ' ' + m).trim().length > 12) break; n = (n + ' ' + m).trim(); }
+  return (n.replace(/(\s+(à|a|au|aux|de|du|des|la|le|les|et|en|d’|d'|l’|l'|&))+$/i, '') || n || t.slice(0, 12)).trim();
+}
+
 function couper(t, max) {
   t = String(t || '').replace(/\s+/g, ' ').trim();
   if (t.length <= max) return t;
@@ -954,6 +1018,7 @@ const BOOT_SITE = `(function(){
     else rendrePage(cfg, racine, { lienHome: avecHome, hrefHome: c.home.arrivee === 'home' ? '#accueil' : 'accueil.html' });
     document.body.style.background = c.design.fond;
   }
+  if ('serviceWorker' in navigator && /\.qrbc\.app$/i.test(location.hostname)) navigator.serviceWorker.register('/sw.js').catch(function () {});
   fetch('config.json?t=' + Date.now(), { cache: 'no-store' })
     .then(function (r) { return r.json(); })
     .then(function (c) { cfg = c; afficher(); window.addEventListener('hashchange', afficher); })
@@ -976,6 +1041,9 @@ function pageHTML(o) {
       meta('og:image:height', String(o.imageTaille[1]), 'property') + meta('og:image:alt', o.nom, 'property') : '') +
     meta('twitter:card', o.image ? 'summary_large_image' : 'summary') + meta('twitter:image', o.image) +
     meta('theme-color', o.couleur) +
+    (o.appli ? '<link rel="manifest" href="/manifest.webmanifest">\n' + meta('mobile-web-app-capable', 'yes') + meta('apple-mobile-web-app-capable', 'yes') +
+      meta('apple-mobile-web-app-title', o.appli.nom) + meta('apple-mobile-web-app-status-bar-style', 'black-translucent') +
+      '<link rel="apple-touch-icon" href="' + echapperHTML(o.appli.icone) + '">\n' : '') +
     (o.icone ? '<link rel="icon" href="' + echapperHTML(o.icone) + '">\n' : '') +
     '<script type="application/ld+json">\n' + o.jsonld + '\n</script>\n' +
     '<style>' + CSS_BASE_SITE + '</style>\n<style id="qp-css">' + CSS_PAGE + '</style>\n' +
@@ -996,6 +1064,8 @@ function genererFichiersSite(cfgBrut, base, doc) {
   const partage = cfg.partage && cfg.partage.chemin ? cfg.partage : null;     // image d'aperçu 1200×630 (voir l'éditeur)
   const image = urlAbsolue(base, partage ? partage.chemin : (d.imageFond || cfg.logo));
   const imageTaille = partage ? [partage.l || 1200, partage.h || 630] : null;
+  // Pages hébergées sur qrbc.app : installables comme une appli (manifeste servi par le serveur)
+  const appli = /\.qrbc\.app\/$/i.test(base) ? { nom: String(cfg.appNom || '').trim().slice(0, 15) || nomCourtAppli(cfg.titre), icone: (cfg.appIcones && cfg.appIcones.i192) || '/apple-touch-icon.png' } : null;
   const icone = cfg.logo || '';
   const titreSite = seo.titre || [cfg.titre, cfg.sousTitre].filter(Boolean).join(' – ') || 'Bienvenue';
   const descSite = seo.description || couper([cfg.sousTitre, cfg.pied].filter(Boolean).join('. '), 155);
@@ -1009,7 +1079,7 @@ function genererFichiersSite(cfgBrut, base, doc) {
 
   const fichiers = {};
   fichiers['index.html'] = pageHTML({
-    titre: titreSite, description: descSite, canonique: base, nom: cfg.titre, image, imageTaille, icone, couleur: d.fond, jsonld,
+    titre: titreSite, description: descSite, canonique: base, nom: cfg.titre, image, imageTaille, icone, couleur: d.fond, jsonld, appli,
     contenu: preRendu(arriveeHome ? 'home' : 'contact'), modeHome: arriveeHome, vue: ''
   });
 
@@ -1024,7 +1094,7 @@ function genererFichiersSite(cfgBrut, base, doc) {
     const descHome = arriveeHome ? descSite : couper(art.texte || descSite, 155);
     fichiers['accueil.html'] = pageHTML({
       titre: titreHome, description: descHome, canonique: arriveeHome ? base : base + 'accueil.html', nom: cfg.titre,
-      image, imageTaille, icone, couleur: d.fond, jsonld, contenu: preRendu('home'), modeHome: true, vue: 'home'
+      image, imageTaille, icone, couleur: d.fond, jsonld, appli, contenu: preRendu('home'), modeHome: true, vue: 'home'
     });
     if (!arriveeHome) urls.push(base + 'accueil.html');
   } else {
