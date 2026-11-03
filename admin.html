@@ -911,7 +911,7 @@
         avecFond ? 'Elle crée 2 images de fond.' : '',
         'E-mail de contact : celui de votre inscription' + (c.email ? ' (' + c.email + ')' : '') + '.',
         'Si vous indiquez un téléphone, les boutons Appeler et WhatsApp sont ajoutés.',
-        'Les pancartes de la page Home, le logo et le fond sont remplacés par les nouveaux. Vos anciennes images et anciens pictogrammes restent disponibles pour les réutiliser.',
+        'Les pancartes de la page Home, l’accroche, le logo et le fond sont remplacés par les nouveaux (avec des couleurs lisibles sur la photo). Vos anciennes images et anciens pictogrammes restent disponibles pour les réutiliser.',
         'Rien n’est publié tant que vous n’appuyez pas sur Enregistrer.'
       ].filter(Boolean).map(t => el('li', { text: t })))
     );
@@ -1027,6 +1027,12 @@
     cfg.titre = d.nom;
     cfg.home.actif = true;                                        // la création express remplit la page Home : on l'active
     Object.assign(cfg.home.ia, { description: d.description, zone: d.zone, ton: d.ton, nombre: NB_EXPRESS });
+    // Une photo va servir de fond : texte clair et voile sombre, sinon le titre se perd dans l'image
+    if (restant.fond && luminance(cfg.design.texte) < 0.5) {
+      const k = d.ton === 'luxe' ? 'luxe' : 'nuit', th = THEMES[k];
+      Object.assign(cfg.design, { theme: k, fond: th.fond, fond2: th.fond2, texte: th.texte, accent: th.accent });
+    }
+    if (restant.fond) cfg.design.voile = Math.max(Number(cfg.design.voile) || 0, 45);
     contactExpress('tel', d.tel);
     contactExpress('whatsapp', d.tel);
     contactExpress('email', compteCF.email || '');
@@ -1044,6 +1050,7 @@
       const articles = await redigerAvecIA({ description: d.description, zone: d.zone, nombre: NB_EXPRESS, ton: d.ton }, true);
       if (propositionSeo) cfg.seo = Object.assign({}, cfg.seo, { titre: propositionSeo.titre, description: propositionSeo.description, motCle: propositionSeo.motCle, motsCles: propositionSeo.motsCles, zone: d.zone || (cfg.seo && cfg.seo.zone) || '' });
       propositionSeo = null; proposition = null;
+      if (articles.accroche) cfg.sousTitre = articles.accroche;
       nouveauxArticles = articles.map(a => ({ titre: a.titre, texte: a.texte, image: '', style: 'texte' }));
       cfg.home.articles = nouveauxArticles;
       cfg.home.actif = true;
@@ -2217,6 +2224,7 @@
       '- Varie avec des synonymes et des formes proches (ex. chauffeur privé, VTC, transport avec chauffeur) et cite les villes et lieux de la zone d’action, répartis sur les pancartes.',
       '- Densité naturelle : un même mot-clé au plus 2 fois par pancarte. Jamais de liste de mots-clés ni de répétition forcée : Google pénalise le bourrage de mots-clés, le texte doit rester agréable à lire pour un humain.',
       '- Rédige aussi un titre Google (55 à 60 caractères, mot-clé principal en tête, nom de l’entreprise à la fin) et une description Google (140 à 155 caractères, mot-clé principal, un service, la zone et une incitation à réserver ou contacter).',
+      '- Rédige aussi une accroche (sous-titre affiché sous le nom de l’entreprise) : 3 à 8 mots, 50 caractères maximum, sans point final, qui dit ce que fait l’entreprise et où (ex. « Spa de luxe au cœur de Méribel »).',
       '- Corrige silencieusement les fautes de frappe évidentes de la description (ex. « 24/14 » pour « 24/24 », « passages » pour « passagers »).',
       '- Respecte exactement le nombre de pancartes demandé.',
       '- Réponds uniquement en appelant l’outil proposer_articles, sans texte autour.'
@@ -2250,6 +2258,7 @@
                   required: ['titre', 'texte']
                 }
               },
+              accroche: { type: 'string', description: 'Sous-titre court, 3 à 8 mots' },
               seo: {
                 type: 'object',
                 properties: {
@@ -2297,10 +2306,12 @@
     const propre = liste.filter(a => a && (a.titre || a.texte)).slice(0, brief.nombre)
       .map(a => ({ titre: String(a.titre || '').trim(), texte: String(a.texte || '').trim() }));
     if (!propre.length) throw new Error(j.stop_reason === 'max_tokens' ? 'Réponse de l’IA coupée (trop longue). Réessayez.' : 'Réponse vide de l’IA. Réessayez.');
+    const accroche = String(lireJSON(entree.accroche) || '').trim().replace(/[.\s]+$/, '').slice(0, 80);
     propositionSeo = seo && (seo.titre || seo.description) ? {
       titre: String(seo.titre || '').trim(), description: String(seo.description || '').trim(),
       motCle: String(seo.motCle || '').trim(), motsCles: Array.isArray(seo.motsCles) ? seo.motsCles.map(String) : []
     } : null;
+    propre.accroche = accroche;               // utilisée par la création express (sous-titre)
     return propre;
   }
 

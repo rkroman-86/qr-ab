@@ -28,7 +28,7 @@
     'votre-nom': ['your-name', 'ваше-имя'],
     'Recevoir le lien': ['Send me the link', 'Получить ссылку'],
     '← Retour à la connexion': ['← Back to sign in', '← Назад ко входу'],
-    'Votre page en 2 minutes': ['Your page in 2 minutes', 'Ваша страница за 2 минуты'],
+    'Votre page en 3 minutes': ['Your page in 3 minutes', 'Ваша страница за 3 минуты'],
     '14 jours gratuits, sans carte bancaire.': ['14 days free, no credit card.', '14 дней бесплатно, без банковской карты.'],
     'Une page mobile à votre nom, avec QR code': ['A mobile page in your name, with a QR code', 'Мобильная страница на ваше имя с QR-кодом'],
     'Cartes de visite prêtes à imprimer': ['Print-ready business cards', 'Визитки, готовые к печати'],
