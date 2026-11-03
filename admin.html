@@ -907,7 +907,7 @@
         avecFond ? 'Elle crée 2 images de fond.' : '',
         'E-mail de contact : celui de votre inscription' + (c.email ? ' (' + c.email + ')' : '') + '.',
         'Si vous indiquez un téléphone, les boutons Appeler et WhatsApp sont ajoutés.',
-        'Les pancartes actuelles de la page Home sont remplacées. Vos images et pictogrammes déjà créés sont conservés : les nouveaux s’ajoutent.',
+        'Les pancartes de la page Home, le logo et le fond sont remplacés par les nouveaux. Vos anciennes images et anciens pictogrammes restent disponibles pour les réutiliser.',
         'Rien n’est publié tant que vous n’appuyez pas sur Enregistrer.'
       ].filter(Boolean).map(t => el('li', { text: t })))
     );
@@ -1049,7 +1049,7 @@
       const nouveaux = await creerMotifsIA(o, null, true);
       o.motifs = o.motifs.concat(nouveaux).slice(-60);       // même historique que l'atelier logo
       o.choix = 'ia' + (o.motifs.length - nouveaux.length);
-      if (!cfg.logo) {                                        // pas encore de logo : le premier picto devient le logo
+      {                                                       // le premier nouveau picto devient le logo (l'ancien reste dans « Mes images »)
         const png = await imageEnPNG(svgEnURL(composerLogo(o, o.motifs[o.motifs.length - nouveaux.length])), 1024);
         const chemin = 'images/logo-' + Date.now() + '.png';
         imagesLocales[chemin] = png;
@@ -1066,7 +1066,7 @@
       medias = j.medias;
       afficherAbonnement(j.compte);
       images = j.nouvelles.map(n => n.chemin);
-      if (!cfg.design.imageFond && images[0]) cfg.design.imageFond = images[0];   // un fond déjà choisi est gardé
+      if (images[0]) cfg.design.imageFond = images[0];   // la nouvelle image devient le fond ; l'ancienne reste dans « Mes images »
     });
 
     const executer = async () => {
