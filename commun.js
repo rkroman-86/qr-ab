@@ -267,12 +267,13 @@ const CSS_PAGE = `
   padding:9px 18px;border-radius:999px;background:rgba(0,0,0,.38);color:#fff;font-weight:600;font-size:.88rem;text-decoration:none;
   white-space:nowrap;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 4px 14px rgba(0,0,0,.18)}
 .qp-avec-home{padding-top:76px}
-.qp-avec-appli{padding-bottom:72px}
-.qp-appli{position:absolute;bottom:calc(14px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);z-index:4;
-  display:inline-flex;align-items:center;gap:7px;padding:8px 16px;border:0;border-radius:999px;cursor:pointer;
-  background:rgba(0,0,0,.30);color:#fff;font:600 .82rem/1.2 var(--police);white-space:nowrap;
-  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);opacity:.85}
-.qp-appli svg{width:15px;height:15px;flex:none}
+.qp-avec-appli{padding-top:76px}
+.qp .qp-appli{position:absolute;top:calc(14px + env(safe-area-inset-top));right:14px;left:auto;bottom:auto;z-index:4;
+  display:inline-flex;align-items:center;gap:6px;width:auto;height:auto;margin:0;padding:9px 14px;border:0;border-radius:999px;cursor:pointer;
+  background:rgba(0,0,0,.38);color:#fff;font:600 .88rem/1.2 var(--police);white-space:nowrap;
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 4px 14px rgba(0,0,0,.18)}
+.qp .qp-appli svg{width:16px;height:16px;flex:none}
+.qp-avec-appli .qp-lien-home{left:14px;transform:none}
 .qp-aide-appli{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.5);display:flex;align-items:flex-end;justify-content:center;font-family:system-ui,sans-serif}
 .qp-aide-appli>div{background:#fff;color:#1b1b1b;width:min(100%,420px);border-radius:20px 20px 0 0;padding:22px 20px calc(22px + env(safe-area-inset-bottom));box-sizing:border-box}
 .qp-aide-appli b{display:block;font-size:1.1rem;margin-bottom:8px}
@@ -350,7 +351,9 @@ const CSS_PAGE = `
 
 function injecterCSS(doc) {
   doc = doc || document;
-  if (doc.getElementById('qp-css')) return;
+  const ancien = doc.getElementById('qp-css');
+  // Une page enregistrée avant une mise à jour garde l'ancienne feuille de style : on la remplace
+  if (ancien) { if (ancien.textContent !== CSS_PAGE) ancien.textContent = CSS_PAGE; return; }
   const s = doc.createElement('style');
   s.id = 'qp-css';
   s.textContent = CSS_PAGE;
@@ -556,7 +559,9 @@ function rendrePage(cfgBrut, racine, opts) {
     b.type = 'button';
     b.className = 'qp-appli';
     b.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M12 7v7M9 11l3 3 3-3"/></svg>';
-    b.appendChild(doc.createTextNode('Installer l’appli'));
+    b.appendChild(doc.createTextNode('Installer'));
+    b.title = 'Installer l’appli sur votre téléphone';
+    b.setAttribute('aria-label', 'Installer l’appli');
     if (!opts.apercu) b.addEventListener('click', () => installerAppli(doc));
     page.appendChild(b);
     page.classList.add('qp-avec-appli');

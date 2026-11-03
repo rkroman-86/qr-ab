@@ -1252,7 +1252,7 @@
       bascule('Tous les boutons en icônes rondes', d, 'tousRonds'),
       bascule('Noms sous les icônes', d, 'nomsReseaux'),
       bascule('Icônes aux couleurs du thème', d, 'reseauxTheme'),
-      ...(CF ? [bascule('Bouton « Installer l’appli » en bas de la page', d, 'installer'),
+      ...(CF ? [bascule('Bouton « Installer l’appli » en haut de la page', d, 'installer'),
         (() => { const c = champTexte('Nom sous l’icône de l’appli (15 caractères max.)', cfg, 'appNom', { ph: nomCourtAppli(cfg.titre) });
           c.querySelector('input').maxLength = 15; c.style.marginTop = '10px'; return c; })()] : [])
     ]));
