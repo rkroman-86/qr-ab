@@ -333,6 +333,10 @@
     $('#editeur').classList.remove('cache');
     construireFormulaire();
     majApercu();
+    if (!partageAJour()) {
+      changement();
+      const e = $('#etat'); e.className = 'etat'; e.textContent = 'Nouvelle image d’aperçu des liens (WhatsApp…) : cliquez sur Enregistrer';
+    }
   }
 
   $('#form-connexion').addEventListener('submit', async e => {
@@ -1367,6 +1371,43 @@
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 4000);
     }, type, qualite);
+  }
+
+  /* Image d'aperçu des liens (WhatsApp, Facebook, SMS…) : 1200×630, JPEG léger.
+     Les messageries ignorent les images lourdes ou très hautes : on n'envoie jamais le fond brut. */
+  const PARTAGE_L = 1200, PARTAGE_H = 630;
+  function clePartage() {
+    const d = cfg.design;
+    return [d.imageFond, cfg.logo, d.fond, d.fond2].join('|');
+  }
+  function partageAJour() { return !(cfg.design.imageFond || cfg.logo) || (cfg.partage && cfg.partage.chemin && cfg.partage.cle === clePartage()); }
+  async function preparerImagePartage() {
+    if (partageAJour()) { if (!(cfg.design.imageFond || cfg.logo)) delete cfg.partage; return; }
+    const d = cfg.design;
+    const resoudre = p => imagesLocales[p] || p;
+    const cv = document.createElement('canvas');
+    cv.width = PARTAGE_L; cv.height = PARTAGE_H;
+    const ctx = cv.getContext('2d');
+    const g = ctx.createLinearGradient(0, 0, PARTAGE_L, PARTAGE_H);
+    g.addColorStop(0, d.fond || '#f5f1ea'); g.addColorStop(1, d.fond2 || d.fond || '#e9e0d2');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, PARTAGE_L, PARTAGE_H);
+    const fond = await chargerImage(d.imageFond ? resoudre(d.imageFond) : '');
+    const logo = await chargerImage(cfg.logo ? resoudre(cfg.logo) : '');
+    if (fond && fond.width) {
+      // recadrage « couvrir », un peu au-dessus du centre (le sujet d'un fond vertical y est souvent)
+      const k = Math.max(PARTAGE_L / fond.width, PARTAGE_H / fond.height);
+      const w = fond.width * k, h = fond.height * k;
+      ctx.drawImage(fond, (PARTAGE_L - w) / 2, Math.max(PARTAGE_H - h, Math.min(0, PARTAGE_H * 0.42 - h * 0.42)), w, h);
+    } else if (logo && logo.width) {
+      const k = Math.min(440 / logo.width, 440 / logo.height);
+      ctx.drawImage(logo, (PARTAGE_L - logo.width * k) / 2, (PARTAGE_H - logo.height * k) / 2, logo.width * k, logo.height * k);
+    } else return;                                       // image illisible : on garde l'ancienne
+    let data;
+    try { data = cv.toDataURL('image/jpeg', 0.84); } catch (e) { return; }
+    const chemin = 'images/partage-' + Date.now() + '.jpg';
+    imagesLocales[chemin] = data;
+    imagesAEnvoyer[chemin] = data.split(',')[1];
+    cfg.partage = { chemin, cle: clePartage(), l: PARTAGE_L, h: PARTAGE_H };
   }
 
   function chargerImage(src) {
@@ -2953,6 +2994,8 @@
     const btn = $('#btn-enregistrer'), etat = $('#etat');
     btn.disabled = true; etat.className = 'etat'; etat.textContent = 'Enregistrement…';
     try {
+      // 0. image d'aperçu des liens, refaite seulement si le fond ou le logo a changé
+      try { await preparerImagePartage(); } catch (e) { console.warn('Aperçu des liens non mis à jour', e); }
       // 1. images d'abord, pour que la page ne pointe jamais vers une image absente
       const chemins = Object.keys(imagesAEnvoyer).filter(p => CF || JSON.stringify(cfg).includes(p));
       for (const p of chemins) {

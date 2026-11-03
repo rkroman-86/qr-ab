@@ -971,7 +971,10 @@ function pageHTML(o) {
     meta('og:type', 'website', 'property') + meta('og:locale', 'fr_FR', 'property') +
     meta('og:site_name', o.nom, 'property') + meta('og:title', o.titre, 'property') +
     meta('og:description', o.description, 'property') + meta('og:url', o.canonique, 'property') +
-    meta('og:image', o.image, 'property') + meta('twitter:card', o.image ? 'summary_large_image' : 'summary') +
+    meta('og:image', o.image, 'property') +
+    (o.imageTaille ? meta('og:image:type', 'image/jpeg', 'property') + meta('og:image:width', String(o.imageTaille[0]), 'property') +
+      meta('og:image:height', String(o.imageTaille[1]), 'property') + meta('og:image:alt', o.nom, 'property') : '') +
+    meta('twitter:card', o.image ? 'summary_large_image' : 'summary') + meta('twitter:image', o.image) +
     meta('theme-color', o.couleur) +
     (o.icone ? '<link rel="icon" href="' + echapperHTML(o.icone) + '">\n' : '') +
     '<script type="application/ld+json">\n' + o.jsonld + '\n</script>\n' +
@@ -990,7 +993,9 @@ function genererFichiersSite(cfgBrut, base, doc) {
   const avecHome = homeVisible(cfg);
   const arriveeHome = avecHome && cfg.home.arrivee === 'home';
   const jsonld = donneesStructurees(cfg, base);
-  const image = urlAbsolue(base, d.imageFond || cfg.logo);
+  const partage = cfg.partage && cfg.partage.chemin ? cfg.partage : null;     // image d'aperçu 1200×630 (voir l'éditeur)
+  const image = urlAbsolue(base, partage ? partage.chemin : (d.imageFond || cfg.logo));
+  const imageTaille = partage ? [partage.l || 1200, partage.h || 630] : null;
   const icone = cfg.logo || '';
   const titreSite = seo.titre || [cfg.titre, cfg.sousTitre].filter(Boolean).join(' – ') || 'Bienvenue';
   const descSite = seo.description || couper([cfg.sousTitre, cfg.pied].filter(Boolean).join('. '), 155);
@@ -1004,7 +1009,7 @@ function genererFichiersSite(cfgBrut, base, doc) {
 
   const fichiers = {};
   fichiers['index.html'] = pageHTML({
-    titre: titreSite, description: descSite, canonique: base, nom: cfg.titre, image, icone, couleur: d.fond, jsonld,
+    titre: titreSite, description: descSite, canonique: base, nom: cfg.titre, image, imageTaille, icone, couleur: d.fond, jsonld,
     contenu: preRendu(arriveeHome ? 'home' : 'contact'), modeHome: arriveeHome, vue: ''
   });
 
@@ -1019,7 +1024,7 @@ function genererFichiersSite(cfgBrut, base, doc) {
     const descHome = arriveeHome ? descSite : couper(art.texte || descSite, 155);
     fichiers['accueil.html'] = pageHTML({
       titre: titreHome, description: descHome, canonique: arriveeHome ? base : base + 'accueil.html', nom: cfg.titre,
-      image, icone, couleur: d.fond, jsonld, contenu: preRendu('home'), modeHome: true, vue: 'home'
+      image, imageTaille, icone, couleur: d.fond, jsonld, contenu: preRendu('home'), modeHome: true, vue: 'home'
     });
     if (!arriveeHome) urls.push(base + 'accueil.html');
   } else {

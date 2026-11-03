@@ -233,7 +233,13 @@ async function apiClient(request, env, slug, route) {
       const type = typeImage(octets);
       if (!type) throw new ErreurAPI(415, 'Format d’image non accepté (JPEG, PNG ou WebP).');
       await env.CLIENTS.put(cle, octets, { metadata: { type } });
-      await ajouterMedias(env, slug, [{ chemin, genre: genreImage(chemin), source: /^images\/logo-/.test(chemin) ? 'logo' : 'photo', le: new Date().toISOString() }]);
+      if (/^images\/partage-/.test(chemin)) {
+        // image d'aperçu des liens : hors « Mes images », une seule gardée (les précédentes sont effacées)
+        const l = await env.CLIENTS.list({ prefix: 'img:' + slug + ':partage-' });
+        for (const k of l.keys) if (k.name !== cle) await env.CLIENTS.delete(k.name);
+      } else {
+        await ajouterMedias(env, slug, [{ chemin, genre: genreImage(chemin), source: /^images\/logo-/.test(chemin) ? 'logo' : 'photo', le: new Date().toISOString() }]);
+      }
     } else {
       const max = chemin === 'config.json' ? TAILLE_MAX['config.json'] : TAILLE_MAX.html;
       if (octets.length > max) throw new ErreurAPI(413, 'Contenu trop volumineux.');
@@ -462,6 +468,7 @@ function genreImage(chemin) {
   const n = String(chemin).slice(7);
   if (/^fond/.test(n)) return 'fond';
   if (/^logo/.test(n)) return 'logo';
+  if (/^partage/.test(n)) return 'partage';
   return 'article';
 }
 /* Médiathèque : liste des images d'un client, les plus récentes d'abord.
