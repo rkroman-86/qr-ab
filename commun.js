@@ -60,7 +60,7 @@ const RESEAUX = {
   tiktok:    { nom: 'TikTok',    coul: '#000000', aide: 'Nom d’utilisateur ou lien',  url: v => 'https://www.tiktok.com/@' + v },
   site:      { nom: 'Site web',  coul: '#4B5563', aide: 'Adresse du site',            url: v => 'https://' + v, icone: GLOBE_SVG },
   youtube:   { nom: 'YouTube',   coul: '#FF0000', aide: 'Nom de la chaîne ou lien',   url: v => 'https://www.youtube.com/@' + v },
-  telegram:  { nom: 'Telegram',  coul: '#26A5E4', aide: 'Nom d’utilisateur ou lien',  url: v => 'https://t.me/' + v },
+  telegram:  { nom: 'Telegram',  coul: '#26A5E4', aide: 'Nom d’utilisateur, lien ou numéro',  url: v => 'https://t.me/' + v },
   tripadvisor:{ nom: 'Tripadvisor', coul: '#34E0A1', aide: 'Lien de la fiche',        url: v => 'https://' + v },
   email:     { nom: 'E-mail',    coul: '#EA4335', aide: 'Adresse e-mail',             url: v => 'mailto:' + v, icone: ICONES_ACTIONS.email }
 };
@@ -75,6 +75,12 @@ function lienReseau(id, valeur) {
   if (estURL(v)) return lienSur(v);
   if (/^(www\.|[a-z0-9-]+\.[a-z]{2,})/i.test(v) && v.includes('.') && id !== 'site') return lienSur('https://' + v);
   if (id === 'site' || id === 'tripadvisor') return lienSur('https://' + v);
+  // Telegram par numéro de téléphone : t.me/+33…  (06… est compris comme un numéro français)
+  if (id === 'telegram' && /^\+?[\d\s.()-]{8,}$/.test(v)) {
+    let n = v.replace(/\D/g, '');
+    if (!v.trim().startsWith('+') && /^0\d{9}$/.test(n)) n = '33' + n.slice(1);
+    return lienSur('https://t.me/+' + n);
+  }
   v = v.replace(/^@/, '').replace(/[^\w.\-]/g, '');
   return lienSur(RESEAUX[id].url(v));
 }

@@ -200,6 +200,7 @@
     "La recharge est réservée aux abonnés.": ["Top-ups are for subscribers only.", "Пополнение доступно только подписчикам."],
     "Le paiement en ligne n’est pas encore ouvert.": ["Online payment is not open yet.", "Онлайн-оплата пока недоступна."],
     "Ce compte est offert : rien à payer.": ["This account is complimentary: nothing to pay.", "Этот аккаунт бесплатный: платить не нужно."],
+    'Nom d’utilisateur, lien ou numéro': ['Username, link or phone number', 'Имя пользователя, ссылка или номер'],
     'Code promo (facultatif)': ['Promo code (optional)', 'Промокод (необязательно)'],
     'Code inconnu ou expiré': ['Unknown or expired code', 'Неизвестный или просроченный код'],
     'Code promo inconnu ou expiré. Corrigez-le ou laissez le champ vide.': ['Unknown or expired promo code. Fix it or leave the field empty.', 'Неизвестный или просроченный промокод. Исправьте его или оставьте поле пустым.'],
