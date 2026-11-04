@@ -65,6 +65,141 @@
     'Mot de passe : 10 caractères minimum.': ['Password: at least 10 characters.', 'Пароль: не менее 10 символов.'],
     'Mot de passe trop long.': ['Password too long.', 'Слишком длинный пароль.'],
     'Merci d’accepter les conditions d’utilisation.': ['Please accept the terms of use.', 'Пожалуйста, примите условия использования.'],
+    // --- abonnement, création express, images IA, appli installable (novembre 2026) ---
+    "Essai gratuit": ["Free trial", "Пробный период"],
+    "Essai terminé": ["Trial ended", "Пробный период закончился"],
+    "Essai terminé.": ["Trial ended.", "Пробный период закончился."],
+    "Abonnement inactif": ["Subscription inactive", "Подписка неактивна"],
+    "Abonnement inactif.": ["Subscription inactive.", "Подписка неактивна."],
+    "Abonnement actif": ["Active subscription", "Подписка активна"],
+    "Abonnement expiré": ["Subscription expired", "Подписка истекла"],
+    "Compte offert": ["Complimentary account", "Бесплатный аккаунт"],
+    "Compte suspendu": ["Account suspended", "Аккаунт приостановлен"],
+    "Mon abonnement": ["My subscription", "Моя подписка"],
+    "Toutes les fonctions sont incluses.": ["All features are included.", "Все функции включены."],
+    "Votre page est en pause. Abonnez-vous pour la remettre en ligne.": ["Your page is paused. Subscribe to put it back online.", "Ваша страница приостановлена. Оформите подписку, чтобы снова её опубликовать."],
+    "Rédactions IA restantes": ["AI writings left", "Осталось генераций текста"],
+    "Créations de motifs restantes": ["Symbol creations left", "Осталось генераций символов"],
+    "Créations d’images de fond restantes": ["Background image creations left", "Осталось генераций фона"],
+    "Crédit IA": ["AI credit", "Кредит ИИ"],
+    "IA illimitée (compte offert)": ["Unlimited AI (complimentary account)", "ИИ без ограничений (бесплатный аккаунт)"],
+    "Quota de l’année utilisé.": ["This year’s quota is used up.", "Годовой лимит исчерпан."],
+    "S’abonner": ["Subscribe", "Подписаться"],
+    "S’abonner sans attendre la fin de l’essai": ["Subscribe without waiting for the end of the trial", "Подписаться, не дожидаясь конца пробного периода"],
+    "Renouveler": ["Renew", "Продлить"],
+    "Renouveler pour un an": ["Renew for one year", "Продлить на год"],
+    "Renouveler avec mon crédit": ["Renew with my credit", "Продлить за счёт кредита"],
+    "Recharger": ["Top up", "Пополнить"],
+    "Recharger le crédit IA (montant HT)": ["Top up AI credit (amount excl. VAT)", "Пополнить кредит ИИ (сумма без НДС)"],
+    "€ HT": ["€ excl. VAT", "€ без НДС"],
+    "Votre page, votre QR code et vos cartes de visite": ["Your page, your QR code and your business cards", "Ваша страница, QR-код и визитки"],
+    "🔒 Paiement sécurisé par Stripe : carte, Apple Pay, Google Pay. Facture envoyée par e-mail.": ["🔒 Secure payment by Stripe: card, Apple Pay, Google Pay. Invoice sent by email.", "🔒 Безопасная оплата через Stripe: карта, Apple Pay, Google Pay. Счёт придёт на e-mail."],
+    "Ouverture du paiement sécurisé…": ["Opening secure payment…", "Открываем безопасную оплату…"],
+    "Des modifications ne sont pas enregistrées. Continuer vers le paiement ?": ["Some changes are not saved. Continue to payment?", "Есть несохранённые изменения. Перейти к оплате?"],
+    "Paiement annulé : rien n’a été débité.": ["Payment cancelled: nothing was charged.", "Оплата отменена: деньги не списаны."],
+    "✓ Paiement reçu, merci ! Votre compte est à jour.": ["✓ Payment received, thank you! Your account is up to date.", "✓ Оплата получена, спасибо! Ваш аккаунт обновлён."],
+    "✓ Abonnement renouvelé grâce à votre crédit.": ["✓ Subscription renewed with your credit.", "✓ Подписка продлена за счёт вашего кредита."],
+    "Paiement en cours de confirmation par votre banque. Votre compte se mettra à jour automatiquement.": ["Your bank is confirming the payment. Your account will update automatically.", "Банк подтверждает оплату. Аккаунт обновится автоматически."],
+    "⚡ Création express": ["⚡ Express creation", "⚡ Быстрое создание"],
+    "Créer mon site": ["Create my site", "Создать мой сайт"],
+    "Pressé ? Décrivez votre activité : l’IA prépare tout votre site en une minute.": ["In a hurry? Describe your business: the AI prepares your whole site in a minute.", "Торопитесь? Опишите свою деятельность: ИИ подготовит весь сайт за минуту."],
+    "Un formulaire va s’ouvrir pour créer votre site à partir de la description de votre activité et de votre zone d’action.": ["A form will open to create your site from the description of your business and your service area.", "Откроется форма: сайт будет создан по описанию вашей деятельности и зоне работы."],
+    "L’IA rédige 5 pancartes sur votre activité pour la page Home, ainsi que le référencement Google.": ["The AI writes 5 slides about your business for the Home page, plus the Google SEO.", "ИИ напишет 5 слайдов о вашей деятельности для главной страницы, а также тексты для Google."],
+    "Elle dessine 3 pictogrammes pour votre logo.": ["It draws 3 symbols for your logo.", "Нарисует 3 символа для логотипа."],
+    "Elle crée 2 images de fond.": ["It creates 2 background images.", "Создаст 2 фоновых изображения."],
+    "Si vous indiquez un téléphone, les boutons Appeler et WhatsApp sont ajoutés.": ["If you enter a phone number, the Call and WhatsApp buttons are added.", "Если указать телефон, добавятся кнопки «Позвонить» и WhatsApp."],
+    "Les pancartes de la page Home, l’accroche, le logo et le fond sont remplacés par les nouveaux (avec des couleurs lisibles sur la photo). Vos anciennes images et anciens pictogrammes restent disponibles pour les réutiliser.": ["The Home page slides, the tagline, the logo and the background are replaced by the new ones (with colours readable over the photo). Your previous images and symbols remain available for reuse.", "Слайды главной страницы, подзаголовок, логотип и фон будут заменены новыми (с цветами, читаемыми на фото). Прежние изображения и символы останутся доступны."],
+    "Rien n’est publié tant que vous n’appuyez pas sur Enregistrer.": ["Nothing is published until you press Save.", "Ничего не публикуется, пока вы не нажмёте «Сохранить»."],
+    "Inclus dans votre compte offert.": ["Included in your complimentary account.", "Входит в ваш бесплатный аккаунт."],
+    "Accepter": ["Accept", "Принять"],
+    "Confirmer": ["Confirm", "Подтвердить"],
+    "⚡ Votre activité": ["⚡ Your business", "⚡ Ваша деятельность"],
+    "Quelques mots suffisent : l’IA s’occupe du reste.": ["A few words are enough: the AI does the rest.", "Достаточно нескольких слов: остальное сделает ИИ."],
+    "Nom de l’entreprise": ["Business name", "Название компании"],
+    "Votre activité": ["Your business", "Ваша деятельность"],
+    "Zone d’action": ["Service area", "Зона работы"],
+    "Téléphone (Appeler et WhatsApp)": ["Phone (Call and WhatsApp)", "Телефон (звонок и WhatsApp)"],
+    "Ton des textes": ["Tone of the texts", "Тон текстов"],
+    "Ex. : 06 12 34 56 78 (facultatif)": ["E.g. 06 12 34 56 78 (optional)", "Напр. 06 12 34 56 78 (необязательно)"],
+    "Ex. : Alex VTC": ["E.g. Alex VTC", "Напр. Alex VTC"],
+    "Ex. : Nice, Monaco, Cannes et toute la Côte d’Azur": ["E.g. Nice, Monaco, Cannes and the whole French Riviera", "Напр. Ницца, Монако, Канны и всё Лазурное побережье"],
+    "Indiquez le nom de votre entreprise.": ["Enter your business name.", "Укажите название компании."],
+    "Numéro de téléphone incomplet.": ["Incomplete phone number.", "Неполный номер телефона."],
+    "⚡ Création en cours…": ["⚡ Creating…", "⚡ Создаём…"],
+    "Environ une minute. Gardez cette fenêtre ouverte.": ["About a minute. Keep this window open.", "Около минуты. Не закрывайте это окно."],
+    "Réservation de la création express": ["Booking the express creation", "Бронирование быстрого создания"],
+    "Création express déjà réglée : reprise sans frais": ["Express creation already paid: resumed at no cost", "Быстрое создание уже оплачено: продолжаем бесплатно"],
+    "5 pancartes et référencement Google": ["5 slides and Google SEO", "5 слайдов и тексты для Google"],
+    "3 pictogrammes pour le logo": ["3 symbols for the logo", "3 символа для логотипа"],
+    "2 images de fond": ["2 background images", "2 фоновых изображения"],
+    "Création express impossible": ["Express creation unavailable", "Быстрое создание недоступно"],
+    "✓ Votre site est prêt": ["✓ Your site is ready", "✓ Ваш сайт готов"],
+    "Vérifiez tout : textes, boutons, logo et images (l’aperçu est à jour). Puis appuyez sur « Enregistrer » en bas de l’écran pour publier.": ["Check everything: texts, buttons, logo and images (the preview is up to date). Then press “Save” at the bottom of the screen to publish.", "Проверьте всё: тексты, кнопки, логотип и изображения (предпросмотр обновлён). Затем нажмите «Сохранить» внизу экрана, чтобы опубликовать."],
+    "Vérifier mon site": ["Check my site", "Проверить сайт"],
+    "Presque terminé": ["Almost done", "Почти готово"],
+    "Une étape n’a pas abouti. Elle est déjà réglée : vous pouvez la relancer sans frais pendant 30 minutes.": ["One step failed. It is already paid: you can retry it at no cost for 30 minutes.", "Один шаг не удался. Он уже оплачен: его можно повторить бесплатно в течение 30 минут."],
+    "Réessayer": ["Retry", "Повторить"],
+    "Mon abonnement ": ["My subscription ", "Моя подписка "],
+    "Site créé : vérifiez puis cliquez sur Enregistrer": ["Site created: check it, then click Save", "Сайт создан: проверьте и нажмите «Сохранить»"],
+    "La création express n’est pas disponible.": ["Express creation is not available.", "Быстрое создание недоступно."],
+    "Votre essai est terminé : abonnez-vous pour utiliser la création express.": ["Your trial has ended: subscribe to use express creation.", "Пробный период закончился: оформите подписку для быстрого создания."],
+    "Abonnement inactif : la création express est désactivée.": ["Subscription inactive: express creation is disabled.", "Подписка неактивна: быстрое создание отключено."],
+    "Les essais de cette étape de la création express sont épuisés. Rien n’a été décompté : écrivez-nous si le problème continue.": ["The attempts for this express creation step are used up. Nothing was charged: contact us if the problem continues.", "Попытки для этого шага исчерпаны. Ничего не списано: напишите нам, если проблема повторится."],
+    "Réponse de l’IA coupée (trop longue). Réessayez.": ["The AI response was cut off (too long). Try again.", "Ответ ИИ оборвался (слишком длинный). Попробуйте ещё раз."],
+    "✨ Créer un fond avec l’IA": ["✨ Create a background with AI", "✨ Создать фон с помощью ИИ"],
+    "L’IA crée 2 images à partir de votre activité. Elles s’ajoutent à « Mes images » : choisissez-en une maintenant ou plus tard.": ["The AI creates 2 images based on your business. They are added to “My images”: pick one now or later.", "ИИ создаст 2 изображения по вашей деятельности. Они появятся в «Моих изображениях»: выберите сейчас или позже."],
+    "✨ Créer 2 images": ["✨ Create 2 images", "✨ Создать 2 изображения"],
+    "L’IA peint vos images…": ["The AI is painting your images…", "ИИ рисует изображения…"],
+    "L’IA peint vos images… (≈ 20 s)": ["The AI is painting your images… (≈ 20 s)", "ИИ рисует изображения… (≈ 20 с)"],
+    "Ex. : van noir devant la tour Eiffel au coucher du soleil": ["E.g. black van in front of the Eiffel Tower at sunset", "Напр. чёрный минивэн у Эйфелевой башни на закате"],
+    "Ambiance": ["Mood", "Атмосфера"],
+    "Photo réaliste": ["Realistic photo", "Реалистичное фото"],
+    "Lumineux": ["Bright", "Светлый"],
+    "Ambiance nuit": ["Night mood", "Ночная атмосфера"],
+    "Minimaliste": ["Minimalist", "Минимализм"],
+    "Aquarelle": ["Watercolour", "Акварель"],
+    "Mes images": ["My images", "Мои изображения"],
+    "Vos images (photos, galerie, IA) apparaîtront ici pour être réutilisées.": ["Your images (photos, gallery, AI) will appear here to be reused.", "Ваши изображения (фото, галерея, ИИ) появятся здесь для повторного использования."],
+    "Chargement de vos images…": ["Loading your images…", "Загружаем изображения…"],
+    "Utiliser cette image": ["Use this image", "Использовать это изображение"],
+    "Image utilisée": ["Image in use", "Используется"],
+    "Supprimer de mes images": ["Remove from my images", "Удалить из моих изображений"],
+    "Supprimer définitivement cette image ?": ["Delete this image permanently?", "Удалить это изображение навсегда?"],
+    "Cette image est utilisée sur votre page. La retirer de « Mes images » ? (elle reste affichée tant que vous ne la changez pas)": ["This image is used on your page. Remove it from “My images”? (it stays displayed until you change it)", "Это изображение используется на странице. Убрать его из «Моих изображений»? (оно останется на странице, пока вы его не замените)"],
+    "IA": ["AI", "ИИ"],
+    "Supprimer ce picto": ["Delete this symbol", "Удалить этот символ"],
+    "Supprimer ce pictogramme ? (le logo déjà enregistré ne change pas)": ["Delete this symbol? (the logo already saved does not change)", "Удалить этот символ? (сохранённый логотип не изменится)"],
+    "✨ Créer 3 motifs": ["✨ Create 3 symbols", "✨ Создать 3 символа"],
+    "Bouton « Installer l’appli » en haut de la page": ["“Install the app” button at the top of the page", "Кнопка «Установить приложение» вверху страницы"],
+    "Nom sous l’icône de l’appli (15 caractères max.)": ["Name under the app icon (15 characters max.)", "Название под значком приложения (до 15 символов)"],
+    "Nouveau : votre page s’installe comme une appli. Cliquez sur Enregistrer pour l’activer.": ["New: your page can be installed as an app. Click Save to turn it on.", "Новое: вашу страницу можно установить как приложение. Нажмите «Сохранить», чтобы включить."],
+    "Nouvelle image d’aperçu des liens (WhatsApp…) : cliquez sur Enregistrer": ["New link preview image (WhatsApp…): click Save", "Новое изображение для превью ссылок (WhatsApp…): нажмите «Сохранить»"],
+    "✓ Publié. Visible sur la page d’ici une minute.": ["✓ Published. Live on the page within a minute.", "✓ Опубликовано. Изменения появятся на странице в течение минуты."],
+    "Installer l’appli": ["Install the app", "Установить приложение"],
+    "Installer l’appli sur votre téléphone": ["Install the app on your phone", "Установить приложение на телефон"],
+    "Installer": ["Install", "Установить"],
+    "Ticket": ["Ticket", "Билет"],
+    "QR géant": ["Giant QR", "Крупный QR"],
+    "Vague": ["Wave", "Волна"],
+    "Pastille": ["Badge", "Круг"],
+    "Monogramme": ["Monogram", "Монограмма"],
+    "Viseur": ["Viewfinder", "Видоискатель"],
+    "Kraft": ["Kraft", "Крафт"],
+    "Vertical épuré": ["Clean vertical", "Вертикальный минимализм"],
+    "Verso couleur": ["Colour back", "Цветной оборот"],
+    "Format 85 × 55 mm": ["85 × 55 mm format", "Формат 85 × 55 мм"],
+    "Format 55 × 85 mm (vertical)": ["55 × 85 mm format (portrait)", "Формат 55 × 85 мм (вертикальный)"],
+    "Votre essai est terminé : abonnez-vous pour continuer à utiliser l’IA.": ["Your trial has ended: subscribe to keep using the AI.", "Пробный период закончился: оформите подписку, чтобы продолжить пользоваться ИИ."],
+    "Abonnement inactif : l’IA est désactivée.": ["Subscription inactive: the AI is disabled.", "Подписка неактивна: ИИ отключён."],
+    "Votre essai gratuit est terminé. Activez l’abonnement pour publier à nouveau.": ["Your free trial has ended. Subscribe to publish again.", "Бесплатный пробный период закончился. Оформите подписку, чтобы снова публиковать."],
+    "Votre abonnement a expiré. Renouvelez-le pour publier à nouveau.": ["Your subscription has expired. Renew it to publish again.", "Подписка истекла. Продлите её, чтобы снова публиковать."],
+    "La rédaction IA n’est pas encore activée sur le serveur.": ["AI writing is not enabled on the server yet.", "Генерация текстов ИИ на сервере ещё не включена."],
+    "La création d’images n’est pas encore activée sur le serveur.": ["Image creation is not enabled on the server yet.", "Создание изображений на сервере ещё не включено."],
+    "Limite quotidienne de l’IA atteinte. Réessayez demain.": ["Daily AI limit reached. Try again tomorrow.", "Дневной лимит ИИ исчерпан. Попробуйте завтра."],
+    "La création d’images a échoué. Réessayez dans un instant (rien n’a été décompté).": ["Image creation failed. Try again in a moment (nothing was charged).", "Не удалось создать изображения. Попробуйте чуть позже (ничего не списано)."],
+    "La recharge est réservée aux abonnés.": ["Top-ups are for subscribers only.", "Пополнение доступно только подписчикам."],
+    "Le paiement en ligne n’est pas encore ouvert.": ["Online payment is not open yet.", "Онлайн-оплата пока недоступна."],
+    "Ce compte est offert : rien à payer.": ["This account is complimentary: nothing to pay.", "Этот аккаунт бесплатный: платить не нужно."],
     'Code promo (facultatif)': ['Promo code (optional)', 'Промокод (необязательно)'],
     'Code inconnu ou expiré': ['Unknown or expired code', 'Неизвестный или просроченный код'],
     'Code promo inconnu ou expiré. Corrigez-le ou laissez le champ vide.': ['Unknown or expired promo code. Fix it or leave the field empty.', 'Неизвестный или просроченный промокод. Исправьте его или оставьте поле пустым.'],
@@ -411,6 +546,74 @@
 
   // Formes dynamiques : [regex sur le français, (m, L, t) => texte]
   const MOTIFS = [
+    // --- compteurs, abonnement, création express ---
+    [/^Essai gratuit : (\d+) jours?$/, m => ({ en: 'Free trial: ' + m[1] + (m[1] === '1' ? ' day' : ' days'), ru: 'Пробный период: ' + m[1] + ' ' + pluriel(+m[1], 'день', 'дня', 'дней') })],
+    [/^Abonné · (.+)$/, m => ({ en: 'Subscribed · ' + m[1], ru: 'Подписка · ' + m[1] })],
+    [/^Abonné$/, () => ({ en: 'Subscribed', ru: 'Подписка' })],
+    [/^(Essai|Cette année) : (\d+) (rédactions?|créations? de motifs|créations? d’images) sur (\d+) restantes?$/, m => {
+      const k = /rédaction/.test(m[3]) ? 0 : /motifs/.test(m[3]) ? 1 : 2, n = +m[2], tot = +m[4];
+      const en = [['AI writing', 'AI writings'], ['symbol creation', 'symbol creations'], ['image creation', 'image creations']][k];
+      const ru = ['генерации текста', 'генерации символов', 'генерации фона'][k], ruP = ['генераций текста', 'генераций символов', 'генераций фона'][k];
+      return { en: (m[1] === 'Essai' ? 'Trial' : 'This year') + ': ' + n + ' of ' + tot + ' ' + en[tot > 1 ? 1 : 0] + ' left',
+               ru: (m[1] === 'Essai' ? 'Пробный период' : 'В этом году') + ': осталось ' + n + ' из ' + tot + ' ' + pluriel(tot, ru, ruP, ruP) };
+    }],
+    [/^Quota utilisé · (.+) par (rédaction|création de motifs|création d’images) sur votre crédit \((.+)\)$/, m => {
+      const k = m[2] === 'rédaction' ? 0 : m[2] === 'création de motifs' ? 1 : 2;
+      return { en: 'Quota used · ' + m[1] + ' per ' + ['AI writing', 'symbol creation', 'image creation'][k] + ' from your credit (' + m[3] + ')',
+               ru: 'Лимит исчерпан · ' + m[1] + ' за ' + ['генерацию текста', 'генерацию символов', 'генерацию фона'][k] + ' из кредита (' + m[3] + ')' };
+    }],
+    [/^Vos (rédactions|créations de motifs|créations d’images) d’essai sont utilisées\.$/, m => {
+      const k = m[1] === 'rédactions' ? 0 : m[1] === 'créations de motifs' ? 1 : 2;
+      return { en: 'Your trial ' + ['AI writings', 'symbol creations', 'image creations'][k] + ' are used up.', ru: 'Пробные ' + ['генерации текста', 'генерации символов', 'генерации фона'][k] + ' израсходованы.' };
+    }],
+    [/^Jusqu’au (\S+)\. Votre page reste en ligne pendant tout l’essai\.$/, m => ({ en: 'Until ' + m[1] + '. Your page stays online for the whole trial.', ru: 'До ' + m[1] + '. Страница остаётся в сети весь пробный период.' })],
+    [/^Jusqu’au (\S+)\.$/, m => ({ en: 'Until ' + m[1] + '.', ru: 'До ' + m[1] + '.' })],
+    [/^Terminé le (\S+)\.$/, m => ({ en: 'Ended on ' + m[1] + '.', ru: 'Закончилась ' + m[1] + '.' })],
+    [/^(.+) HT \/ an$/, m => ({ en: m[1] + ' excl. VAT / year', ru: m[1] + ' без НДС / год' })],
+    [/^(.+) TTC \(TVA (\d+) %\)\. Soit (.+) HT par mois, le prix d’un café\.$/, m => ({ en: m[1] + ' incl. VAT (' + m[2] + ' %). That’s ' + m[3] + ' excl. VAT a month, the price of a coffee.', ru: m[1] + ' с НДС (' + m[2] + ' %). То есть ' + m[3] + ' без НДС в месяц — цена чашки кофе.' })],
+    [/^(.+) incluses par an$/, m => {
+      const tr = x => x.replace(/(\d+) rédactions? IA/, (a, n) => ({ en: n + (n === '1' ? ' AI writing' : ' AI writings'), ru: n + ' ' + pluriel(+n, 'генерация текста', 'генерации текста', 'генераций текста') })[L])
+        .replace(/(\d+) créations? de motifs/, (a, n) => ({ en: n + (n === '1' ? ' symbol creation' : ' symbol creations'), ru: n + ' ' + pluriel(+n, 'генерация символов', 'генерации символов', 'генераций символов') })[L])
+        .replace(/(\d+) créations? d’images de fond/, (a, n) => ({ en: n + (n === '1' ? ' background image creation' : ' background image creations'), ru: n + ' ' + pluriel(+n, 'генерация фона', 'генерации фона', 'генераций фона') })[L])
+        .replace(/ et /, L === 'en' ? ' and ' : ' и ');
+      let L = 'en'; const en = tr(m[1]) + ' included per year'; L = 'ru'; const ru = tr(m[1]) + ' в год включено';
+      return { en, ru };
+    }],
+    [/^(Au-delà|IA à la demande) : (.+) HT la rédaction, (.+) HT la création de motifs(?:, (.+) HT la création d’images de fond \(2 images\))?$/, m => ({
+      en: (m[1] === 'Au-delà' ? 'Beyond that: ' : 'AI on demand: ') + m[2] + ' excl. VAT per writing, ' + m[3] + ' excl. VAT per symbol creation' + (m[4] ? ', ' + m[4] + ' excl. VAT per background creation (2 images)' : ''),
+      ru: (m[1] === 'Au-delà' ? 'Сверх лимита: ' : 'ИИ по запросу: ') + m[2] + ' без НДС за текст, ' + m[3] + ' без НДС за символы' + (m[4] ? ', ' + m[4] + ' без НДС за фон (2 изображения)' : '') })],
+    [/^(.+) HT la rédaction, (.+) HT la création de motifs\. Le crédit non utilisé est déduit de votre prochain renouvellement(?: \(prochain paiement : (.+) HT au lieu de (.+)\))?\.$/, m => ({
+      en: m[1] + ' excl. VAT per writing, ' + m[2] + ' excl. VAT per symbol creation. Unused credit is deducted from your next renewal' + (m[3] ? ' (next payment: ' + m[3] + ' excl. VAT instead of ' + m[4] + ')' : '') + '.',
+      ru: m[1] + ' без НДС за текст, ' + m[2] + ' без НДС за символы. Неиспользованный кредит вычитается из следующего продления' + (m[3] ? ' (следующий платёж: ' + m[3] + ' без НДС вместо ' + m[4] + ')' : '') + '.' })],
+    [/^TVA (\d+) % ajoutée au paiement \((.+) HT = (.+) TTC\)\.$/, m => ({ en: m[1] + ' % VAT added at payment (' + m[2] + ' excl. VAT = ' + m[3] + ' incl. VAT).', ru: 'НДС ' + m[1] + ' % добавляется при оплате (' + m[2] + ' без НДС = ' + m[3] + ' с НДС).' })],
+    [/^Crédit déduit : −(.+) HT → à payer (.+) HT \((.+) TTC\)$/, m => ({ en: 'Credit deducted: −' + m[1] + ' excl. VAT → to pay ' + m[2] + ' excl. VAT (' + m[3] + ' incl. VAT)', ru: 'Вычтено из кредита: −' + m[1] + ' без НДС → к оплате ' + m[2] + ' без НДС (' + m[3] + ' с НДС)' })],
+    [/^Coût : ([^()]+) HT, débités de votre crédit IA \(solde : ([^()]+)\)\.$/, m => ({ en: 'Cost: ' + m[1] + ' excl. VAT, taken from your AI credit (balance: ' + m[2] + ').', ru: 'Стоимость: ' + m[1] + ' без НДС, списывается с кредита ИИ (баланс: ' + m[2] + ').' })],
+    [/^Coût : la moitié de vos créations IA gratuites de l’essai \((.+)\)\.$/, m => {
+      const tr = (x, L) => x.replace(/(\d+) rédactions?/g, (a, n) => L === 'en' ? n + (n === '1' ? ' writing' : ' writings') : n + ' ' + pluriel(+n, 'текст', 'текста', 'текстов'))
+        .replace(/(\d+) créations? de motifs/g, (a, n) => L === 'en' ? n + ' symbol creation' + (n === '1' ? '' : 's') : n + ' ' + pluriel(+n, 'генерация символов', 'генерации символов', 'генераций символов'))
+        .replace(/(\d+) créations? d’images/g, (a, n) => L === 'en' ? n + ' image creation' + (n === '1' ? '' : 's') : n + ' ' + pluriel(+n, 'генерация фона', 'генерации фона', 'генераций фона'));
+      return { en: 'Cost: half of your free trial AI creations (' + tr(m[1], 'en') + ').', ru: 'Стоимость: половина бесплатных генераций ИИ пробного периода (' + tr(m[1], 'ru') + ').' };
+    }],
+    [/^E-mail de contact : celui de votre inscription(?: \((.+)\))?\.$/, m => ({ en: 'Contact email: the one you signed up with' + (m[1] ? ' (' + m[1] + ')' : '') + '.', ru: 'Контактный e-mail: тот, что указан при регистрации' + (m[1] ? ' (' + m[1] + ')' : '') + '.' })],
+    [/^Une création express déjà réglée est en cours : vous pouvez la reprendre sans frais jusqu’à (.+)\.$/, m => ({ en: 'An express creation already paid for is in progress: you can resume it at no cost until ' + m[1] + '.', ru: 'Быстрое создание уже оплачено и не завершено: его можно продолжить бесплатно до ' + m[1] + '.' })],
+    [/^La création express coûte ([^()]+) HT sur votre crédit IA \(solde : ([^()]+)\)\.$/, m => ({ en: 'Express creation costs ' + m[1] + ' excl. VAT from your AI credit (balance: ' + m[2] + ').', ru: 'Быстрое создание стоит ' + m[1] + ' без НДС из кредита ИИ (баланс: ' + m[2] + ').' })],
+    [/^Rechargez votre crédit \(([^(),]+) HT minimum(?:, ([^()]+?) HT la (rédaction|création de motifs|création \(2 images\)))?\)\.$/, m => {
+      const k = m[3] === 'rédaction' ? 0 : m[3] === 'création de motifs' ? 1 : 2;
+      return { en: 'Top up your credit (' + m[1] + ' excl. VAT minimum' + (m[2] ? ', ' + m[2] + ' excl. VAT per ' + ['writing', 'symbol creation', 'background creation (2 images)'][k] : '') + ').',
+               ru: 'Пополните кредит (минимум ' + m[1] + ' без НДС' + (m[2] ? ', ' + m[2] + ' без НДС за ' + ['текст', 'символы', 'фон (2 изображения)'][k] : '') + ').' };
+    }],
+    [/^La création express utilise la moitié de vos créations IA d’essai, et il n’en reste plus assez\.$/, () => ({ en: 'Express creation uses half of your trial AI creations, and there are not enough left.', ru: 'Быстрое создание расходует половину пробных генераций ИИ, а их осталось недостаточно.' })],
+    [/^Abonnez-vous \((.+) HT\/an\) : la création express coûtera alors (.+) HT\.$/, m => ({ en: 'Subscribe (' + m[1] + ' excl. VAT/year): express creation will then cost ' + m[2] + ' excl. VAT.', ru: 'Оформите подписку (' + m[1] + ' без НДС/год): тогда быстрое создание будет стоить ' + m[2] + ' без НДС.' })],
+    [/^Abonnez-vous dès maintenant pour en obtenir (\d+) par an \((.+) HT\/an\)\.$/, m => ({ en: 'Subscribe now to get ' + m[1] + ' a year (' + m[2] + ' excl. VAT/year).', ru: 'Оформите подписку сейчас и получайте ' + m[1] + ' в год (' + m[2] + ' без НДС/год).' })],
+    [/^(?:Vos (\d+)|Votre) (rédactions? IA|créations? de motifs IA|créations? d’images de fond) (d’essai|de l’année) (?:sont utilisées|est utilisée)\.$/, m => {
+      const k = /rédaction/.test(m[2]) ? 0 : /motifs/.test(m[2]) ? 1 : 2, essai = m[3] === 'd’essai';
+      const en = ['AI writing', 'AI symbol creation', 'background image creation'][k], ru = ['генерации текста', 'генерации символов', 'генерации фона'][k];
+      return { en: 'Your ' + (m[1] ? m[1] + ' ' : '') + (essai ? 'trial ' : 'yearly ') + en + (m[1] ? 's are' : ' is') + ' used up.',
+               ru: (essai ? 'Пробные ' : 'Годовые ') + ru + (m[1] ? ' (' + m[1] + ')' : '') + ' израсходованы.' };
+    }],
+    [/^✓ (\d+) nouvelles? images? ajoutées? dans « Mes images » ci-dessus : touchez-en une pour l’utiliser\.$/, m => ({ en: '✓ ' + m[1] + ' new image' + (m[1] === '1' ? '' : 's') + ' added to “My images” above: tap one to use it.', ru: '✓ ' + m[1] + ' ' + pluriel(+m[1], 'новое изображение добавлено', 'новых изображения добавлены', 'новых изображений добавлено') + ' в «Мои изображения» выше: нажмите, чтобы использовать.' })],
+    [/^⏳ Demande (de recharge de|d’abonnement :) (.+) HT envoyée le (\S+)\. (.+)$/, (m, t) => ({ en: '⏳ ' + (m[1] === 'de recharge de' ? 'Top-up request of ' : 'Subscription request: ') + m[2] + ' excl. VAT sent on ' + m[3] + '. ' + t(m[4]), ru: '⏳ ' + (m[1] === 'de recharge de' ? 'Запрос на пополнение ' : 'Запрос на подписку: ') + m[2] + ' без НДС отправлен ' + m[3] + '. ' + t(m[4]) })],
+
     [/^✓ (\d+) jours \+ (\d+) jours offerts$/, m => ({ en: '✓ ' + m[1] + ' days + ' + m[2] + ' free days', ru: '✓ ' + m[1] + ' дней + ' + m[2] + ' дней в подарок' })],
     [/^Pancarte (\d+) \/ (\d+)$/, m => ({ en: 'Slide ' + m[1] + ' / ' + m[2], ru: 'Слайд ' + m[1] + ' / ' + m[2] })],
     [/^Pancarte (\d+)$/, m => ({ en: 'Slide ' + m[1], ru: 'Слайд ' + m[1] })],
@@ -468,6 +671,14 @@
     if (r == null) for (const [re, f] of MOTIFS) {
       const m = cle.match(re);
       if (m) { r = f(m, x => t(x, lng))[lng]; break; }
+    }
+    if (r == null && /[.!?»)] \S/.test(cle)) {
+      // message de plusieurs phrases (souvent assemblé par le serveur) : chaque phrase se traduit à part
+      const parts = cle.split(/(?<=[.!?»)])\s+(?=[A-ZÀ-ÖØ-ÞÉ«⏳✓])/u);
+      if (parts.length > 1) {
+        const tr = parts.map(x => t(x, lng));
+        if (tr.some((x, k) => x !== parts[k])) r = tr.join(' ');
+      }
     }
     if (r == null) {
       // préfixe de symboles (emoji, flèches…) + texte connu
