@@ -225,6 +225,7 @@
     "Installer qrbc sur iPhone": ["Install qrbc on iPhone", "Установить qrbc на iPhone"],
     "Dans Safari, touchez Partager (le carré avec une flèche), puis « Sur l’écran d’accueil ».": ["In Safari, tap Share (the square with an arrow), then “Add to Home Screen”.", "В Safari нажмите «Поделиться» (квадрат со стрелкой), затем «На экран «Домой»»."],
     "Compris": ["Got it", "Понятно"],
+    'Texte du bouton (vide = icône ronde)': ['Button text (empty = round icon)', 'Текст кнопки (пусто = круглая иконка)'],
     'Code promo (facultatif)': ['Promo code (optional)', 'Промокод (необязательно)'],
     'Code inconnu ou expiré': ['Unknown or expired code', 'Неизвестный или просроченный код'],
     'Code promo inconnu ou expiré. Corrigez-le ou laissez le champ vide.': ['Unknown or expired promo code. Fix it or leave the field empty.', 'Неизвестный или просроченный промокод. Исправьте его или оставьте поле пустым.'],

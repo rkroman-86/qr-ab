@@ -262,6 +262,7 @@ const CSS_PAGE = `
 .qp-dispo-hautbas .qp-zone-a{order:-1}
 .qp-dispo-hautbas .qp-entete{margin:auto 0}
 .qp-dispo-hautbas .qp-rs{display:flex;flex-wrap:wrap;justify-content:center;gap:14px 22px}
+.qp .qp-rs-libre{display:flex;flex-wrap:wrap;justify-content:center;gap:14px 22px}
 .qp-dispo-hautbas .qp-zone-b{margin-top:24px}
 .qp-dispo-cotes{align-items:stretch}
 .qp-dispo-cotes .qp-contenu{display:grid;grid-template-columns:66px 1fr 66px;grid-template-areas:"a entete b" "a pied b";
@@ -454,7 +455,8 @@ function rendrePage(cfgBrut, racine, opts) {
   const zone = doc.createElement('div');
   zone.className = 'qp-btns';
   normaliser(cfg);
-  const visibles = (cfg.boutons || []).filter(b => b && !b.masque && (b.type === 'reseaux' || b.texte));
+  // Un bouton sans texte reste affiché : il devient une icône ronde (même dans les dispositions pleine largeur)
+  const visibles = (cfg.boutons || []).filter(b => b && !b.masque);
   let nbAffiches = 0;
   let grille = null; // grille d'icônes rondes en cours
   const nouvelleGrille = () => { grille = doc.createElement('div'); grille.className = 'qp-rs'; zone.appendChild(grille); };
@@ -476,18 +478,20 @@ function rendrePage(cfgBrut, racine, opts) {
       nbAffiches++;
       return;
     }
-    if (ronds) {
+    const sansTexte = !String(b.texte || '').trim();
+    if (ronds || sansTexte) {
       if (!opts.apercu && !String(b.valeur || '').trim()) return; // pas de lien : pas d'icône
       nbAffiches++;
-      if (!grille) nouvelleGrille();
+      if (!grille) { nouvelleGrille(); if (!ronds) grille.classList.add('qp-rs-libre'); }
       grille.appendChild(creerRond(doc, {
-        href: construireLien(b), nom: b.texte, icone: iconeAction(b.type),
+        href: construireLien(b), nom: b.texte || (TYPES[b.type] || TYPES.lien).nom, icone: iconeAction(b.type),
         fond: b.couleur || (d.reseauxTheme ? d.accent : (COULEURS_ACTIONS[b.type] || d.accent)),
         vide: !String(b.valeur || '').trim(), nomVisible: d.nomsReseaux, apercu: opts.apercu
       }));
       return;
     }
     nbAffiches++;
+    grille = null;                                  // un bouton pleine largeur coupe la rangée d'icônes
 
     const a = doc.createElement('a');
     a.className = 'qp-btn';

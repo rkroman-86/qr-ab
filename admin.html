@@ -2980,7 +2980,7 @@
 
     const ico = el('input', { type: 'text', class: 'ico', value: b.icone || '', placeholder: '🙂', maxLength: 4 });
     ico.addEventListener('input', () => { b.icone = ico.value; changement(); });
-    const txt = el('input', { type: 'text', value: b.texte || '', placeholder: 'Texte du bouton' });
+    const txt = el('input', { type: 'text', value: b.texte || '', placeholder: 'Texte du bouton (vide = icône ronde)' });
     txt.addEventListener('input', () => { b.texte = txt.value; changement(); });
 
     const type = el('select', {}, Object.keys(TYPES).map(k => el('option', { value: k, text: TYPES[k].nom, selected: b.type === k })));
