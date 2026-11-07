@@ -129,6 +129,19 @@
       <p class="infos">Le client qui saisit un code actif à l’inscription a <span id="p-essai">14</span> jours d’essai + les jours du code ; le paiement n’est demandé qu’après. Le code reste noté sur sa fiche (onglet Clients), même si vous le désactivez ensuite. Lien à donner à un apporteur : qrbc.app/?promo=CODE (le code est prérempli).</p>
     </div>
 
+    <div class="boite" id="b-ia">
+      <h2>Intelligence artificielle (Anthropic)</h2>
+      <div id="ia-etat" class="infos">…</div>
+      <form id="f-ia">
+        <label><span>Clé API Anthropic</span><input type="password" id="ia-cle" autocomplete="off" spellcheck="false" placeholder="sk-ant-…"></label>
+        <button class="prim" id="ia-btn">Enregistrer la clé</button>
+        <button type="button" id="ia-test" class="cache">Tester la clé</button>
+        <button type="button" id="ia-off" class="danger cache">Retirer la clé</button>
+      </form>
+      <div class="msg" id="m-ia"></div>
+      <p class="infos">Sert aux textes, aux pictogrammes et aux descriptions des images de fond. La clé est vérifiée auprès d’Anthropic (sans consommer de crédit), puis rangée chiffrée : elle ne sera plus jamais affichée. Créez-la dans la Console Anthropic › API keys.</p>
+    </div>
+
     <div class="boite" id="b-stripe">
       <h2>Paiements en ligne (Stripe)</h2>
       <div id="stripe-etat" class="infos">…</div>
@@ -248,6 +261,44 @@
     catch (err) { m.className = 'msg err'; m.textContent = err.message; }
   });
 
+  /* ---------- Clé API Anthropic ---------- */
+  async function chargerIA(etat) {
+    const e = etat || await api('anthropic');
+    const z = $('#ia-etat');
+    if (!e.connecte) {
+      z.innerHTML = '<span class="badge b-inactif">aucune clé</span> Textes, pictos et créations express sont indisponibles pour les clients.';
+      $('#ia-btn').textContent = 'Enregistrer la clé'; $('#ia-test').classList.add('cache'); $('#ia-off').classList.add('cache');
+      return;
+    }
+    if (e.source === 'cloudflare') {
+      z.innerHTML = '<span class="badge b-essai">clé Cloudflare</span> clé …' + e.fin + ' (secret ANTHROPIC_KEY du Worker). Collez une clé ici pour la gérer depuis cette page.';
+      $('#ia-btn').textContent = 'Enregistrer la clé'; $('#ia-test').classList.remove('cache'); $('#ia-off').classList.add('cache');
+      return;
+    }
+    z.innerHTML = '<span class="badge b-payant">clé active</span> clé …' + e.fin + ' · enregistrée le ' + date(e.le) +
+      (e.secours ? '<br><small>Le secret Cloudflare ANTHROPIC_KEY existe encore : il ne sert plus que de secours si vous retirez cette clé.</small>' : '');
+    $('#ia-btn').textContent = 'Remplacer la clé'; $('#ia-test').classList.remove('cache'); $('#ia-off').classList.remove('cache');
+  }
+  $('#f-ia').addEventListener('submit', async e => {
+    e.preventDefault();
+    const m = $('#m-ia'), cle = $('#ia-cle').value.trim();
+    if (!cle) return;
+    m.className = 'msg'; m.textContent = 'Vérification auprès d’Anthropic…';
+    try { await chargerIA(await api('anthropic', { cle })); $('#ia-cle').value = ''; m.className = 'msg ok'; m.textContent = '✓ Clé vérifiée et enregistrée : l’IA l’utilise dès maintenant.'; }
+    catch (err) { m.className = 'msg err'; m.textContent = err.message; }
+  });
+  $('#ia-test').addEventListener('click', async () => {
+    const m = $('#m-ia'); m.className = 'msg'; m.textContent = 'Test…';
+    try { await chargerIA(await api('anthropic', { test: true })); m.className = 'msg ok'; m.textContent = '✓ La clé fonctionne.'; }
+    catch (err) { m.className = 'msg err'; m.textContent = err.message; }
+  });
+  $('#ia-off').addEventListener('click', async () => {
+    if (!confirm('Retirer la clé Anthropic de cette page ? (le secret Cloudflare, s’il existe, reprendra le relais ; sinon l’IA sera coupée)')) return;
+    const m = $('#m-ia');
+    try { await chargerIA(await api('anthropic', { deconnecter: true })); m.className = 'msg'; m.textContent = 'Clé retirée.'; }
+    catch (err) { m.className = 'msg err'; m.textContent = err.message; }
+  });
+
   /* ---------- Tarifs et quotas ---------- */
   const CHAMPS_TARIFS = ['prixAnnuel', 'prixTexte', 'prixPicto', 'prixFond', 'prixExpress', 'essaiTexte', 'essaiPicto', 'essaiFond', 'payantTexte', 'payantPicto', 'payantFond'];
   const versChamps = t => ({
@@ -317,6 +368,7 @@
   async function charger() {
     const { comptes } = await api('liste');
     chargerStripe().catch(() => {});
+    chargerIA().catch(() => {});
     chargerEmail().catch(() => {});
     chargerPromos().catch(() => {});
     if (!tarifsDefaut) chargerTarifs().catch(() => {});

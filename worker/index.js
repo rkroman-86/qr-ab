@@ -14,7 +14,7 @@
    Secrets (Paramètres → Variables et secrets) :
      SESSION_SECRET  → longue chaîne aléatoire (signature des sessions)
      ADMIN_TOKEN     → mot de passe de la page gestion de Roman
-     ANTHROPIC_KEY   → clé API pour la rédaction IA et l'atelier logo
+     ANTHROPIC_KEY   → clé API IA de secours (la clé collée dans /gestion › Réglages est prioritaire)
    ========================================================= */
 
 const DOMAINE = 'qrbc.app';
@@ -320,7 +320,8 @@ async function apiClient(request, env, slug, route) {
     if (!actif(compte)) throw new ErreurAPI(402, compte.plan === 'essai'
       ? 'Votre essai est terminé : abonnez-vous pour continuer à utiliser l’IA.'
       : 'Abonnement inactif : l’IA est désactivée.', compte.plan === 'essai' ? 'essai_termine' : 'abonnement_inactif');
-    if (!env.ANTHROPIC_KEY) throw new ErreurAPI(503, 'La rédaction IA n’est pas encore activée sur le serveur.');
+    const cleIA = await cleAnthropic(env);
+    if (!cleIA) throw new ErreurAPI(503, 'La rédaction IA n’est pas encore activée sur le serveur.');
     const d = await corpsJSON(request);
     if (!MODELES_IA.includes(d.model)) throw new ErreurAPI(400, 'Modèle non autorisé.');
     const outils = Array.isArray(d.tools) ? d.tools : [];
@@ -336,7 +337,7 @@ async function apiClient(request, env, slug, route) {
     };
     const r = await fetch(env.ANTHROPIC_URL || 'https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-api-key': env.ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
+      headers: { 'content-type': 'application/json', 'x-api-key': cleIA, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify(corps)
     });
     const txt = await r.text();
@@ -483,7 +484,7 @@ async function apiClient(request, env, slug, route) {
     if (!actif(compte)) throw new ErreurAPI(402, compte.plan === 'essai'
       ? 'Votre essai est terminé : abonnez-vous pour continuer à utiliser l’IA.'
       : 'Abonnement inactif : l’IA est désactivée.', compte.plan === 'essai' ? 'essai_termine' : 'abonnement_inactif');
-    if (!env.ANTHROPIC_KEY) throw new ErreurAPI(503, 'La rédaction IA n’est pas encore activée sur le serveur.');
+    if (!(await cleAnthropic(env))) throw new ErreurAPI(503, 'La rédaction IA n’est pas encore activée sur le serveur.');
     if (expressEnCours(compte)) return json({ express: compte.express, compte: await resumeAvecOffre(env, compte), reprise: true });
     const cout = coutExpress(compte);
     if (!cout.possible) throw new ErreurAPI(402, cout.message, cout.code);
@@ -583,11 +584,12 @@ async function descriptionFond(env, cfg, ambiance, idee) {
   const style = AMBIANCES_FOND[ambiance];
   const activite = [cfg.titre, cfg.sousTitre, cfg.home && cfg.home.ia && cfg.home.ia.description, cfg.home && cfg.home.ia && cfg.home.ia.zone].filter(Boolean).join(' — ');
   const secours = (idee || activite || 'a welcoming local business') + '. ' + style + '. Vertical background image, no text, no letters, no logos, no watermark.';
-  if (!env.ANTHROPIC_KEY) return secours;
+  const cleIA = await cleAnthropic(env);
+  if (!cleIA) return secours;
   try {
     const r = await fetch(env.ANTHROPIC_URL || 'https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-api-key': env.ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
+      headers: { 'content-type': 'application/json', 'x-api-key': cleIA, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify({
         model: MODELES_IA[0], max_tokens: 300,
         system: 'You write prompts for an image generation model. Output ONLY the prompt, in English, 40 to 80 words, no quotes. ' +
@@ -746,6 +748,22 @@ async function gestion(request, env, action) {
     }
     await connecterEmail(env, String(d.cle || '').trim(), String(d.expediteur || '').trim());
     return json(await etatEmail(env));
+  }
+
+  if (action === 'anthropic') {
+    if (request.method === 'GET') return json(await etatAnthropic(env));
+    if (d.deconnecter) { await env.CLIENTS.delete('config:anthropic'); return json(await etatAnthropic(env)); }
+    if (d.test) {
+      const cle = await cleAnthropic(env);
+      if (!cle) throw new ErreurAPI(400, 'Aucune clé enregistrée.');
+      await verifierCleAnthropic(env, cle);
+      return json(Object.assign(await etatAnthropic(env), { testOk: true }));
+    }
+    const cle = String(d.cle || '').trim();
+    if (!/^sk-ant-[A-Za-z0-9_-]{20,}$/.test(cle)) throw new ErreurAPI(400, 'Clé attendue : sk-ant-… (Console Anthropic › API keys).');
+    await verifierCleAnthropic(env, cle);
+    await env.CLIENTS.put('config:anthropic', JSON.stringify({ cle: await chiffrer(env, cle), fin: cle.slice(-4), le: new Date().toISOString() }));
+    return json(await etatAnthropic(env));
   }
 
   if (action === 'stripe') {
@@ -1076,6 +1094,32 @@ async function envoyerEmail(env, conf, a, sujet, html, texteBrut) {
     const j = await r.json().catch(() => ({}));
     throw new ErreurAPI(502, 'Envoi impossible : ' + ((j && j.message) || r.status));
   }
+}
+
+/* ===================== Clé API Anthropic (IA) =====================
+   Collée dans /gestion, vérifiée, rangée chiffrée dans KV (config:anthropic) ; jamais renvoyée.
+   Sans clé dans /gestion, on garde le secret Cloudflare ANTHROPIC_KEY comme secours. */
+async function cleAnthropic(env) {
+  try {
+    const t = await env.CLIENTS.get('config:anthropic');
+    if (t) { const c = JSON.parse(t); const cle = await dechiffrer(env, c.cle); if (cle) return cle; }
+  } catch (e) {}
+  return env.ANTHROPIC_KEY || '';
+}
+async function etatAnthropic(env) {
+  const t = await env.CLIENTS.get('config:anthropic');
+  if (t) { const c = JSON.parse(t); return { connecte: true, source: 'gestion', fin: c.fin, le: c.le, secours: !!env.ANTHROPIC_KEY }; }
+  return env.ANTHROPIC_KEY ? { connecte: true, source: 'cloudflare', fin: String(env.ANTHROPIC_KEY).slice(-4) } : { connecte: false };
+}
+/* Vérification gratuite : la liste des modèles ne consomme aucun token */
+async function verifierCleAnthropic(env, cle) {
+  const url = (env.ANTHROPIC_URL || 'https://api.anthropic.com/v1/messages').replace(/\/messages$/, '/models?limit=1');
+  let r, j;
+  try { r = await fetch(url, { headers: { 'x-api-key': cle, 'anthropic-version': '2023-06-01' } }); j = await r.json().catch(() => ({})); }
+  catch (e) { throw new ErreurAPI(502, 'Anthropic injoignable. Réessayez dans un instant.'); }
+  if (r.status === 401) throw new ErreurAPI(400, 'Anthropic refuse cette clé (invalide ou supprimée).');
+  if (r.status === 403) throw new ErreurAPI(400, 'Cette clé n’a pas les droits nécessaires (vérifiez l’organisation dans la Console).');
+  if (!r.ok) throw new ErreurAPI(400, 'Anthropic refuse cette clé : ' + ((j && j.error && j.error.message) || r.status));
 }
 
 /* ===================== Stripe ===================== */
