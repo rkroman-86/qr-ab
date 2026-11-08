@@ -831,15 +831,15 @@ async function reduireImage(fichier, maxCote, typeSortie, qualite) {
    Page Home : pancartes plein écran à défilement aimanté
    opts.resoudre(chemin), opts.apercu, opts.surContact()
    ========================================================= */
-/* Mention « Créé avec qrbc.app » : minuscule, tout en bas, dans la langue du visiteur */
+/* Mention « Made with qrbc.app » : minuscule, tout en bas, la même partout */
 function creditQrbc(doc, apercu) {
-  const l = ((typeof navigator !== 'undefined' && navigator.language) || 'fr').slice(0, 2).toLowerCase();
   const a = doc.createElement('a');
-  a.className = 'qp-credit';
-  a.href = 'https://qrbc.app/' + (l === 'ru' || l === 'en' ? '?lang=' + l : '');
+  a.className = 'qp-credit notranslate';
+  a.setAttribute('translate', 'no');           // jamais traduite (ni par le navigateur)
+  a.href = 'https://qrbc.app/';
   a.target = '_blank';
   a.rel = 'noopener';
-  a.textContent = (l === 'fr' ? 'Créé avec' : l === 'ru' ? 'Создано на' : 'Made with') + ' qrbc.app';
+  a.textContent = 'Made with qrbc.app';
   if (apercu) a.addEventListener('click', e => e.preventDefault());
   return a;
 }
