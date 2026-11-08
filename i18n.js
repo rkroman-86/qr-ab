@@ -681,6 +681,11 @@
   }
 
   function langueInitiale() {
+    // ?lang=ru dans l'adresse (lien partagé) : prioritaire, et retenu
+    try {
+      const u = new URLSearchParams(location.search).get('lang');
+      if (LANGUES[u]) { try { localStorage.setItem(CLE, u); } catch (e) {} return u; }
+    } catch (e) {}
     try { const l = localStorage.getItem(CLE); if (LANGUES[l]) return l; } catch (e) {}
     const n = (navigator.language || 'fr').slice(0, 2).toLowerCase();
     return LANGUES[n] ? n : 'en';
@@ -788,8 +793,21 @@
     if (!LANGUES[l]) return;
     langue = l;
     try { localStorage.setItem(CLE, l); } catch (e) {}
+    langueDansAdresse(l);
     appliquer();
     document.querySelectorAll('select.choix-langue').forEach(s => { s.value = l; });
+  }
+
+  /* Pages publiques de qrbc.app : la langue choisie va dans l'adresse, pour qu'un lien copié
+     (WhatsApp, SMS…) s'ouvre et s'affiche en aperçu dans cette langue */
+  function langueDansAdresse(l) {
+    try {
+      if (!document.documentElement.hasAttribute('data-lien-langue')) return;
+      const u = new URL(location.href);
+      if (u.searchParams.get('lang') === l) return;
+      u.searchParams.set('lang', l);
+      history.replaceState(history.state, '', u.pathname + u.search + u.hash);
+    } catch (e) {}
   }
 
   /* Petit sélecteur à insérer dans la page */

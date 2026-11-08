@@ -119,7 +119,7 @@ async function racine(request, env, url) {
     if (err) return json({ disponible: false, raison: err });
     return json({ disponible: !(await env.CLIENTS.get('compte:' + slug)) });
   }
-  if (p === '/' || p === '/index.html') return statique(env, request, '/qrbc.html');
+  if (p === '/' || p === '/index.html') return accueilLangue(env, request, url);
   if (p === '/gestion' || p === '/gestion.html') return statique(env, request, '/gestion.html', true);
   if (p === '/cgv' || p === '/cgv.html') return statique(env, request, '/cgv.html');
   if (p === '/mentions-legales' || p === '/mentions-legales.html') return statique(env, request, '/mentions-legales.html');
@@ -1493,6 +1493,33 @@ function pageInfo(titre, msg, status) {
     esc(titre) + '</h1><p>' + esc(msg) + '</p><p><a href="https://' + DOMAINE + '">' + DOMAINE + '</a></p></div></body></html>',
     { status, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } });
 }
+/* Page d'accueil dans la langue du lien (?lang=en|ru) : les robots d'aperçu (WhatsApp, Facebook…)
+   et Google lisent le titre et la description sans exécuter le JavaScript */
+const META_ACCUEIL = {
+  en: { lang: 'en', locale: 'en_GB', titre: 'qrbc — your QR page and business cards',
+        desc: 'Create a mobile page for your business in minutes, with its QR code and print-ready business cards. 14-day free trial.' },
+  ru: { lang: 'ru', locale: 'ru_RU', titre: 'qrbc — ваша QR-страница и визитки',
+        desc: 'Создайте за несколько минут мобильную страницу для своего бизнеса, её QR-код и визитки, готовые к печати. 14 дней бесплатно.' }
+};
+async function accueilLangue(env, request, url) {
+  const r = await statique(env, request, '/qrbc.html');
+  const m = META_ACCUEIL[url.searchParams.get('lang')];
+  if (!m || !r.ok) return r;
+  const adresse = 'https://' + DOMAINE + '/?lang=' + m.lang;
+  const attr = (a, v) => ({ element(e) { e.setAttribute(a, v); } });
+  const h = new Headers(r.headers); h.delete('content-length'); h.set('content-language', m.lang);
+  return new HTMLRewriter()
+    .on('html', attr('lang', m.lang))
+    .on('title', { element(e) { e.setInnerContent(m.titre); } })
+    .on('meta[name="description"]', attr('content', m.desc))
+    .on('meta[property="og:title"]', attr('content', m.titre))
+    .on('meta[property="og:description"]', attr('content', m.desc))
+    .on('meta[property="og:locale"]', attr('content', m.locale))
+    .on('meta[property="og:url"]', attr('content', adresse))
+    .on('link[rel="canonical"]', attr('href', adresse))
+    .transform(new Response(r.body, { status: r.status, headers: h }));
+}
+
 async function statique(env, request, chemin, sansCache) {
   const u = new URL(request.url);
   u.pathname = chemin;
