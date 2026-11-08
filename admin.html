@@ -60,6 +60,19 @@
     #fen-express .etapes small{color:var(--err);display:block}
     @keyframes qp-pouls{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--prim) 60%,transparent)}50%{box-shadow:0 0 0 10px transparent}}
     .pouls{animation:qp-pouls 1.2s ease-in-out 5}
+    #fen-cadre{position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:14px}
+    #fen-cadre .fen{background:var(--panneau);color:var(--txt);border-radius:18px;padding:16px;width:min(100%,460px);max-height:100%;overflow:auto;box-sizing:border-box}
+    #fen-cadre h2{margin:0 0 4px;font-size:1.1rem}
+    #fen-cadre .sous{margin:0 0 12px;color:var(--doux);font-size:.88rem}
+    .cadre-zone{position:relative;margin:0 auto;overflow:hidden;border-radius:12px;background:#111;touch-action:none;cursor:grab;user-select:none}
+    .cadre-zone img{position:absolute;left:0;top:0;transform-origin:0 0;max-width:none;pointer-events:none;-webkit-user-drag:none}
+    .cadre-zone::after{content:"";position:absolute;inset:0;pointer-events:none;border-radius:12px;box-shadow:inset 0 0 0 2px rgba(255,255,255,.75);
+      background:linear-gradient(rgba(255,255,255,.18),rgba(255,255,255,.18)) 33.33% 0/1px 100% no-repeat,linear-gradient(rgba(255,255,255,.18),rgba(255,255,255,.18)) 66.66% 0/1px 100% no-repeat,
+      linear-gradient(rgba(255,255,255,.18),rgba(255,255,255,.18)) 0 33.33%/100% 1px no-repeat,linear-gradient(rgba(255,255,255,.18),rgba(255,255,255,.18)) 0 66.66%/100% 1px no-repeat}
+    .cadre-zoom{display:flex;align-items:center;gap:10px;margin:12px 0 4px}
+    .cadre-zoom input{flex:1}
+    #fen-cadre .boutons{display:flex;gap:10px;margin-top:12px}
+    #fen-cadre .boutons .btn{flex:1}
 
     /* ---------- Connexion ---------- */
     #connexion{min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:24px 16px}
@@ -799,11 +812,109 @@
     const choisir = el('button', { type: 'button', class: 'btn btn-mini', text: reglages.photo ? '🖼 Galerie…' : 'Choisir…', onclick: () => fichier.click() });
     const prendre = reglages.photo ? el('button', { type: 'button', class: 'btn btn-mini', text: '📷 Prendre une photo', onclick: () => camera.click() }) : null;
     const retirer = el('button', { type: 'button', class: 'btn btn-mini', text: 'Retirer', onclick: () => { obj[cle] = ''; majVign(); changement(); } });
+    const recadrer = reglages.fond ? el('button', { type: 'button', class: 'btn btn-mini', text: '✂ Recadrer', onclick: () => {
+      if (!obj[cle]) { alert(t('Choisissez d’abord une image.')); return; }
+      ouvrirRecadrage(obj[cle], reglages.ratio ? reglages.ratio() : RATIO_ECRAN, reglages.nom, chemin => {
+        obj[cle] = chemin; majVign(); changement(); if (CF) construireFormulaire();
+      });
+    } }) : null;
     majVign();
     const genre = reglages.nom === 'fond' ? 'fond' : reglages.nom === 'logo' ? 'logo' : 'article';
     return el('div', {}, [el('span', { class: 'etiq', text: etiquette }),
-      el('div', { class: 'image-ligne' }, [vign, el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' }, [prendre, choisir, retirer].filter(Boolean)), fichier, camera]),
+      el('div', { class: 'image-ligne' }, [vign, el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' }, [prendre, choisir, recadrer, retirer].filter(Boolean)), fichier, camera]),
       ...(CF ? [el('details', { class: 'mes-images', open: genre !== 'article' ? true : undefined }, [el('summary', { text: 'Mes images' }), galerieImages(genre, obj, cle)])] : [])]);
+  }
+
+  /* ---------------- Recadrer et zoomer une image (fond, pancartes) ----------------
+     Glisser pour déplacer, pincer / molette / curseur pour zoomer. Le cadre a le format de l'écran
+     (ou du bandeau d'image d'une pancarte). Le résultat est une NOUVELLE image : l'originale reste dans « Mes images ». */
+  const RATIO_ECRAN = 9 / 19;          // téléphone en portrait (fond, pancarte « photo »)
+  const RATIO_BANDEAU = 1;             // pancarte « image au-dessus du texte » (≈ carré sur téléphone)
+  async function ouvrirRecadrage(source, ratio, nom, fini) {
+    const img = new Image();
+    img.decoding = 'async';
+    try {
+      await new Promise((ok, ko) => { img.onload = ok; img.onerror = ko; img.src = imagesLocales[source] || source; });
+    } catch (e) { alert(t('Cette image ne peut pas être lue sur cet appareil. Essayez une autre image (JPEG ou PNG de moins de 3 Mo).')); return; }
+    const ancien = document.getElementById('fen-cadre'); if (ancien) ancien.remove();
+    const fond = el('div', { id: 'fen-cadre', role: 'dialog', 'aria-modal': 'true' });
+    const fen = el('div', { class: 'fen' });
+    const larg = Math.min(420, window.innerWidth - 60), haut = Math.min(Math.round(larg / ratio), window.innerHeight - 260);
+    const FW = Math.round(Math.min(larg, haut * ratio)), FH = Math.round(FW / ratio);
+    const zone = el('div', { class: 'cadre-zone', style: 'width:' + FW + 'px;height:' + FH + 'px' });
+    const im = el('img', { src: img.src, alt: '' });
+    zone.appendChild(im);
+    const iw = img.naturalWidth, ih = img.naturalHeight;
+    const base = Math.max(FW / iw, FH / ih);                 // « couvrir » : l'image remplit toujours le cadre
+    let z = 1, ox = (FW - iw * base) / 2, oy = (FH - ih * base) / 2;
+    const curseur = el('input', { type: 'range', min: '1', max: '5', step: '0.01', value: '1', 'aria-label': t('Zoom') });
+    function borner() {
+      const S = base * z;
+      ox = Math.min(0, Math.max(FW - iw * S, ox));
+      oy = Math.min(0, Math.max(FH - ih * S, oy));
+    }
+    const flou = el('div', { class: 'aide', style: 'color:var(--alerte);min-height:1.2em;margin:0' });
+    function dessiner() {
+      borner(); im.style.transform = 'translate(' + ox + 'px,' + oy + 'px) scale(' + base * z + ')'; curseur.value = String(z);
+      flou.textContent = FW / (base * z) < 420 ? t('Zoom important : l’image risque de paraître floue sur le téléphone.') : '';
+    }
+    function zoomer(nz, cx, cy) {                             // zoom autour du point (cx, cy) du cadre
+      nz = Math.min(5, Math.max(1, nz));
+      const S0 = base * z, S1 = base * nz;
+      ox = cx - (cx - ox) * S1 / S0; oy = cy - (cy - oy) * S1 / S0; z = nz; dessiner();
+    }
+    // glisser / pincer
+    const doigts = new Map(); let pince = null;
+    zone.addEventListener('pointerdown', e => { zone.setPointerCapture(e.pointerId); doigts.set(e.pointerId, { x: e.clientX, y: e.clientY }); zone.style.cursor = 'grabbing';
+      if (doigts.size === 2) { const [a, b] = [...doigts.values()]; pince = { d: Math.hypot(a.x - b.x, a.y - b.y), z }; } });
+    zone.addEventListener('pointermove', e => {
+      const avant = doigts.get(e.pointerId); if (!avant) return;
+      const ici = { x: e.clientX, y: e.clientY };
+      if (doigts.size === 1) { ox += ici.x - avant.x; oy += ici.y - avant.y; doigts.set(e.pointerId, ici); dessiner(); return; }
+      doigts.set(e.pointerId, ici);
+      if (doigts.size === 2 && pince) {
+        const [a, b] = [...doigts.values()], r = zone.getBoundingClientRect();
+        zoomer(pince.z * Math.hypot(a.x - b.x, a.y - b.y) / pince.d, (a.x + b.x) / 2 - r.left, (a.y + b.y) / 2 - r.top);
+      }
+    });
+    const lacher = e => { doigts.delete(e.pointerId); if (doigts.size < 2) pince = null; zone.style.cursor = 'grab'; };
+    zone.addEventListener('pointerup', lacher); zone.addEventListener('pointercancel', lacher);
+    zone.addEventListener('wheel', e => { e.preventDefault(); const r = zone.getBoundingClientRect(); zoomer(z * (e.deltaY < 0 ? 1.1 : 1 / 1.1), e.clientX - r.left, e.clientY - r.top); }, { passive: false });
+    curseur.addEventListener('input', () => zoomer(Number(curseur.value), FW / 2, FH / 2));
+    const fermer = () => fond.remove();
+    fen.append(
+      el('h2', { text: '✂ Recadrer et zoomer' }),
+      el('p', { class: 'sous', text: 'Faites glisser l’image, pincez ou utilisez le curseur pour zoomer. Le cadre montre ce qui sera visible sur un téléphone.' }),
+      zone,
+      el('div', { class: 'cadre-zoom' }, [el('span', { text: '−' }), curseur, el('span', { text: '+' })]),
+      flou,
+      el('div', { class: 'boutons' }, [
+        el('button', { type: 'button', class: 'btn', text: 'Annuler', onclick: fermer }),
+        el('button', { type: 'button', class: 'btn', text: 'Recentrer', onclick: () => { z = 1; ox = (FW - iw * base) / 2; oy = (FH - ih * base) / 2; dessiner(); } }),
+        el('button', { type: 'button', class: 'btn btn-prim', text: 'Appliquer', onclick: appliquer })
+      ]));
+    fond.appendChild(fen);
+    fond.addEventListener('click', e => { if (e.target === fond) fermer(); });
+    document.body.appendChild(fond);
+    dessiner();
+    function appliquer() {
+      const S = base * z;
+      const sx = -ox / S, sy = -oy / S, sw = FW / S, sh = FH / S;
+      const maxL = ratio < 1 ? 1080 : 1400;                   // assez net pour un écran de téléphone, léger à charger
+      const ow = Math.round(Math.min(sw, maxL)), oh = Math.round(ow / ratio);
+      const cv = document.createElement('canvas'); cv.width = ow; cv.height = oh;
+      const ctx = cv.getContext('2d');
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, ow, oh);
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, ow, oh);
+      let data;
+      try { data = cv.toDataURL('image/jpeg', 0.86); } catch (e) { alert(t('Cette image ne peut pas être lue sur cet appareil. Essayez une autre image (JPEG ou PNG de moins de 3 Mo).')); return; }
+      const chemin = 'images/' + (nom === 'fond' ? 'fond' : 'article') + '-cadre-' + Date.now() + '.jpg';
+      imagesLocales[chemin] = data;
+      imagesAEnvoyer[chemin] = data.split(',')[1];
+      fermer();
+      fini(chemin);
+    }
   }
 
   /* ---------------- Atelier « fond par l'IA » (Cloudflare) ---------------- */
@@ -2968,7 +3079,7 @@
       champTexte('Titre', a, 'titre', { ph: 'Qui sommes-nous ?' }),
       (() => { const c = champTexte('Texte', a, 'texte', { multi: true, ph: 'Votre texte…' }); c.querySelector('textarea').rows = 5; return c; })(),
       segments('Mise en page', HOME_STYLES, a, 'style'),
-      choixImage('Image', a, 'image', { nom: 'article', max: 1600, fond: true, photo: true }),
+      choixImage('Image', a, 'image', { nom: 'article', max: 1600, fond: true, photo: true, ratio: () => a.style === 'image' ? RATIO_BANDEAU : RATIO_ECRAN }),
       el('div', { class: 'bc-actions' }, [
         el('button', { type: 'button', class: 'btn btn-mini', text: '↑', disabled: i === 0, onclick: () => deplacer(-1) }),
         el('button', { type: 'button', class: 'btn btn-mini', text: '↓', disabled: i === n - 1, onclick: () => deplacer(1) }),
