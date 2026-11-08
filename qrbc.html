@@ -236,7 +236,7 @@
     try {
       const r = await fetch('/api/inscription', {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ nom: nom.value, titre: $('#titre').value, email: $('#email').value, mdp: $('#mdp').value, cgu: true, promo: promo.valeur() })
+        body: JSON.stringify({ nom: nom.value, titre: $('#titre').value, email: $('#email').value, mdp: $('#mdp').value, cgu: true, promo: promo.valeur(), langue: document.documentElement.lang })
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j.erreur || 'Erreur');

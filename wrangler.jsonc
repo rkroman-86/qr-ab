@@ -22,6 +22,8 @@
     "not_found_handling": "none"
   },
   "build": { "command": "sh build.sh" },
+  // Rappels d'échéance par e-mail : chaque jour à 7 h UTC (8 h ou 9 h à Paris)
+  "triggers": { "crons": ["0 7 * * *"] },
   "observability": { "enabled": true }
   // Secrets à définir dans le tableau de bord (jamais dans ce fichier) :
   // SESSION_SECRET, ADMIN_TOKEN, ANTHROPIC_KEY

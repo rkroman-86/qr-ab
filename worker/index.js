@@ -79,6 +79,11 @@ const FICHIERS_SITE = new Set(['config.json', 'index.html', 'accueil.html', 'sit
 const TAILLE_MAX = { 'config.json': 512 * 1024, html: 768 * 1024, image: 3 * 1024 * 1024 };
 
 export default {
+  // Tâche quotidienne (wrangler.jsonc › triggers.crons) : rappels d'échéance par e-mail
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(chargerTarifs(env).then(() => lancerRappels(env, {})).then(r => console.log('rappels', JSON.stringify(r.resume)))
+      .catch(e => console.error('rappels', e.message)));
+  },
   async fetch(request, env) {
     try {
       await chargerTarifs(env);
@@ -265,7 +270,11 @@ async function apiClient(request, env, slug, route) {
   // Tout le reste exige une session valide pour CE sous-domaine
   const compte = await exigerSession(request, env, slug);
 
-  if (route === 'compte' && m === 'GET') return json({ compte: await resumeAvecOffre(env, compte) });
+  if (route === 'compte' && m === 'GET') {
+    const l = request.headers.get('x-qrbc-langue');              // langue des e-mails = langue de l'éditeur
+    if (LANGUES_MAIL.includes(l) && compte.langue !== l) { compte.langue = l; await ecrireCompte(env, compte); }
+    return json({ compte: await resumeAvecOffre(env, compte) });
+  }
 
   if (route === 'fichier' && m === 'GET') {
     const chemin = new URL(request.url).searchParams.get('chemin') || '';
@@ -664,6 +673,7 @@ async function inscription(request, env) {
     if (!promo) throw new ErreurAPI(400, 'Code promo inconnu ou expiré. Corrigez-le ou laissez le champ vide.');
   }
   const compte = await creerCompte(env, { slug, email, mdp: String(d.mdp), plan: 'essai', titre: String(d.titre || '').slice(0, 80),
+    langue: LANGUES_MAIL.includes(d.langue) ? d.langue : 'fr',
     joursBonus: promo ? promo.jours : 0, promo: promo ? { code: promo.code, jours: promo.jours, le: new Date().toISOString() } : null });
   return json({ ok: true, adresse: 'https://' + slug + '.' + DOMAINE + '/', editeur: '/app/' + slug + '/', compte: resumeCompte(compte) });
 }
@@ -673,6 +683,7 @@ async function creerCompte(env, o) {
   const maintenant = Date.now();
   const compte = Object.assign({
     slug: o.slug, email: String(o.email || '').trim().toLowerCase(), plan: o.plan, version: 1, cree: new Date(maintenant).toISOString(),
+    langue: o.langue || 'fr',
     finEssai: o.plan === 'essai' ? new Date(maintenant + (JOURS_ESSAI + (o.joursBonus || 0)) * 86400000).toISOString() : null,
     payeJusqua: null, note: o.note || ''
   }, o.promo ? { promo: o.promo } : {}, await hacherMdp(o.mdp));
@@ -755,6 +766,11 @@ async function gestion(request, env, action) {
     return json(await etatEmail(env));
   }
 
+  if (action === 'rappels') {
+    if (request.method === 'GET') return json(await lancerRappels(env, { simuler: true }));
+    return json(await lancerRappels(env, { simuler: !d.envoyer }));
+  }
+
   if (action === 'anthropic') {
     if (request.method === 'GET') return json(await etatAnthropic(env));
     if (d.deconnecter) { await env.CLIENTS.delete('config:anthropic'); return json(await etatAnthropic(env)); }
@@ -814,7 +830,9 @@ async function gestion(request, env, action) {
         if (!c) continue;
         let titre = '';
         try { titre = (JSON.parse(await env.CLIENTS.get('site:' + c.slug + ':config.json') || '{}').titre) || ''; } catch (e) {}
-        comptes.push(Object.assign(resumeCompte(c), { paiements: c.paiements || [], titre, depenseIA: (c.ia && c.ia.depense) || 0 }));
+        comptes.push(Object.assign(resumeCompte(c), { paiements: c.paiements || [], titre, depenseIA: (c.ia && c.ia.depense) || 0,
+          rappels: c.rappels || {}, langue: c.langue || 'fr', aSupprimer: aSupprimer(c),
+          finConservation: echeanceCompte(c) ? new Date(Date.parse(echeanceCompte(c)) + JOURS_CONSERVATION * 86400000).toISOString() : null }));
       }
       curseur = l.list_complete ? null : l.cursor;
     } while (curseur);
@@ -1106,6 +1124,152 @@ async function envoyerEmail(env, conf, a, sujet, html, texteBrut) {
     throw new ErreurAPI(502, 'Envoi impossible : ' + ((j && j.message) || r.status));
   }
 }
+
+/* ===================== Rappels d'échéance =====================
+   Chaque jour (7 h UTC), pour chaque compte en essai ou abonné, on cherche l'étape atteinte la plus avancée
+   (J-30 abonnés, J-7, J-1, J0 = page en pause, J+30, J+80) et on l'envoie si rien d'égal ou de plus avancé n'est
+   déjà parti pour cette échéance : pas de doublon, et un jour manqué se rattrape sans avalanche.
+   Au-delà de JOURS_CONSERVATION jours après l'échéance, le compte est signalé « à supprimer » dans /gestion
+   (suppression manuelle). */
+const LANGUES_MAIL = ['fr', 'en', 'ru'];
+const JOURS_CONSERVATION = 90;
+const ENVOIS_MAX = 40;                     // par passage (limite de requêtes d'une tâche Cloudflare) ; la suite part le lendemain
+const ETAPES_RAPPEL = [
+  { id: 'J-30', seuil: 30, plans: ['payant'] },
+  { id: 'J-7', seuil: 7 },
+  { id: 'J-1', seuil: 1 },
+  { id: 'J0', seuil: 0, apres: true },
+  { id: 'J+30', seuil: -30, apres: true },
+  { id: 'J+80', seuil: -80, apres: true }
+];
+function echeanceCompte(c) { return c.plan === 'essai' ? c.finEssai : c.plan === 'payant' ? c.payeJusqua : null; }
+function aSupprimer(c, maintenant) {
+  const fin = echeanceCompte(c);
+  return !!fin && !actif(c) && Date.parse(fin) + JOURS_CONSERVATION * 86400000 < (maintenant || Date.now());
+}
+function etapeDue(c, maintenant) {
+  const fin = echeanceCompte(c);
+  if (!fin || !c.email || c.plan === 'gratuit' || c.plan === 'suspendu') return null;
+  if (aSupprimer(c, maintenant)) return null;                    // conservation dépassée : plus d'e-mail, suppression manuelle
+  const restant = (Date.parse(fin) - maintenant) / 86400000;
+  let due = -1;
+  ETAPES_RAPPEL.forEach((e, i) => {
+    if (e.plans && !e.plans.includes(c.plan)) return;
+    if (e.apres ? restant <= e.seuil : Math.round(restant) <= e.seuil) due = i;
+  });
+  if (due < 0) return null;
+  const jour = fin.slice(0, 10), r = c.rappels || {};
+  if (ETAPES_RAPPEL.slice(due).some(e => r[jour + ':' + e.id])) return null;
+  if (ETAPES_RAPPEL[due].apres && actif(c)) return null;
+  return { etape: ETAPES_RAPPEL[due].id, fin, cle: jour + ':' + ETAPES_RAPPEL[due].id, jours: Math.ceil(restant) };
+}
+async function lancerRappels(env, o) {
+  const maintenant = Date.now();
+  const conf = o.simuler ? null : await lireEmail(env).catch(() => null);
+  const prevus = [], envoyes = [], erreurs = [];
+  let curseur, nbSupprimer = 0;
+  do {
+    const l = await env.CLIENTS.list({ prefix: 'compte:', cursor: curseur });
+    for (const k of l.keys) {
+      let c; try { c = JSON.parse(await env.CLIENTS.get(k.name) || 'null'); } catch (e) { c = null; }
+      if (!c) continue;
+      if (aSupprimer(c, maintenant)) nbSupprimer++;
+      const due = etapeDue(c, maintenant);
+      if (!due) continue;
+      const ligne = { slug: c.slug, email: c.email, plan: c.plan, etape: due.etape, fin: due.fin, langue: c.langue || 'fr' };
+      if (o.simuler || !conf) { prevus.push(ligne); continue; }
+      if (envoyes.length >= ENVOIS_MAX) { prevus.push(ligne); continue; }
+      try {
+        const m = mailRappel(c, due);
+        await envoyerEmail(env, conf, c.email, m.sujet, m.html, m.texte);
+        c.rappels = Object.assign({}, c.rappels, { [due.cle]: new Date().toISOString() });
+        await ecrireCompte(env, c);
+        envoyes.push(ligne);
+      } catch (e) { erreurs.push(Object.assign(ligne, { erreur: e.message })); }
+    }
+    curseur = l.list_complete ? null : l.cursor;
+  } while (curseur);
+  return { simulation: !!o.simuler, emailConfigure: o.simuler ? !!(await env.CLIENTS.get('config:email')) : !!conf,
+    envoyes, prevus, erreurs, resume: { envoyes: envoyes.length, enAttente: prevus.length, erreurs: erreurs.length, aSupprimer: nbSupprimer } };
+}
+
+/* Texte des rappels : français, anglais, russe (langue de l'éditeur du client) */
+function mailRappel(c, due) {
+  const L = LANGUES_MAIL.includes(c.langue) ? c.langue : 'fr';
+  const site = c.slug + '.' + DOMAINE;
+  const sep = L === 'ru' ? '.' : '/';
+  const fmt = iso => { const d = new Date(iso); return String(d.getUTCDate()).padStart(2, '0') + sep + String(d.getUTCMonth() + 1).padStart(2, '0') + sep + d.getUTCFullYear(); };
+  const dFin = fmt(due.fin), dSuppr = fmt(new Date(Date.parse(due.fin) + JOURS_CONSERVATION * 86400000).toISOString());
+  const prix = PRIX_ANNUEL, ttc = Math.round(prix * (1 + TVA / 100));
+  const credit = c.plan === 'payant' ? Math.min(c.credit || 0, prix) : 0;
+  const eur = v => L === 'en' ? '€' + (v / 100).toFixed(2) : (v / 100).toFixed(2).replace('.', ',') + ' €';
+  const lien = 'https://' + DOMAINE + '/app/' + c.slug + '/?abonnement=1' + (L !== 'fr' ? '&lang=' + L : '');
+  const essai = c.plan === 'essai', avant = !['J0', 'J+30', 'J+80'].includes(due.etape);
+  const T = {
+    fr: {
+      salut: 'Bonjour,',
+      sujet: avant ? (essai ? 'Votre essai qrbc se termine le ' + dFin : 'Votre abonnement qrbc arrive à échéance le ' + dFin)
+        : due.etape === 'J+80' ? 'Dernier rappel : votre page ' + site + ' sera supprimée le ' + dSuppr
+        : due.etape === 'J+30' ? 'Votre page ' + site + ' vous attend' : 'Votre page ' + site + ' est en pause',
+      corps: avant
+        ? (essai ? 'Votre essai gratuit de la page <b>' + site + '</b> se termine le <b>' + dFin + '</b>' + (due.jours > 1 ? ' (dans ' + due.jours + ' jours)' : '') + '. Pour qu’elle reste en ligne, avec votre QR code et vos cartes de visite, abonnez-vous dès maintenant.'
+                 : 'L’abonnement de votre page <b>' + site + '</b> arrive à échéance le <b>' + dFin + '</b>' + (due.jours > 1 ? ' (dans ' + due.jours + ' jours)' : '') + '. Il n’est pas renouvelé automatiquement : renouvelez-le pour que votre page et votre QR code restent actifs.')
+        : due.etape === 'J0' ? 'Votre page <b>' + site + '</b> est en pause depuis le ' + dFin + ' : elle n’est plus visible et votre QR code n’affiche plus vos coordonnées. Rien n’est perdu : un paiement la remet en ligne à l’identique.'
+        : 'Votre page <b>' + site + '</b> est en pause depuis le ' + dFin + '. Nous gardons tout (textes, images, QR code) jusqu’au <b>' + dSuppr + '</b> ; après cette date, la page et ses données seront supprimées.',
+      prix: 'Abonnement : ' + eur(prix) + ' HT par an (' + eur(ttc) + ' TTC).' + (credit ? ' Votre crédit IA de ' + eur(credit) + ' HT sera déduit : il ne reste que ' + eur(prix - credit) + ' HT à payer.' : ''),
+      bouton: avant ? (essai ? 'M’abonner' : 'Renouveler pour un an') : 'Réactiver ma page',
+      voir: 'Voir ma page', voirTxt: 'Revoir votre page telle que vos clients la voient :',
+      pied: 'Pas de renouvellement automatique : vous ne payez que si vous le décidez. Une question ? Répondez simplement à cet e-mail.',
+      cgv: 'Conditions générales de vente'
+    },
+    en: {
+      salut: 'Hello,',
+      sujet: avant ? (essai ? 'Your qrbc trial ends on ' + dFin : 'Your qrbc subscription expires on ' + dFin)
+        : due.etape === 'J+80' ? 'Last reminder: your page ' + site + ' will be deleted on ' + dSuppr
+        : due.etape === 'J+30' ? 'Your page ' + site + ' is waiting for you' : 'Your page ' + site + ' is paused',
+      corps: avant
+        ? (essai ? 'The free trial of your page <b>' + site + '</b> ends on <b>' + dFin + '</b>' + (due.jours > 1 ? ' (in ' + due.jours + ' days)' : '') + '. To keep it online, with your QR code and business cards, subscribe now.'
+                 : 'The subscription for your page <b>' + site + '</b> expires on <b>' + dFin + '</b>' + (due.jours > 1 ? ' (in ' + due.jours + ' days)' : '') + '. It does not renew automatically: renew it to keep your page and QR code active.')
+        : due.etape === 'J0' ? 'Your page <b>' + site + '</b> has been paused since ' + dFin + ': it is no longer visible and your QR code no longer shows your details. Nothing is lost: a payment puts it back online exactly as it was.'
+        : 'Your page <b>' + site + '</b> has been paused since ' + dFin + '. We keep everything (texts, images, QR code) until <b>' + dSuppr + '</b>; after that date, the page and its data will be deleted.',
+      prix: 'Subscription: ' + eur(prix) + ' excl. VAT per year (' + eur(ttc) + ' incl. VAT).' + (credit ? ' Your AI credit of ' + eur(credit) + ' excl. VAT will be deducted: only ' + eur(prix - credit) + ' excl. VAT left to pay.' : ''),
+      bouton: avant ? (essai ? 'Subscribe' : 'Renew for one year') : 'Reactivate my page',
+      voir: 'View my page', voirTxt: 'See your page as your customers see it:',
+      pied: 'No automatic renewal: you only pay if you decide to. Any question? Just reply to this email.',
+      cgv: 'Terms of sale'
+    },
+    ru: {
+      salut: 'Здравствуйте!',
+      sujet: avant ? (essai ? 'Пробный период qrbc заканчивается ' + dFin : 'Подписка qrbc заканчивается ' + dFin)
+        : due.etape === 'J+80' ? 'Последнее напоминание: страница ' + site + ' будет удалена ' + dSuppr
+        : due.etape === 'J+30' ? 'Ваша страница ' + site + ' ждёт вас' : 'Ваша страница ' + site + ' приостановлена',
+      corps: avant
+        ? (essai ? 'Бесплатный пробный период вашей страницы <b>' + site + '</b> заканчивается <b>' + dFin + '</b>' + (due.jours > 1 ? ' (через ' + due.jours + ' ' + plurielRu(due.jours, 'день', 'дня', 'дней') + ')' : '') + '. Чтобы страница, QR-код и визитки продолжали работать, оформите подписку.'
+                 : 'Подписка на вашу страницу <b>' + site + '</b> заканчивается <b>' + dFin + '</b>' + (due.jours > 1 ? ' (через ' + due.jours + ' ' + plurielRu(due.jours, 'день', 'дня', 'дней') + ')' : '') + '. Она не продлевается автоматически: продлите её, чтобы страница и QR-код оставались активными.')
+        : due.etape === 'J0' ? 'Ваша страница <b>' + site + '</b> приостановлена с ' + dFin + ': она больше не видна, а QR-код не показывает ваши контакты. Ничего не потеряно: после оплаты страница вернётся в прежнем виде.'
+        : 'Ваша страница <b>' + site + '</b> приостановлена с ' + dFin + '. Мы храним всё (тексты, изображения, QR-код) до <b>' + dSuppr + '</b>; после этой даты страница и её данные будут удалены.',
+      prix: 'Подписка: ' + eur(prix) + ' без НДС в год (' + eur(ttc) + ' с НДС).' + (credit ? ' Ваш кредит ИИ ' + eur(credit) + ' без НДС будет вычтен: к оплате останется ' + eur(prix - credit) + ' без НДС.' : ''),
+      bouton: avant ? (essai ? 'Оформить подписку' : 'Продлить на год') : 'Восстановить страницу',
+      voir: 'Открыть мою страницу', voirTxt: 'Посмотрите на свою страницу глазами клиентов:',
+      pied: 'Без автоматического продления: вы платите, только если сами решите. Есть вопросы? Просто ответьте на это письмо.',
+      cgv: 'Условия продажи'
+    }
+  }[L];
+  const lienCgv = 'https://' + DOMAINE + '/cgv' + (L !== 'fr' ? '?lang=' + L : '');
+  const html = '<div style="font:16px/1.55 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#1b1a17;max-width:520px">' +
+    '<p style="font-weight:800;font-size:20px;margin:0 0 18px">qrbc<span style="color:#d9572b">.</span></p>' +
+    '<p>' + T.salut + '</p><p>' + T.corps + '</p>' +
+    '<p style="color:#4a463f">' + esc(T.prix) + '</p>' +
+    '<p style="margin:22px 0"><a href="' + lien + '" style="display:inline-block;background:#d9572b;color:#fff;text-decoration:none;padding:13px 20px;border-radius:10px;font-weight:700">' + esc(T.bouton) + '</a></p>' +
+    (avant ? '<p style="margin:0 0 22px">' + esc(T.voirTxt) + ' <a href="https://' + site + '/" style="color:#d9572b;font-weight:700">' + esc(site) + '</a></p>' : '') +
+    '<p style="color:#6a665d;font-size:13px;border-top:1px solid #e8e3d8;padding-top:14px">' + esc(T.pied) + '<br>' +
+    'KPS · qrbc.app · <a href="mailto:support@' + DOMAINE + '" style="color:#6a665d">support@' + DOMAINE + '</a> · <a href="' + lienCgv + '" style="color:#6a665d">' + esc(T.cgv) + '</a></p></div>';
+  const brut = s => s.replace(/<[^>]+>/g, '');
+  const texte = T.salut + '\n\n' + brut(T.corps) + '\n\n' + T.prix + '\n\n' + T.bouton + ' : ' + lien +
+    (avant ? '\n' + T.voir + ' : https://' + site + '/' : '') + '\n\n' + T.pied + '\nKPS · qrbc.app · support@' + DOMAINE;
+  return { sujet: T.sujet, html, texte };
+}
+function plurielRu(n, un, peu, beaucoup) { const a = n % 10, b = n % 100; return a === 1 && b !== 11 ? un : a >= 2 && a <= 4 && (b < 12 || b > 14) ? peu : beaucoup; }
 
 /* ===================== Clé API Anthropic (IA) =====================
    Collée dans /gestion, vérifiée, rangée chiffrée dans KV (config:anthropic) ; jamais renvoyée.

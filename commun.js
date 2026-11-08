@@ -742,6 +742,7 @@ async function appelAPI(chemin, jeton, init) {
   init = init || {};
   const entetes = { 'content-type': 'application/json' };
   if (jeton) entetes.authorization = 'Bearer ' + jeton;
+  try { const l = localStorage.getItem('qp-langue'); if (l) entetes['x-qrbc-langue'] = l; } catch (e) {}
   Object.assign(entetes, init.headers || {});
   const r = await fetch(baseAPI() + chemin, Object.assign({ cache: 'no-store' }, init, { headers: entetes }));
   if (!r.ok) {

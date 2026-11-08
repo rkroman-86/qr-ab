@@ -30,6 +30,9 @@
   .ligne1{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline}
   .slug{font-weight:700}
   .badge{font-size:.75rem;font-weight:600;padding:2px 8px;border-radius:99px;border:1px solid var(--ligne)}
+  .alerte-suppr{border:1px solid var(--err);color:var(--err);border-radius:12px;padding:10px 12px;margin:0 0 12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .alerte-suppr button{margin-left:auto}
+  .rappels-liste{font-size:.88rem;margin:8px 0 0;padding-left:18px}
   .b-gratuit{color:var(--prim)} .b-essai{color:var(--alerte)} .b-payant{color:var(--ok)} .b-inactif{color:var(--err);border-color:var(--err)}
   .infos{color:var(--doux);font-size:.85rem;margin:4px 0 8px}
   .actions{display:flex;flex-wrap:wrap;gap:6px}
@@ -99,6 +102,7 @@
 
     <section id="onglet-clients">
       <div class="stats" id="stats"></div>
+      <div class="alerte-suppr cache" id="alerte-suppr"></div>
       <div class="outils">
         <input type="search" id="recherche" placeholder="Rechercher : page, activité, e-mail, note…">
         <select id="filtre">
@@ -108,6 +112,7 @@
           <option value="payant">Abonnés</option>
           <option value="gratuit">Offerts</option>
           <option value="inactif">Inactifs</option>
+          <option value="supprimer">À supprimer (+ de 90 jours)</option>
         </select>
         <button type="button" id="btn-nouveau" class="prim">+ Nouveau compte</button>
       </div>
@@ -116,6 +121,19 @@
     </section>
 
     <section id="onglet-reglages" class="cache">
+    <div class="boite" id="b-rappels">
+      <h2>Rappels automatiques</h2>
+      <p class="infos" style="margin-top:0">Chaque jour à 8 h–9 h (heure de Paris), un e-mail part aux clients concernés, dans la langue de leur éditeur, avec le bouton de paiement et le lien vers leur page :
+        essai J-7 et J-1 · abonnement J-30, J-7 et J-1 · jour de la mise en pause · J+30 · J+80 (suppression annoncée). À J+90, le compte apparaît « à supprimer » dans l’onglet Clients : la suppression reste manuelle.</p>
+      <div id="rappels-etat" class="infos">…</div>
+      <div class="actions">
+        <button type="button" id="rappels-voir">Voir les envois du jour</button>
+        <button type="button" id="rappels-envoyer" class="prim">Envoyer maintenant</button>
+      </div>
+      <div class="msg" id="m-rappels"></div>
+      <ul class="rappels-liste" id="rappels-liste"></ul>
+    </div>
+
     <div class="boite" id="b-promos">
       <h2>Codes promo</h2>
       <form id="f-promo" class="promo-ajout">
@@ -390,15 +408,46 @@
     const garder = tousComptes.filter(c => {
       if (f === 'demande' && !c.demande) return false;
       if (f === 'inactif' && c.actif) return false;
+      if (f === 'supprimer' && !c.aSupprimer) return false;
       if (['essai', 'payant', 'gratuit'].includes(f) && c.plan !== f) return false;
       if (!q) return true;
       return [c.slug, c.titre, c.email, c.note, c.promo && 'code:' + c.promo.code].some(x => String(x || '').toLowerCase().includes(q));
     }).sort((a, b) => (b.demande ? 1 : 0) - (a.demande ? 1 : 0) || String(b.cree).localeCompare(String(a.cree)));
+    const nbS = tousComptes.filter(c => c.aSupprimer).length, al = $('#alerte-suppr');
+    al.classList.toggle('cache', !nbS || f === 'supprimer');
+    al.innerHTML = '';
+    if (nbS) al.append(document.createTextNode('🗑 ' + nbS + (nbS > 1 ? ' comptes en pause depuis plus de 90 jours sont à supprimer' : ' compte en pause depuis plus de 90 jours est à supprimer') + ' (durée de conservation annoncée dans les CGV). '),
+      el('button', { type: 'button', text: 'Voir', onclick: () => { $('#filtre').value = 'supprimer'; afficherListe(); } }));
     if (!garder.length) liste.textContent = tousComptes.length ? 'Aucun client ne correspond.' : 'Aucun compte pour l’instant.';
     garder.forEach(c => liste.appendChild(carte(c)));
   }
   $('#recherche').addEventListener('input', afficherListe);
   $('#filtre').addEventListener('change', afficherListe);
+
+  /* ---------- Rappels automatiques ---------- */
+  function montrerRappels(r) {
+    const nom = { 'J-30': 'J-30', 'J-7': 'J-7', 'J-1': 'J-1', 'J0': 'mise en pause', 'J+30': 'J+30', 'J+80': 'J+80' };
+    $('#rappels-etat').innerHTML = r.emailConfigure ? '' : '<span class="badge b-inactif">e-mails non configurés</span> Configurez Resend ci-dessous pour que les rappels partent.';
+    const ul = $('#rappels-liste'); ul.innerHTML = '';
+    const lignes = (r.simulation ? r.prevus : r.envoyes).map(x => ['', x]).concat(r.simulation ? [] : r.prevus.map(x => ['en attente : ', x])).concat(r.erreurs.map(x => ['⚠ ', x]));
+    lignes.forEach(([pre, x]) => ul.append(el('li', { text: pre + x.slug + '.qrbc.app · ' + (x.plan === 'essai' ? 'essai' : 'abonnement') + ' · ' + nom[x.etape] + ' · échéance ' + date(x.fin) + ' · ' + x.email + ' (' + x.langue.toUpperCase() + ')' + (x.erreur ? ' — ' + x.erreur : '') })));
+    return lignes.length;
+  }
+  $('#rappels-voir').addEventListener('click', async () => {
+    const m = $('#m-rappels'); m.className = 'msg'; m.textContent = '…';
+    try { const r = await api('rappels'); const n = montrerRappels(r); m.textContent = n ? n + ' e-mail(s) à envoyer aujourd’hui :' : 'Aucun rappel à envoyer aujourd’hui.'; }
+    catch (e) { m.className = 'msg err'; m.textContent = e.message; }
+  });
+  $('#rappels-envoyer').addEventListener('click', async () => {
+    if (!confirm('Envoyer maintenant les rappels du jour ? (ceux déjà envoyés ne repartent pas)')) return;
+    const m = $('#m-rappels'); m.className = 'msg'; m.textContent = 'Envoi…';
+    try {
+      const r = await api('rappels', { envoyer: true }); montrerRappels(r);
+      m.className = r.erreurs.length ? 'msg err' : 'msg ok';
+      m.textContent = r.emailConfigure ? '✓ ' + r.envoyes.length + ' envoyé(s)' + (r.prevus.length ? ', ' + r.prevus.length + ' en attente (limite par passage)' : '') + (r.erreurs.length ? ', ' + r.erreurs.length + ' erreur(s)' : '') + '.' : 'Rien n’est parti : les e-mails ne sont pas configurés.';
+      charger();
+    } catch (e) { m.className = 'msg err'; m.textContent = e.message; }
+  });
 
   /* ---------- Codes promo ---------- */
   let promos = [];
@@ -501,6 +550,10 @@
     if (c.plan === 'essai') ligneDonnee('Fin d’essai', date(c.finEssai));
     if (c.plan === 'payant') ligneDonnee('Payé jusqu’au', date(c.payeJusqua));
     if (c.depenseIA) ligneDonnee('IA payée', euros(c.depenseIA));
+    const ETAPES = { 'J-30': 'J-30', 'J-7': 'J-7', 'J-1': 'J-1', 'J0': 'mise en pause', 'J+30': 'J+30', 'J+80': 'J+80 (suppression annoncée)' };
+    const rap = Object.entries(c.rappels || {}).sort((a, b) => String(a[1]).localeCompare(String(b[1])));
+    ligneDonnee('Rappels e-mail', rap.length ? rap.slice(-4).map(([k, le]) => ETAPES[k.split(':')[1]] + ' le ' + date(le)).join(' · ') + ' (' + ({ fr: 'FR', en: 'EN', ru: 'RU' }[c.langue] || 'FR') + ')' : '—');
+    if (c.aSupprimer) ligneDonnee('Conservation', 'dépassée depuis le ' + date(c.finConservation) + ' : à supprimer');
     ligneDonnee('Code promo', c.promo ? c.promo.code + (c.promo.manuel ? ' (rattaché à la main le ' + date(c.promo.le) + ')' : ' · +' + c.promo.jours + ' j à l’inscription') : '—');
     if (c.note) ligneDonnee('Note', c.note);
     d.append(dl);

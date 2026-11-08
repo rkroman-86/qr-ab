@@ -414,6 +414,12 @@
   /* Retour de la page de paiement Stripe : ?paiement=ok&session_id=… ou ?paiement=annule */
   async function retourPaiement() {
     const q = new URLSearchParams(location.search);
+    if (q.has('abonnement') && !q.get('paiement')) {       // lien d'un e-mail de rappel
+      q.delete('abonnement');
+      history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : '') + location.hash);
+      ouvrirAbonnement();
+      return;
+    }
     const etat = q.get('paiement');
     if (!etat) return;
     history.replaceState(null, '', location.pathname + location.hash);
