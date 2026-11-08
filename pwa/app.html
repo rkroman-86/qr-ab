@@ -79,7 +79,10 @@
   .accord.ok{color:var(--ok)} .accord.ko{color:var(--err)}
   /* Écran « nouveau mot de passe » (lien reçu par e-mail) */
   body.reinit header .onglets, body.reinit .rail, body.reinit .points-nav{display:none}
-  #ecran-reinit{flex:1;overflow-y:auto;padding:18px 20px calc(24px + env(safe-area-inset-bottom))}
+  #ecran-reinit,#ecran-verif{flex:1;overflow-y:auto;padding:18px 20px calc(24px + env(safe-area-inset-bottom))}
+  .attente-mail{text-align:center;padding:8px 0}
+  .attente-mail .grand{font-size:3rem;line-height:1;margin:6px 0 10px}
+  .attente-mail .actions{display:flex;flex-direction:column;gap:8px;margin-top:16px}
   .points li::before{content:"✓";color:var(--accent);font-weight:700;margin-right:8px}
 
   /* ---------- Points de navigation ---------- */
@@ -168,6 +171,14 @@
   </section>
 </div>
 
+<main id="ecran-verif" hidden>
+  <div class="carte-in">
+    <h1 id="ve-titre">Confirmation de votre adresse</h1>
+    <p class="sous" id="ve-sous">Vérification du lien…</p>
+    <button type="button" class="prim" id="ve-btn" hidden>Aller à la connexion</button>
+  </div>
+</main>
+
 <main id="ecran-reinit" hidden>
   <div class="carte-in">
     <h1>Nouveau mot de passe</h1>
@@ -203,7 +214,7 @@
   /* Une seule page connue : on l'ouvre directement, sauf demande explicite */
   const params = new URLSearchParams(location.search);
   const connues = lire();
-  if (connues.length === 1 && !params.has('choisir') && !params.has('reinit') && !params.has('promo') && !location.hash) { location.replace('/app/' + connues[0] + '/'); return; }
+  if (connues.length === 1 && !params.has('choisir') && !params.has('reinit') && !params.has('verif') && !params.has('promo') && !location.hash) { location.replace('/app/' + connues[0] + '/'); return; }
 
   /* ---------- Pancartes : glisser ou boutons ---------- */
   let courante = 0;
@@ -255,7 +266,7 @@
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mdp, rester: true })
     });
     const j = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(j.erreur || 'Connexion impossible.');
+    if (!r.ok) { const e = new Error(j.erreur || 'Connexion impossible.'); e.code = j.code; e.donnees = j; throw e; }
     // même clé que l'éditeur : il démarre déjà connecté
     try { localStorage.setItem('qp-jeton:' + slug, j.jeton); sessionStorage.setItem('qp-jeton:' + slug, j.jeton); } catch (e) {}
     memoriser(slug);
@@ -276,6 +287,7 @@
       await connecter(slug, $('#cx-mdp').value);
     } catch (err) {
       msg.textContent = err.message === 'Failed to fetch' ? 'Pas de connexion internet.' : err.message;
+      if (err.code === 'email_non_confirme') msg.appendChild(boutonRenvoi(slug, $('#cx-mdp').value, msg));
       btn.disabled = false; btn.textContent = 'Se connecter';
     }
   });
@@ -411,14 +423,93 @@
         body: JSON.stringify({ nom: slug, titre: $('#in-titre').value, email: $('#in-email').value, mdp, cgu: true, promo: promo.valeur(), langue: document.documentElement.lang })
       });
       const j = await r.json().catch(() => ({}));
+      if (r.status === 409 && j.code === 'email_existe') {           // déjà inscrit : on l'emmène à la connexion
+        btn.disabled = false; btn.textContent = 'Créer ma page';
+        cxNom.value = (j.pages && j.pages[0]) || '';
+        $('#cx-mdp').value = '';
+        aller(0);
+        const m2 = $('#cx-msg'); m2.textContent = j.erreur;
+        setTimeout(() => $('#cx-mdp').focus(), 400);
+        return;
+      }
       if (!r.ok) throw new Error(j.erreur || 'Erreur');
       promo.oublier();
-      await connecter(slug, mdp);
+      memoriser(slug);
+      if (!j.verifier) { await connecter(slug, mdp); return; }      // pas de service d'e-mail : accès direct
+      attenteMail(slug, mdp, $('#in-email').value.trim(), j.envoye);
     } catch (err) {
       msg.textContent = err.message === 'Failed to fetch' ? 'Pas de connexion internet.' : err.message;
       btn.disabled = false; btn.textContent = 'Créer ma page';
     }
   });
+
+  /* ---------- Après l'inscription : cliquer sur le lien reçu par e-mail ---------- */
+  function boutonRenvoi(slug, mdp, zone, email) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'lien'; b.textContent = t('Renvoyer l’e-mail');
+    b.style.display = 'block'; b.style.marginTop = '8px';
+    b.onclick = async () => {
+      b.disabled = true;
+      try {
+        const r = await fetch('/app/' + slug + '/api/email/renvoyer', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mdp, email: email || '' }) });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(j.erreur || 'Erreur');
+        zone.textContent = j.dejaConfirme ? t('Adresse déjà confirmée : connectez-vous.') : '✉️ ' + t('Nouveau lien envoyé à ') + j.email;
+        return j;
+      } catch (e) { zone.textContent = e.message; b.disabled = false; zone.appendChild(b); }
+    };
+    return b;
+  }
+  function attenteMail(slug, mdp, email, envoye) {
+    const carte = $('#f-in').parentNode;
+    $('#f-in').hidden = true;
+    carte.querySelectorAll('.points, .bascule').forEach(n => n.hidden = true);
+    carte.querySelector('h1').textContent = t('Vérifiez vos e-mails');
+    carte.querySelector('.sous').textContent = '';
+    const box = document.createElement('div');
+    box.className = 'attente-mail';
+    box.innerHTML = '<div class="grand">✉️</div><p class="t1"></p><p class="sous t2"></p><div class="msg ok t3"></div><div class="actions"></div>';
+    box.querySelector('.t1').textContent = envoye
+      ? t('Nous avons envoyé un lien de confirmation à ') + email + '.'
+      : t('L’e-mail de confirmation n’a pas pu partir. Vérifiez l’adresse et renvoyez-le.');
+    box.querySelector('.t2').textContent = t('Cliquez sur le lien dans cet e-mail pour ouvrir votre page et commencer. Pensez à regarder dans les indésirables.');
+    const zone = box.querySelector('.t3'), actions = box.querySelector('.actions');
+    actions.appendChild(boutonRenvoi(slug, mdp, zone));
+    const corriger = document.createElement('button');
+    corriger.type = 'button'; corriger.className = 'lien'; corriger.textContent = t('Corriger mon adresse e-mail');
+    corriger.onclick = () => {
+      const v = prompt(t('Votre adresse e-mail :'), email);
+      if (!v || !v.trim() || v.trim() === email) return;
+      email = v.trim();
+      box.querySelector('.t1').textContent = t('Nous avons envoyé un lien de confirmation à ') + email + '.';
+      boutonRenvoi(slug, mdp, zone, email).click();
+    };
+    actions.appendChild(corriger);
+    carte.insertBefore(box, $('#f-in'));
+  }
+
+  /* ---------- Lien de confirmation reçu par e-mail : ?verif=… ---------- */
+  const jetonVerif = params.get('verif');
+  if (jetonVerif) {
+    document.body.classList.add('reinit');
+    $('#ecran-verif').hidden = false;
+    history.replaceState(null, '', '/app');
+    fetch('/api/verifier-email', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jeton: jetonVerif }) })
+      .then(r => r.json().then(j => ({ r, j })))
+      .then(({ r, j }) => {
+        if (!r.ok) {
+          $('#ve-sous').textContent = j.erreur || 'Lien invalide.';
+          $('#ve-btn').hidden = false; $('#ve-btn').onclick = () => { location.href = '/app?choisir#connexion'; };
+          return;
+        }
+        $('#ve-titre').textContent = t('Adresse confirmée ✓');
+        $('#ve-sous').textContent = t('Ouverture de votre page…');
+        try { localStorage.setItem('qp-jeton:' + j.slug, j.jeton); sessionStorage.setItem('qp-jeton:' + j.slug, j.jeton); } catch (x) {}
+        memoriser(j.slug);
+        setTimeout(() => { location.href = '/app/' + j.slug + '/'; }, 700);
+      })
+      .catch(() => { $('#ve-sous').textContent = 'Pas de connexion internet.'; });
+  }
 })();
 </script>
 </body>

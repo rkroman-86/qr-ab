@@ -99,14 +99,14 @@ export default {
       return texte('qrbc-router OK');
     } catch (e) {
       console.error(e);
-      if (e instanceof ErreurAPI) return json({ erreur: e.message, code: e.code }, e.status);
+      if (e instanceof ErreurAPI) return json(Object.assign({ erreur: e.message, code: e.code }, e.extra || {}), e.status);
       return json({ erreur: 'Erreur interne' }, 500);
     }
   }
 };
 
 class ErreurAPI extends Error {
-  constructor(status, message, code) { super(message); this.status = status; this.code = code; }
+  constructor(status, message, code, extra) { super(message); this.status = status; this.code = code; this.extra = extra; }
 }
 
 /* ===================== Domaine principal ===================== */
@@ -118,6 +118,7 @@ async function racine(request, env, url) {
   if (p.startsWith('/api/gestion/')) return gestion(request, env, p.slice('/api/gestion/'.length));
   if (p === '/api/mdp-oublie' && request.method === 'POST') return mdpOublie(request, env);
   if (p === '/api/mdp-reinit' && request.method === 'POST') return mdpReinit(request, env);
+  if (p === '/api/verifier-email' && request.method === 'POST') return verifierEmail(request, env);
   if (p === '/api/disponible') {
     const slug = (url.searchParams.get('nom') || '').toLowerCase();
     const err = erreurSlug(slug);
@@ -169,6 +170,8 @@ async function siteClient(request, env, url, slug) {
   const compte = await lireCompte(env, slug);
   if (!compte) return pageInfo('Page introuvable', 'Cette adresse n’est pas encore utilisée.', 404);
   if (!actif(compte)) return pageInfo('Page en pause', 'Cette page est momentanément indisponible.', 200);
+  if (compte.emailAVerifier && p !== '/manifest.webmanifest' && !p.startsWith('/images/'))
+    return pageInfo('Page bientôt en ligne', 'Cette page sera visible dès que son propriétaire aura confirmé son adresse e-mail.', 200);
 
   if (p === '/contact') return Response.redirect(url.origin + '/#contact', 302);
   if (p === '/manifest.webmanifest') return manifestePage(env, slug);
@@ -262,9 +265,34 @@ async function apiClient(request, env, slug, route) {
     const { mdp, rester } = await corpsJSON(request);
     const compte = await lireCompte(env, slug);
     if (!compte || !(await verifierMdp(compte, String(mdp || '')))) throw new ErreurAPI(401, 'Mot de passe incorrect.');
+    if (compte.emailAVerifier) throw new ErreurAPI(403, 'Confirmez d’abord votre adresse e-mail : cliquez sur le lien envoyé à ' + compte.email + ' (pensez aux indésirables).', 'email_non_confirme', { email: compte.email });
     const duree = rester ? 30 * 86400 : 12 * 3600;
     const jeton = await signerSession(env, { s: slug, v: compte.version || 1, e: Math.floor(Date.now() / 1000) + duree });
     return json({ jeton, compte: await resumeAvecOffre(env, compte) });
+  }
+
+  /* Lien de confirmation pas reçu : on le renvoie (mot de passe exigé), en corrigeant l'adresse si besoin */
+  if (route === 'email/renvoyer' && m === 'POST') {
+    await limiter(env, 'cx:' + slug + ':' + ip(request), 20, 3600, 'Trop d’essais. Réessayez dans une heure.');
+    const dd = await corpsJSON(request);
+    const compte = await lireCompte(env, slug);
+    if (!compte || !(await verifierMdp(compte, String(dd.mdp || '')))) throw new ErreurAPI(401, 'Mot de passe incorrect.');
+    if (!compte.emailAVerifier) return json({ ok: true, dejaConfirme: true });
+    await limiter(env, 'verif:' + slug + ':' + new Date().toISOString().slice(0, 13), 3, 7200, 'Trop d’envois. Réessayez dans une heure.');
+    const nouvelle = String(dd.email || '').trim().toLowerCase();
+    if (nouvelle && nouvelle !== compte.email) {             // faute de frappe à l'inscription : on corrige l'adresse
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nouvelle) || nouvelle.length > 200) throw new ErreurAPI(400, 'Adresse e-mail invalide.');
+      for (const s2 of (await slugsParEmail(env, nouvelle)).filter(x => x !== slug))
+        if (await env.CLIENTS.get('compte:' + s2)) throw new ErreurAPI(409, 'Cette adresse e-mail est déjà utilisée par un autre compte.');
+      await indexerEmail(env, compte.email, slug, false);
+      compte.email = nouvelle;
+      await indexerEmail(env, nouvelle, slug, true);
+      await ecrireCompte(env, compte);
+    }
+    const conf = await lireEmail(env);
+    if (!conf) throw new ErreurAPI(503, 'L’envoi d’e-mails n’est pas disponible pour le moment. Contactez le support.');
+    await envoyerLienVerif(env, conf, compte);
+    return json({ ok: true, email: compte.email });
   }
 
   // Tout le reste exige une session valide pour CE sous-domaine
@@ -686,10 +714,17 @@ async function inscription(request, env) {
     promo = (await lirePromos(env)).find(x => x.code === normCode(d.promo) && x.actif);
     if (!promo) throw new ErreurAPI(400, 'Code promo inconnu ou expiré. Corrigez-le ou laissez le champ vide.');
   }
+  // Adresse déjà inscrite : on propose de se connecter plutôt que de créer un doublon
+  const existants = [];
+  for (const s of (await slugsParEmail(env, email)).slice(0, 10)) if (await env.CLIENTS.get('compte:' + s)) existants.push(s);
+  if (existants.length) throw new ErreurAPI(409, 'Un compte existe déjà avec cette adresse e-mail : connectez-vous avec votre mot de passe.', 'email_existe', { pages: existants });
+  const conf = await lireEmail(env);                // sans service d'e-mail configuré, pas de validation possible : on n'en exige pas
   const compte = await creerCompte(env, { slug, email, mdp: String(d.mdp), plan: 'essai', titre: String(d.titre || '').slice(0, 80),
-    langue: LANGUES_MAIL.includes(d.langue) ? d.langue : 'fr',
+    langue: LANGUES_MAIL.includes(d.langue) ? d.langue : 'fr', emailAVerifier: !!conf,
     joursBonus: promo ? promo.jours : 0, promo: promo ? { code: promo.code, jours: promo.jours, le: new Date().toISOString() } : null });
-  return json({ ok: true, adresse: 'https://' + slug + '.' + DOMAINE + '/', editeur: '/app/' + slug + '/', compte: resumeCompte(compte) });
+  let envoye = false;
+  if (conf) { try { await envoyerLienVerif(env, conf, compte); envoye = true; } catch (e) { console.error('e-mail de validation', e.message); } }
+  return json({ ok: true, adresse: 'https://' + slug + '.' + DOMAINE + '/', editeur: '/app/' + slug + '/', verifier: !!conf, envoye, compte: resumeCompte(compte) });
 }
 
 async function creerCompte(env, o) {
@@ -700,7 +735,7 @@ async function creerCompte(env, o) {
     langue: o.langue || 'fr',
     finEssai: o.plan === 'essai' ? new Date(maintenant + (JOURS_ESSAI + (o.joursBonus || 0)) * 86400000).toISOString() : null,
     payeJusqua: null, note: o.note || ''
-  }, o.promo ? { promo: o.promo } : {}, await hacherMdp(o.mdp));
+  }, o.promo ? { promo: o.promo } : {}, o.emailAVerifier ? { emailAVerifier: true } : {}, await hacherMdp(o.mdp));
   await ecrireCompte(env, compte);
   await indexerEmail(env, compte.email, o.slug, true);
   if (!(await env.CLIENTS.get('site:' + o.slug + ':config.json'))) {
@@ -876,6 +911,7 @@ async function gestion(request, env, action) {
     if (d.prolongerEssai) compte.finEssai = new Date(Math.max(Date.now(), Date.parse(compte.finEssai || 0) || 0) + Number(d.prolongerEssai) * 86400000).toISOString();
     if (d.payeJusqua !== undefined) compte.payeJusqua = d.payeJusqua || null;
     if (d.note !== undefined) compte.note = String(d.note);
+    if (d.validerEmail) { delete compte.emailAVerifier; compte.emailVerifie = new Date().toISOString(); }   // validation à la main par Roman
     // IA gratuites restantes : on repart de zéro utilisation et on ajuste l'écart avec le quota de la formule
     for (const type of TYPES_IA) {
       const v = d['restant' + type[0].toUpperCase() + type.slice(1)];
@@ -1054,9 +1090,53 @@ async function mdpReinit(request, env) {
   if (!compte || (compte.version || 1) !== info.v) { await env.CLIENTS.delete(cle); throw new ErreurAPI(410, 'Ce lien n’est plus valable. Refaites une demande.'); }
   await env.CLIENTS.delete(cle);                                     // usage unique
   Object.assign(compte, await hacherMdp(String(d.mdp)), { version: (compte.version || 1) + 1 });   // déconnecte les autres appareils
+  if (compte.emailAVerifier) { delete compte.emailAVerifier; compte.emailVerifie = new Date().toISOString(); }   // le lien reçu prouve l'adresse
   await ecrireCompte(env, compte);
   const session = await signerSession(env, { s: compte.slug, v: compte.version, e: Math.floor(Date.now() / 1000) + 30 * 86400 });
   return json({ ok: true, slug: compte.slug, jeton: session });
+}
+
+/* ===================== Validation de l'adresse e-mail =====================
+   À l'inscription, le compte est créé mais reste fermé (pas de connexion, page publique « bientôt en ligne »)
+   tant que le lien reçu par e-mail n'a pas été ouvert. Le clic ouvre directement l'éditeur. Lien valable 7 jours, renvoyable. */
+const DUREE_LIEN_VERIF = 7 * 86400;
+async function envoyerLienVerif(env, conf, compte) {
+  const jeton = b64url(crypto.getRandomValues(new Uint8Array(32)));
+  await env.CLIENTS.put('verif:' + await empreinte(jeton), JSON.stringify({ slug: compte.slug, email: compte.email }), { expirationTtl: DUREE_LIEN_VERIF });
+  const L = LANGUES_MAIL.includes(compte.langue) ? compte.langue : 'fr';
+  const url = 'https://' + DOMAINE + '/app?verif=' + jeton + (L !== 'fr' ? '&lang=' + L : '');
+  const adr = compte.slug + '.' + DOMAINE;
+  const T = {
+    fr: { sujet: 'Confirmez votre adresse e-mail — qrbc', bonjour: 'Bonjour,', corps: 'Merci pour votre inscription ! Confirmez votre adresse e-mail pour accéder à votre page <b>' + esc(adr) + '</b> et commencer à la créer :',
+      bouton: 'Confirmer et ouvrir ma page', fin: 'Ce lien est valable 7 jours. Si vous n’êtes pas à l’origine de cette inscription, ignorez simplement cet e-mail.' },
+    en: { sujet: 'Confirm your email address — qrbc', bonjour: 'Hello,', corps: 'Thank you for signing up! Confirm your email address to access your page <b>' + esc(adr) + '</b> and start building it:',
+      bouton: 'Confirm and open my page', fin: 'This link is valid for 7 days. If you did not sign up, simply ignore this email.' },
+    ru: { sujet: 'Подтвердите адрес электронной почты — qrbc', bonjour: 'Здравствуйте!', corps: 'Спасибо за регистрацию! Подтвердите адрес электронной почты, чтобы открыть вашу страницу <b>' + esc(adr) + '</b> и начать её создавать:',
+      bouton: 'Подтвердить и открыть страницу', fin: 'Ссылка действительна 7 дней. Если вы не регистрировались, просто проигнорируйте это письмо.' }
+  }[L];
+  const html = '<div style="font:16px/1.5 system-ui,sans-serif;color:#1b1a17;max-width:480px">' +
+    '<p>' + T.bonjour + '</p><p>' + T.corps + '</p>' +
+    '<p style="margin:22px 0"><a href="' + url + '" style="display:inline-block;background:#d9572b;color:#fff;text-decoration:none;padding:12px 18px;border-radius:10px;font-weight:700">' + T.bouton + '</a></p>' +
+    '<p style="color:#6a665d;font-size:14px">' + T.fin + '</p></div>';
+  const brut = T.bonjour + '\n\n' + T.corps.replace(/<[^>]+>/g, '') + '\n' + url + '\n\n' + T.fin;
+  await envoyerEmail(env, conf, compte.email, T.sujet, html, brut);
+}
+async function verifierEmail(request, env) {
+  await limiter(env, 'verif-ip:' + ip(request) + ':' + new Date().toISOString().slice(0, 13), 20, 7200, 'Trop d’essais. Réessayez dans une heure.');
+  const d = await corpsJSON(request);
+  const jeton = String(d.jeton || '');
+  if (!/^[A-Za-z0-9_-]{30,60}$/.test(jeton)) throw new ErreurAPI(400, 'Lien invalide.');
+  const cle = 'verif:' + await empreinte(jeton);
+  const t = await env.CLIENTS.get(cle);
+  if (!t) throw new ErreurAPI(410, 'Ce lien a expiré ou a déjà servi. Ouvrez votre page dans l’appli pour recevoir un nouveau lien.');
+  const info = JSON.parse(t);
+  const compte = await lireCompte(env, info.slug);
+  if (!compte) { await env.CLIENTS.delete(cle); throw new ErreurAPI(410, 'Ce compte n’existe plus.'); }
+  if (compte.email !== info.email) { await env.CLIENTS.delete(cle); throw new ErreurAPI(410, 'L’adresse e-mail du compte a changé : utilisez le lien du dernier e-mail reçu.'); }
+  await env.CLIENTS.delete(cle);
+  if (compte.emailAVerifier) { delete compte.emailAVerifier; compte.emailVerifie = new Date().toISOString(); await ecrireCompte(env, compte); }
+  const session = await signerSession(env, { s: compte.slug, v: compte.version || 1, e: Math.floor(Date.now() / 1000) + 30 * 86400 });
+  return json({ ok: true, slug: compte.slug, jeton: session, adresse: 'https://' + compte.slug + '.' + DOMAINE + '/' });
 }
 
 async function empreinte(t) {
@@ -1509,7 +1589,7 @@ function resumeCompte(c) {
   const q = QUOTAS_IA[c.plan];
   const ia = c.ia || {};
   return {
-    slug: c.slug, email: c.email, plan: c.plan, actif: actif(c), finEssai: c.finEssai, payeJusqua: c.payeJusqua, cree: c.cree, note: c.note || '', promo: c.promo || null,
+    slug: c.slug, email: c.email, emailAVerifier: !!c.emailAVerifier, plan: c.plan, actif: actif(c), finEssai: c.finEssai, payeJusqua: c.payeJusqua, cree: c.cree, note: c.note || '', promo: c.promo || null,
     ia: {
       illimite: c.plan === 'gratuit',
       texte: { utilises: ia.texte || 0, inclus: q ? Math.max(0, q.texte + ((ia.bonus && ia.bonus.texte) || 0)) : null },
@@ -1635,6 +1715,7 @@ async function exigerSession(request, env, slug) {
   if (!ch || ch.s !== slug || ch.e < Date.now() / 1000) throw new ErreurAPI(401, 'Session expirée : reconnectez-vous.');
   const compte = await lireCompte(env, slug);
   if (!compte || (compte.version || 1) !== ch.v || compte.plan === 'suspendu') throw new ErreurAPI(401, 'Session expirée : reconnectez-vous.');
+  if (compte.emailAVerifier) throw new ErreurAPI(401, 'Confirmez d’abord votre adresse e-mail.');
   return compte;
 }
 

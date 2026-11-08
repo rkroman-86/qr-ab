@@ -751,8 +751,9 @@ async function appelAPI(chemin, jeton, init) {
   const r = await fetch(baseAPI() + chemin, Object.assign({ cache: 'no-store' }, init, { headers: entetes }));
   if (!r.ok) {
     let msg = r.status + ' ' + r.statusText;
-    try { const j = await r.json(); if (j.erreur) msg = j.erreur; } catch (e) {}
-    const err = new Error(msg); err.status = r.status; throw err;
+    let j = null;
+    try { j = await r.json(); if (j.erreur) msg = j.erreur; } catch (e) {}
+    const err = new Error(msg); err.status = r.status; err.code = j && j.code; err.donnees = j; throw err;
   }
   return r;
 }

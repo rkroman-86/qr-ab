@@ -545,7 +545,7 @@
     // Données
     const dl = el('dl', { class: 'donnees' });
     const ligneDonnee = (k, v) => { dl.append(el('dt', { text: k }), el('dd', { text: v })); };
-    ligneDonnee('E-mail', c.email || '—');
+    ligneDonnee('E-mail', (c.email || '—') + (c.emailAVerifier ? ' · ⚠️ non confirmé (page pas encore en ligne)' : ''));
     ligneDonnee('Créé le', date(c.cree));
     if (c.plan === 'essai') ligneDonnee('Fin d’essai', date(c.finEssai));
     if (c.plan === 'payant') ligneDonnee('Payé jusqu’au', date(c.payeJusqua));
@@ -602,6 +602,7 @@
       return confirm(txt) ? api('abonner', { nom: c.slug }) : null;
     });
     if (c.demande) bouton('Ignorer la demande', () => api('annuler-demande', { nom: c.slug }));
+    if (c.emailAVerifier) bouton('Valider l’e-mail', () => confirm('Considérer l’adresse ' + c.email + ' comme confirmée ? La page de ' + c.slug + ' sera visible en ligne.') ? api('modifier', { nom: c.slug, validerEmail: true }) : null);
     if (c.plan !== 'suspendu') bouton('Suspendre', () => api('modifier', { nom: c.slug, plan: 'suspendu' }));
     bouton(c.email ? 'E-mail' : 'Ajouter un e-mail', () => {
       const v = prompt('E-mail de ' + c.slug + ' (sert à récupérer le mot de passe) :', c.email || '');

@@ -387,6 +387,17 @@
     } catch (err) {
       msg.className = 'msg err';
       msg.textContent = err.status === 401 && !CF ? 'Accès refusé : le jeton GitHub a expiré ou a été révoqué.' : err.message;
+      if (err.code === 'email_non_confirme') {
+        const renvoi = el('button', { type: 'button', class: 'btn btn-mini', style: 'margin-top:8px', text: 'Renvoyer l’e-mail', onclick: async () => {
+          renvoi.disabled = true;
+          try {
+            const r = await appelAPI('email/renvoyer', null, { method: 'POST', body: JSON.stringify({ mdp: $('#mdp').value }) });
+            const j = await r.json();
+            msg.className = 'msg ok'; msg.textContent = j.dejaConfirme ? t('Adresse déjà confirmée : connectez-vous.') : '✉️ ' + t('Nouveau lien envoyé à ') + j.email;
+          } catch (e2) { msg.textContent = e2.message; renvoi.disabled = false; }
+        } });
+        msg.append(el('br'), renvoi);
+      }
     } finally { btn.disabled = false; }
   });
 

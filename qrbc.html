@@ -128,7 +128,8 @@
       </div>
       <div id="etape-ok" class="bravo" hidden>
         <h2>Votre page est prête 🎉</h2>
-        <p class="sous">Adresse : <code id="adr"></code><br>Connectez-vous avec votre mot de passe pour la personnaliser.</p>
+        <p class="sous" id="ok-normal">Adresse : <code id="adr"></code><br>Connectez-vous avec votre mot de passe pour la personnaliser.</p>
+        <p class="sous" id="ok-mail" hidden></p>
         <a id="lien-admin" href="#">Personnaliser ma page</a>
         <p class="sous" id="conseil-install" style="margin-top:16px" hidden>Astuce : installez l’appli qrbc pour retrouver votre page en un geste.</p>
       </div>
@@ -239,6 +240,14 @@
         body: JSON.stringify({ nom: nom.value, titre: $('#titre').value, email: $('#email').value, mdp: $('#mdp').value, cgu: true, promo: promo.valeur(), langue: document.documentElement.lang })
       });
       const j = await r.json();
+      if (r.status === 409 && j.code === 'email_existe') {             // déjà inscrit : on propose de se connecter
+        msg.className = 'msg err'; msg.textContent = j.erreur + ' ';
+        const a = document.createElement('a');
+        a.href = '/app/' + ((j.pages && j.pages[0]) || '') + '/'; a.textContent = t('Se connecter →');
+        a.setAttribute('data-lien-langue', '');
+        msg.appendChild(a);
+        btn.disabled = false; return;
+      }
       if (!r.ok) throw new Error(j.erreur || 'Erreur');
       promo.oublier();
       const slug = nom.value;
@@ -249,6 +258,12 @@
         l.unshift(slug); localStorage.setItem('qrbc-pages', JSON.stringify(l.slice(0, 10)));
       } catch (x) {}
       $('#conseil-install').hidden = !installable();
+      if (j.verifier) {                                   // l'éditeur s'ouvre par le lien reçu par e-mail
+        $('#ok-normal').hidden = true; $('#ok-mail').hidden = false; $('#lien-admin').style.display = 'none';
+        $('#ok-mail').textContent = '✉️ ' + t('Nous avons envoyé un lien de confirmation à ') + $('#email').value.trim() + '. ' +
+          t('Cliquez sur le lien dans cet e-mail pour ouvrir votre page et commencer. Pensez à regarder dans les indésirables.');
+        $('#etape-ok h2').textContent = t('Votre page est créée 🎉');
+      }
       $('#etape-form').hidden = true; $('#etape-ok').hidden = false;
     } catch (err) {
       msg.className = 'msg err'; msg.textContent = err.message;
