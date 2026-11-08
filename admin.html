@@ -746,7 +746,7 @@
       .catch(() => { medias = []; })
       .finally(() => { chargementMedias = null; construireFormulaire(); });
   }
-  function galerieImages(genre, obj, cle) {
+  function galerieImages(genre, obj, cle, apres) {
     const box = el('div', { class: 'galerie-fonds' });
     const l = (medias || []).filter(x => x.genre === genre);
     // photos chargées mais pas encore enregistrées : visibles tout de suite
@@ -758,7 +758,7 @@
       const actif = obj[cle] === m.chemin;
       const v = el('button', { type: 'button', class: 'fond-ia' + (genre === 'logo' ? ' carre' : '') + (actif ? ' actif' : ''), title: actif ? 'Image utilisée' : 'Utiliser cette image' });
       v.style.backgroundImage = 'url("' + (imagesLocales[m.chemin] || m.chemin) + '")';
-      v.addEventListener('click', () => { obj[cle] = m.chemin; changement(); construireFormulaire(); });
+      v.addEventListener('click', () => { obj[cle] = m.chemin; if (apres) apres(); changement(); construireFormulaire(); });
       if (m.source === 'ia') v.appendChild(el('span', { class: 'fond-badge', text: 'IA' }));
       if (actif) v.appendChild(el('span', { class: 'fond-coche', text: '✓' }));
       if (!m.attente) {
@@ -806,6 +806,7 @@
         imagesLocales[chemin] = data;
         imagesAEnvoyer[chemin] = data.split(',')[1];
         obj[cle] = chemin;
+        if (reglages.apresImage) reglages.apresImage();
         majVign(); changement();
         if (CF) construireFormulaire();
       } catch (e) { alert(t(e.message)); }
@@ -828,7 +829,7 @@
         const j = await r.json();
         medias = j.medias;
         afficherAbonnement(j.compte);
-        obj[cle] = j.nouvelles[0].chemin; majVign(); changement();
+        obj[cle] = j.nouvelles[0].chemin; if (reglages.apresImage) reglages.apresImage(); majVign(); changement();
         zoneIA.innerHTML = '';
         const vues = j.nouvelles.map(n => {
           const v = el('button', { type: 'button', class: 'ia-choix' + (n.chemin === obj[cle] ? ' actif' : ''), style: 'background-image:url("' + n.chemin + '")', 'aria-label': t('Utiliser cette image') });
@@ -846,7 +847,7 @@
     const recadrer = reglages.fond ? el('button', { type: 'button', class: 'btn btn-mini', text: '✂ Recadrer', onclick: () => {
       if (!obj[cle]) { alert(t('Choisissez d’abord une image.')); return; }
       ouvrirRecadrage(obj[cle], reglages.ratio ? reglages.ratio() : RATIO_ECRAN, reglages.nom, chemin => {
-        obj[cle] = chemin; majVign(); changement(); if (CF) construireFormulaire();
+        obj[cle] = chemin; if (reglages.apresImage) reglages.apresImage(); majVign(); changement(); if (CF) construireFormulaire();
       });
     } }) : null;
     majVign();
@@ -854,7 +855,7 @@
     return el('div', {}, [el('span', { class: 'etiq', text: etiquette }),
       el('div', { class: 'image-ligne' }, [vign, el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' }, [prendre, choisir, imageIA, recadrer, retirer].filter(Boolean)), fichier, camera]),
       zoneIA,
-      ...(CF ? [el('details', { class: 'mes-images', open: genre !== 'article' ? true : undefined }, [el('summary', { text: 'Mes images' }), galerieImages(genre, obj, cle)])] : [])]);
+      ...(CF ? [el('details', { class: 'mes-images', open: genre !== 'article' ? true : undefined }, [el('summary', { text: 'Mes images' }), galerieImages(genre, obj, cle, reglages.apresImage)])] : [])]);
   }
 
   /* ---------------- Recadrer et zoomer une image (fond, pancartes) ----------------
@@ -3127,7 +3128,13 @@
       (() => { const c = champTexte('Texte', a, 'texte', { multi: true, ph: 'Votre texte…' }); c.querySelector('textarea').rows = 5; return c; })(),
       segments('Mise en page', HOME_STYLES, a, 'style'),
       choixImage('Image', a, 'image', { nom: 'article', max: 1600, fond: true, photo: true, ratio: () => a.style === 'image' ? RATIO_BANDEAU : RATIO_ECRAN,
-        ia: () => ({ titre: a.titre || '', texte: a.texte || '', style: a.style || '' }) }),
+        ia: () => ({ titre: a.titre || '', texte: a.texte || '', style: a.style || '' }),
+        apresImage: () => {
+          if (a.style === 'photo' || a.style === 'image') return;
+          a.style = 'photo';
+          const cles = Object.keys(HOME_STYLES);
+          carte.querySelectorAll('.segments button').forEach((b, k) => b.classList.toggle('actif', cles[k] === 'photo'));
+        } }),
       el('div', { class: 'bc-actions' }, [
         el('button', { type: 'button', class: 'btn btn-mini', text: '↑', disabled: i === 0, onclick: () => deplacer(-1) }),
         el('button', { type: 'button', class: 'btn btn-mini', text: '↓', disabled: i === n - 1, onclick: () => deplacer(1) }),
