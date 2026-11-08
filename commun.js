@@ -228,6 +228,9 @@ const CSS_PAGE = `
   background:linear-gradient(165deg,var(--fond),var(--fond2));background-size:cover;background-position:center;position:relative}
 .qp *{box-sizing:border-box}
 .qp-voile{position:absolute;inset:0;pointer-events:none}
+.qp-credit{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(6px + env(safe-area-inset-bottom));z-index:3;
+  font:500 .62rem/1.2 system-ui,-apple-system,sans-serif;letter-spacing:.02em;color:inherit;opacity:.42;text-decoration:none;white-space:nowrap}
+.qp-credit:hover,.qp-credit:focus-visible{opacity:.8;text-decoration:underline}
 .qp-contenu{position:relative;width:100%;max-width:420px;text-align:center}
 .qp-carte .qp-contenu{background:color-mix(in srgb,var(--fond) 88%,transparent);padding:32px 22px 24px;border-radius:24px;
   box-shadow:0 10px 40px rgba(0,0,0,.18);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
@@ -576,6 +579,7 @@ function rendrePage(cfgBrut, racine, opts) {
     page.appendChild(b);
     page.classList.add('qp-avec-appli');
   }
+  page.appendChild(creditQrbc(doc, opts.apercu));
   racine.appendChild(page);
   return cfg;
 }
@@ -827,6 +831,19 @@ async function reduireImage(fichier, maxCote, typeSortie, qualite) {
    Page Home : pancartes plein écran à défilement aimanté
    opts.resoudre(chemin), opts.apercu, opts.surContact()
    ========================================================= */
+/* Mention « Créé avec qrbc.app » : minuscule, tout en bas, dans la langue du visiteur */
+function creditQrbc(doc, apercu) {
+  const l = ((typeof navigator !== 'undefined' && navigator.language) || 'fr').slice(0, 2).toLowerCase();
+  const a = doc.createElement('a');
+  a.className = 'qp-credit';
+  a.href = 'https://qrbc.app/' + (l === 'ru' || l === 'en' ? '?lang=' + l : '');
+  a.target = '_blank';
+  a.rel = 'noopener';
+  a.textContent = (l === 'fr' ? 'Créé avec' : l === 'ru' ? 'Создано на' : 'Made with') + ' qrbc.app';
+  if (apercu) a.addEventListener('click', e => e.preventDefault());
+  return a;
+}
+
 function rendreHome(cfgBrut, racine, opts) {
   opts = opts || {};
   const cfg = normaliser(fusion(CONFIG_DEFAUT, cfgBrut));
@@ -932,6 +949,7 @@ function rendreHome(cfgBrut, racine, opts) {
     defile.appendChild(p);
   }
 
+  if (defile.lastElementChild) defile.lastElementChild.appendChild(creditQrbc(doc, opts.apercu));   // sous la dernière pancarte
   home.append(defile, barre, points);
   racine.appendChild(home);
 
