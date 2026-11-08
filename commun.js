@@ -231,6 +231,12 @@ const CSS_PAGE = `
 .qp-credit{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(6px + env(safe-area-inset-bottom));z-index:3;
   font:500 .62rem/1.2 system-ui,-apple-system,sans-serif;letter-spacing:.02em;color:inherit;opacity:.42;text-decoration:none;white-space:nowrap}
 .qp-credit:hover,.qp-credit:focus-visible{opacity:.8;text-decoration:underline}
+.qp-langues{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(24px + env(safe-area-inset-bottom));z-index:3;display:flex;gap:4px;
+  font:600 .74rem/1 system-ui,-apple-system,sans-serif;letter-spacing:.04em;white-space:nowrap}
+.qp-langues a,.qh-langues a{color:inherit;text-decoration:none;opacity:.6;padding:6px 7px;border-radius:999px}
+.qp-langues a.actif,.qh-langues a.actif{opacity:1;background:color-mix(in srgb,currentColor 14%,transparent)}
+.qp.qp-avec-langues{padding-bottom:70px}
+.qh-langues{display:flex;gap:1px;flex-shrink:0;font:600 .72rem/1 system-ui,-apple-system,sans-serif;letter-spacing:.03em}
 .qp-contenu{position:relative;width:100%;max-width:420px;text-align:center}
 .qp-carte .qp-contenu{background:color-mix(in srgb,var(--fond) 88%,transparent);padding:32px 22px 24px;border-radius:24px;
   box-shadow:0 10px 40px rgba(0,0,0,.18);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
@@ -572,13 +578,16 @@ function rendrePage(cfgBrut, racine, opts) {
     b.type = 'button';
     b.className = 'qp-appli';
     b.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M12 7v7M9 11l3 3 3-3"/></svg>';
-    b.appendChild(doc.createTextNode('Installer'));
-    b.title = 'Installer l’appli sur votre téléphone';
-    b.setAttribute('aria-label', 'Installer l’appli');
+    const TA = textesAppli(doc);
+    b.appendChild(doc.createTextNode(TA.bouton));
+    b.title = TA.titre;
+    b.setAttribute('aria-label', TA.titre);
     if (!opts.apercu) b.addEventListener('click', () => installerAppli(doc));
     page.appendChild(b);
     page.classList.add('qp-avec-appli');
   }
+  const langues = opts.apercu ? null : selecteurLangues(doc, 'qp-langues', false);
+  if (langues) { page.appendChild(langues); page.classList.add('qp-avec-langues'); }
   page.appendChild(creditQrbc(doc, opts.apercu));
   racine.appendChild(page);
   return cfg;
@@ -594,6 +603,30 @@ if (typeof window !== 'undefined' && pageInstallable()) {
   window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); QP_INVITE_INSTALL = e; });
   window.addEventListener('appinstalled', () => { document.querySelectorAll('.qp-appli').forEach(b => b.remove()); });
 }
+/* Textes de l'installation, dans la langue de la page (version traduite : langue de la traduction) */
+function textesAppli(doc) {
+  const b = t => '<b style="display:inline">' + t + '</b>';
+  const T = {
+    fr: { bouton: 'Installer', titre: 'Installer l’appli',
+      ios: ['Touchez le bouton ' + b('Partager') + ' (le carré avec une flèche vers le haut) dans la barre de Safari.', 'Puis choisissez ' + b('« Sur l’écran d’accueil »') + ' et touchez Ajouter.'],
+      mobile: ['Ouvrez le menu ' + b('⋮') + ' du navigateur.', 'Puis choisissez ' + b('« Installer l’application »') + ' ou ' + b('« Ajouter à l’écran d’accueil »') + '.'],
+      ordi: ['Cliquez sur l’icône d’installation à droite de la barre d’adresse,', 'ou ouvrez le menu du navigateur et choisissez ' + b('« Installer »') + '.'],
+      apres: 'L’icône apparaît ensuite avec vos applis : la page s’ouvre en plein écran, même sans réseau.', ok: 'J’ai compris' },
+    en: { bouton: 'Install', titre: 'Install the app',
+      ios: ['Tap the ' + b('Share') + ' button (the square with an arrow pointing up) in the Safari toolbar.', 'Then choose ' + b('“Add to Home Screen”') + ' and tap Add.'],
+      mobile: ['Open the browser menu ' + b('⋮') + '.', 'Then choose ' + b('“Install app”') + ' or ' + b('“Add to Home screen”') + '.'],
+      ordi: ['Click the install icon on the right of the address bar,', 'or open the browser menu and choose ' + b('“Install”') + '.'],
+      apres: 'The icon then appears with your apps: the page opens full screen, even offline.', ok: 'Got it' },
+    ru: { bouton: 'Установить', titre: 'Установить приложение',
+      ios: ['Нажмите кнопку ' + b('«Поделиться»') + ' (квадрат со стрелкой вверх) на панели Safari.', 'Затем выберите ' + b('«На экран «Домой»»') + ' и нажмите «Добавить».'],
+      mobile: ['Откройте меню браузера ' + b('⋮') + '.', 'Затем выберите ' + b('«Установить приложение»') + ' или ' + b('«Добавить на главный экран»') + '.'],
+      ordi: ['Нажмите значок установки справа от адресной строки', 'или откройте меню браузера и выберите ' + b('«Установить»') + '.'],
+      apres: 'Значок появится среди ваших приложений: страница откроется на весь экран, даже без сети.', ok: 'Понятно' }
+  };
+  const l = String((doc.documentElement && doc.documentElement.lang) || 'fr').slice(0, 2).toLowerCase();
+  return T[l] || (l === 'fr' ? T.fr : T.en);
+}
+
 async function installerAppli(doc) {
   if (QP_INVITE_INSTALL) {                       // Android / Chrome / Edge : fenêtre d'installation native
     const ev = QP_INVITE_INSTALL; QP_INVITE_INSTALL = null;
@@ -603,14 +636,11 @@ async function installerAppli(doc) {
   const ua = navigator.userAgent || '';
   const ios = /iPad|iPhone|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
   const mobile = ios || /Android|Mobi/i.test(ua);
-  const txt = ios
-    ? ['Touchez le bouton <b style="display:inline">Partager</b> (le carré avec une flèche vers le haut) dans la barre de Safari.', 'Puis choisissez <b style="display:inline">« Sur l’écran d’accueil »</b> et touchez Ajouter.']
-    : mobile
-      ? ['Ouvrez le menu <b style="display:inline">⋮</b> du navigateur.', 'Puis choisissez <b style="display:inline">« Installer l’application »</b> ou <b style="display:inline">« Ajouter à l’écran d’accueil »</b>.']
-      : ['Cliquez sur l’icône d’installation à droite de la barre d’adresse,', 'ou ouvrez le menu du navigateur et choisissez <b style="display:inline">« Installer »</b>.'];
+  const TA = textesAppli(doc);
+  const txt = ios ? TA.ios : mobile ? TA.mobile : TA.ordi;
   const fond = doc.createElement('div');
   fond.className = 'qp-aide-appli';
-  fond.innerHTML = '<div><b>Installer l’appli</b><p>' + txt[0] + '</p><p>' + txt[1] + '</p><p style="opacity:.7;font-size:.9rem">L’icône apparaît ensuite avec vos applis : la page s’ouvre en plein écran, même sans réseau.</p><button type="button">J’ai compris</button></div>';
+  fond.innerHTML = '<div><b>' + TA.titre + '</b><p>' + txt[0] + '</p><p>' + txt[1] + '</p><p style="opacity:.7;font-size:.9rem">' + TA.apres + '</p><button type="button">' + TA.ok + '</button></div>';
   fond.addEventListener('click', e => { if (e.target === fond || e.target.tagName === 'BUTTON') fond.remove(); });
   doc.body.appendChild(fond);
 }
@@ -623,7 +653,10 @@ async function installerAppli(doc) {
    …/qr-ab/admin.html, …/qr-ab/admin, …/qr-ab/admin/ → …/qr-ab/ */
 function dossierSite() {
   const app = pageApp();
-  if (app) return 'https://' + app + '.' + location.hostname.replace(/^www\./, '') + '/';
+  if (app) {
+    const [nom, langue] = app.split('.');                 // version traduite : nom.qrbc.app/xx/
+    return 'https://' + nom + '.' + location.hostname.replace(/^www\./, '') + '/' + (langue ? langue + '/' : '');
+  }
   let p = location.pathname.replace(/\/(admin|setup|index|accueil)(\.html)?\/?$/i, '/');
   if (!p.endsWith('/')) p = p.replace(/[^/]*$/, '');
   return location.origin + p;
@@ -735,7 +768,7 @@ function clientGitHub(jeton, depot) {
    ========================================================= */
 /* Dans l'appli installée, l'éditeur est servi depuis qrbc.app/app/<page>/ */
 function pageApp() {
-  const m = location.pathname.match(/^\/app\/([a-z0-9-]{3,30})\//);
+  const m = location.pathname.match(/^\/app\/([a-z0-9-]{3,30}(?:\.[a-z]{2})?)\//);
   return m ? m[1] : null;
 }
 function baseAPI() { const a = pageApp(); return a ? '/app/' + a + '/api/' : '/api/'; }
@@ -832,6 +865,25 @@ async function reduireImage(fichier, maxCote, typeSortie, qualite) {
    Page Home : pancartes plein écran à défilement aimanté
    opts.resoudre(chemin), opts.apercu, opts.surContact()
    ========================================================= */
+/* Sélecteur de langues d'une page traduite (rien sans traduction, ni dans l'aperçu de l'éditeur) */
+function selecteurLangues(doc, classe, versHome) {
+  const L = typeof window !== 'undefined' && window.QRBC_LANGUES;
+  if (!L || !Array.isArray(L.l) || L.l.length < 2) return null;
+  const box = doc.createElement('nav');
+  box.className = classe + ' notranslate';
+  box.setAttribute('translate', 'no');
+  box.setAttribute('aria-label', 'Language');
+  L.l.forEach(x => {
+    const a = doc.createElement('a');
+    a.href = x.u + (versHome ? 'accueil.html' : '') + '?l=' + x.l;
+    a.textContent = String(x.l).toUpperCase();
+    a.hreflang = x.l; a.lang = x.l;
+    if (x.l === L.a) { a.className = 'actif'; a.setAttribute('aria-current', 'true'); }
+    box.appendChild(a);
+  });
+  return box;
+}
+
 /* Mention « Made with qrbc.app » : minuscule, tout en bas, la même partout */
 function creditQrbc(doc, apercu) {
   const a = doc.createElement('a');
@@ -883,6 +935,8 @@ function rendreHome(cfgBrut, racine, opts) {
   contact.style.background = d.accent;
   contact.style.color = texteContraste(d.accent);
   if (opts.surContact) contact.addEventListener('click', e => { e.preventDefault(); opts.surContact(); });
+  const languesH = opts.apercu ? null : selecteurLangues(doc, 'qh-langues', true);
+  if (languesH) barre.appendChild(languesH);
   barre.appendChild(contact);
 
   /* Pancartes */
@@ -1062,13 +1116,15 @@ const BOOT_SITE = `(function(){
 
 function pageHTML(o) {
   const meta = (n, v, attr) => v ? '<meta ' + (attr || 'name') + '="' + n + '" content="' + echapperHTML(v) + '">\n' : '';
-  return '<!DOCTYPE html>\n<html lang="fr">\n<head>\n' +
+  const L = /^[a-z]{2}$/.test(o.langue || '') ? o.langue : 'fr';
+  const LOCALES = { fr: 'fr_FR', en: 'en_GB', ru: 'ru_RU', es: 'es_ES', de: 'de_DE', it: 'it_IT', pt: 'pt_PT', nl: 'nl_NL', uk: 'uk_UA', pl: 'pl_PL', ro: 'ro_RO', tr: 'tr_TR', zh: 'zh_CN', ja: 'ja_JP' };
+  return '<!DOCTYPE html>\n<html lang="' + L + '">\n<head>\n' +
     '<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n' +
     '<title>' + echapperHTML(o.titre) + '</title>\n' +
     meta('description', o.description) +
     '<link rel="canonical" href="' + echapperHTML(o.canonique) + '">\n' +
     meta('robots', 'index, follow') +
-    meta('og:type', 'website', 'property') + meta('og:locale', 'fr_FR', 'property') +
+    meta('og:type', 'website', 'property') + meta('og:locale', LOCALES[L] || 'fr_FR', 'property') +
     meta('og:site_name', o.nom, 'property') + meta('og:title', o.titre, 'property') +
     meta('og:description', o.description, 'property') + meta('og:url', o.canonique, 'property') +
     meta('og:image', o.image, 'property') +
@@ -1100,7 +1156,7 @@ function genererFichiersSite(cfgBrut, base, doc) {
   const image = urlAbsolue(base, partage ? partage.chemin : (d.imageFond || cfg.logo));
   const imageTaille = partage ? [partage.l || 1200, partage.h || 630] : null;
   // Pages hébergées sur qrbc.app : installables comme une appli (manifeste servi par le serveur)
-  const appli = /\.qrbc\.app\/$/i.test(base) ? { nom: String(cfg.appNom || '').trim().slice(0, 15) || nomCourtAppli(cfg.titre), icone: (cfg.appIcones && cfg.appIcones.i192) || '/apple-touch-icon.png' } : null;
+  const appli = /\.qrbc\.app\/([a-z]{2}\/)?$/i.test(base) ? { nom: String(cfg.appNom || '').trim().slice(0, 15) || nomCourtAppli(cfg.titre), icone: (cfg.appIcones && cfg.appIcones.i192) || '/apple-touch-icon.png' } : null;
   const icone = cfg.logo || '';
   const titreSite = seo.titre || [cfg.titre, cfg.sousTitre].filter(Boolean).join(' – ') || 'Bienvenue';
   const descSite = seo.description || couper([cfg.sousTitre, cfg.pied].filter(Boolean).join('. '), 155);
@@ -1114,7 +1170,7 @@ function genererFichiersSite(cfgBrut, base, doc) {
 
   const fichiers = {};
   fichiers['index.html'] = pageHTML({
-    titre: titreSite, description: descSite, canonique: base, nom: cfg.titre, image, imageTaille, icone, couleur: d.fond, jsonld, appli,
+    titre: titreSite, description: descSite, canonique: base, nom: cfg.titre, image, imageTaille, icone, couleur: d.fond, jsonld, appli, langue: cfg.langue,
     contenu: preRendu(arriveeHome ? 'home' : 'contact'), modeHome: arriveeHome, vue: ''
   });
 
@@ -1129,11 +1185,11 @@ function genererFichiersSite(cfgBrut, base, doc) {
     const descHome = arriveeHome ? descSite : couper(art.texte || descSite, 155);
     fichiers['accueil.html'] = pageHTML({
       titre: titreHome, description: descHome, canonique: arriveeHome ? base : base + 'accueil.html', nom: cfg.titre,
-      image, imageTaille, icone, couleur: d.fond, jsonld, appli, contenu: preRendu('home'), modeHome: true, vue: 'home'
+      image, imageTaille, icone, couleur: d.fond, jsonld, appli, langue: cfg.langue, contenu: preRendu('home'), modeHome: true, vue: 'home'
     });
     if (!arriveeHome) urls.push(base + 'accueil.html');
   } else {
-    fichiers['accueil.html'] = '<!DOCTYPE html>\n<html lang="fr"><head><meta charset="utf-8"><title>' + echapperHTML(cfg.titre) +
+    fichiers['accueil.html'] = '<!DOCTYPE html>\n<html lang="' + (/^[a-z]{2}$/.test(cfg.langue || '') ? cfg.langue : 'fr') + '"><head><meta charset="utf-8"><title>' + echapperHTML(cfg.titre) +
       '</title><link rel="canonical" href="' + echapperHTML(base) + '"><meta http-equiv="refresh" content="0; url=./"></head><body></body></html>\n';
   }
 

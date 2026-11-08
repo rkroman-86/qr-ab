@@ -31,22 +31,40 @@
     .quota-ia{font-size:.8rem;color:var(--doux);margin:8px 0 0;text-align:center}
     .quota-ia.vide{color:var(--err)}
     .quota-ia button{border:0;background:none;color:var(--prim);font:inherit;font-weight:600;padding:0 0 0 4px;cursor:pointer;text-decoration:underline}
-    #fen-abo,#fen-express{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center}
-    @media (min-width:640px){#fen-abo,#fen-express{align-items:center}}
-    #fen-abo .fen,#fen-express .fen{box-sizing:border-box;background:var(--panneau);color:var(--txt);width:min(100vw,440px);max-width:100%;max-height:92dvh;overflow:auto;border-radius:18px 18px 0 0;padding:22px 20px calc(20px + env(safe-area-inset-bottom))}
-    @media (min-width:640px){#fen-abo .fen,#fen-express .fen{border-radius:18px}}
-    #fen-abo h2,#fen-express h2{margin:0 0 4px;font-size:1.2rem}
-    #fen-abo .sous,#fen-express .sous{color:var(--doux);margin:0 0 16px;font-size:.92rem}
-    #fen-abo .alerte-abo,#fen-express .alerte-abo{background:var(--bg);border:1px solid var(--err);color:var(--txt);border-radius:12px;padding:12px;margin:0 0 16px;font-size:.92rem}
-    #fen-abo .compteur,#fen-express .compteur{display:flex;justify-content:space-between;padding:10px 0;border-top:1px solid var(--ligne);font-size:.95rem}
-    #fen-abo .compteur b,#fen-express .compteur b{font-variant-numeric:tabular-nums}
-    #fen-abo .offre,#fen-express .offre{margin-top:16px;padding:16px;border-radius:14px;border:1px solid var(--prim);background:var(--bg)}
-    #fen-abo .offre .prix,#fen-express .offre .prix{font-size:1.5rem;font-weight:800;letter-spacing:-.02em}
-    #fen-abo .offre ul,#fen-express .offre ul{margin:8px 0 12px;padding-left:18px;color:var(--doux);font-size:.9rem}
-    #fen-abo .ligne-recharge,#fen-express .ligne-recharge{display:flex;gap:8px;margin-top:10px}
-    #fen-abo .ligne-recharge input,#fen-express .ligne-recharge input{flex:1;min-width:0}
-    #fen-abo .attente,#fen-express .attente{margin-top:14px;padding:12px;border-radius:12px;background:var(--bg);font-size:.9rem}
-    #fen-abo .fermer,#fen-express .fermer{margin-top:14px}
+    #fen-abo,#fen-express,    #fen-pages{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center}
+    @media (min-width:640px){#fen-abo,#fen-express,#fen-pages{align-items:center}}
+    #fen-abo .fen,#fen-express .fen,    #fen-pages .fen{box-sizing:border-box;background:var(--panneau);color:var(--txt);width:min(100vw,440px);max-width:100%;max-height:92dvh;overflow:auto;border-radius:18px 18px 0 0;padding:22px 20px calc(20px + env(safe-area-inset-bottom))}
+    @media (min-width:640px){#fen-abo .fen,#fen-express .fen,#fen-pages .fen{border-radius:18px}}
+    #fen-abo h2,#fen-express h2,    #fen-pages h2{margin:0 0 4px;font-size:1.2rem}
+    #fen-abo .sous,#fen-express .sous,    #fen-pages .sous{color:var(--doux);margin:0 0 16px;font-size:.92rem}
+    #fen-abo .alerte-abo,#fen-express .alerte-abo,    #fen-pages .alerte-abo{background:var(--bg);border:1px solid var(--err);color:var(--txt);border-radius:12px;padding:12px;margin:0 0 16px;font-size:.92rem}
+    #fen-abo .compteur,#fen-express .compteur,    #fen-pages .compteur{display:flex;justify-content:space-between;padding:10px 0;border-top:1px solid var(--ligne);font-size:.95rem}
+    #fen-abo .compteur b,#fen-express .compteur b,    #fen-pages .compteur b{font-variant-numeric:tabular-nums}
+    #fen-abo .offre,#fen-express .offre,    #fen-pages .offre{margin-top:16px;padding:16px;border-radius:14px;border:1px solid var(--prim);background:var(--bg)}
+    #fen-abo .offre .prix,#fen-express .offre .prix,    #fen-pages .offre .prix{font-size:1.5rem;font-weight:800;letter-spacing:-.02em}
+    #fen-abo .offre ul,#fen-express .offre ul,    #fen-pages .offre ul{margin:8px 0 12px;padding-left:18px;color:var(--doux);font-size:.9rem}
+    #fen-abo .ligne-recharge,#fen-express .ligne-recharge,    #fen-pages .ligne-recharge{display:flex;gap:8px;margin-top:10px}
+    #fen-abo .ligne-recharge input,#fen-express .ligne-recharge input,    #fen-pages .ligne-recharge input{flex:1;min-width:0}
+    #fen-abo .attente,#fen-express .attente,    #fen-pages .attente{margin-top:14px;padding:12px;border-radius:12px;background:var(--bg);font-size:.9rem}
+    #fen-abo .fermer,#fen-express .fermer,    #fen-pages .fermer{margin-top:14px}
+    .pages-bandeau{border:1px solid var(--ligne);background:var(--panneau);border-radius:14px;padding:10px 12px;margin:0 0 12px}
+    .pages-bandeau .pb-tete{display:flex;align-items:center;gap:8px;justify-content:space-between;flex-wrap:wrap}
+    .pages-bandeau .pb-liste{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+    .pages-bandeau .pb-page{border:1px solid var(--ligne);background:var(--bg);color:var(--txt);border-radius:999px;padding:6px 11px;font:inherit;font-size:.86rem;cursor:pointer}
+    .pages-bandeau .pb-page.actif{border-color:var(--prim);background:color-mix(in srgb,var(--prim) 14%,var(--bg));font-weight:700;cursor:default}
+    .pages-bandeau .pb-trad{border-bottom:1px solid var(--ligne);padding:0 0 10px;margin:0 0 10px}
+    #fen-pages .choix-ajout{display:flex;flex-direction:column;gap:8px;margin:0 0 14px}
+    #fen-pages .choix-ajout label{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--ligne);border-radius:12px;padding:10px 12px;cursor:pointer}
+    #fen-pages .choix-ajout label.actif{border-color:var(--prim);background:var(--bg)}
+    #fen-pages .choix-ajout label.inactif{opacity:.5;cursor:not-allowed}
+    #fen-pages .choix-ajout small{display:block;color:var(--doux);font-size:.84rem;margin-top:2px}
+    #fen-pages .zone-ajout{margin:0 0 12px}
+    #fen-pages .zone-ajout .adresse{display:flex;align-items:center;gap:4px}
+    #fen-pages .zone-ajout .adresse input{flex:1;min-width:0}
+    #fen-pages .dispo{font-size:.85rem;margin-top:4px;color:var(--doux)}
+    #fen-pages .dispo.ok{color:var(--ok)} #fen-pages .dispo.ko{color:var(--err)}
+    #fen-pages .boutons{display:flex;gap:10px;margin-top:6px}
+    #fen-pages .boutons .btn{flex:1}
     .express-bandeau{display:flex;align-items:center;gap:12px;justify-content:space-between;border:1px solid color-mix(in srgb,var(--prim) 45%,var(--ligne));background:color-mix(in srgb,var(--prim) 8%,var(--panneau));border-radius:14px;padding:12px 14px;margin:0 0 14px}
     .express-bandeau .btn{flex:none}
     #fen-express ul{margin:0 0 14px;padding-left:18px;font-size:.92rem;line-height:1.45}
@@ -350,6 +368,7 @@
     $('#editeur').classList.remove('cache');
     construireFormulaire();
     majApercu();
+    if (CF && compteCF && compteCF.traduction && compteCF.aTraduire) { setTimeout(() => lancerTraduction(true), 300); return; }
     if (!partageAJour() || !iconesAJour()) {
       changement();
       const e = $('#etat'); e.className = 'etat';
@@ -458,6 +477,13 @@
         const r = await appelAPI('paiement/verifier?session=' + encodeURIComponent(id), jetonCF);
         const j = await r.json();
         afficherAbonnement(j.compte);
+        if (j.paye && j.nouvellePage) {                    // page ou langue ajoutée : on l'ouvre
+          const f = fenetrePages();
+          f.fen.append(el('h2', { text: '✓ ' + t('Paiement reçu, merci !') }), el('p', { class: 'sous', text: t('Ouverture de votre nouvelle page…') }));
+          setTimeout(() => basculerVers(j.nouvellePage, true), 900);
+          return;
+        }
+        if (j.paye && j.etat === 'échec') { ouvrirAbonnement(null, t('Paiement reçu, mais la page n’a pas pu être créée (nom pris entre-temps). Nous vous remboursons : écrivez-nous à support@qrbc.app.')); return; }
         if (j.paye) { ouvrirAbonnement(null, null, '✓ Paiement reçu, merci ! Votre compte est à jour.'); return; }
       } catch (e) { ouvrirAbonnement(null, e.message); return; }
       await new Promise(ok => setTimeout(ok, 2000));
@@ -518,6 +544,8 @@
       c.plan === 'essai' ? (c.actif ? 'Jusqu’au ' + date(c.finEssai) + '. Votre page reste en ligne pendant tout l’essai.' : 'Votre page est en pause. Abonnez-vous pour la remettre en ligne.') :
       c.plan === 'payant' ? (c.payeJusqua ? (c.actif ? 'Jusqu’au ' : 'Terminé le ') + date(c.payeJusqua) + '.' : '') :
       c.plan === 'gratuit' ? 'Toutes les fonctions sont incluses.' : '' }));
+    if (c.parent) fen.append(el('div', { class: 'attente', style: 'margin:0 0 14px', text: t('Cette page est rattachée à ') + c.parent + '.qrbc.app. ' +
+      t('Son abonnement est compris dans celui de votre page principale (une seule échéance) : le renouvellement se fait depuis la page principale.') }));
     if (message) fen.append(el('div', { class: 'alerte-abo', text: message }));
     if (succes) fen.append(el('div', { class: 'alerte-abo', style: 'border-color:var(--ok)', text: succes }));
 
@@ -556,17 +584,18 @@
     }
 
     const finProche = c.plan === 'payant' && c.actif && c.payeJusqua && (Date.parse(c.payeJusqua) - Date.now()) < c.offre.renouvelerAvant * 86400000;
-    const abonnable = c.plan === 'essai' || (c.plan === 'payant' && !c.actif) || finProche;
+    const abonnable = !c.parent && (c.plan === 'essai' || (c.plan === 'payant' && !c.actif) || finProche);
     if (abonnable) {
       const q = c.offre.quotasPayant;
-      const ren0 = c.renouvellement;
+      const ren0 = c.renouvellement, ren = c.renouvellement;
       const libBtn = ren0 && ren0.aPayer <= 0 ? 'Renouveler avec mon crédit' : (finProche ? 'Renouveler pour un an' : c.plan === 'essai' && c.actif ? 'S’abonner sans attendre la fin de l’essai' : 'S’abonner');
       const btn = el('button', { type: 'button', class: 'btn btn-prim btn-plein', text: libBtn });
       btn.addEventListener('click', () => demander({ genre: 'abonnement' }, btn));
-      const ren = c.renouvellement;
+      const groupeP = ren && ren.pages ? ren : null;      // compte à plusieurs pages : abonnement + pages rattachées
       fen.append(el('div', { class: 'offre' }, [
-        el('div', { class: 'prix', text: prixAn + ' HT / an' }),
-        el('div', { class: 'aide', text: ttc(c.offre.prixAnnuel) + ' TTC (TVA ' + c.offre.tva + ' %). Soit ' + euros(Math.round(c.offre.prixAnnuel / 12)) + ' HT par mois, le prix d’un café.' }),
+        el('div', { class: 'prix', text: (groupeP ? euros(groupeP.prix) : prixAn) + ' HT / an' }),
+        groupeP ? el('div', { class: 'aide', text: t('Votre page principale') + ' ' + prixAn + ' + ' + groupeP.pages + ' × ' + euros(groupeP.prixPage) + ' ' + t('(pages rattachées), une seule échéance.') + ' ' + ttc(groupeP.prix) + ' TTC.' })
+          : el('div', { class: 'aide', text: ttc(c.offre.prixAnnuel) + ' TTC (TVA ' + c.offre.tva + ' %). Soit ' + euros(Math.round(c.offre.prixAnnuel / 12)) + ' HT par mois, le prix d’un café.' }),
         el('ul', {}, [
           el('li', { text: 'Votre page, votre QR code et vos cartes de visite' }),
           ...((q.texte || q.picto || q.fond) ? [el('li', { text: [q.texte ? q.texte + (q.texte > 1 ? ' rédactions IA' : ' rédaction IA') : '', q.picto ? q.picto + (q.picto > 1 ? ' créations de motifs' : ' création de motifs') : '', q.fond ? q.fond + (q.fond > 1 ? ' créations d’images de fond' : ' création d’images de fond') : ''].filter(Boolean).join(', ').replace(/, ([^,]*)$/, ' et $1') + ' incluses par an' })] : []),
@@ -626,7 +655,7 @@
       style: 'display:block;margin:12px 0 0;text-align:center;color:var(--doux);font-size:.9rem' }), document.getElementById('msg-connexion').nextSibling);
   }
   function memoriserPageApp() {
-    if (!APP) return;
+    if (!APP || APP.includes('.')) return;
     try {
       const l = (JSON.parse(localStorage.getItem('qrbc-pages')) || []).filter(x => x !== APP);
       l.unshift(APP);
@@ -1020,6 +1049,219 @@
     return boite;
   }
 
+  /* =============== Mes pages : plusieurs pages et langues sur un seul compte =============== */
+  let groupe = null;                            // réponse de l'API « pages » (liste, prix d'ajout)
+  async function chargerGroupe(forcer) {
+    if (!CF || !jetonCF) return null;
+    if (groupe && !forcer) return groupe;
+    try { groupe = await (await appelAPI('pages', jetonCF)).json(); } catch (e) { groupe = null; }
+    return groupe;
+  }
+  function nomLangue(code) {
+    let ui = 'fr';
+    try { ui = localStorage.getItem('qp-langue') || document.documentElement.lang || 'fr'; } catch (e) {}
+    try { const n = new Intl.DisplayNames([ui], { type: 'language' }).of(code); return n.charAt(0).toUpperCase() + n.slice(1); }
+    catch (e) { return String(code).toUpperCase(); }
+  }
+  function libellePage(p) { return p.traduction ? p.traduction.source + ' · ' + p.traduction.langue.toUpperCase() : p.slug; }
+
+  function bandeauPages() {
+    const box = el('div', { class: 'pages-bandeau' });
+    const remplir = () => {
+      box.innerHTML = '';
+      const c = compteCF, g = groupe;
+      if (c && c.traduction) {
+        box.append(el('div', { class: 'pb-trad' }, [
+          el('b', { text: '🌐 ' + nomLangue(c.traduction.langue) + ' · ' + t('version traduite') }),
+          el('div', { class: 'aide', style: 'margin:2px 0 8px', text: t('Traduction de ') + c.traduction.source + '.qrbc.app. ' +
+            t('Vous pouvez la modifier librement : elle est indépendante de la page d’origine.') }),
+          el('button', { type: 'button', class: 'btn btn-mini', text: t('🔄 Retraduire depuis la page d’origine') + ' (' + (c.plan === 'gratuit' ? t('offert') : euros(c.offre.prixTraduction) + ' ' + t('HT')) + ')',
+            onclick: () => lancerTraduction(false) })
+        ]));
+      }
+      const plusieurs = g && g.pages.length > 1;
+      box.append(el('div', { class: 'pb-tete' }, [
+        el('b', { text: plusieurs ? '📄 ' + t('Mes pages') : '📄 ' + t('Une autre activité ou une autre langue ?') }),
+        el('button', { type: 'button', class: 'btn btn-mini', text: '＋ ' + t('Ajouter une page ou une langue'), onclick: () => ouvrirAjoutPage() })
+      ]));
+      if (plusieurs) {
+        const liste = el('div', { class: 'pb-liste' });
+        g.pages.forEach(p => {
+          const actif = p.slug === g.courant;
+          liste.appendChild(el('button', { type: 'button', class: 'pb-page' + (actif ? ' actif' : ''), text: libellePage(p) + (p.principale ? ' ★' : ''),
+            title: p.adresse, onclick: actif ? null : () => basculerVers(p.slug) }));
+        });
+        box.append(liste);
+      }
+    };
+    remplir();
+    chargerGroupe().then(remplir);
+    return box;
+  }
+
+  /* Ouvre une autre page du compte (session donnée par le serveur, sans retaper le mot de passe) */
+  async function basculerVers(vers, sansQuestion) {
+    if (!sansQuestion && modifie && !confirm(t('Des modifications ne sont pas enregistrées. Changer de page quand même ?'))) return;
+    try {
+      const j = await (await appelAPI('basculer', jetonCF, { method: 'POST', body: JSON.stringify({ vers }) })).json();
+      ouvrirPage(j.slug, j.jeton);
+    } catch (e) { alert(e.message); }
+  }
+  function ouvrirPage(slug, jeton) {
+    try { localStorage.setItem('qp-jeton:' + slug, jeton); sessionStorage.setItem('qp-jeton:' + slug, jeton); } catch (e) {}
+    modifie = false;
+    const domaine = APP ? '' : 'https://' + location.hostname.split('.').slice(1).join('.');
+    location.href = domaine + '/app/' + slug + '/';
+  }
+
+  function fenetrePages() {
+    const ancien = document.getElementById('fen-pages'); if (ancien) ancien.remove();
+    const fond = el('div', { id: 'fen-pages', role: 'dialog', 'aria-modal': 'true' });
+    const fen = el('div', { class: 'fen' });
+    fond.appendChild(fen);
+    document.body.appendChild(fond);
+    return { fond, fen, fermer: () => fond.remove() };
+  }
+
+  async function ouvrirAjoutPage() {
+    const g = await chargerGroupe(true);
+    if (!g) { alert(t('Connexion impossible.')); return; }
+    const c = compteCF;
+    const { fond, fen, fermer } = fenetrePages();
+    fond.addEventListener('click', e => { if (e.target === fond) fermer(); });
+    fen.append(el('h2', { text: t('Ajouter une page ou une langue') }));
+    if (!g.ajout.possible) {
+      fen.append(el('div', { class: 'alerte-abo', text: g.ajout.raison }),
+        el('button', { type: 'button', class: 'btn btn-prim btn-plein', text: t('Voir l’abonnement'), onclick: () => { fermer(); ouvrirAbonnement(); } }),
+        el('button', { type: 'button', class: 'btn btn-plein fermer', text: t('Fermer'), onclick: fermer }));
+      return;
+    }
+    const ttc = ht => euros(Math.round(ht * (100 + g.tva) / 100));
+    const date = d => new Date(d).toLocaleDateString(document.documentElement.lang || 'fr-FR');
+    fen.append(el('p', { class: 'sous', text: t('Tout reste sur le même compte : un seul mot de passe, une seule échéance, et vos images partagées entre toutes les pages.') }));
+
+    let type = 'page';
+    const peutTraduire = !c.traduction;
+    const opt = (val, titre, sous, inactif) => {
+      const r = el('input', { type: 'radio', name: 'type-ajout', value: val, disabled: !!inactif });
+      if (val === type) r.checked = true;
+      const lab = el('label', { class: (val === type ? 'actif' : '') + (inactif ? ' inactif' : '') }, [r, el('span', {}, [el('b', { text: titre }), el('small', { text: sous })])]);
+      r.addEventListener('change', () => { type = val; majZones(); });
+      return lab;
+    };
+    const choix = el('div', { class: 'choix-ajout' }, [
+      opt('page', t('Une nouvelle page'), t('Pour une autre activité : nouveau nom, nouvelle adresse, nouveau QR code.')),
+      opt('traduction', t('Une traduction de cette page'), peutTraduire
+        ? t('Même adresse et même QR code : la page s’ouvre dans la langue du téléphone du visiteur. Traduction automatique offerte.')
+        : t('Ouvrez la page d’origine pour lui ajouter une langue.'), !peutTraduire)
+    ]);
+
+    // nouvelle page : nom + disponibilité
+    const nom = el('input', { type: 'text', maxLength: 30, placeholder: t('nom-de-la-page'), autocapitalize: 'none', spellcheck: 'false' });
+    const dispo = el('div', { class: 'dispo' });
+    let minu = null, libre = false;
+    nom.addEventListener('input', () => {
+      const v = nom.value.toLowerCase().replace(/[^a-z0-9-]/g, '');
+      if (v !== nom.value) nom.value = v;
+      libre = false; dispo.className = 'dispo'; dispo.textContent = v ? v + '.qrbc.app' : '';
+      clearTimeout(minu);
+      if (v.length < 3) return;
+      minu = setTimeout(async () => {
+        try {
+          const j = await (await appelAPI('pages/disponible?nom=' + encodeURIComponent(v), jetonCF)).json();
+          if (nom.value !== v) return;
+          libre = !!j.disponible;
+          dispo.className = 'dispo ' + (libre ? 'ok' : 'ko');
+          dispo.textContent = libre ? '✓ ' + v + '.qrbc.app ' + t('est disponible') : (j.raison || t('Ce nom est déjà pris.'));
+        } catch (e) {}
+      }, 350);
+    });
+    const zonePage = el('div', { class: 'zone-ajout' }, [el('label', { class: 'champ' }, [el('span', { text: t('Adresse de la nouvelle page') }),
+      el('div', { class: 'adresse' }, [nom, el('em', { text: '.qrbc.app' })])]), dispo]);
+
+    // traduction : langue cible (+ langue actuelle de la page la 1re fois)
+    const existantes = new Set([(c.langueSite || '')].concat(c.traductions || []).concat(g.pages.filter(p => p.traduction && p.traduction.source === c.slug).map(p => p.traduction.langue)));
+    const selSource = el('select', {}, g.langues.map(l => el('option', { value: l, text: nomLangue(l), selected: l === 'fr' })));
+    const selLangue = el('select', {});
+    const majLangues = () => {
+      const src = c.langueSite || selSource.value;
+      selLangue.innerHTML = '';
+      g.langues.filter(l => l !== src && !existantes.has(l)).forEach(l => selLangue.appendChild(el('option', { value: l, text: nomLangue(l) })));
+    };
+    selSource.addEventListener('change', majLangues);
+    majLangues();
+    const zoneTrad = el('div', { class: 'zone-ajout' }, [
+      ...(c.langueSite ? [] : [el('label', { class: 'champ' }, [el('span', { text: t('Langue actuelle de cette page') }), selSource])]),
+      el('label', { class: 'champ' }, [el('span', { text: t('Traduire en') }), selLangue])
+    ]);
+    const majZones = () => {
+      zonePage.hidden = type !== 'page'; zoneTrad.hidden = type !== 'traduction';
+      choix.querySelectorAll('label').forEach(l => l.classList.toggle('actif', l.querySelector('input').value === type));
+    };
+
+    const prix = el('div', { class: 'cout', style: 'padding:12px;border-radius:12px;background:var(--bg);border:1px solid var(--prim);font-size:.92rem;margin:0 0 14px' });
+    if (g.ajout.gratuit) prix.textContent = '🎁 ' + t('Offert avec votre compte.');
+    else prix.append(el('b', { text: euros(g.ajout.prix) + ' ' + t('HT') + ' (' + ttc(g.ajout.prix) + ' ' + t('TTC') + ') ' + t('aujourd’hui') }), el('br'),
+      document.createTextNode((g.ajout.echeance ? t('Prix réduit au prorata jusqu’à votre échéance commune du ') + date(g.ajout.echeance) + '. ' : '') +
+        t('Ensuite ') + euros(g.prixPage) + ' ' + t('HT') + ' ' + t('par an (moitié prix), renouvelée avec votre abonnement. Crédits IA d’un abonnement inclus.')));
+    const msg = el('div', { class: 'msg' });
+    const go = el('button', { type: 'button', class: 'btn btn-prim', text: g.ajout.gratuit ? t('Créer') : t('Payer et créer') });
+    go.addEventListener('click', async () => {
+      msg.className = 'msg'; msg.textContent = '';
+      const corps = type === 'page' ? { type, nom: nom.value.trim() } : { type, langue: selLangue.value, langueSource: c.langueSite || selSource.value };
+      if (type === 'page' && !libre) { msg.className = 'msg err'; msg.textContent = t('Choisissez une adresse disponible.'); return; }
+      if (type === 'traduction' && !corps.langue) { msg.className = 'msg err'; msg.textContent = t('Toutes les langues proposées existent déjà pour cette page.'); return; }
+      if (modifie && !confirm(t('Des modifications ne sont pas enregistrées. Continuer quand même ?'))) return;
+      go.disabled = true; go.textContent = t('Un instant…');
+      try {
+        if (g.ajout.gratuit) {
+          const j = await (await appelAPI('pages/ajouter', jetonCF, { method: 'POST', body: JSON.stringify(corps) })).json();
+          ouvrirPage(j.cree, j.jeton);
+          return;
+        }
+        corps.genre = 'page'; corps.retour = location.origin + location.pathname;
+        const j = await (await appelAPI('paiement', jetonCF, { method: 'POST', body: JSON.stringify(corps) })).json();
+        if (j.url) { modifie = false; location.href = j.url; return; }
+      } catch (e) {
+        msg.className = 'msg err'; msg.textContent = e.message;
+        go.disabled = false; go.textContent = g.ajout.gratuit ? t('Créer') : t('Payer et créer');
+      }
+    });
+    fen.append(choix, zonePage, zoneTrad, prix, msg,
+      el('div', { class: 'boutons' }, [el('button', { type: 'button', class: 'btn', text: t('Annuler'), onclick: fermer }), go]));
+    if (!g.ajout.gratuit) fen.append(el('div', { class: 'aide', style: 'margin-top:8px;text-align:center', text: '🔒 ' + t('Paiement sécurisé par Stripe. Facture envoyée par e-mail.') }));
+    majZones();
+  }
+
+  /* Traduction IA de cette version (la 1re, à la création, est offerte) puis publication */
+  async function lancerTraduction(auto) {
+    const c = compteCF;
+    if (!c || !c.traduction) return;
+    if (!auto) {
+      const prix = c.plan === 'gratuit' ? t('offerte') : euros(c.offre.prixTraduction) + ' ' + t('HT') + ' ' + t('sur votre crédit IA');
+      if (!confirm(t('Retraduire remplace tout le contenu de cette version par une nouvelle traduction de la page d’origine (textes, boutons, pancartes, design). Les modifications faites ici seront perdues.') + '\n\n' + t('Prix : ') + prix)) return;
+    }
+    const { fen, fermer } = fenetrePages();
+    fen.append(el('h2', { text: '🌐 ' + t('Traduction en cours') }),
+      el('p', { class: 'sous', text: t('L’IA traduit votre page en ') + nomLangue(c.traduction.langue).toLowerCase() + '… (≈ 30 s)' }));
+    try {
+      const j = await (await appelAPI('traduire', jetonCF, { method: 'POST' })).json();
+      afficherAbonnement(j.compte);
+      const f = await gh.lire('config.json');
+      cfg = normaliser(fusion(CONFIG_DEFAUT, f ? JSON.parse(f.texte) : {}));
+      construireFormulaire();
+      majApercu();
+      fermer();
+      changement();
+      $('#btn-enregistrer').click();                 // publication immédiate (pages lisibles par Google, icônes, aperçu des liens)
+    } catch (e) {
+      fen.innerHTML = '';
+      fen.append(el('h2', { text: t('Traduction impossible') }), el('div', { class: 'alerte-abo', text: e.message }),
+        el('button', { type: 'button', class: 'btn btn-plein fermer', text: t('Fermer'), onclick: fermer }));
+      if (e.status === 402) { fermer(); ouvrirAbonnement('quota', e.message); }
+    }
+  }
+
   /* =============== Création express : tout le site en une fois =============== */
   const NB_EXPRESS = 5;                         // pancartes de la page Home
   let expressActif = false;                     // une création express tourne (empêche de relancer)
@@ -1338,7 +1580,8 @@
     f.innerHTML = '';
     requestAnimationFrame(() => window.scrollTo(0, defil));
     const d = cfg.design;
-    if (CF) f.appendChild(bandeauExpress());
+    if (CF) f.appendChild(bandeauPages());
+    if (CF && !(compteCF && compteCF.traduction)) f.appendChild(bandeauExpress());
 
     /* Textes */
     f.appendChild(section('textes', 'Textes', true, [

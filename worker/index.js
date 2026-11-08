@@ -31,7 +31,7 @@ const ESSAIS_EXPRESS = 2;                       // appels IA par étape d'une cr
    essai   : 2 textes + 2 pictos pour toute la durée de l'essai
    payant  : 10 textes + 5 pictos par année d'abonnement, puis crédit prépayé */
 // Tarifs et quotas : réglables dans /gestion (config:tarifs) ; valeurs par défaut ci-dessous
-const TARIFS_DEFAUT = { prixAnnuel: 1800, prixTexte: 40, prixPicto: 70, prixFond: 70, prixExpress: 150,
+const TARIFS_DEFAUT = { prixAnnuel: 1800, prixTexte: 40, prixPicto: 70, prixFond: 70, prixExpress: 150, prixPage: 900, prixTraduction: 150,
   essai: { texte: 2, picto: 2, fond: 1 }, payant: { texte: 10, picto: 5, fond: 2 } };
 const TYPES_IA = ['texte', 'picto', 'fond'];      // fond = une génération de 2 images de fond
 const MODELE_IMAGE = '@cf/black-forest-labs/flux-2-klein-9b';
@@ -47,6 +47,12 @@ const DUREE_LIEN_MDP = 3600;                    // secondes de validité d'un li
 let QUOTAS_IA = { essai: TARIFS_DEFAUT.essai, payant: TARIFS_DEFAUT.payant };
 let PRIX_IA = { texte: TARIFS_DEFAUT.prixTexte, picto: TARIFS_DEFAUT.prixPicto, fond: TARIFS_DEFAUT.prixFond };   // centimes HT, débités du crédit au-delà du quota
 let PRIX_EXPRESS = TARIFS_DEFAUT.prixExpress;   // centimes HT, création express pour un abonné (débité du crédit)
+let PRIX_PAGE = TARIFS_DEFAUT.prixPage;         // centimes HT par an, page supplémentaire (ou version traduite) d'un compte
+let PRIX_TRADUCTION = TARIFS_DEFAUT.prixTraduction;   // centimes HT, nouvelle traduction d'une page (la 1re est offerte)
+const PAGE_MIN = 50;                            // centimes HT : montant minimal d'un ajout au prorata (paiement par carte)
+// Langues proposées pour traduire une page (code à 2 lettres = chemin /xx/ de la page)
+const LANGUES_PAGE = ['fr', 'en', 'ru', 'es', 'de', 'it', 'pt', 'nl', 'uk', 'pl', 'ro', 'tr', 'zh', 'ja'];
+const RE_PAGE = '[a-z0-9-]{3,30}(?:\\.[a-z]{2})?';      // nom d'une page ; « nom.en » = version anglaise de « nom »
 
 async function lireTarifs(env) {
   let t = {};
@@ -54,7 +60,7 @@ async function lireTarifs(env) {
   const D = TARIFS_DEFAUT;
   return {
     prixAnnuel: t.prixAnnuel ?? D.prixAnnuel, prixTexte: t.prixTexte ?? D.prixTexte, prixPicto: t.prixPicto ?? D.prixPicto, prixFond: t.prixFond ?? D.prixFond,
-    prixExpress: t.prixExpress ?? D.prixExpress,
+    prixExpress: t.prixExpress ?? D.prixExpress, prixPage: t.prixPage ?? D.prixPage, prixTraduction: t.prixTraduction ?? D.prixTraduction,
     essai: Object.assign({}, D.essai, t.essai), payant: Object.assign({}, D.payant, t.payant)
   };
 }
@@ -63,6 +69,8 @@ async function chargerTarifs(env) {
   PRIX_ANNUEL = t.prixAnnuel;
   PRIX_IA = { texte: t.prixTexte, picto: t.prixPicto, fond: t.prixFond };
   PRIX_EXPRESS = t.prixExpress;
+  PRIX_PAGE = t.prixPage;
+  PRIX_TRADUCTION = t.prixTraduction;
   QUOTAS_IA = { essai: t.essai, payant: t.payant };
   return t;
 }
@@ -123,7 +131,7 @@ async function racine(request, env, url) {
     const slug = (url.searchParams.get('nom') || '').toLowerCase();
     const err = erreurSlug(slug);
     if (err) return json({ disponible: false, raison: err });
-    return json({ disponible: !(await env.CLIENTS.get('compte:' + slug)) });
+    return json({ disponible: !(await env.CLIENTS.get('compte:' + slug)) && !(await env.CLIENTS.get('reserve:' + slug)) });
   }
   if (p === '/' || p === '/index.html') return accueilLangue(env, request, url);
   if (p === '/gestion' || p === '/gestion.html') return statique(env, request, '/gestion.html', true);
@@ -143,14 +151,14 @@ async function racine(request, env, url) {
   if (FICHIERS_PWA.has(p) || FICHIERS_STATIQUES.has(p)) return statique(env, request, p);
 
   // Éditeur dans l'appli : /app/<page>/…  (même origine que l'appli installée)
-  const m = p.match(/^\/app\/([a-z0-9-]{3,30})(\/.*)?$/);
+  const m = p.match(new RegExp('^/app/(' + RE_PAGE + ')(/.*)?$'));
   if (m) {
     const slug = m[1], reste = m[2] || '';
     if (!reste) return Response.redirect(url.origin + '/app/' + slug + '/', 301);
     if (reste.startsWith('/api/')) return apiClient(request, env, slug, reste.slice(5));
     if (reste === '/' || reste === '/admin.html') return statique(env, request, '/admin.html', true);
     if (FICHIERS_STATIQUES.has(reste)) return statique(env, request, reste);
-    if (reste.startsWith('/images/')) return imageClient(env, slug, reste.slice('/images/'.length));
+    if (reste.startsWith('/images/')) return imageClient(env, slug, reste.slice('/images/'.length), await lireCompte(env, slug));
   }
   return texte('Page introuvable', 404);
 }
@@ -162,10 +170,24 @@ async function siteClient(request, env, url, slug) {
   if (p.startsWith('/api/')) return apiClient(request, env, slug, p.slice(5));
   if (p === '/admin' || p === '/admin/' || p === '/admin.html') return statique(env, request, '/admin.html', true);
   if (FICHIERS_STATIQUES.has(p)) return statique(env, request, p);
-  if (p === '/robots.txt') return texte('User-agent: *\nAllow: /\nDisallow: /admin\nSitemap: https://' + slug + '.' + DOMAINE + '/sitemap.xml\n');
+  if (p === '/robots.txt') {
+    const c = await lireCompte(env, slug);
+    const plans = ['/'].concat(((c && c.traductions) || []).map(l => '/' + l + '/'));
+    return texte('User-agent: *\nAllow: /\nDisallow: /admin\n' + plans.map(x => 'Sitemap: https://' + slug + '.' + DOMAINE + x + 'sitemap.xml\n').join(''));
+  }
   // Page installable comme une appli : service worker propre à la page, icônes qrbc par défaut
   if (p === '/sw.js') return new Response(SW_PAGE, { headers: { 'content-type': 'application/javascript; charset=utf-8', 'cache-control': 'no-cache' } });
   if (FICHIERS_PWA.has(p) && /\.png$/.test(p)) return statique(env, request, p);
+
+  // Version traduite : nom.qrbc.app/xx/… (page « nom.xx »)
+  const ml = p.match(/^\/([a-z]{2})(\/.*)?$/);
+  if (ml && LANGUES_PAGE.includes(ml[1])) {
+    const tc = await lireCompte(env, slug + '.' + ml[1]);
+    if (tc && tc.traduction && tc.traduction.source === slug) {
+      if (!ml[2]) return Response.redirect(url.origin + '/' + ml[1] + '/' + url.search, 301);
+      return pageTraduite(request, env, url, slug, tc, ml[2]);
+    }
+  }
 
   const compte = await lireCompte(env, slug);
   if (!compte) return pageInfo('Page introuvable', 'Cette adresse n’est pas encore utilisée.', 404);
@@ -179,19 +201,71 @@ async function siteClient(request, env, url, slug) {
     const c = await env.CLIENTS.get('site:' + slug + ':config.json');
     return new Response(c || '{}', { headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } });
   }
-  if (p.startsWith('/images/')) return imageClient(env, slug, p.slice('/images/'.length));
+  if (p.startsWith('/images/')) return imageClient(env, slug, p.slice('/images/'.length), compte);
   const pages = { '/': 'index.html', '/index.html': 'index.html', '/accueil.html': 'accueil.html', '/sitemap.xml': 'sitemap.xml' };
   if (pages[p]) {
     const nom = pages[p];
+    const langs = languesPage(compte);
+    // Page traduite : arrivée dans la langue du téléphone du visiteur (ou celle qu'il a choisie), sauf choix explicite (?l=)
+    if (langs.length && nom !== 'sitemap.xml' && !url.searchParams.get('l')) {
+      const pref = cookieLangue(request) || langueNavigateur(request, langs.map(x => x.l));
+      if (pref && pref !== langs[0].l && compte.traductions.includes(pref))
+        return new Response(null, { status: 302, headers: { location: '/' + pref + '/' + (nom === 'accueil.html' ? 'accueil.html' : ''), 'cache-control': 'private, no-store', vary: 'Accept-Language, Cookie' } });
+    }
     let corps = await env.CLIENTS.get('site:' + slug + ':' + nom);
     if (!corps && nom !== 'sitemap.xml') corps = await pageDemarrage(env, slug, nom === 'accueil.html' ? 'home' : '');
     if (!corps) return texte('Introuvable', 404);
-    return new Response(corps, { headers: {
-      'content-type': nom.endsWith('.xml') ? 'application/xml; charset=utf-8' : 'text/html; charset=utf-8',
-      'cache-control': 'public, max-age=60'
-    } });
+    return reponsePage(corps, nom, langs, langs.length ? langs[0].l : null, slug, url);
   }
   return pageInfo('Page introuvable', 'Ce lien n’existe pas.', 404);
+}
+
+/* ---------- Pages traduites et sélecteur de langues ---------- */
+async function pageTraduite(request, env, url, slug, tc, reste) {
+  if (FICHIERS_STATIQUES.has(reste)) return statique(env, request, reste);
+  const source = await lireCompte(env, slug);
+  if (!source || !actif(tc)) return pageInfo('Page en pause', 'Cette page est momentanément indisponible.', 200);
+  if (reste === '/manifest.webmanifest') return manifestePage(env, slug);
+  if (reste === '/config.json') {
+    const c = await env.CLIENTS.get('site:' + tc.slug + ':config.json');
+    return new Response(c || '{}', { headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } });
+  }
+  if (reste.startsWith('/images/')) return imageClient(env, tc.slug, reste.slice('/images/'.length), tc);
+  const pages = { '/': 'index.html', '/index.html': 'index.html', '/accueil.html': 'accueil.html', '/sitemap.xml': 'sitemap.xml' };
+  const nom = pages[reste];
+  if (!nom) return pageInfo('Page introuvable', 'Ce lien n’existe pas.', 404);
+  let corps = await env.CLIENTS.get('site:' + tc.slug + ':' + nom);
+  if (!corps && nom !== 'sitemap.xml') corps = await pageDemarrage(env, tc.slug, nom === 'accueil.html' ? 'home' : '');
+  if (!corps) return texte('Introuvable', 404);
+  return reponsePage(corps, nom, languesPage(source), tc.traduction.langue, slug, url);
+}
+function cookieLangue(request) {
+  const m = (request.headers.get('cookie') || '').match(/(?:^|;\s*)qrbc-l=([a-z]{2})/);
+  return m ? m[1] : null;
+}
+function langueNavigateur(request, dispo) {
+  const liste = (request.headers.get('accept-language') || '').split(',')
+    .map(x => { const [l, q] = x.trim().split(';q='); return { l: l.slice(0, 2).toLowerCase(), q: q ? Number(q) : 1 }; })
+    .filter(x => x.l).sort((a, b) => b.q - a.q);
+  for (const x of liste) if (dispo.includes(x.l)) return x.l;
+  return null;
+}
+/* Ajoute les versions linguistiques (Google + sélecteur) et retient le choix du visiteur */
+function reponsePage(corps, nom, langs, actuelle, slug, url) {
+  const h = { 'content-type': nom.endsWith('.xml') ? 'application/xml; charset=utf-8' : 'text/html; charset=utf-8', 'cache-control': 'public, max-age=60' };
+  if (langs.length && nom !== 'sitemap.xml') {
+    const base = 'https://' + slug + '.' + DOMAINE;
+    const fin = nom === 'accueil.html' ? 'accueil.html' : '';
+    const liens = langs.map(x => '<link rel="alternate" hreflang="' + x.l + '" href="' + base + x.u + fin + '">').join('\n') +
+      '\n<link rel="alternate" hreflang="x-default" href="' + base + '/' + fin + '">';
+    const donnees = '<script>window.QRBC_LANGUES=' + JSON.stringify({ a: actuelle, l: langs }) + ';</script>';
+    corps = corps.replace(/<html lang="[a-zA-Z-]*"/, '<html lang="' + actuelle + '"').replace('</head>', liens + '\n' + donnees + '\n</head>');
+    h['cache-control'] = 'private, no-cache';
+    h.vary = 'Accept-Language, Cookie';
+    const choix = url.searchParams.get('l');
+    if (choix && langs.some(x => x.l === choix)) h['set-cookie'] = 'qrbc-l=' + choix + '; Path=/; Max-Age=31536000; SameSite=Lax; Secure';
+  }
+  return new Response(corps, { headers: h });
 }
 
 /* Page de secours tant que l'éditeur n'a pas encore généré index.html */
@@ -264,10 +338,11 @@ async function apiClient(request, env, slug, route) {
     await limiter(env, 'cx:' + slug + ':' + ip(request), 20, 3600, 'Trop d’essais. Réessayez dans une heure.');
     const { mdp, rester } = await corpsJSON(request);
     const compte = await lireCompte(env, slug);
-    if (!compte || !(await verifierMdp(compte, String(mdp || '')))) throw new ErreurAPI(401, 'Mot de passe incorrect.');
-    if (compte.emailAVerifier) throw new ErreurAPI(403, 'Confirmez d’abord votre adresse e-mail : cliquez sur le lien envoyé à ' + compte.email + ' (pensez aux indésirables).', 'email_non_confirme', { email: compte.email });
+    const tit = await titulaireDe(env, compte);                 // page rattachée : mot de passe commun du compte
+    if (!compte || !(await verifierMdp(tit, String(mdp || '')))) throw new ErreurAPI(401, 'Mot de passe incorrect.');
+    if (tit.emailAVerifier) throw new ErreurAPI(403, 'Confirmez d’abord votre adresse e-mail : cliquez sur le lien envoyé à ' + tit.email + ' (pensez aux indésirables).', 'email_non_confirme', { email: tit.email });
     const duree = rester ? 30 * 86400 : 12 * 3600;
-    const jeton = await signerSession(env, { s: slug, v: compte.version || 1, e: Math.floor(Date.now() / 1000) + duree });
+    const jeton = await signerSession(env, { s: slug, v: tit.version || 1, e: Math.floor(Date.now() / 1000) + duree });
     return json({ jeton, compte: await resumeAvecOffre(env, compte) });
   }
 
@@ -275,7 +350,7 @@ async function apiClient(request, env, slug, route) {
   if (route === 'email/renvoyer' && m === 'POST') {
     await limiter(env, 'cx:' + slug + ':' + ip(request), 20, 3600, 'Trop d’essais. Réessayez dans une heure.');
     const dd = await corpsJSON(request);
-    const compte = await lireCompte(env, slug);
+    const compte = await titulaireDe(env, await lireCompte(env, slug));
     if (!compte || !(await verifierMdp(compte, String(dd.mdp || '')))) throw new ErreurAPI(401, 'Mot de passe incorrect.');
     if (!compte.emailAVerifier) return json({ ok: true, dejaConfirme: true });
     await limiter(env, 'verif:' + slug + ':' + new Date().toISOString().slice(0, 13), 3, 7200, 'Trop d’envois. Réessayez dans une heure.');
@@ -306,7 +381,7 @@ async function apiClient(request, env, slug, route) {
 
   if (route === 'fichier' && m === 'GET') {
     const chemin = new URL(request.url).searchParams.get('chemin') || '';
-    const cle = cleFichier(slug, chemin);
+    const cle = cleFichier(compte, chemin);
     if (chemin.startsWith('images/')) {
       const v = await env.CLIENTS.get(cle, { type: 'arrayBuffer' });
       return json(v ? { sha: 'kv', texte: '' } : null);
@@ -320,7 +395,7 @@ async function apiClient(request, env, slug, route) {
       ? 'Votre essai gratuit est terminé. Activez l’abonnement pour publier à nouveau.'
       : 'Votre abonnement a expiré. Renouvelez-le pour publier à nouveau.');
     const { chemin, contenu } = await corpsJSON(request);
-    const cle = cleFichier(slug, String(chemin || ''));
+    const cle = cleFichier(compte, String(chemin || ''));
     const octets = base64VersOctets(String(contenu || ''));
     if (chemin.startsWith('images/')) {
       if (octets.length > TAILLE_MAX.image) throw new ErreurAPI(413, 'Image trop lourde (3 Mo maximum).');
@@ -337,7 +412,7 @@ async function apiClient(request, env, slug, route) {
         const l = await env.CLIENTS.list({ prefix: 'img:' + slug + ':partage-' });
         for (const k of l.keys) if (k.name !== cle) await env.CLIENTS.delete(k.name);
       } else {
-        await ajouterMedias(env, slug, [{ chemin, genre: genreImage(chemin), source: /^images\/logo-/.test(chemin) ? 'logo' : 'photo', le: new Date().toISOString() }]);
+        await ajouterMedias(env, racineDe(compte), [{ chemin, genre: genreImage(chemin), source: /^images\/logo-/.test(chemin) ? 'logo' : 'photo', le: new Date().toISOString() }]);
       }
     } else {
       const max = chemin === 'config.json' ? TAILLE_MAX['config.json'] : TAILLE_MAX.html;
@@ -351,10 +426,11 @@ async function apiClient(request, env, slug, route) {
 
   if (route === 'mdp' && m === 'POST') {
     const { ancien, nouveau } = await corpsJSON(request);
-    if (!(await verifierMdp(compte, String(ancien || '')))) throw new ErreurAPI(401, 'Ancien mot de passe incorrect.');
+    const tit = await titulaireDe(env, compte);                 // un seul mot de passe pour toutes les pages du compte
+    if (!(await verifierMdp(tit, String(ancien || '')))) throw new ErreurAPI(401, 'Ancien mot de passe incorrect.');
     verifierForceMdp(nouveau);
-    Object.assign(compte, await hacherMdp(String(nouveau)), { version: (compte.version || 1) + 1 });
-    await ecrireCompte(env, compte);
+    Object.assign(tit, await hacherMdp(String(nouveau)), { version: (tit.version || 1) + 1 });
+    await ecrireCompte(env, tit);
     return json({ ok: true });
   }
 
@@ -401,20 +477,33 @@ async function apiClient(request, env, slug, route) {
   /* ---------- Paiement en ligne (Stripe Checkout) ---------- */
   if (route === 'paiement' && m === 'POST') {
     const dd = await corpsJSON(request);
-    const genre = dd.genre === 'recharge' ? 'recharge' : 'abonnement';
-    let montant, deduction = 0, libelle;
+    const genre = dd.genre === 'recharge' ? 'recharge' : dd.genre === 'page' ? 'page' : 'abonnement';
+    let montant, deduction = 0, libelle, extra = {};
+    const tit = await titulaireDe(env, compte);
     if (genre === 'abonnement') {
+      if (compte.parent) throw new ErreurAPI(400, 'L’abonnement de toutes vos pages se règle depuis votre page principale (' + compte.parent + '.' + DOMAINE + ').');
       if (compte.plan === 'gratuit') throw new ErreurAPI(400, 'Ce compte est offert : rien à payer.');
       if (compte.plan === 'payant' && actif(compte) && Date.parse(compte.payeJusqua) - Date.now() > RENOUVELER_AVANT * 86400000)
         throw new ErreurAPI(400, 'Le renouvellement sera possible ' + RENOUVELER_AVANT + ' jours avant l’échéance.');
-      const r = prixRenouvellement(compte);
+      const r = await prixGroupe(env, compte);
       montant = r.aPayer; deduction = r.deduction;
       if (montant <= 0) {                                   // le crédit couvre toute l'année
-        appliquerAbonnement(compte, 0, deduction, 'payé avec le crédit');
+        await appliquerAbonnementGroupe(env, compte, 0, deduction, 'payé avec le crédit');
         await ecrireCompte(env, compte);
         return json({ applique: true, compte: await resumeAvecOffre(env, compte) });
       }
-      libelle = 'Abonnement qrbc 1 an — ' + slug + '.' + DOMAINE + (deduction ? ' (crédit déduit : ' + (deduction / 100).toFixed(2).replace('.', ',') + ' € HT)' : '');
+      libelle = 'Abonnement qrbc 1 an — ' + slug + '.' + DOMAINE + (r.pages ? ' + ' + r.pages + (r.pages > 1 ? ' pages' : ' page') : '') +
+        (deduction ? ' (crédit déduit : ' + (deduction / 100).toFixed(2).replace('.', ',') + ' € HT)' : '');
+    } else if (genre === 'page') {
+      const o = offreAjout(tit);
+      if (!o.possible) throw new ErreurAPI(402, o.raison);
+      if (o.gratuit) throw new ErreurAPI(400, 'Compte offert : la page est créée sans paiement.');
+      const a = await preparerAjout(env, tit, compte, dd);
+      if (a.type === 'page') await env.CLIENTS.put('reserve:' + a.cible, tit.slug, { expirationTtl: 3600 });   // le temps de payer
+      montant = o.prix;
+      libelle = (a.type === 'traduction' ? 'Version ' + a.langue.toUpperCase() + ' de ' + a.source + '.' + DOMAINE : 'Page ' + a.cible + '.' + DOMAINE) +
+        (o.echeance ? ' — jusqu’au ' + new Date(o.echeance).toLocaleDateString('fr-FR') + ' (échéance commune)' : ' — 1 an');
+      extra = { titulaire: tit.slug, cible: a.cible, type: a.type, source: a.source || '', langue: a.langue || '', langueSource: a.langueSource || '' };
     } else {
       if (compte.plan !== 'payant' || !actif(compte)) throw new ErreurAPI(400, 'La recharge est réservée aux abonnés.');
       montant = Math.round(Number(dd.montant) * 100);
@@ -427,9 +516,9 @@ async function apiClient(request, env, slug, route) {
     const session = await stripe(env, st, 'POST', '/checkout/sessions', {
       mode: 'payment',
       client_reference_id: slug,
-      customer_email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(compte.email || '') ? compte.email : undefined,
+      customer_email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(tit.email || '') ? tit.email : undefined,
       line_items: [{ quantity: 1, tax_rates: [st.taxRate], price_data: { currency: 'eur', unit_amount: montant, product_data: { name: libelle } } }],
-      metadata: { slug, genre, montant: String(montant), deduction: String(deduction) },
+      metadata: Object.assign({ slug, genre, montant: String(montant), deduction: String(deduction) }, extra),
       payment_intent_data: { metadata: { slug, genre }, description: libelle },
       invoice_creation: { enabled: true },
       // Stripe active par défaut « Managed Payments » (Stripe vendeur, TVA mondiale, frais en plus) :
@@ -449,24 +538,26 @@ async function apiClient(request, env, slug, route) {
     if (!session.metadata || session.metadata.slug !== slug) throw new ErreurAPI(403, 'Ce paiement concerne une autre page.');
     const etat = await encaisserSession(env, session);
     const frais = await lireCompte(env, slug);
-    return json({ paye: session.payment_status === 'paid', etat, compte: await resumeAvecOffre(env, frais) });
+    const nouvelle = session.metadata.genre === 'page' && (etat === 'appliqué' || etat === 'déjà appliqué') ? session.metadata.cible : null;
+    return json({ paye: session.payment_status === 'paid', etat, nouvellePage: nouvelle, compte: await resumeAvecOffre(env, frais) });
   }
 
   /* ---------- Images de fond par l'IA ---------- */
   /* ---------- Médiathèque : toutes les images du client (IA, photos, logos) ---------- */
   if ((route === 'medias' || route === 'fonds') && m === 'GET') {
-    const medias = await lireMedias(env, slug);
+    const medias = await lireMedias(env, racineDe(compte));
     return json(route === 'fonds' ? { fonds: medias.filter(x => x.genre === 'fond') } : { medias });
   }
   if ((route === 'medias' || route === 'fonds') && m === 'DELETE') {
     const { chemin } = await corpsJSON(request);
-    let medias = await lireMedias(env, slug);
+    const racine = racineDe(compte);
+    let medias = await lireMedias(env, racine);
     if (!medias.some(x => x.chemin === chemin)) throw new ErreurAPI(404, 'Image introuvable.');
     medias = medias.filter(x => x.chemin !== chemin);
-    await env.CLIENTS.put('site:' + slug + ':medias', JSON.stringify(medias));
-    // le fichier n'est effacé que si la page publiée ne l'utilise pas
-    const cfg = await env.CLIENTS.get('site:' + slug + ':config.json') || '';
-    if (!cfg.includes(chemin)) await env.CLIENTS.delete('img:' + slug + ':' + chemin.slice(7));
+    await env.CLIENTS.put('site:' + racine + ':medias', JSON.stringify(medias));
+    // le fichier n'est effacé que si aucune page publiée du compte ne l'utilise
+    const cfg = await configsGroupe(env, racine);
+    if (!cfg.includes(chemin)) await env.CLIENTS.delete('img:' + racine + ':' + chemin.slice(7));
     return json(route === 'fonds' ? { fonds: medias.filter(x => x.genre === 'fond') } : { medias });
   }
   if (route === 'fond' && m === 'POST') {
@@ -508,12 +599,12 @@ async function apiClient(request, env, slug, route) {
       const type = typeImage(octets);
       if (!type) continue;
       const chemin = 'images/' + (pc ? 'article' : 'fond') + '-ia-' + base + '-' + (i + 1) + (type === 'image/png' ? '.png' : type === 'image/webp' ? '.webp' : '.jpg');
-      await env.CLIENTS.put('img:' + slug + ':' + chemin.slice(7), octets, { metadata: { type } });
+      await env.CLIENTS.put('img:' + racineDe(compte) + ':' + chemin.slice(7), octets, { metadata: { type } });
       nouvelles.push({ chemin, genre: pc ? 'article' : 'fond', source: 'ia', le: new Date().toISOString(), ambiance, idee: pc ? pc.titre : idee });
     }
     if (!nouvelles.length) throw new ErreurAPI(502, 'La création d’images a échoué. Réessayez dans un instant (rien n’a été décompté).');
 
-    const medias = await ajouterMedias(env, slug, nouvelles);
+    const medias = await ajouterMedias(env, racineDe(compte), nouvelles);
     const fonds = medias.filter(x => x.genre === 'fond');
 
     const frais = (await lireCompte(env, slug)) || compte;
@@ -554,10 +645,92 @@ async function apiClient(request, env, slug, route) {
     return json({ express: compte.express, compte: await resumeAvecOffre(env, compte) });
   }
 
+  /* ---------- Comptes à plusieurs pages ---------- */
+  if (route === 'pages' && m === 'GET') {
+    const tit = await titulaireDe(env, compte);
+    const membres = await membresGroupe(env, tit);
+    const pages = [];
+    for (const c of membres) {
+      let titre = '';
+      try { titre = (JSON.parse(await env.CLIENTS.get('site:' + c.slug + ':config.json') || '{}').titre) || ''; } catch (e) {}
+      pages.push({ slug: c.slug, titre, principale: !c.parent, traduction: c.traduction || null, langueSite: c.langueSite || null,
+        traductions: c.traductions || [], adresse: adressePage(c), actif: actif(c) });
+    }
+    const o = offreAjout(tit);
+    return json({ pages, courant: slug, titulaire: tit.slug, ajout: o, prixTraduction: PRIX_TRADUCTION, prixPage: PRIX_PAGE,
+      tva: TVA, langues: LANGUES_PAGE, credit: compte.credit || 0, creditTitulaire: tit.credit || 0 });
+  }
+  if (route === 'pages/disponible' && m === 'GET') {
+    const nom = (new URL(request.url).searchParams.get('nom') || '').toLowerCase();
+    const err = erreurSlug(nom);
+    if (err) return json({ disponible: false, raison: err });
+    const pris = (await env.CLIENTS.get('compte:' + nom)) || (await env.CLIENTS.get('reserve:' + nom));
+    return json({ disponible: !pris });
+  }
+  if (route === 'pages/ajouter' && m === 'POST') {
+    const tit = await titulaireDe(env, compte);
+    const o = offreAjout(tit);
+    if (!o.possible) throw new ErreurAPI(402, o.raison, 'ajout_impossible');
+    if (!o.gratuit) throw new ErreurAPI(400, 'Paiement nécessaire.', 'paiement');
+    const a = await preparerAjout(env, tit, compte, await corpsJSON(request));
+    const page = await creerPageSup(env, tit, a);
+    await ecrireCompte(env, tit);
+    const session = await signerSession(env, { s: page.slug, v: tit.version || 1, e: Math.floor(Date.now() / 1000) + 30 * 86400 });
+    return json({ ok: true, cree: page.slug, jeton: session });
+  }
+  if (route === 'basculer' && m === 'POST') {
+    const { vers } = await corpsJSON(request);
+    const tit = await titulaireDe(env, compte);
+    if (vers !== tit.slug && !(tit.pages || []).includes(vers)) throw new ErreurAPI(403, 'Cette page n’appartient pas à votre compte.');
+    const cible = await lireCompte(env, vers);
+    if (!cible) throw new ErreurAPI(404, 'Page introuvable.');
+    const session = await signerSession(env, { s: vers, v: tit.version || 1, e: Math.floor(Date.now() / 1000) + 30 * 86400 });
+    return json({ ok: true, slug: vers, jeton: session });
+  }
+  /* Traduction IA d'une version traduite : la 1re (à la création) est offerte, les suivantes PRIX_TRADUCTION */
+  if (route === 'traduire' && m === 'POST') {
+    if (!compte.traduction) throw new ErreurAPI(400, 'Cette page n’est pas une version traduite.');
+    if (!actif(compte)) throw new ErreurAPI(402, 'Abonnement inactif : renouvelez-le depuis votre page principale.', 'abonnement_inactif');
+    const cleIA = await cleAnthropic(env);
+    if (!cleIA) throw new ErreurAPI(503, 'La traduction IA n’est pas encore activée sur le serveur.');
+    const tit = await titulaireDe(env, compte);
+    const offerte = compte.aTraduire || compte.plan === 'gratuit';
+    let payeur = null;
+    if (!offerte) {
+      payeur = (compte.credit || 0) >= PRIX_TRADUCTION ? compte : (tit.credit || 0) >= PRIX_TRADUCTION ? tit : null;
+      if (!payeur) throw new ErreurAPI(402, 'Une nouvelle traduction coûte ' + euros(PRIX_TRADUCTION) + ' HT sur votre crédit IA (solde : ' + euros(compte.credit || 0) + '). Rechargez votre crédit (' + euros(RECHARGE_MIN) + ' HT minimum).', 'credit_insuffisant');
+    }
+    await limiter(env, 'ia:' + slug + ':' + new Date().toISOString().slice(0, 10), IA_PAR_JOUR, 86400 * 2, 'Limite quotidienne de l’IA atteinte. Réessayez demain.');
+    let cfg = {};
+    try { cfg = JSON.parse(await env.CLIENTS.get('site:' + compte.traduction.source + ':config.json') || '{}'); } catch (e) {}
+    const source = await lireCompte(env, compte.traduction.source);
+    const traduite = await traduireConfig(env, cleIA, cfg, (source && source.langueSite) || 'fr', compte.traduction.langue);
+    delete traduite.partage; delete traduite.appIcones;
+    traduite.langue = compte.traduction.langue;
+    await env.CLIENTS.put('site:' + slug + ':config.json', JSON.stringify(traduite, null, 2));
+    // la langue apparaît dans le sélecteur des pages dès la 1re traduction
+    if (source && !(source.traductions || []).includes(compte.traduction.langue)) {
+      source.traductions = (source.traductions || []).concat([compte.traduction.langue]);
+      if (source.slug === tit.slug) tit.traductions = source.traductions;
+      await ecrireCompte(env, source);
+    }
+    const frais = (await lireCompte(env, slug)) || compte;
+    delete frais.aTraduire;
+    if (payeur) {
+      const qui = payeur.slug === frais.slug ? frais : (await lireCompte(env, payeur.slug));
+      qui.credit = Math.max(0, (qui.credit || 0) - PRIX_TRADUCTION);
+      qui.ia = qui.ia || {}; qui.ia.depense = (qui.ia.depense || 0) + PRIX_TRADUCTION;
+      if (qui !== frais) await ecrireCompte(env, qui);
+    }
+    await ecrireCompte(env, frais);
+    return json({ ok: true, offerte, compte: await resumeAvecOffre(env, frais) });
+  }
+
   if (route === 'demande' && m === 'POST') {
     const dd = await corpsJSON(request);
     const genre = dd.genre === 'recharge' ? 'recharge' : 'abonnement';
-    const montant = genre === 'recharge' ? Math.round(Number(dd.montant) * 100) : prixRenouvellement(compte).aPayer;
+    if (genre === 'abonnement' && compte.parent) throw new ErreurAPI(400, 'L’abonnement de toutes vos pages se règle depuis votre page principale.');
+    const montant = genre === 'recharge' ? Math.round(Number(dd.montant) * 100) : (await prixGroupe(env, compte)).aPayer;
     if (genre === 'recharge') {
       if (compte.plan !== 'payant' || !actif(compte)) throw new ErreurAPI(400, 'La recharge est réservée aux abonnés.');
       if (!(montant >= RECHARGE_MIN) || montant > 50000) throw new ErreurAPI(400, 'Montant de recharge : 5 € HT minimum.');
@@ -617,7 +790,7 @@ async function lireMedias(env, slug) {
 async function ajouterMedias(env, slug, nouvelles) {
   const chemins = new Set(nouvelles.map(x => x.chemin));
   let medias = nouvelles.concat((await lireMedias(env, slug)).filter(x => !chemins.has(x.chemin)));
-  const cfg = await env.CLIENTS.get('site:' + slug + ':config.json') || '';
+  const cfg = await configsGroupe(env, slug);
   const parGenre = {};
   const garder = [];
   for (const x of medias) {
@@ -674,9 +847,12 @@ async function genererImage(env, prompt, graine, largeur = FOND_L, hauteur = FON
   return deb64(r.image);
 }
 
-async function imageClient(env, slug, nom) {
+async function imageClient(env, slug, nom, compte) {
   if (!nomImageValide(nom)) return texte('Introuvable', 404);
-  const { value, metadata } = await env.CLIENTS.getWithMetadata('img:' + slug + ':' + nom, { type: 'arrayBuffer' });
+  // images communes rangées chez la page principale ; sinon (ancien emplacement) chez la page elle-même
+  const racine = !imagePropre(nom) && compte ? racineDe(compte) : slug;
+  let { value, metadata } = await env.CLIENTS.getWithMetadata('img:' + racine + ':' + nom, { type: 'arrayBuffer' });
+  if (!value && racine !== slug) ({ value, metadata } = await env.CLIENTS.getWithMetadata('img:' + slug + ':' + nom, { type: 'arrayBuffer' }));
   if (!value) return texte('Introuvable', 404);
   return new Response(value, { headers: {
     'content-type': (metadata && metadata.type) || 'application/octet-stream',
@@ -684,9 +860,11 @@ async function imageClient(env, slug, nom) {
   } });
 }
 
-function cleFichier(slug, chemin) {
+function cleFichier(compte, chemin) {
+  const slug = compte.slug;
   if (FICHIERS_SITE.has(chemin)) return 'site:' + slug + ':' + chemin;
-  if (chemin.startsWith('images/') && nomImageValide(chemin.slice(7))) return 'img:' + slug + ':' + chemin.slice(7);
+  if (chemin.startsWith('images/') && nomImageValide(chemin.slice(7)))
+    return 'img:' + (imagePropre(chemin.slice(7)) ? slug : racineDe(compte)) + ':' + chemin.slice(7);
   throw new ErreurAPI(400, 'Fichier non autorisé : ' + chemin);
 }
 function nomImageValide(nom) { return /^[a-z0-9][a-z0-9._-]{0,80}\.(png|jpe?g|webp)$/i.test(nom); }
@@ -729,6 +907,7 @@ async function inscription(request, env) {
 
 async function creerCompte(env, o) {
   if (await env.CLIENTS.get('compte:' + o.slug)) throw new ErreurAPI(409, 'Ce nom est déjà pris.');
+  if (await env.CLIENTS.get('reserve:' + o.slug)) throw new ErreurAPI(409, 'Ce nom est déjà pris.');
   const maintenant = Date.now();
   const compte = Object.assign({
     slug: o.slug, email: String(o.email || '').trim().toLowerCase(), plan: o.plan, version: 1, cree: new Date(maintenant).toISOString(),
@@ -792,6 +971,8 @@ async function gestion(request, env, action) {
       prixPicto: centimes(d.prixPicto, 'Prix d’une création de motifs'),
       prixFond: centimes(d.prixFond, 'Prix d’une génération d’images de fond'),
       prixExpress: centimes(d.prixExpress ?? (TARIFS_DEFAUT.prixExpress / 100), 'Prix d’une création express'),
+      prixPage: centimes(d.prixPage ?? (TARIFS_DEFAUT.prixPage / 100), 'Prix annuel d’une page supplémentaire'),
+      prixTraduction: centimes(d.prixTraduction ?? (TARIFS_DEFAUT.prixTraduction / 100), 'Prix d’une traduction'),
       essai: { texte: entier(d.essaiTexte, 'Rédactions de l’essai'), picto: entier(d.essaiPicto, 'Motifs de l’essai'), fond: entier(d.essaiFond, 'Fonds de l’essai') },
       payant: { texte: entier(d.payantTexte, 'Rédactions de l’abonnement'), picto: entier(d.payantPicto, 'Motifs de l’abonnement'), fond: entier(d.payantFond, 'Fonds de l’abonnement') }
     };
@@ -879,7 +1060,9 @@ async function gestion(request, env, action) {
         if (!c) continue;
         let titre = '';
         try { titre = (JSON.parse(await env.CLIENTS.get('site:' + c.slug + ':config.json') || '{}').titre) || ''; } catch (e) {}
-        comptes.push(Object.assign(resumeCompte(c), { paiements: c.paiements || [], titre, depenseIA: (c.ia && c.ia.depense) || 0,
+        const res = resumeCompte(c);
+        if ((c.pages || []).length) res.renouvellement = await prixGroupe(env, c);   // abonnement + pages rattachées
+        comptes.push(Object.assign(res, { paiements: c.paiements || [], titre, depenseIA: (c.ia && c.ia.depense) || 0, adresse: adressePage(c),
           rappels: c.rappels || {}, langue: c.langue || 'fr', aSupprimer: aSupprimer(c),
           finConservation: echeanceCompte(c) ? new Date(Date.parse(echeanceCompte(c)) + JOURS_CONSERVATION * 86400000).toISOString() : null }));
       }
@@ -944,6 +1127,7 @@ async function gestion(request, env, action) {
       }
     }
     await ecrireCompte(env, compte);
+    if ((compte.pages || []).length && (d.plan || d.prolongerEssai || d.payeJusqua !== undefined)) await synchroniserPages(env, compte, false);
     return json({ ok: true, compte: resumeCompte(compte) });
   }
 
@@ -951,8 +1135,9 @@ async function gestion(request, env, action) {
   if (action === 'abonner') {
     const compte = await lireCompte(env, String(d.nom || ''));
     if (!compte) throw new ErreurAPI(404, 'Compte introuvable.');
-    const r = prixRenouvellement(compte);
-    appliquerAbonnement(compte, r.aPayer, r.deduction, 'manuel');
+    if (compte.parent) throw new ErreurAPI(400, 'Page rattachée à ' + compte.parent + ' : enregistrez le paiement sur la page principale.');
+    const r = await prixGroupe(env, compte);
+    await appliquerAbonnementGroupe(env, compte, r.aPayer, r.deduction, 'manuel');
     await ecrireCompte(env, compte);
     return json({ ok: true, encaisse: r.aPayer, deduction: r.deduction, compte: resumeCompte(compte) });
   }
@@ -984,6 +1169,17 @@ async function gestion(request, env, action) {
   if (action === 'supprimer') {
     const slug = String(d.nom || '');
     if (d.confirmation !== slug) throw new ErreurAPI(400, 'Confirmation incorrecte.');
+    const cible = await lireCompte(env, slug);
+    if (cible && (cible.pages || []).length) throw new ErreurAPI(400, 'Ce compte a des pages rattachées (' + cible.pages.join(', ') + ') : supprimez-les d’abord.');
+    if (cible && cible.traductions && cible.traductions.length) throw new ErreurAPI(400, 'Cette page a des versions traduites (' + cible.traductions.map(l => slug + '.' + l).join(', ') + ') : supprimez-les d’abord.');
+    if (cible && cible.parent) {                     // page rattachée : on la retire de sa page principale (les images communes restent)
+      const tit = await lireCompte(env, cible.parent);
+      if (tit) { tit.pages = (tit.pages || []).filter(x => x !== slug); await ecrireCompte(env, tit); }
+      if (cible.traduction) {
+        const src = await lireCompte(env, cible.traduction.source);
+        if (src) { src.traductions = (src.traductions || []).filter(l => l !== cible.traduction.langue); await ecrireCompte(env, src); }
+      }
+    }
     for (const prefix of ['site:' + slug + ':', 'img:' + slug + ':']) {
       let curseur;
       do {
@@ -1045,7 +1241,7 @@ async function mdpOublie(request, env) {
 
   let slugs = [];
   if (saisie.includes('@')) slugs = await slugsParEmail(env, saisie);
-  else if (!erreurSlug(saisie)) slugs = [saisie];
+  else if (!erreurSlug(saisie)) { const c = await lireCompte(env, saisie); slugs = [c && c.parent ? c.parent : saisie]; }
 
   const liens = [];
   let email = null;
@@ -1268,13 +1464,14 @@ async function lancerRappels(env, o) {
       let c; try { c = JSON.parse(await env.CLIENTS.get(k.name) || 'null'); } catch (e) { c = null; }
       if (!c) continue;
       if (aSupprimer(c, maintenant)) nbSupprimer++;
+      if (c.parent) continue;                        // pages rattachées : le rappel de la page principale couvre tout le compte
       const due = etapeDue(c, maintenant);
       if (!due) continue;
       const ligne = { slug: c.slug, email: c.email, plan: c.plan, etape: due.etape, fin: due.fin, langue: c.langue || 'fr' };
       if (o.simuler || !conf) { prevus.push(ligne); continue; }
       if (envoyes.length >= ENVOIS_MAX) { prevus.push(ligne); continue; }
       try {
-        const m = mailRappel(c, due);
+        const m = mailRappel(c, due, (c.pages || []).length ? await prixGroupe(env, c) : null);
         await envoyerEmail(env, conf, c.email, m.sujet, m.html, m.texte);
         c.rappels = Object.assign({}, c.rappels, { [due.cle]: new Date().toISOString() });
         await ecrireCompte(env, c);
@@ -1288,14 +1485,15 @@ async function lancerRappels(env, o) {
 }
 
 /* Texte des rappels : français, anglais, russe (langue de l'éditeur du client) */
-function mailRappel(c, due) {
+function mailRappel(c, due, groupe) {
   const L = LANGUES_MAIL.includes(c.langue) ? c.langue : 'fr';
   const site = c.slug + '.' + DOMAINE;
   const sep = L === 'ru' ? '.' : '/';
   const fmt = iso => { const d = new Date(iso); return String(d.getUTCDate()).padStart(2, '0') + sep + String(d.getUTCMonth() + 1).padStart(2, '0') + sep + d.getUTCFullYear(); };
   const dFin = fmt(due.fin), dSuppr = fmt(new Date(Date.parse(due.fin) + JOURS_CONSERVATION * 86400000).toISOString());
-  const prix = PRIX_ANNUEL, ttc = Math.round(prix * (1 + TVA / 100));
-  const credit = c.plan === 'payant' ? Math.min(c.credit || 0, prix) : 0;
+  const prix = groupe ? groupe.prix : PRIX_ANNUEL, ttc = Math.round(prix * (1 + TVA / 100));
+  const credit = c.plan === 'payant' ? (groupe ? groupe.deduction : Math.min(c.credit || 0, prix)) : 0;
+  const nbP = groupe ? groupe.pages + 1 : 1;         // page principale + pages rattachées (même échéance)
   const eur = v => L === 'en' ? '€' + (v / 100).toFixed(2) : (v / 100).toFixed(2).replace('.', ',') + ' €';
   const lien = 'https://' + DOMAINE + '/app/' + c.slug + '/?abonnement=1' + (L !== 'fr' ? '&lang=' + L : '');
   const essai = c.plan === 'essai', avant = !['J0', 'J+30', 'J+80'].includes(due.etape);
@@ -1310,7 +1508,7 @@ function mailRappel(c, due) {
                  : 'L’abonnement de votre page <b>' + site + '</b> arrive à échéance le <b>' + dFin + '</b>' + (due.jours > 1 ? ' (dans ' + due.jours + ' jours)' : '') + '. Il n’est pas renouvelé automatiquement : renouvelez-le pour que votre page et votre QR code restent actifs.')
         : due.etape === 'J0' ? 'Votre page <b>' + site + '</b> est en pause depuis le ' + dFin + ' : elle n’est plus visible et votre QR code n’affiche plus vos coordonnées. Rien n’est perdu : un paiement la remet en ligne à l’identique.'
         : 'Votre page <b>' + site + '</b> est en pause depuis le ' + dFin + '. Nous gardons tout (textes, images, QR code) jusqu’au <b>' + dSuppr + '</b> ; après cette date, la page et ses données seront supprimées.',
-      prix: 'Abonnement : ' + eur(prix) + ' HT par an (' + eur(ttc) + ' TTC).' + (credit ? ' Votre crédit IA de ' + eur(credit) + ' HT sera déduit : il ne reste que ' + eur(prix - credit) + ' HT à payer.' : ''),
+      prix: 'Abonnement' + (nbP > 1 ? ' de vos ' + nbP + ' pages' : '') + ' : ' + eur(prix) + ' HT par an (' + eur(ttc) + ' TTC).' + (credit ? ' Votre crédit IA de ' + eur(credit) + ' HT sera déduit : il ne reste que ' + eur(prix - credit) + ' HT à payer.' : ''),
       bouton: avant ? (essai ? 'M’abonner' : 'Renouveler pour un an') : 'Réactiver ma page',
       voir: 'Voir ma page', voirTxt: 'Revoir votre page telle que vos clients la voient :',
       pied: 'Pas de renouvellement automatique : vous ne payez que si vous le décidez. Une question ? Répondez simplement à cet e-mail.',
@@ -1326,7 +1524,7 @@ function mailRappel(c, due) {
                  : 'The subscription for your page <b>' + site + '</b> expires on <b>' + dFin + '</b>' + (due.jours > 1 ? ' (in ' + due.jours + ' days)' : '') + '. It does not renew automatically: renew it to keep your page and QR code active.')
         : due.etape === 'J0' ? 'Your page <b>' + site + '</b> has been paused since ' + dFin + ': it is no longer visible and your QR code no longer shows your details. Nothing is lost: a payment puts it back online exactly as it was.'
         : 'Your page <b>' + site + '</b> has been paused since ' + dFin + '. We keep everything (texts, images, QR code) until <b>' + dSuppr + '</b>; after that date, the page and its data will be deleted.',
-      prix: 'Subscription: ' + eur(prix) + ' excl. VAT per year (' + eur(ttc) + ' incl. VAT).' + (credit ? ' Your AI credit of ' + eur(credit) + ' excl. VAT will be deducted: only ' + eur(prix - credit) + ' excl. VAT left to pay.' : ''),
+      prix: 'Subscription' + (nbP > 1 ? ' for your ' + nbP + ' pages' : '') + ': ' + eur(prix) + ' excl. VAT per year (' + eur(ttc) + ' incl. VAT).' + (credit ? ' Your AI credit of ' + eur(credit) + ' excl. VAT will be deducted: only ' + eur(prix - credit) + ' excl. VAT left to pay.' : ''),
       bouton: avant ? (essai ? 'Subscribe' : 'Renew for one year') : 'Reactivate my page',
       voir: 'View my page', voirTxt: 'See your page as your customers see it:',
       pied: 'No automatic renewal: you only pay if you decide to. Any question? Just reply to this email.',
@@ -1342,7 +1540,7 @@ function mailRappel(c, due) {
                  : 'Подписка на вашу страницу <b>' + site + '</b> заканчивается <b>' + dFin + '</b>' + (due.jours > 1 ? ' (через ' + due.jours + ' ' + plurielRu(due.jours, 'день', 'дня', 'дней') + ')' : '') + '. Она не продлевается автоматически: продлите её, чтобы страница и QR-код оставались активными.')
         : due.etape === 'J0' ? 'Ваша страница <b>' + site + '</b> приостановлена с ' + dFin + ': она больше не видна, а QR-код не показывает ваши контакты. Ничего не потеряно: после оплаты страница вернётся в прежнем виде.'
         : 'Ваша страница <b>' + site + '</b> приостановлена с ' + dFin + '. Мы храним всё (тексты, изображения, QR-код) до <b>' + dSuppr + '</b>; после этой даты страница и её данные будут удалены.',
-      prix: 'Подписка: ' + eur(prix) + ' без НДС в год (' + eur(ttc) + ' с НДС).' + (credit ? ' Ваш кредит ИИ ' + eur(credit) + ' без НДС будет вычтен: к оплате останется ' + eur(prix - credit) + ' без НДС.' : ''),
+      prix: 'Подписка' + (nbP > 1 ? ' на ' + nbP + ' ' + plurielRu(nbP, 'страницу', 'страницы', 'страниц') : '') + ': ' + eur(prix) + ' без НДС в год (' + eur(ttc) + ' с НДС).' + (credit ? ' Ваш кредит ИИ ' + eur(credit) + ' без НДС будет вычтен: к оплате останется ' + eur(prix - credit) + ' без НДС.' : ''),
       bouton: avant ? (essai ? 'Оформить подписку' : 'Продлить на год') : 'Восстановить страницу',
       voir: 'Открыть мою страницу', voirTxt: 'Посмотрите на свою страницу глазами клиентов:',
       pied: 'Без автоматического продления: вы платите, только если сами решите. Есть вопросы? Просто ответьте на это письмо.',
@@ -1501,13 +1699,27 @@ async function webhookStripe(request, env) {
 async function encaisserSession(env, session) {
   if (!session || session.payment_status !== 'paid') return 'non payé';
   const md = session.metadata || {};
-  const compte = await lireCompte(env, md.slug);
+  const compte = await lireCompte(env, md.genre === 'page' ? md.titulaire : md.slug);
   if (!compte) return 'compte introuvable';
   if ((compte.refsPayees || []).includes(session.id)) return 'déjà appliqué';
   const montant = Number(md.montant) || 0;
   const ttc = (session.amount_total / 100).toFixed(2) + ' € TTC';
-  if (md.genre === 'abonnement') appliquerAbonnement(compte, montant, Number(md.deduction) || 0, 'Stripe · ' + ttc, session.id);
+  if (md.genre === 'abonnement') await appliquerAbonnementGroupe(env, compte, montant, Number(md.deduction) || 0, 'Stripe · ' + ttc, session.id);
   else if (md.genre === 'recharge') appliquerRecharge(compte, montant, 'Stripe · ' + ttc, session.id);
+  else if (md.genre === 'page') {
+    // payé : on crée la page (si le nom a été pris entre-temps, le paiement est noté pour remboursement)
+    let note = 'Stripe · ' + ttc + ' · ' + md.cible;
+    try { await creerPageSup(env, compte, { type: md.type, cible: md.cible, source: md.source, langue: md.langue, langueSource: md.langueSource }); }
+    catch (e) {
+      // webhook et retour du client presque en même temps : la page vient d'être créée par l'autre appel
+      const deja = await lireCompte(env, md.cible);
+      if (deja && deja.parent === compte.slug) return 'déjà appliqué';
+      note += ' · ÉCHEC DE CRÉATION (' + e.message + ') : à rembourser'; console.error('page payée non créée', md.cible, e.message);
+    }
+    journaliser(compte, 'page', montant, note, session.id);
+    await ecrireCompte(env, compte);
+    return note.includes('ÉCHEC') ? 'échec' : 'appliqué';
+  }
   else return 'genre inconnu';
   await ecrireCompte(env, compte);
   return 'appliqué';
@@ -1542,6 +1754,9 @@ async function dechiffrer(env, valeur) {
 async function resumeAvecOffre(env, c) {
   const r = resumeCompte(c);
   r.offre.enLigne = !!(await env.CLIENTS.get('config:stripe'));
+  r.offre.prixPage = PRIX_PAGE; r.offre.prixTraduction = PRIX_TRADUCTION;
+  if (c.parent) r.renouvellement = null;                        // l'abonnement se règle depuis la page principale
+  else if ((c.pages || []).length) r.renouvellement = await prixGroupe(env, c);
   return r;
 }
 
@@ -1551,6 +1766,193 @@ async function lireCompte(env, slug) {
   const t = await env.CLIENTS.get('compte:' + slug);
   return t ? JSON.parse(t) : null;
 }
+/* ===================== Comptes à plusieurs pages =====================
+   La page « principale » (titulaire) porte l'e-mail, le mot de passe et l'abonnement ; elle liste ses pages
+   rattachées dans `pages`. Une page rattachée a `parent` = page principale, pas de mot de passe ni d'e-mail,
+   et copie l'échéance de la principale (synchroniserPages). Une version traduite s'appelle « nom.xx » et est
+   servie sur nom.qrbc.app/xx/ (`traduction` = { source, langue }) ; la page traduite liste ses langues dans `traductions`.
+   Un compte sans `parent` ni `pages` fonctionne exactement comme avant. */
+async function titulaireDe(env, compte) {
+  if (!compte || !compte.parent) return compte;
+  return (await lireCompte(env, compte.parent)) || compte;
+}
+const racineDe = c => (c && c.parent) || (c && c.slug);
+// Images propres à une page (icônes d'appli, aperçu des liens) ; toutes les autres sont communes au compte
+const imagePropre = nom => /^(app-|partage-)/.test(String(nom));
+async function membresGroupe(env, tit) {
+  const l = [tit];
+  for (const s of (tit && tit.pages) || []) { const c = await lireCompte(env, s); if (c && c.parent === tit.slug) l.push(c); }
+  return l;
+}
+// Textes des configurations de toutes les pages du compte (une image n'est effacée que si aucune ne l'utilise)
+async function configsGroupe(env, racine) {
+  const tit = await lireCompte(env, racine);
+  const slugs = tit ? [tit.slug].concat(tit.pages || []) : [racine];
+  let t = '';
+  for (const s of slugs) t += (await env.CLIENTS.get('site:' + s + ':config.json')) || '';
+  return t;
+}
+/* Les pages rattachées suivent l'abonnement de la principale (une seule échéance) */
+async function synchroniserPages(env, tit, nouvelleAnnee) {
+  for (const s of tit.pages || []) {
+    const c = await lireCompte(env, s);
+    if (!c || c.parent !== tit.slug) continue;
+    c.plan = tit.plan; c.payeJusqua = tit.payeJusqua; c.finEssai = tit.finEssai;
+    if (nouvelleAnnee) c.ia = { texte: 0, picto: 0, depuis: new Date().toISOString() };
+    await ecrireCompte(env, c);
+  }
+}
+/* Prix du renouvellement de tout le compte : abonnement + pages rattachées, crédits IA de toutes les pages déduits */
+async function prixGroupe(env, tit) {
+  const membres = await membresGroupe(env, tit);
+  const n = membres.length - 1;
+  const prix = PRIX_ANNUEL + n * PRIX_PAGE;
+  const credits = membres.reduce((a, c) => a + (c.credit || 0), 0);
+  const deduction = Math.min(credits, prix);
+  return { prix, deduction, aPayer: prix - deduction, pages: n, prixPage: PRIX_PAGE, prixAnnuel: PRIX_ANNUEL };
+}
+/* Renouvellement de tout le compte : la principale prend un an de plus, les pages suivent ; la déduction
+   est prise sur le crédit de la principale puis sur celui des pages rattachées */
+async function appliquerAbonnementGroupe(env, tit, montantHT, deduction, source, ref) {
+  const d1 = Math.min(deduction || 0, tit.credit || 0);
+  const nb = (tit.pages || []).length;
+  appliquerAbonnement(tit, montantHT, d1, source + (nb ? ' · ' + (nb + 1) + ' pages' : ''), ref);
+  let reste = (deduction || 0) - d1;
+  for (const s of tit.pages || []) {
+    if (reste <= 0) break;
+    const c = await lireCompte(env, s);
+    if (!c || c.parent !== tit.slug || !c.credit) continue;
+    const dk = Math.min(reste, c.credit);
+    c.credit -= dk; reste -= dk;
+    journaliser(c, 'correction', -dk, 'crédit déduit du renouvellement de ' + tit.slug);
+    await ecrireCompte(env, c);
+  }
+  await synchroniserPages(env, tit, true);
+}
+/* Ajout d'une page : possible pour un compte offert (gratuit) ou abonné actif ; prix au prorata jusqu'à l'échéance commune */
+function offreAjout(tit) {
+  if (tit.plan === 'gratuit') return { possible: true, gratuit: true, prix: 0 };
+  if (tit.plan === 'payant' && actif(tit) && !tit.payeJusqua)          // abonné sans date de fin (compte réglé à la main)
+    return { possible: true, gratuit: false, jours: 365, echeance: null, prixAnnuel: PRIX_PAGE, prix: PRIX_PAGE };
+  if (tit.plan === 'payant' && actif(tit) && tit.payeJusqua) {
+    const jours = Math.max(1, Math.ceil((Date.parse(tit.payeJusqua) - Date.now()) / 86400000));
+    return { possible: true, gratuit: false, jours, echeance: tit.payeJusqua, prixAnnuel: PRIX_PAGE,
+      prix: Math.max(PAGE_MIN, Math.round(PRIX_PAGE * Math.min(jours, 366) / 365)) };
+  }
+  return { possible: false, raison: tit.plan === 'essai'
+    ? 'Les pages supplémentaires et les traductions sont disponibles avec l’abonnement. Abonnez-vous d’abord à votre page principale.'
+    : 'Votre abonnement est inactif : renouvelez-le d’abord pour ajouter une page.' };
+}
+/* Vérifie une demande d'ajout et renvoie la page à créer : { type, cible, source?, langue?, langueSource? } */
+async function preparerAjout(env, tit, courant, d) {
+  if (d.type === 'traduction') {
+    const source = courant.traduction ? null : courant;
+    if (!source) throw new ErreurAPI(400, 'Ouvrez la page d’origine pour lui ajouter une langue.');
+    const langue = String(d.langue || '').toLowerCase();
+    const langueSource = source.langueSite || (LANGUES_PAGE.includes(d.langueSource) ? d.langueSource : 'fr');
+    if (!LANGUES_PAGE.includes(langue)) throw new ErreurAPI(400, 'Langue non proposée.');
+    if (langue === langueSource) throw new ErreurAPI(400, 'Cette page est déjà dans cette langue.');
+    const cible = source.slug + '.' + langue;
+    if (await env.CLIENTS.get('compte:' + cible)) throw new ErreurAPI(409, 'Cette langue existe déjà pour cette page.');
+    return { type: 'traduction', cible, source: source.slug, langue, langueSource };
+  }
+  const cible = String(d.nom || '').trim().toLowerCase();
+  const err = erreurSlug(cible);
+  if (err) throw new ErreurAPI(400, err);
+  if (await env.CLIENTS.get('compte:' + cible)) throw new ErreurAPI(409, 'Ce nom est déjà pris.');
+  const resa = await env.CLIENTS.get('reserve:' + cible);
+  if (resa && resa !== tit.slug) throw new ErreurAPI(409, 'Ce nom est en cours de réservation. Choisissez-en un autre.');
+  return { type: 'page', cible };
+}
+/* Crée la page rattachée (après paiement, ou tout de suite pour un compte offert). tit est modifié : à écrire par l'appelant. */
+async function creerPageSup(env, tit, a) {
+  if (await env.CLIENTS.get('compte:' + a.cible)) throw new ErreurAPI(409, 'Cette page existe déjà.');
+  const page = {
+    slug: a.cible, parent: tit.slug, email: '', plan: tit.plan, version: 1, cree: new Date().toISOString(),
+    langue: tit.langue || 'fr', finEssai: tit.finEssai || null, payeJusqua: tit.payeJusqua || null, note: '',
+    ia: { texte: 0, picto: 0, depuis: new Date().toISOString() }
+  };
+  let cfg = { titre: '' };
+  if (a.type === 'traduction') {
+    page.traduction = { source: a.source, langue: a.langue };
+    page.aTraduire = true;                                   // 1re traduction offerte, faite à la 1re ouverture de l'éditeur
+    try { cfg = JSON.parse(await env.CLIENTS.get('site:' + a.source + ':config.json') || '{}'); } catch (e) { cfg = {}; }
+    delete cfg.partage; delete cfg.appIcones;                // propres à chaque page : refaits à l'enregistrement
+    cfg.langue = a.langue;
+    const src = a.source === tit.slug ? tit : await lireCompte(env, a.source);
+    if (src && !src.langueSite) {
+      src.langueSite = a.langueSource || 'fr';
+      if (src !== tit) await ecrireCompte(env, src);
+    }
+  }
+  await ecrireCompte(env, page);
+  await env.CLIENTS.put('site:' + a.cible + ':config.json', JSON.stringify(cfg, null, 2));
+  tit.pages = (tit.pages || []).filter(x => x !== a.cible).concat([a.cible]);
+  await env.CLIENTS.delete('reserve:' + a.cible);
+  return page;
+}
+function adressePage(c) {
+  return c.traduction ? 'https://' + c.traduction.source + '.' + DOMAINE + '/' + c.traduction.langue + '/' : 'https://' + c.slug + '.' + DOMAINE + '/';
+}
+/* Textes traduits d'une configuration : on n'envoie que les textes affichés (jamais liens, numéros, couleurs, images) */
+const NOMS_LANGUES = { fr: 'French', en: 'English', ru: 'Russian', es: 'Spanish', de: 'German', it: 'Italian', pt: 'Portuguese', nl: 'Dutch',
+  uk: 'Ukrainian', pl: 'Polish', ro: 'Romanian', tr: 'Turkish', zh: 'Simplified Chinese', ja: 'Japanese' };
+function textesATraduire(cfg) {
+  const t = {};
+  const mettre = (cle, v) => { if (typeof v === 'string' && v.trim()) t[cle] = v; };
+  ['titre', 'sousTitre', 'pied', 'appNom'].forEach(k => mettre(k, cfg[k]));
+  (cfg.boutons || []).forEach((b, i) => { if (b) { mettre('boutons.' + i + '.texte', b.texte); mettre('boutons.' + i + '.message', b.message); } });
+  const h = cfg.home || {};
+  mettre('home.boutonContact', h.boutonContact); mettre('home.lienTexte', h.lienTexte);
+  (h.articles || []).forEach((a, i) => { if (a) { mettre('home.articles.' + i + '.titre', a.titre); mettre('home.articles.' + i + '.texte', a.texte); } });
+  if (h.ia) mettre('home.ia.description', h.ia.description);
+  const seo = cfg.seo || {};
+  mettre('seo.titre', seo.titre); mettre('seo.description', seo.description); mettre('seo.motCle', seo.motCle);
+  return t;
+}
+async function traduireConfig(env, cleIA, cfg, de, vers) {
+  const textes = textesATraduire(cfg);
+  const copie = JSON.parse(JSON.stringify(cfg));
+  if (!Object.keys(textes).length) return copie;
+  const r = await fetch(env.ANTHROPIC_URL || 'https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-api-key': cleIA, 'anthropic-version': '2023-06-01' },
+    body: JSON.stringify({
+      model: MODELE_PAR_TYPE.texte, max_tokens: 8000,
+      system: 'You translate the texts of a small business mobile page from ' + (NOMS_LANGUES[de] || de) + ' to ' + (NOMS_LANGUES[vers] || vers) + '. ' +
+        'Translate naturally for local customers, keeping the tone, meaning and approximate length. Keep brand names, person names, ' +
+        'street addresses and place names unchanged (transliterate them only if the target script requires it). Keep emojis and line breaks. ' +
+        'Output ONLY a JSON object with exactly the same keys as the input and the translated strings as values.',
+      messages: [{ role: 'user', content: JSON.stringify(textes, null, 1) }]
+    })
+  });
+  const txt = await r.text();
+  if (!r.ok) { console.error('traduction', r.status, txt.slice(0, 300)); throw new ErreurAPI(502, 'La traduction a échoué. Réessayez dans un instant (rien n’a été décompté).'); }
+  let sortie = null;
+  try {
+    const j = JSON.parse(txt);
+    const brut = (j.content || []).filter(c => c.type === 'text').map(c => c.text).join('');
+    sortie = JSON.parse(brut.slice(brut.indexOf('{'), brut.lastIndexOf('}') + 1));
+  } catch (e) { sortie = null; }
+  if (!sortie || typeof sortie !== 'object') throw new ErreurAPI(502, 'La traduction a échoué. Réessayez dans un instant (rien n’a été décompté).');
+  for (const cle of Object.keys(textes)) {
+    const v = sortie[cle];
+    if (typeof v !== 'string' || !v.trim()) continue;            // texte manquant : on garde l'original
+    const chemin = cle.split('.');
+    let o = copie;
+    for (let i = 0; i < chemin.length - 1; i++) { o = o && o[/^\d+$/.test(chemin[i]) ? Number(chemin[i]) : chemin[i]]; }
+    if (o && typeof o === 'object') o[chemin[chemin.length - 1]] = v.slice(0, 4000);
+  }
+  return copie;
+}
+
+/* Langues publiées d'une page (pour le sélecteur et Google) : [{ l, u }] — vide si pas de traduction */
+function languesPage(source) {
+  const tr = (source && source.traductions) || [];
+  if (!tr.length) return [];
+  return [{ l: source.langueSite || 'fr', u: '/' }].concat(tr.map(l => ({ l, u: '/' + l + '/' })));
+}
+
 /* Une année d'abonnement de plus ; le crédit utilisé en déduction est retiré */
 function appliquerAbonnement(compte, montantHT, deduction, source, ref) {
   const base = compte.plan === 'payant' && actif(compte) && compte.payeJusqua ? Date.parse(compte.payeJusqua) : Date.now();
@@ -1601,7 +2003,10 @@ function resumeCompte(c) {
     },
     offre: { prixAnnuel: PRIX_ANNUEL, rechargeMin: RECHARGE_MIN, quotasPayant: QUOTAS_IA.payant, tva: TVA, renouvelerAvant: RENOUVELER_AVANT },
     renouvellement: prixRenouvellement(c),
-    demande: c.demande || null
+    demande: c.demande || null,
+    // comptes à plusieurs pages
+    parent: c.parent || null, pages: c.pages || [], traduction: c.traduction || null, aTraduire: !!c.aTraduire,
+    langueSite: c.langueSite || null, traductions: c.traductions || []
   };
 }
 
@@ -1714,8 +2119,9 @@ async function exigerSession(request, env, slug) {
   try { ch = JSON.parse(new TextDecoder().decode(deb64(corps.replace(/-/g, '+').replace(/_/g, '/')))); } catch (e) { ch = null; }
   if (!ch || ch.s !== slug || ch.e < Date.now() / 1000) throw new ErreurAPI(401, 'Session expirée : reconnectez-vous.');
   const compte = await lireCompte(env, slug);
-  if (!compte || (compte.version || 1) !== ch.v || compte.plan === 'suspendu') throw new ErreurAPI(401, 'Session expirée : reconnectez-vous.');
-  if (compte.emailAVerifier) throw new ErreurAPI(401, 'Confirmez d’abord votre adresse e-mail.');
+  const tit = await titulaireDe(env, compte);
+  if (!compte || (tit.version || 1) !== ch.v || compte.plan === 'suspendu' || tit.plan === 'suspendu') throw new ErreurAPI(401, 'Session expirée : reconnectez-vous.');
+  if (tit.emailAVerifier) throw new ErreurAPI(401, 'Confirmez d’abord votre adresse e-mail.');
   return compte;
 }
 

@@ -182,6 +182,8 @@
         <label><span>Prix d’une création d’images de fond, 2 images (€ HT)</span><input type="text" inputmode="decimal" id="t-prixFond"></label>
         <label><span>Prix d’une création express pour un abonné (€ HT)</span><input type="text" inputmode="decimal" id="t-prixExpress"></label>
         <span></span>
+        <label><span>Page supplémentaire ou version traduite (€ HT par an, au prorata la 1re fois)</span><input type="text" inputmode="decimal" id="t-prixPage"></label>
+        <label><span>Nouvelle traduction d’une page (€ HT ; la 1re est offerte)</span><input type="text" inputmode="decimal" id="t-prixTraduction"></label>
         <label><span>Essai 14 jours : rédactions offertes</span><input type="number" min="0" step="1" id="t-essaiTexte"></label>
         <label><span>Essai 14 jours : créations de pictos offertes</span><input type="number" min="0" step="1" id="t-essaiPicto"></label>
         <label><span>Essai 14 jours : créations d’images de fond offertes</span><input type="number" min="0" step="1" id="t-essaiFond"></label>
@@ -318,9 +320,10 @@
   });
 
   /* ---------- Tarifs et quotas ---------- */
-  const CHAMPS_TARIFS = ['prixAnnuel', 'prixTexte', 'prixPicto', 'prixFond', 'prixExpress', 'essaiTexte', 'essaiPicto', 'essaiFond', 'payantTexte', 'payantPicto', 'payantFond'];
+  const CHAMPS_TARIFS = ['prixAnnuel', 'prixTexte', 'prixPicto', 'prixFond', 'prixExpress', 'prixPage', 'prixTraduction', 'essaiTexte', 'essaiPicto', 'essaiFond', 'payantTexte', 'payantPicto', 'payantFond'];
   const versChamps = t => ({
     prixAnnuel: t.prixAnnuel / 100, prixTexte: t.prixTexte / 100, prixPicto: t.prixPicto / 100, prixFond: t.prixFond / 100, prixExpress: t.prixExpress / 100,
+    prixPage: (t.prixPage ?? 900) / 100, prixTraduction: (t.prixTraduction ?? 150) / 100,
     essaiTexte: t.essai.texte, essaiPicto: t.essai.picto, essaiFond: t.essai.fond,
     payantTexte: t.payant.texte, payantPicto: t.payant.picto, payantFond: t.payant.fond
   });
@@ -335,7 +338,7 @@
     const e = x => isFinite(x) ? x.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }) : '?';
     $('#t-apercu').textContent = 'Le client voit : ' + e(n('prixAnnuel')) + ' HT/an (' + e(n('prixAnnuel') * 1.2) + ' TTC, soit ' + e(n('prixAnnuel') / 12) + ' HT/mois) · essai : ' +
       n('essaiTexte') + ' rédaction(s) + ' + n('essaiPicto') + ' picto(s) + ' + n('essaiFond') + ' fond(s) · abonnement : ' + n('payantTexte') + ' + ' + n('payantPicto') + ' + ' + n('payantFond') +
-      ' par an · au-delà ' + e(n('prixTexte')) + ' / ' + e(n('prixPicto')) + ' / ' + e(n('prixFond')) + ' HT · création express ' + e(n('prixExpress')) + ' HT (essai : moitié des créations offertes)';
+      ' par an · au-delà ' + e(n('prixTexte')) + ' / ' + e(n('prixPicto')) + ' / ' + e(n('prixFond')) + ' HT · création express ' + e(n('prixExpress')) + ' HT (essai : moitié des créations offertes) · page supplémentaire ' + e(n('prixPage')) + ' HT/an · nouvelle traduction ' + e(n('prixTraduction')) + ' HT';
   }
   CHAMPS_TARIFS.forEach(k => $('#t-' + k).addEventListener('input', apercuTarifs));
   async function chargerTarifs() { const r = await api('tarifs'); tarifsDefaut = r.defaut; remplirTarifs(r.tarifs); }
@@ -531,21 +534,23 @@
     return n;
   }
   function carte(c) {
-    const site = 'https://' + c.slug + '.qrbc.app/';
+    const site = c.adresse || ('https://' + c.slug + '.qrbc.app/');
     let etat = { gratuit: 'offert', essai: 'essai', payant: 'abonné', suspendu: 'suspendu' }[c.plan] || c.plan;
     if (c.plan === 'essai' && c.actif) etat = 'essai · ' + jours(c.finEssai) + ' j';
     const d = el('article', { class: 'carte' + (c.demande ? ' demande-attente' : '') });
 
     // En-tête
     d.append(el('div', { class: 'carte-tete' }, [
-      el('div', {}, [el('div', { class: 'slug', text: c.slug + '.qrbc.app' }), el('div', { class: 'titre', text: c.titre || '(activité non renseignée)' })]),
+      el('div', {}, [el('div', { class: 'slug', text: site.replace(/^https:\/\//, '').replace(/\/$/, '') }), el('div', { class: 'titre', text: c.titre || '(activité non renseignée)' })]),
       el('span', { class: 'badge b-' + (c.actif ? c.plan : 'inactif'), text: c.actif ? etat : etat + ' · inactif' })
     ]));
 
     // Données
     const dl = el('dl', { class: 'donnees' });
     const ligneDonnee = (k, v) => { dl.append(el('dt', { text: k }), el('dd', { text: v })); };
-    ligneDonnee('E-mail', (c.email || '—') + (c.emailAVerifier ? ' · ⚠️ non confirmé (page pas encore en ligne)' : ''));
+    if (c.parent) ligneDonnee('Compte', (c.traduction ? 'Version ' + c.traduction.langue.toUpperCase() + ' de ' + c.traduction.source + ' · ' : 'Page ') + 'rattachée à ' + c.parent + ' (mot de passe, e-mail et échéance de la page principale)');
+    if (c.pages && c.pages.length) ligneDonnee('Pages rattachées', c.pages.join(', ') + ' · renouvellement groupé ' + euros(c.renouvellement.prix) + ' HT/an');
+    if (!c.parent) ligneDonnee('E-mail', (c.email || '—') + (c.emailAVerifier ? ' · ⚠️ non confirmé (page pas encore en ligne)' : ''));
     ligneDonnee('Créé le', date(c.cree));
     if (c.plan === 'essai') ligneDonnee('Fin d’essai', date(c.finEssai));
     if (c.plan === 'payant') ligneDonnee('Payé jusqu’au', date(c.payeJusqua));
@@ -593,22 +598,23 @@
     const bouton = (t, f, cls) => a.append(el('button', { type: 'button', class: cls || '', text: t, onclick: () => action(f) }));
     lien('Voir la page', site);
     lien('Éditeur', '/app/' + c.slug + '/');
-    if (c.plan !== 'gratuit') bouton('Passer en offert', () => api('modifier', { nom: c.slug, plan: 'gratuit' }));
-    if (c.plan === 'essai') bouton('+14 j d’essai', () => api('modifier', { nom: c.slug, prolongerEssai: 14 }));
-    if (c.plan !== 'gratuit') bouton((c.plan === 'payant' ? 'Renouveler' : 'Abonner') + ' 1 an (' + euros(c.renouvellement.aPayer) + ' HT)', () => {
+    const rattachee = !!c.parent;               // page rattachée : tout se règle sur la page principale
+    if (c.plan !== 'gratuit' && !rattachee) bouton('Passer en offert', () => api('modifier', { nom: c.slug, plan: 'gratuit' }));
+    if (c.plan === 'essai' && !rattachee) bouton('+14 j d’essai', () => api('modifier', { nom: c.slug, prolongerEssai: 14 }));
+    if (c.plan !== 'gratuit' && !rattachee) bouton((c.plan === 'payant' ? 'Renouveler' : 'Abonner') + ' 1 an (' + euros(c.renouvellement.aPayer) + ' HT)', () => {
       const r = c.renouvellement;
-      const txt = 'Paiement reçu hors Stripe pour ' + c.slug + ' ?\n\nAbonnement : ' + euros(r.prix) + ' HT' +
+      const txt = 'Paiement reçu hors Stripe pour ' + c.slug + ' ?\n\nAbonnement' + (r.pages ? ' (' + (r.pages + 1) + ' pages)' : '') + ' : ' + euros(r.prix) + ' HT' +
         (r.deduction ? '\nCrédit non consommé déduit : −' + euros(r.deduction) : '') + '\nÀ encaisser : ' + euros(r.aPayer) + ' HT\n\nLes quotas IA repartent à zéro (' + c.offre.quotasPayant.texte + ' textes, ' + c.offre.quotasPayant.picto + ' pictos).';
       return confirm(txt) ? api('abonner', { nom: c.slug }) : null;
     });
     if (c.demande) bouton('Ignorer la demande', () => api('annuler-demande', { nom: c.slug }));
     if (c.emailAVerifier) bouton('Valider l’e-mail', () => confirm('Considérer l’adresse ' + c.email + ' comme confirmée ? La page de ' + c.slug + ' sera visible en ligne.') ? api('modifier', { nom: c.slug, validerEmail: true }) : null);
     if (c.plan !== 'suspendu') bouton('Suspendre', () => api('modifier', { nom: c.slug, plan: 'suspendu' }));
-    bouton(c.email ? 'E-mail' : 'Ajouter un e-mail', () => {
+    if (!rattachee) bouton(c.email ? 'E-mail' : 'Ajouter un e-mail', () => {
       const v = prompt('E-mail de ' + c.slug + ' (sert à récupérer le mot de passe) :', c.email || '');
       return v === null ? null : api('modifier', { nom: c.slug, email: v.trim() });
     });
-    bouton('Nouveau mot de passe', () => {
+    if (!rattachee) bouton('Nouveau mot de passe', () => {
       const m = prompt('Nouveau mot de passe pour ' + c.slug + ' (10 caractères minimum) :');
       return m ? api('modifier', { nom: c.slug, mdp: m }) : null;
     });
