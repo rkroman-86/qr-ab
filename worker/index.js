@@ -446,10 +446,12 @@ async function apiClient(request, env, slug, route) {
       ? 'Votre essai est terminé : abonnez-vous pour continuer à utiliser l’IA.'
       : 'Abonnement inactif : l’IA est désactivée.', compte.plan === 'essai' ? 'essai_termine' : 'abonnement_inactif');
     if (!env.AI) throw new ErreurAPI(503, 'La création d’images n’est pas encore activée sur le serveur.');
+    const dd = await corpsJSON(request);
+    if (dd.pancarte && typeof dd.pancarte === 'object' && !String(dd.pancarte.titre || '').trim() && !String(dd.pancarte.texte || '').trim())
+      throw new ErreurAPI(400, 'Écrivez d’abord le titre ou le texte de la pancarte : l’image s’en inspire.');
     const mode = modeFacturation(compte, 'fond', request.headers.get('x-qrbc-express') === '1');
     const jour = new Date().toISOString().slice(0, 10);
     await limiter(env, 'ia:' + slug + ':' + jour, IA_PAR_JOUR, 86400 * 2, 'Limite quotidienne de l’IA atteinte. Réessayez demain.');
-    const dd = await corpsJSON(request);
     const ambiance = AMBIANCES_FOND[dd.ambiance] ? dd.ambiance : 'photo';
     const idee = String(dd.idee || '').slice(0, 300);
     let cfg = {};
@@ -461,20 +463,25 @@ async function apiClient(request, env, slug, route) {
       cfg = Object.assign({}, cfg, { titre: txt(act.titre, 120) || cfg.titre, sousTitre: txt(act.sousTitre, 200) || cfg.sousTitre,
         home: { ia: { description: txt(act.description, 1500) || (cfg.home && cfg.home.ia && cfg.home.ia.description) || '', zone: txt(act.zone, 300) || (cfg.home && cfg.home.ia && cfg.home.ia.zone) || '' } } });
     }
-    const description = await descriptionFond(env, cfg, ambiance, idee);
+    // Image d'une pancarte : le sujet vient du titre et du texte de la pancarte ; carrée pour « image au-dessus du texte »
+    const pc = dd.pancarte && typeof dd.pancarte === 'object' ? {
+      titre: String(dd.pancarte.titre || '').slice(0, 150).trim(), texte: String(dd.pancarte.texte || '').slice(0, 1200).trim(),
+      carre: dd.pancarte.style === 'image' } : null;
+    const description = await descriptionFond(env, cfg, ambiance, idee, pc);
+    const [L, H] = pc && pc.carre ? [1024, 1024] : [FOND_L, FOND_H];
 
     // 2 images en parallèle, graines différentes ; on garde celles qui réussissent
     const base = Date.now();
-    const essais = await Promise.allSettled([1, 2].map(i => genererImage(env, description, (base + i * 7919) % 2147483647)));
+    const essais = await Promise.allSettled([1, 2].map(i => genererImage(env, description, (base + i * 7919) % 2147483647, L, H)));
     const nouvelles = [];
     for (let i = 0; i < essais.length; i++) {
       if (essais[i].status !== 'fulfilled') { console.error('image', essais[i].reason && essais[i].reason.message); continue; }
       const octets = essais[i].value;
       const type = typeImage(octets);
       if (!type) continue;
-      const chemin = 'images/fond-ia-' + base + '-' + (i + 1) + (type === 'image/png' ? '.png' : type === 'image/webp' ? '.webp' : '.jpg');
+      const chemin = 'images/' + (pc ? 'article' : 'fond') + '-ia-' + base + '-' + (i + 1) + (type === 'image/png' ? '.png' : type === 'image/webp' ? '.webp' : '.jpg');
       await env.CLIENTS.put('img:' + slug + ':' + chemin.slice(7), octets, { metadata: { type } });
-      nouvelles.push({ chemin, genre: 'fond', source: 'ia', le: new Date().toISOString(), ambiance, idee });
+      nouvelles.push({ chemin, genre: pc ? 'article' : 'fond', source: 'ia', le: new Date().toISOString(), ambiance, idee: pc ? pc.titre : idee });
     }
     if (!nouvelles.length) throw new ErreurAPI(502, 'La création d’images a échoué. Réessayez dans un instant (rien n’a été décompté).');
 
@@ -594,10 +601,12 @@ async function ajouterMedias(env, slug, nouvelles) {
   return garder;
 }
 /* Claude rédige la description de l'image (en anglais, sans texte dans l'image) à partir de l'activité */
-async function descriptionFond(env, cfg, ambiance, idee) {
+async function descriptionFond(env, cfg, ambiance, idee, pc) {
   const style = AMBIANCES_FOND[ambiance];
   const activite = [cfg.titre, cfg.sousTitre, cfg.home && cfg.home.ia && cfg.home.ia.description, cfg.home && cfg.home.ia && cfg.home.ia.zone].filter(Boolean).join(' — ');
-  const secours = (idee || activite || 'a welcoming local business') + '. ' + style + '. Vertical background image, no text, no letters, no logos, no watermark.';
+  const format = pc ? (pc.carre ? 'Square image' : 'Vertical image') : 'Vertical background image';
+  const secours = (pc ? [pc.titre, pc.texte.slice(0, 200)].filter(Boolean).join('. ') + (activite ? ' (' + activite.slice(0, 200) + ')' : '') : (idee || activite || 'a welcoming local business'))
+    + '. ' + style + '. ' + format + ', no text, no letters, no logos, no watermark.';
   const cleIA = await cleAnthropic(env);
   if (!cleIA) return secours;
   try {
@@ -607,10 +616,15 @@ async function descriptionFond(env, cfg, ambiance, idee) {
       body: JSON.stringify({
         model: MODELES_IA[0], max_tokens: 300,
         system: 'You write prompts for an image generation model. Output ONLY the prompt, in English, 40 to 80 words, no quotes. ' +
-          'The image is a vertical (9:16) background for a small business mobile page, composed freely (any framing). ' +
-          'Describe a concrete scene evoking the business (place, objects, atmosphere), ' +
+          (pc
+            ? 'The image illustrates ONE section (a "card") of a small business mobile page; it is ' + (pc.carre ? 'square (1:1), shown above the text' : 'vertical (9:16), shown full screen behind the text') + '. ' +
+              'Depict concretely what this section is about (its service, place, objects or result), consistent with the business. ' +
+              'The section text may be in any language: understand it, but write the prompt in English. '
+            : 'The image is a vertical (9:16) background for a small business mobile page, composed freely (any framing). ' +
+              'Describe a concrete scene evoking the business (place, objects, atmosphere), ') +
           'never a close-up portrait of a person. Forbid any text: always end with "no text, no letters, no logos, no watermark".',
-        messages: [{ role: 'user', content: 'Business: ' + (activite || '(not specified)') + '\nStyle: ' + style + (idee ? '\nClient idea: ' + idee : '') }]
+        messages: [{ role: 'user', content: 'Business: ' + (activite || '(not specified)') + '\nStyle: ' + style +
+          (pc ? '\nSection title: ' + (pc.titre || '(none)') + '\nSection text: ' + (pc.texte || '(none)') : '') + (idee ? '\nClient idea: ' + idee : '') }]
       })
     });
     if (!r.ok) return secours;
@@ -620,11 +634,11 @@ async function descriptionFond(env, cfg, ambiance, idee) {
   } catch (e) { return secours; }
 }
 /* FLUX.2 klein 9B sur Workers AI : entrée multipart, sortie image en base64 */
-async function genererImage(env, prompt, graine) {
+async function genererImage(env, prompt, graine, largeur = FOND_L, hauteur = FOND_H) {
   const form = new FormData();
   form.append('prompt', prompt);
-  form.append('width', String(FOND_L));
-  form.append('height', String(FOND_H));
+  form.append('width', String(largeur));
+  form.append('height', String(hauteur));
   form.append('seed', String(graine));
   const corps = new Response(form);                // FormData n'expose pas sa frontière : on la récupère ainsi
   const r = await env.AI.run(MODELE_IMAGE, { multipart: { body: corps.body, contentType: corps.headers.get('content-type') } });

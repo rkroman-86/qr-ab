@@ -60,6 +60,10 @@
     #fen-express .etapes small{color:var(--err);display:block}
     @keyframes qp-pouls{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--prim) 60%,transparent)}50%{box-shadow:0 0 0 10px transparent}}
     .pouls{animation:qp-pouls 1.2s ease-in-out 5}
+    .ia-pancarte{margin-top:8px}
+    .ia-choix-ligne{display:flex;gap:8px}
+    .ia-choix{width:64px;height:96px;border-radius:10px;border:2px solid transparent;background:#222 center/cover no-repeat;cursor:pointer;padding:0}
+    .ia-choix.actif{border-color:var(--accent,#2563eb)}
     #fen-cadre{position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:14px}
     #fen-cadre .fen{background:var(--panneau);color:var(--txt);border-radius:18px;padding:16px;width:min(100%,460px);max-height:100%;overflow:auto;box-sizing:border-box}
     #fen-cadre h2{margin:0 0 4px;font-size:1.1rem}
@@ -812,6 +816,33 @@
     const choisir = el('button', { type: 'button', class: 'btn btn-mini', text: reglages.photo ? '🖼 Galerie…' : 'Choisir…', onclick: () => fichier.click() });
     const prendre = reglages.photo ? el('button', { type: 'button', class: 'btn btn-mini', text: '📷 Prendre une photo', onclick: () => camera.click() }) : null;
     const retirer = el('button', { type: 'button', class: 'btn btn-mini', text: 'Retirer', onclick: () => { obj[cle] = ''; majVign(); changement(); } });
+    // ✨ Image IA (pancartes) : 2 images inspirées du titre et du texte ; la 1re est appliquée, on peut choisir l'autre
+    const zoneIA = el('div', { class: 'ia-pancarte cache' });
+    const imageIA = reglages.ia ? el('button', { type: 'button', class: 'btn btn-mini', text: '✨ Image IA', onclick: async () => {
+      const p = reglages.ia();
+      if (!String(p.titre || '').trim() && !String(p.texte || '').trim()) { alert(t('Écrivez d’abord le titre ou le texte de la pancarte : l’image s’en inspire.')); return; }
+      imageIA.disabled = true; imageIA.textContent = t('L’IA peint… (≈ 20 s)');
+      zoneIA.className = 'ia-pancarte'; zoneIA.innerHTML = ''; zoneIA.appendChild(el('div', { class: 'aide', text: 'L’IA crée 2 images à partir du texte de cette pancarte…' }));
+      try {
+        const r = await appelAPI('fond', jetonCF, { method: 'POST', body: JSON.stringify({ ambiance: etatFond.ambiance, pancarte: p, activite: activiteEnCours() }) });
+        const j = await r.json();
+        medias = j.medias;
+        afficherAbonnement(j.compte);
+        obj[cle] = j.nouvelles[0].chemin; majVign(); changement();
+        zoneIA.innerHTML = '';
+        const vues = j.nouvelles.map(n => {
+          const v = el('button', { type: 'button', class: 'ia-choix' + (n.chemin === obj[cle] ? ' actif' : ''), style: 'background-image:url("' + n.chemin + '")', 'aria-label': t('Utiliser cette image') });
+          v.addEventListener('click', () => { obj[cle] = n.chemin; majVign(); changement(); vues.forEach(x => x.classList.toggle('actif', x === v)); });
+          return v;
+        });
+        zoneIA.append(el('div', { class: 'aide', style: 'margin:0 0 6px', text: j.nouvelles.length > 1 ? 'Touchez l’image que vous préférez (l’autre reste dans « Mes images ») :' : 'Image créée et appliquée.' }), el('div', { class: 'ia-choix-ligne' }, vues));
+      } catch (e) {
+        zoneIA.innerHTML = ''; zoneIA.appendChild(el('div', { class: 'msg err', text: e.message === 'Failed to fetch' ? 'Connexion impossible.' : e.message }));
+        if (e.status === 402) ouvrirAbonnement('quota', e.message);
+      }
+      imageIA.disabled = false; imageIA.textContent = t('✨ Image IA');
+      majQuotas();
+    } }) : null;
     const recadrer = reglages.fond ? el('button', { type: 'button', class: 'btn btn-mini', text: '✂ Recadrer', onclick: () => {
       if (!obj[cle]) { alert(t('Choisissez d’abord une image.')); return; }
       ouvrirRecadrage(obj[cle], reglages.ratio ? reglages.ratio() : RATIO_ECRAN, reglages.nom, chemin => {
@@ -821,7 +852,8 @@
     majVign();
     const genre = reglages.nom === 'fond' ? 'fond' : reglages.nom === 'logo' ? 'logo' : 'article';
     return el('div', {}, [el('span', { class: 'etiq', text: etiquette }),
-      el('div', { class: 'image-ligne' }, [vign, el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' }, [prendre, choisir, recadrer, retirer].filter(Boolean)), fichier, camera]),
+      el('div', { class: 'image-ligne' }, [vign, el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' }, [prendre, choisir, imageIA, recadrer, retirer].filter(Boolean)), fichier, camera]),
+      zoneIA,
       ...(CF ? [el('details', { class: 'mes-images', open: genre !== 'article' ? true : undefined }, [el('summary', { text: 'Mes images' }), galerieImages(genre, obj, cle)])] : [])]);
   }
 
@@ -3094,7 +3126,8 @@
       champTexte('Titre', a, 'titre', { ph: 'Qui sommes-nous ?' }),
       (() => { const c = champTexte('Texte', a, 'texte', { multi: true, ph: 'Votre texte…' }); c.querySelector('textarea').rows = 5; return c; })(),
       segments('Mise en page', HOME_STYLES, a, 'style'),
-      choixImage('Image', a, 'image', { nom: 'article', max: 1600, fond: true, photo: true, ratio: () => a.style === 'image' ? RATIO_BANDEAU : RATIO_ECRAN }),
+      choixImage('Image', a, 'image', { nom: 'article', max: 1600, fond: true, photo: true, ratio: () => a.style === 'image' ? RATIO_BANDEAU : RATIO_ECRAN,
+        ia: () => ({ titre: a.titre || '', texte: a.texte || '', style: a.style || '' }) }),
       el('div', { class: 'bc-actions' }, [
         el('button', { type: 'button', class: 'btn btn-mini', text: '↑', disabled: i === 0, onclick: () => deplacer(-1) }),
         el('button', { type: 'button', class: 'btn btn-mini', text: '↓', disabled: i === n - 1, onclick: () => deplacer(1) }),
