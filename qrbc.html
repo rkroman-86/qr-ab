@@ -55,6 +55,9 @@
   .bravo a{display:inline-block;margin-top:10px;padding:13px 20px;border-radius:12px;background:var(--prim);color:var(--prim-txt);text-decoration:none;font-weight:700}
   .bravo code{background:var(--bg);padding:2px 7px;border-radius:6px}
   footer{margin-top:56px;color:var(--doux);font-size:.85rem}
+  footer p{margin:.35em 0}
+  footer .prix{color:var(--txt);font-weight:600}
+  footer a{color:inherit}
   .hd-actions{display:flex;align-items:center;gap:14px}
   .langue select{background:var(--panneau);color:var(--txt);border:1px solid var(--ligne);border-radius:9px;padding:6px 8px;font:inherit;font-size:.85rem;font-weight:600;width:auto;min-height:0}
   .installer{width:auto;min-height:0;padding:8px 14px;border-radius:99px;font-size:.88rem;background:var(--accent);color:#fff}
@@ -108,7 +111,7 @@
         <div class="dispo" id="accord" style="margin:-8px 0 14px"></div>
         <label><span>Code promo (facultatif)</span><input type="text" id="promo" autocapitalize="none" autocomplete="off" spellcheck="false" maxlength="30">
           <div class="dispo" id="promo-etat"></div></label>
-        <label class="case"><input type="checkbox" id="cgu"> <span>J’accepte les conditions d’utilisation du service.</span></label>
+        <label class="case"><input type="checkbox" id="cgu"> <span>J’accepte les conditions d’utilisation du service.</span> <a href="/cgv" target="_blank" rel="noopener">Lire les CGV</a></label>
         <button id="btn">Créer ma page</button>
         <div class="msg" id="msg"></div>
       </div>
@@ -121,7 +124,11 @@
     </form>
   </div>
 
-  <footer>qrbc.app — pages QR et cartes de visite</footer>
+  <footer>
+    <p class="prix">Après l’essai : 18 € HT par an (21,60 € TTC), sans renouvellement automatique.</p>
+    <p>qrbc.app — pages QR et cartes de visite</p>
+    <p class="liens"><a href="/cgv">Conditions générales de vente</a> · <a href="/mentions-legales">Mentions légales et confidentialité</a> · <a href="mailto:support@qrbc.app" data-no-i18n>support@qrbc.app</a></p>
+  </footer>
 </div>
 <script src="/i18n.js"></script>
 <script>

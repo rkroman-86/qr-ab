@@ -121,6 +121,8 @@ async function racine(request, env, url) {
   }
   if (p === '/' || p === '/index.html') return statique(env, request, '/qrbc.html');
   if (p === '/gestion' || p === '/gestion.html') return statique(env, request, '/gestion.html', true);
+  if (p === '/cgv' || p === '/cgv.html') return statique(env, request, '/cgv.html');
+  if (p === '/mentions-legales' || p === '/mentions-legales.html') return statique(env, request, '/mentions-legales.html');
   if (p === '/app' || p === '/app/') return statique(env, request, '/app.html', true);
   if (p === '/favicon.ico') return statique(env, request, '/favicon.png');
   if (p === '/sw.js') {

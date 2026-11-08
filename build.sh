@@ -3,5 +3,5 @@
 set -e
 rm -rf dist
 mkdir -p dist
-cp admin.html commun.js i18n.js qrcode.js qrbc.html gestion.html dist/
+cp admin.html commun.js i18n.js qrcode.js qrbc.html gestion.html cgv.html mentions-legales.html dist/
 cp pwa/* dist/
