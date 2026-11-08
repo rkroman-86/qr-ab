@@ -1079,11 +1079,17 @@ async function connecterEmail(env, cle, expediteur) {
     r = await fetch((env.RESEND_API || RESEND_API) + '/domains', { headers: { authorization: 'Bearer ' + cle } });
     j = await r.json().catch(() => ({}));
   } catch (e) { throw new ErreurAPI(502, 'Resend injoignable.'); }
-  if (!r.ok) throw new ErreurAPI(400, 'Resend refuse cette clé : ' + ((j && j.message) || r.status));
-  const d = ((j && j.data) || []).find(x => String(x.name).toLowerCase() === domaine);
-  if (!d) throw new ErreurAPI(400, 'Le domaine ' + domaine + ' n’est pas ajouté dans Resend (Domains → Add domain).');
+  // Clé « Sending access » (recommandée) : valide, mais n'a pas le droit de lister les domaines.
+  const envoiSeul = !r.ok && /restricted to only send/i.test((j && j.message) || '');
+  if (!r.ok && !envoiSeul) throw new ErreurAPI(400, 'Resend refuse cette clé : ' + ((j && j.message) || r.status));
+  let statut = 'limitée à l’envoi';
+  if (!envoiSeul) {
+    const d = ((j && j.data) || []).find(x => String(x.name).toLowerCase() === domaine);
+    if (!d) throw new ErreurAPI(400, 'Le domaine ' + domaine + ' n’est pas ajouté dans Resend (Domains → Add domain).');
+    statut = d.status;
+  }
   await env.CLIENTS.put('config:email', JSON.stringify({
-    expediteur, domaine, statutDomaine: d.status, fin: cle.slice(-4), le: new Date().toISOString(), cle: await chiffrer(env, cle)
+    expediteur, domaine, statutDomaine: statut, fin: cle.slice(-4), le: new Date().toISOString(), cle: await chiffrer(env, cle)
   }));
 }
 async function envoyerEmail(env, conf, a, sujet, html, texteBrut) {
