@@ -121,8 +121,11 @@ async function racine(request, env, url) {
   }
   if (p === '/' || p === '/index.html') return accueilLangue(env, request, url);
   if (p === '/gestion' || p === '/gestion.html') return statique(env, request, '/gestion.html', true);
-  if (p === '/cgv' || p === '/cgv.html') return statique(env, request, '/cgv.html');
-  if (p === '/mentions-legales' || p === '/mentions-legales.html') return statique(env, request, '/mentions-legales.html');
+  // Pages légales : français (seul faisant foi) + traductions anglaise et russe (?lang=en|ru)
+  if (p === '/cgv' || p === '/cgv.html' || p === '/mentions-legales' || p === '/mentions-legales.html') {
+    const base = p.replace(/\.html$/, ''), l = url.searchParams.get('lang');
+    return statique(env, request, base + (l === 'en' || l === 'ru' ? '.' + l : '') + '.html');
+  }
   if (p === '/app' || p === '/app/') return statique(env, request, '/app.html', true);
   if (p === '/favicon.ico') return statique(env, request, '/favicon.png');
   if (p === '/sw.js') {

@@ -778,6 +778,7 @@
         else if (m.type === 'attributes') traduireAttrs(m.target);
         else m.addedNodes.forEach(parcourir);
       }
+      if (muts.some(m => m.addedNodes.length)) liensLegaux();   // fenêtres ajoutées plus tard (abonnement…)
     } finally { enCours = false; }
   });
 
@@ -785,7 +786,18 @@
     document.documentElement.lang = langue;
     if (!document.body) return;
     enCours = true;
-    try { parcourir(document.body); if (document.title) document.title = t(origTitre); } finally { enCours = false; }
+    try { parcourir(document.body); if (document.title) document.title = t(origTitre); liensLegaux(); } finally { enCours = false; }
+  }
+  /* Liens CGV / mentions légales : vers la version de la langue choisie */
+  function liensLegaux() {
+    document.querySelectorAll('a[href*="/cgv"], a[href*="/mentions-legales"]').forEach(a => {
+      try {
+        const u = new URL(a.getAttribute('href'), location.href);
+        if (!/^\/(cgv|mentions-legales)(\.html)?$/.test(u.pathname)) return;
+        if (langue === 'fr') u.searchParams.delete('lang'); else u.searchParams.set('lang', langue);
+        a.setAttribute('href', (u.origin === location.origin ? '' : u.origin) + u.pathname + u.search + u.hash);
+      } catch (e) {}
+    });
   }
   let origTitre = document.title;
 
