@@ -1143,6 +1143,12 @@ async function etatStripe(env) {
   const t = await env.CLIENTS.get('config:stripe');
   if (!t) return { connecte: false, webhook: 'https://' + DOMAINE + '/api/stripe/webhook' };
   const c = JSON.parse(t);
+  // Le nom peut changer dans Stripe : on le relit à chaque ouverture de /gestion
+  try {
+    const st = await lireStripe(env);
+    const nom = nomCompteStripe(await stripe(env, st, 'GET', '/account'));
+    if (nom && nom !== c.nomCompte) { c.nomCompte = nom; await env.CLIENTS.put('config:stripe', JSON.stringify(c)); }
+  } catch (e) {}
   return { connecte: true, mode: c.mode, compte: c.nomCompte, fin: c.fin, le: c.le, tva: TVA, webhook: c.urlWebhook, dernierWebhook: c.dernierWebhook || null };
 }
 async function connecterStripe(env, cle) {
@@ -1160,13 +1166,17 @@ async function connecterStripe(env, cle) {
     url: urlWebhook, enabled_events: ['checkout.session.completed', 'checkout.session.async_payment_succeeded'],
     description: 'qrbc : activation des abonnements et recharges'
   });
-  const nom = (compteStripe.settings && compteStripe.settings.dashboard && compteStripe.settings.dashboard.display_name) ||
-    (compteStripe.business_profile && compteStripe.business_profile.name) || compteStripe.email || compteStripe.id;
+  const nom = nomCompteStripe(compteStripe);
   await env.CLIENTS.put('config:stripe', JSON.stringify({
     mode: st.mode, nomCompte: nom, fin: cle.slice(-4), le: new Date().toISOString(),
     taxRate: taux.id, webhookId: wh.id, urlWebhook,
     cle: await chiffrer(env, cle), whsec: await chiffrer(env, wh.secret)
   }));
+}
+// Nom public (celui que voient les clients au paiement), sinon nom du compte
+function nomCompteStripe(a) {
+  return (a.business_profile && a.business_profile.name) ||
+    (a.settings && a.settings.dashboard && a.settings.dashboard.display_name) || a.email || a.id;
 }
 async function deconnecterStripe(env) {
   const st = await lireStripe(env).catch(() => null);
