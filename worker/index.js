@@ -1090,7 +1090,7 @@ async function envoyerEmail(env, conf, a, sujet, html, texteBrut) {
   const r = await fetch((env.RESEND_API || RESEND_API) + '/emails', {
     method: 'POST',
     headers: { authorization: 'Bearer ' + conf.cle, 'content-type': 'application/json' },
-    body: JSON.stringify({ from: conf.expediteur, to: [a], subject: sujet, html, text: texteBrut })
+    body: JSON.stringify({ from: conf.expediteur, to: [a], reply_to: 'support@' + DOMAINE, subject: sujet, html, text: texteBrut })
   });
   if (!r.ok) {
     const j = await r.json().catch(() => ({}));
