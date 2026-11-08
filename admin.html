@@ -540,7 +540,10 @@
         ]),
         ...(ren && ren.deduction ? [el('div', { class: 'aide', style: 'margin-bottom:10px', text: 'Crédit déduit : −' + euros(ren.deduction) + ' HT → à payer ' + euros(ren.aPayer) + ' HT (' + ttc(ren.aPayer) + ' TTC)' })] : []),
         c.demande && c.demande.genre === 'abonnement' && !c.offre.enLigne ? attente : btn,
-        ...(c.offre.enLigne ? [el('div', { class: 'aide', style: 'margin-top:8px;text-align:center', text: '🔒 Paiement sécurisé par Stripe : carte, Apple Pay, Google Pay. Facture envoyée par e-mail.' })] : [])
+        ...(c.offre.enLigne ? [el('div', { class: 'aide', style: 'margin-top:8px;text-align:center', text: '🔒 Paiement sécurisé par Stripe : carte, Apple Pay, Google Pay. Facture envoyée par e-mail.' })] : []),
+        el('div', { class: 'aide', style: 'margin-top:6px;text-align:center' }, [
+          el('a', { href: 'https://qrbc.app/cgv', target: '_blank', rel: 'noopener', text: 'Conditions générales de vente' }), document.createTextNode(' · '),
+          el('a', { href: 'https://qrbc.app/mentions-legales', target: '_blank', rel: 'noopener', text: 'Mentions légales et confidentialité' })])
       ]));
     }
     if (c.plan === 'payant' && c.actif) {

@@ -52,6 +52,9 @@
   .dispo{font-size:.82rem;margin-top:6px;min-height:1.2em;color:var(--doux)}
   .dispo.ok{color:var(--ok)} .dispo.ko{color:var(--err)}
   .case{display:flex;gap:10px;align-items:flex-start;font-size:.9rem;color:var(--doux)}
+  .case a{color:var(--txt);white-space:nowrap}
+  .liens{margin:16px 0 0;text-align:center;font-size:.8rem;line-height:1.6;color:var(--doux)}
+  .liens a{color:inherit}
   .case input{margin-top:4px;width:18px;height:18px;accent-color:var(--accent)}
   button.prim{width:100%;margin-top:6px;padding:15px;border:0;border-radius:12px;background:var(--accent);color:#fff;font:inherit;font-weight:700;min-height:54px;cursor:pointer}
   button.prim:disabled{opacity:.55}
@@ -128,6 +131,7 @@
       </form>
 
       <div class="bascule">Pas encore de page ? <button type="button" data-aller="1">Créer ma page →</button></div>
+      <p class="liens"><a href="/cgv" target="_blank" rel="noopener">Conditions générales de vente</a> · <a href="/mentions-legales" target="_blank" rel="noopener">Mentions légales et confidentialité</a></p>
     </div>
   </section>
 
@@ -153,12 +157,13 @@
         <div class="accord" id="in-accord"></div>
         <label><span>Code promo (facultatif)</span><input type="text" id="in-promo" autocapitalize="none" autocomplete="off" spellcheck="false" maxlength="30">
           <div class="dispo" id="in-promo-etat"></div></label>
-        <label class="case"><input type="checkbox" id="in-cgu"> <span>J’accepte les conditions d’utilisation du service.</span></label>
+        <label class="case"><input type="checkbox" id="in-cgu"> <span>J’accepte les conditions d’utilisation du service. <a href="/cgv" target="_blank" rel="noopener">Lire les CGV</a></span></label>
         <button class="prim" id="in-btn">Créer ma page</button>
         <div class="msg" id="in-msg"></div>
       </form>
 
       <div class="bascule">Déjà une page ? <button type="button" data-aller="0">← Se connecter</button></div>
+      <p class="liens"><a href="/cgv" target="_blank" rel="noopener">Conditions générales de vente</a> · <a href="/mentions-legales" target="_blank" rel="noopener">Mentions légales et confidentialité</a></p>
     </div>
   </section>
 </div>
