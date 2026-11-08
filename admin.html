@@ -831,11 +831,18 @@
   const RATIO_ECRAN = 9 / 19;          // téléphone en portrait (fond, pancarte « photo »)
   const RATIO_BANDEAU = 1;             // pancarte « image au-dessus du texte » (≈ carré sur téléphone)
   async function ouvrirRecadrage(source, ratio, nom, fini) {
-    const img = new Image();
-    img.decoding = 'async';
-    try {
-      await new Promise((ok, ko) => { img.onload = ok; img.onerror = ko; img.src = imagesLocales[source] || source; });
-    } catch (e) { alert(t('Cette image ne peut pas être lue sur cet appareil. Essayez une autre image (JPEG ou PNG de moins de 3 Mo).')); return; }
+    // Image déjà recadrée : on repart de l'ORIGINALE, au dernier cadrage (on peut donc dézoomer)
+    cfg.cadres = cfg.cadres || {};
+    const prec = cfg.cadres[source];
+    const charger = src => new Promise((ok, ko) => { const i = new Image(); i.decoding = 'async'; i.onload = () => ok(i); i.onerror = ko; i.src = imagesLocales[src] || src; });
+    let img, origine = source, rect = null;
+    if (prec && prec.source) {
+      try { img = await charger(prec.source); origine = prec.source; rect = prec.rect; } catch (e) { img = null; }   // originale supprimée : on garde la copie
+    }
+    if (!img) {
+      try { img = await charger(source); }
+      catch (e) { alert(t('Cette image ne peut pas être lue sur cet appareil. Essayez une autre image (JPEG ou PNG de moins de 3 Mo).')); return; }
+    }
     const ancien = document.getElementById('fen-cadre'); if (ancien) ancien.remove();
     const fond = el('div', { id: 'fen-cadre', role: 'dialog', 'aria-modal': 'true' });
     const fen = el('div', { class: 'fen' });
@@ -847,6 +854,10 @@
     const iw = img.naturalWidth, ih = img.naturalHeight;
     const base = Math.max(FW / iw, FH / ih);                 // « couvrir » : l'image remplit toujours le cadre
     let z = 1, ox = (FW - iw * base) / 2, oy = (FH - ih * base) / 2;
+    if (rect && rect.sw > 0) {                                // reprend le cadrage précédent
+      const S = FW / rect.sw; z = Math.min(5, Math.max(1, S / base)); const S2 = base * z;
+      ox = -rect.sx * S2; oy = -rect.sy * S2;
+    }
     const curseur = el('input', { type: 'range', min: '1', max: '5', step: '0.01', value: '1', 'aria-label': t('Zoom') });
     function borner() {
       const S = base * z;
@@ -912,6 +923,10 @@
       const chemin = 'images/' + (nom === 'fond' ? 'fond' : 'article') + '-cadre-' + Date.now() + '.jpg';
       imagesLocales[chemin] = data;
       imagesAEnvoyer[chemin] = data.split(',')[1];
+      // mémorise l'originale et le cadrage, pour pouvoir recadrer (et dézoomer) plus tard
+      cfg.cadres[chemin] = { source: origine, rect: { sx: Math.round(sx), sy: Math.round(sy), sw: Math.round(sw), sh: Math.round(sh) } };
+      const utiles = new Set(JSON.stringify(Object.assign({}, cfg, { cadres: null })).match(/images\/[\w.-]+/g) || []);
+      for (const k in cfg.cadres) if (!utiles.has(k) && k !== chemin) delete cfg.cadres[k];   // pas d'entrées orphelines
       fermer();
       fini(chemin);
     }
