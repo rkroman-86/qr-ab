@@ -1911,8 +1911,12 @@ function textesATraduire(cfg) {
   return t;
 }
 async function traduireConfig(env, cleIA, cfg, de, vers) {
-  const textes = textesATraduire(cfg);
   const copie = JSON.parse(JSON.stringify(cfg));
+  // textes par défaut affichés sur la page (sinon ils resteraient en français)
+  copie.home = copie.home || {};
+  if (!copie.home.lienTexte) copie.home.lienTexte = 'Découvrir l’entreprise';
+  if (!copie.home.boutonContact) copie.home.boutonContact = 'Contact';
+  const textes = textesATraduire(copie);
   if (!Object.keys(textes).length) return copie;
   const r = await fetch(env.ANTHROPIC_URL || 'https://api.anthropic.com/v1/messages', {
     method: 'POST',

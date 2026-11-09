@@ -231,12 +231,24 @@ const CSS_PAGE = `
 .qp-credit{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(6px + env(safe-area-inset-bottom));z-index:3;
   font:500 .62rem/1.2 system-ui,-apple-system,sans-serif;letter-spacing:.02em;color:inherit;opacity:.42;text-decoration:none;white-space:nowrap}
 .qp-credit:hover,.qp-credit:focus-visible{opacity:.8;text-decoration:underline}
-.qp-langues{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(24px + env(safe-area-inset-bottom));z-index:3;display:flex;gap:4px;
-  font:600 .74rem/1 system-ui,-apple-system,sans-serif;letter-spacing:.04em;white-space:nowrap}
-.qp-langues a,.qh-langues a{color:inherit;text-decoration:none;opacity:.6;padding:6px 7px;border-radius:999px}
-.qp-langues a.actif,.qh-langues a.actif{opacity:1;background:color-mix(in srgb,currentColor 14%,transparent)}
-.qp.qp-avec-langues{padding-bottom:70px}
-.qh-langues{display:flex;gap:1px;flex-shrink:0;font:600 .72rem/1 system-ui,-apple-system,sans-serif;letter-spacing:.03em}
+.qp-haut-droite{position:absolute;top:calc(14px + env(safe-area-inset-top));right:14px;z-index:5;display:flex;gap:8px;align-items:center}
+.qp .qp-haut-droite .qp-appli{position:static}
+.qp-appli.qp-appli-court{padding:9px 11px}
+.qp-avec-langues .qp-lien-home{max-width:calc(100% - 172px);overflow:hidden;text-overflow:ellipsis}
+.qp-langsel{position:relative;flex:none;font:600 .88rem/1.2 system-ui,-apple-system,sans-serif}
+.qp-langsel>button{display:inline-flex;align-items:center;gap:5px;margin:0;padding:9px 12px;border:0;border-radius:999px;cursor:pointer;
+  background:rgba(0,0,0,.38);color:#fff;font:inherit;letter-spacing:.03em;white-space:nowrap;
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 4px 14px rgba(0,0,0,.18)}
+.qp-langsel>button svg{width:15px;height:15px;flex:none}
+.qp-langsel>button .fl{font-size:.7em;opacity:.8;margin-left:1px}
+.qh-barre .qp-langsel>button{background:color-mix(in srgb,currentColor 13%,transparent);color:inherit;box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none;padding:8px 10px}
+.qp-langsel ul{position:absolute;right:0;top:calc(100% + 6px);min-width:160px;margin:0;padding:6px;list-style:none;background:#fff;color:#1b1b1b;
+  border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.25);display:none;z-index:30}
+.qp-langsel.ouvert ul{display:block}
+.qp-langsel li a{display:flex;justify-content:space-between;gap:12px;padding:10px 12px;border-radius:10px;color:inherit;text-decoration:none;font-weight:500}
+.qp-langsel li a:hover,.qp-langsel li a:focus-visible{background:#f1f1f1}
+.qp-langsel li a.actif{font-weight:700}
+.qp-langsel li a small{opacity:.55;font-weight:600}
 .qp-contenu{position:relative;width:100%;max-width:420px;text-align:center}
 .qp-carte .qp-contenu{background:color-mix(in srgb,var(--fond) 88%,transparent);padding:32px 22px 24px;border-radius:24px;
   box-shadow:0 10px 40px rgba(0,0,0,.18);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
@@ -572,22 +584,26 @@ function rendrePage(cfgBrut, racine, opts) {
     page.appendChild(l);
     page.classList.add('qp-avec-home');
   }
-  // « Installer l'appli » : discret, en bas ; seulement sur les pages qrbc (pas une fois installée)
+  // En haut à droite : « Installer l'appli » (pages qrbc, pas une fois installée) puis le choix de la langue
+  const langues = opts.apercu ? null : selecteurLangues(doc, false);
+  const hautDroite = doc.createElement('div');
+  hautDroite.className = 'qp-haut-droite';
   if (d.installer !== false && (opts.apercu || (pageInstallable() && !appliInstallee()))) {
     const b = doc.createElement('button');
     b.type = 'button';
     b.className = 'qp-appli';
     b.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M12 7v7M9 11l3 3 3-3"/></svg>';
     const TA = textesAppli(doc);
-    b.appendChild(doc.createTextNode(TA.bouton));
+    if (langues) b.classList.add('qp-appli-court');      // avec le choix de langue : icône seule, pour la place
+    else b.appendChild(doc.createTextNode(TA.bouton));
     b.title = TA.titre;
     b.setAttribute('aria-label', TA.titre);
     if (!opts.apercu) b.addEventListener('click', () => installerAppli(doc));
-    page.appendChild(b);
+    hautDroite.appendChild(b);
     page.classList.add('qp-avec-appli');
   }
-  const langues = opts.apercu ? null : selecteurLangues(doc, 'qp-langues', false);
-  if (langues) { page.appendChild(langues); page.classList.add('qp-avec-langues'); }
+  if (langues) { hautDroite.appendChild(langues); page.classList.add('qp-avec-appli', 'qp-avec-langues'); }
+  if (hautDroite.childNodes.length) page.appendChild(hautDroite);
   page.appendChild(creditQrbc(doc, opts.apercu));
   racine.appendChild(page);
   return cfg;
@@ -865,22 +881,41 @@ async function reduireImage(fichier, maxCote, typeSortie, qualite) {
    Page Home : pancartes plein écran à défilement aimanté
    opts.resoudre(chemin), opts.apercu, opts.surContact()
    ========================================================= */
-/* Sélecteur de langues d'une page traduite (rien sans traduction, ni dans l'aperçu de l'éditeur) */
-function selecteurLangues(doc, classe, versHome) {
+/* Sélecteur de langues d'une page traduite : liste déroulante en haut à droite (rien sans traduction, ni dans l'aperçu) */
+const NOMS_LANGUES_PAGE = { fr: 'Français', en: 'English', ru: 'Русский', es: 'Español', de: 'Deutsch', it: 'Italiano', pt: 'Português',
+  nl: 'Nederlands', uk: 'Українська', pl: 'Polski', ro: 'Română', tr: 'Türkçe', zh: '中文', ja: '日本語' };
+function selecteurLangues(doc, versHome) {
   const L = typeof window !== 'undefined' && window.QRBC_LANGUES;
   if (!L || !Array.isArray(L.l) || L.l.length < 2) return null;
-  const box = doc.createElement('nav');
-  box.className = classe + ' notranslate';
+  const box = doc.createElement('div');
+  box.className = 'qp-langsel notranslate';
   box.setAttribute('translate', 'no');
-  box.setAttribute('aria-label', 'Language');
+  const b = doc.createElement('button');
+  b.type = 'button';
+  b.setAttribute('aria-haspopup', 'listbox');
+  b.setAttribute('aria-expanded', 'false');
+  b.setAttribute('aria-label', 'Language / Langue');
+  b.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.7 5.6 3.7 9s-1.2 6.4-3.7 9c-2.5-2.6-3.7-5.6-3.7-9S9.5 5.6 12 3z"/></svg>';
+  b.appendChild(doc.createTextNode(String(L.a || L.l[0].l).toUpperCase()));
+  const fl = doc.createElement('span'); fl.className = 'fl'; fl.textContent = '▼'; b.appendChild(fl);
+  const ul = doc.createElement('ul');
+  ul.setAttribute('role', 'listbox');
   L.l.forEach(x => {
+    const li = doc.createElement('li');
     const a = doc.createElement('a');
     a.href = x.u + (versHome ? 'accueil.html' : '') + '?l=' + x.l;
-    a.textContent = String(x.l).toUpperCase();
     a.hreflang = x.l; a.lang = x.l;
-    if (x.l === L.a) { a.className = 'actif'; a.setAttribute('aria-current', 'true'); }
-    box.appendChild(a);
+    a.setAttribute('role', 'option');
+    a.appendChild(doc.createTextNode((x.l === L.a ? '✓ ' : '') + (NOMS_LANGUES_PAGE[x.l] || x.l.toUpperCase())));
+    const sm = doc.createElement('small'); sm.textContent = x.l.toUpperCase(); a.appendChild(sm);
+    if (x.l === L.a) { a.className = 'actif'; a.setAttribute('aria-selected', 'true'); }
+    li.appendChild(a); ul.appendChild(li);
   });
+  const basculer = ouvrir => { box.classList.toggle('ouvert', ouvrir); b.setAttribute('aria-expanded', ouvrir ? 'true' : 'false'); };
+  b.addEventListener('click', e => { e.stopPropagation(); basculer(!box.classList.contains('ouvert')); });
+  doc.addEventListener('click', e => { if (!box.contains(e.target)) basculer(false); });
+  doc.addEventListener('keydown', e => { if (e.key === 'Escape') basculer(false); });
+  box.append(b, ul);
   return box;
 }
 
@@ -935,9 +970,9 @@ function rendreHome(cfgBrut, racine, opts) {
   contact.style.background = d.accent;
   contact.style.color = texteContraste(d.accent);
   if (opts.surContact) contact.addEventListener('click', e => { e.preventDefault(); opts.surContact(); });
-  const languesH = opts.apercu ? null : selecteurLangues(doc, 'qh-langues', true);
-  if (languesH) barre.appendChild(languesH);
   barre.appendChild(contact);
+  const languesH = opts.apercu ? null : selecteurLangues(doc, true);
+  if (languesH) barre.appendChild(languesH);          // tout à droite de la barre
 
   /* Pancartes */
   const defile = doc.createElement('div');
@@ -981,7 +1016,9 @@ function rendreHome(cfgBrut, racine, opts) {
     if (i === 0 && total > 1) {
       const ind = doc.createElement('div');
       ind.className = 'qh-indice';
-      ind.textContent = 'GLISSEZ';
+      const lg = String((doc.documentElement && doc.documentElement.lang) || 'fr').slice(0, 2);
+      ind.textContent = ({ fr: 'GLISSEZ', en: 'SWIPE', ru: 'ЛИСТАЙТЕ', es: 'DESLIZA', de: 'WISCHEN', it: 'SCORRI', pt: 'DESLIZE', nl: 'SWIPE', uk: 'ГОРТАЙТЕ',
+        pl: 'PRZESUŃ', ro: 'GLISEAZĂ', tr: 'KAYDIR', zh: '滑动', ja: 'スワイプ' })[lg] || 'SWIPE';
       if (style !== 'photo') ind.style.color = 'var(--texte)';
       p.appendChild(ind);
     }
