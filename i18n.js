@@ -329,6 +329,7 @@
     "L’abonnement de toutes vos pages se règle depuis votre page principale.": ["The subscription for all your pages is paid from your main page.", "Подписка на все ваши страницы оплачивается с основной страницы."],
     "HT": ["excl. VAT", "без НДС"],
     "TTC": ["incl. VAT", "с НДС"],
+    "Retraduire depuis la page d’origine": ["Translate again from the original page", "Перевести заново с исходной страницы"],
     'Code promo (facultatif)': ['Promo code (optional)', 'Промокод (необязательно)'],
     'Code inconnu ou expiré': ['Unknown or expired code', 'Неизвестный или просроченный код'],
     'Code promo inconnu ou expiré. Corrigez-le ou laissez le champ vide.': ['Unknown or expired promo code. Fix it or leave the field empty.', 'Неизвестный или просроченный промокод. Исправьте его или оставьте поле пустым.'],

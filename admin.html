@@ -1065,27 +1065,33 @@
   }
   function libellePage(p) { return p.traduction ? p.traduction.source + ' · ' + p.traduction.langue.toUpperCase() : p.slug; }
 
+  /* Bandeau « Mes pages ». Les textes sont posés en français, en morceaux séparés : la traduction de l'interface
+     (i18n) les traduit et les retraduit à chaque changement de langue, sans recharger la page. */
+  const NOMS_PROPRES_LANGUE = { fr: 'Français', en: 'English', ru: 'Русский', es: 'Español', de: 'Deutsch', it: 'Italiano', pt: 'Português',
+    nl: 'Nederlands', uk: 'Українська', pl: 'Polski', ro: 'Română', tr: 'Türkçe', zh: '中文', ja: '日本語' };
   function bandeauPages() {
     const box = el('div', { class: 'pages-bandeau' });
     const remplir = () => {
       box.innerHTML = '';
       const c = compteCF, g = groupe;
       if (c && c.traduction) {
+        const L = c.traduction.langue;
         box.append(el('div', { class: 'pb-trad' }, [
-          el('b', { text: '🌐 ' + nomLangue(c.traduction.langue) + ' · ' + t('version traduite') }),
-          el('div', { class: 'aide', style: 'margin:2px 0 8px', text: t('Traduction de ') + c.traduction.source + '.qrbc.app. ' +
-            t('Vous pouvez la modifier librement : elle est indépendante de la page d’origine.') }),
-          el('button', { type: 'button', class: 'btn btn-mini', text: t('🔄 Retraduire depuis la page d’origine') + ' (' + (c.plan === 'gratuit' ? t('offert') : euros(c.offre.prixTraduction) + ' ' + t('HT')) + ')',
-            onclick: () => lancerTraduction(false) })
+          el('b', {}, ['🌐 ', el('span', { 'data-no-i18n': '', text: NOMS_PROPRES_LANGUE[L] || L.toUpperCase() }), ' · ', el('span', { text: 'version traduite' })]),
+          el('div', { class: 'aide', style: 'margin:2px 0 8px' }, [el('span', { text: 'Traduction de' }), ' ', el('b', { text: c.traduction.source + '.qrbc.app' }), '. ',
+            el('span', { text: 'Vous pouvez la modifier librement : elle est indépendante de la page d’origine.' })]),
+          el('button', { type: 'button', class: 'btn btn-mini', onclick: () => lancerTraduction(false) },
+            [el('span', {}, ['🔄 ', el('span', { text: 'Retraduire depuis la page d’origine' }), ' (',      // un seul bloc : le bouton est en flex
+              ...(c.plan === 'gratuit' ? [el('span', { text: 'offert' })] : [euros(c.offre.prixTraduction) + ' ', el('span', { text: 'HT' })]), ')'])])
         ]));
       }
       const plusieurs = g && g.pages.length > 1;
       box.append(el('div', { class: 'pb-tete' }, [
-        el('b', { text: plusieurs ? '📄 ' + t('Mes pages') : '📄 ' + t('Une autre activité ou une autre langue ?') }),
-        el('button', { type: 'button', class: 'btn btn-mini', text: '＋ ' + t('Ajouter une page ou une langue'), onclick: () => ouvrirAjoutPage() })
+        el('b', {}, ['📄 ', el('span', { text: plusieurs ? 'Mes pages' : 'Une autre activité ou une autre langue ?' })]),
+        el('button', { type: 'button', class: 'btn btn-mini', onclick: () => ouvrirAjoutPage() }, [el('span', {}, ['＋ ', el('span', { text: 'Ajouter une page ou une langue' })])])
       ]));
       if (plusieurs) {
-        const liste = el('div', { class: 'pb-liste' });
+        const liste = el('div', { class: 'pb-liste', 'data-no-i18n': '' });
         g.pages.forEach(p => {
           const actif = p.slug === g.courant;
           liste.appendChild(el('button', { type: 'button', class: 'pb-page' + (actif ? ' actif' : ''), text: libellePage(p) + (p.principale ? ' ★' : ''),
