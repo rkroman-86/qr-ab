@@ -70,6 +70,8 @@
   @media (min-width:720px){.cartes{grid-template-columns:1fr 1fr}}
   .carte{background:var(--panneau);border:1px solid var(--ligne);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px}
   .carte.demande-attente{border-color:var(--alerte)}
+  .carte.rattachee{margin-left:22px;border-left:4px solid var(--accent,#2563eb);position:relative}
+  .carte.rattachee::before{content:'↳';position:absolute;left:-20px;top:14px;color:var(--doux,#888);font-size:1.1rem}
   .carte-tete{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
   .carte-tete .titre{font-size:.85rem;color:var(--doux)}
   .donnees{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:.88rem;margin:0}
@@ -407,6 +409,7 @@
 
   function afficherListe() {
     const q = $('#recherche').value.trim().toLowerCase(), f = $('#filtre').value;
+    const parSlug = Object.fromEntries(tousComptes.map(c => [c.slug, c]));
     const liste = $('#liste'); liste.innerHTML = '';
     const garder = tousComptes.filter(c => {
       if (f === 'demande' && !c.demande) return false;
@@ -414,15 +417,33 @@
       if (f === 'supprimer' && !c.aSupprimer) return false;
       if (['essai', 'payant', 'gratuit'].includes(f) && c.plan !== f) return false;
       if (!q) return true;
-      return [c.slug, c.titre, c.email, c.note, c.promo && 'code:' + c.promo.code].some(x => String(x || '').toLowerCase().includes(q));
-    }).sort((a, b) => (b.demande ? 1 : 0) - (a.demande ? 1 : 0) || String(b.cree).localeCompare(String(a.cree)));
+      const tit = c.parent ? parSlug[c.parent] : null;      // page rattachée : on cherche aussi par l'e-mail du compte
+      return [c.slug, c.titre, c.email, tit && tit.email, c.parent, c.note, c.promo && 'code:' + c.promo.code].some(x => String(x || '').toLowerCase().includes(q));
+    });
+    // Regroupement par compte : la page principale, puis ses pages rattachées et ses versions traduites
+    const tri = (a, b) => (b.demande ? 1 : 0) - (a.demande ? 1 : 0) || String(b.cree).localeCompare(String(a.cree));
+    const racine = c => (c.parent && parSlug[c.parent]) ? parSlug[c.parent] : c;
+    const groupes = new Map();
+    garder.forEach(c => { const r = racine(c).slug; if (!groupes.has(r)) groupes.set(r, []); groupes.get(r).push(c); });
+    const ordreGroupes = [...groupes.keys()].sort((x, y) => tri(parSlug[x] || groupes.get(x)[0], parSlug[y] || groupes.get(y)[0]));
+    // ordre dans un compte : principale, ses langues, puis chaque page suivie de ses langues
+    const sequence = r => {
+      const t = parSlug[r], pages = (t && t.pages) || [];
+      const langues = src => pages.filter(x => x.startsWith(src + '.'));
+      const seq = [r].concat(langues(r));
+      pages.filter(x => !x.includes('.')).forEach(x => seq.push(x, ...langues(x)));
+      return seq;
+    };
+    const ordreDans = (r, c) => { const i = sequence(r).indexOf(c.slug); return i < 0 ? 999 : i; };
+    const enOrdre = [];
+    ordreGroupes.forEach(r => groupes.get(r).sort((a, b) => ordreDans(r, a) - ordreDans(r, b)).forEach(c => enOrdre.push(c)));
     const nbS = tousComptes.filter(c => c.aSupprimer).length, al = $('#alerte-suppr');
     al.classList.toggle('cache', !nbS || f === 'supprimer');
     al.innerHTML = '';
     if (nbS) al.append(document.createTextNode('🗑 ' + nbS + (nbS > 1 ? ' comptes en pause depuis plus de 90 jours sont à supprimer' : ' compte en pause depuis plus de 90 jours est à supprimer') + ' (durée de conservation annoncée dans les CGV). '),
       el('button', { type: 'button', text: 'Voir', onclick: () => { $('#filtre').value = 'supprimer'; afficherListe(); } }));
     if (!garder.length) liste.textContent = tousComptes.length ? 'Aucun client ne correspond.' : 'Aucun compte pour l’instant.';
-    garder.forEach(c => liste.appendChild(carte(c)));
+    enOrdre.forEach(c => liste.appendChild(carte(c)));
   }
   $('#recherche').addEventListener('input', afficherListe);
   $('#filtre').addEventListener('change', afficherListe);
@@ -537,7 +558,7 @@
     const site = c.adresse || ('https://' + c.slug + '.qrbc.app/');
     let etat = { gratuit: 'offert', essai: 'essai', payant: 'abonné', suspendu: 'suspendu' }[c.plan] || c.plan;
     if (c.plan === 'essai' && c.actif) etat = 'essai · ' + jours(c.finEssai) + ' j';
-    const d = el('article', { class: 'carte' + (c.demande ? ' demande-attente' : '') });
+    const d = el('article', { class: 'carte' + (c.demande ? ' demande-attente' : '') + (c.parent ? ' rattachee' : '') });
 
     // En-tête
     d.append(el('div', { class: 'carte-tete' }, [
