@@ -3,20 +3,21 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>qrbc — votre page QR et vos cartes de visite</title>
-<meta name="description" content="Créez en quelques minutes une page mobile pour votre activité, son QR code et des cartes de visite prêtes à imprimer. Essai gratuit de 14 jours.">
+<title>Page QR code et cartes de visite pour indépendants et commerces | qrbc</title>
+<meta name="description" content="Page mobile, QR code et cartes de visite pour votre activité. Modifiable à tout moment, traduite avec un seul QR code. 14 jours gratuits, puis 18 € HT/an.">
 <link rel="canonical" href="https://qrbc.app/">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="qrbc">
 <meta property="og:url" content="https://qrbc.app/">
-<meta property="og:title" content="qrbc — votre page QR et vos cartes de visite">
-<meta property="og:description" content="Créez en quelques minutes une page mobile pour votre activité, son QR code et des cartes de visite prêtes à imprimer. Essai gratuit de 14 jours.">
+<meta property="og:title" content="Page QR code et cartes de visite pour indépendants et commerces | qrbc">
+<meta property="og:description" content="Page mobile, QR code et cartes de visite pour votre activité. Modifiable à tout moment, traduite avec un seul QR code. 14 jours gratuits, puis 18 € HT/an.">
 <meta property="og:locale" content="fr_FR">
 <meta property="og:image" content="https://qrbc.app/icon-512.png">
 <link rel="alternate" hreflang="fr" href="https://qrbc.app/">
 <link rel="alternate" hreflang="en" href="https://qrbc.app/?lang=en">
 <link rel="alternate" hreflang="ru" href="https://qrbc.app/?lang=ru">
 <link rel="alternate" hreflang="x-default" href="https://qrbc.app/">
+<script type="application/ld+json">{"@context": "https://schema.org", "@graph": [{"@type": "Organization", "@id": "https://qrbc.app/#org", "name": "qrbc", "url": "https://qrbc.app/", "logo": "https://qrbc.app/icon-512.png", "email": "support@qrbc.app"}, {"@type": "WebSite", "@id": "https://qrbc.app/#site", "name": "qrbc", "url": "https://qrbc.app/", "inLanguage": ["fr", "en", "ru"], "publisher": {"@id": "https://qrbc.app/#org"}}, {"@type": "SoftwareApplication", "name": "qrbc", "url": "https://qrbc.app/", "applicationCategory": "BusinessApplication", "operatingSystem": "Web, Android, iOS", "offers": {"@type": "Offer", "price": "21.60", "priceCurrency": "EUR", "description": "1 an / 1 year / 1 год"}, "publisher": {"@id": "https://qrbc.app/#org"}}]}</script>
 <link rel="manifest" href="/manifest.webmanifest">
 <meta name="theme-color" content="#1b1a17">
 <link rel="icon" href="/favicon.png">
@@ -79,6 +80,23 @@
   .ios{position:fixed;left:12px;right:12px;bottom:max(12px,env(safe-area-inset-bottom));padding:16px 16px 14px;border-radius:16px;background:var(--prim);color:var(--prim-txt);
     box-shadow:0 10px 40px rgba(0,0,0,.35);font-size:.95rem;z-index:10}
   .ios button{width:auto;min-height:0;padding:6px 12px;margin-top:10px;background:transparent;border:1px solid currentColor;color:inherit;font-size:.85rem}
+  .infos{margin-top:64px;display:grid;gap:56px}
+  .infos h2{font-size:clamp(1.4rem,4vw,1.9rem);letter-spacing:-.02em;margin:0 0 14px}
+  .infos .intro{color:var(--doux);margin:0 0 18px;max-width:40em}
+  .metiers{list-style:none;padding:0;margin:0;display:flex;flex-wrap:wrap;gap:8px}
+  .metiers li{padding:7px 13px;border:1px solid var(--ligne);border-radius:99px;background:var(--panneau);font-size:.92rem}
+  .atouts{display:grid;gap:14px;grid-template-columns:1fr}
+  @media (min-width:640px){.atouts{grid-template-columns:1fr 1fr}}
+  @media (min-width:960px){.atouts{grid-template-columns:1fr 1fr 1fr}}
+  .atouts article{padding:18px;border:1px solid var(--ligne);border-radius:14px;background:var(--panneau)}
+  .atouts h3{font-size:1rem;margin:0 0 6px}
+  .atouts p{margin:0;color:var(--doux);font-size:.93rem}
+  .tarif p{margin:0 0 8px;max-width:40em}
+  .tarif p+p{color:var(--doux)}
+  .faq details{border-bottom:1px solid var(--ligne);padding:14px 0}
+  .faq summary{cursor:pointer;font-weight:600;list-style-position:outside}
+  .faq details p{margin:10px 0 0;color:var(--doux)}
+  .cta{display:inline-block;padding:14px 22px;border-radius:12px;background:var(--prim);color:var(--prim-txt);text-decoration:none;font-weight:700}
 </style>
 </head>
 <body>
@@ -94,7 +112,7 @@
 
   <div class="grille">
     <section>
-      <h1>Votre page, votre QR code, <em>vos cartes de visite.</em></h1>
+      <h1>Votre page QR, vos cartes de visite, <em>dans la langue de chaque client.</em></h1>
       <p class="chapeau">Une page mobile à votre nom, que vos clients ouvrent d’un scan : réserver, appeler, écrire sur WhatsApp, laisser un avis Google. Vous la modifiez vous-même, depuis votre téléphone.</p>
       <ul class="points">
         <li><div class="num">1</div><div><b>Choisissez votre adresse</b><span>Par exemple votre-nom.qrbc.app</span></div></li>
@@ -134,6 +152,48 @@
         <p class="sous" id="conseil-install" style="margin-top:16px" hidden>Astuce : installez l’appli qrbc pour retrouver votre page en un geste.</p>
       </div>
     </form>
+  </div>
+
+  <div class="infos">
+    <section>
+      <h2>Pour qui ?</h2>
+      <p class="intro">Pour tous ceux qui reçoivent des clients et veulent être joints, réservés ou recommandés d’un simple scan.</p>
+      <ul class="metiers">
+        <li>Chauffeurs VTC et taxis</li>
+        <li>Restaurants, cafés et bars</li>
+        <li>Artisans et dépannage</li>
+        <li>Coiffeurs et instituts de beauté</li>
+        <li>Saunas, spas et bien-être</li>
+        <li>Locations saisonnières et conciergeries</li>
+        <li>Coachs, guides et professeurs</li>
+        <li>Boutiques et commerces de proximité</li>
+      </ul>
+    </section>
+    <section>
+      <h2>Ce que votre page fait pour vous</h2>
+      <div class="atouts">
+        <article><h3>Un QR code qui ne change jamais</h3><p>Changez de numéro, d’horaires ou d’offres quand vous voulez : vos cartes et affiches déjà imprimées restent valables.</p></article>
+        <article><h3>Une page dans la langue de chaque client</h3><p>Ajoutez des langues à votre page (14 au choix), traduites par l’IA. Le même QR code l’ouvre dans la langue du téléphone de chaque visiteur.</p></article>
+        <article><h3>Avis Google, WhatsApp, réservation</h3><p>Des boutons pour appeler, écrire, réserver, suivre vos réseaux ou laisser un avis : vos clients agissent en un geste.</p></article>
+        <article><h3>Textes et images avec l’IA</h3><p>Décrivez votre activité en quelques mots : l’IA propose les textes, les pictogrammes et les images de votre page.</p></article>
+        <article><h3>Visible sur Google</h3><p>Titre, description et fiche « entreprise locale » sont créés automatiquement pour les moteurs de recherche.</p></article>
+        <article><h3>22 modèles de cartes de visite</h3><p>Des cartes prêtes à imprimer avec votre QR code, chez vous ou chez l’imprimeur.</p></article>
+      </div>
+    </section>
+    <section class="tarif">
+      <h2>Un prix simple</h2>
+      <p>14 jours d’essai gratuit, sans carte bancaire. Ensuite 18 € HT par an (21,60 € TTC) : page, QR code, cartes de visite et crédits IA compris.</p>
+      <p>Pas de renouvellement automatique, pas d’engagement. Satisfait ou remboursé pendant 14 jours.</p>
+    </section>
+    <section class="faq">
+      <h2>Questions fréquentes</h2>
+      <details><summary>Faut-il savoir créer un site ?</summary><p>Non. Vous choisissez une adresse, vous remplissez quelques champs et l’IA propose le reste. Tout se fait depuis votre téléphone.</p></details>
+      <details><summary>Et si je change de numéro ou d’horaires ?</summary><p>Vous modifiez votre page en quelques secondes. Le QR code reste le même : inutile de réimprimer vos cartes.</p></details>
+      <details><summary>Comment fonctionnent les traductions ?</summary><p>Vous ajoutez une langue (en option) et l’IA traduit votre page. Chaque visiteur la voit dans la langue de son téléphone et peut en changer en haut de la page.</p></details>
+      <details><summary>Mes clients doivent-ils installer une appli ?</summary><p>Non. Il suffit de scanner le QR code avec l’appareil photo du téléphone pour ouvrir votre page.</p></details>
+      <details><summary>L’abonnement se renouvelle-t-il tout seul ?</summary><p>Non. Nous vous prévenons par e-mail avant l’échéance et vous renouvelez si vous le souhaitez. Sans paiement, la page est mise en pause.</p></details>
+    </section>
+    <p><a class="cta" href="#inscription">Créer ma page gratuitement</a></p>
   </div>
 
   <footer>

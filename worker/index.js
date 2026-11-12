@@ -2247,27 +2247,57 @@ async function planGlobal(env, frais) {
 /* Page d'accueil dans la langue du lien (?lang=en|ru) : les robots d'aperçu (WhatsApp, Facebook…)
    et Google lisent le titre et la description sans exécuter le JavaScript */
 const META_ACCUEIL = {
-  en: { lang: 'en', locale: 'en_GB', titre: 'qrbc — your QR page and business cards',
-        desc: 'Create a mobile page for your business in minutes, with its QR code and print-ready business cards. 14-day free trial.' },
-  ru: { lang: 'ru', locale: 'ru_RU', titre: 'qrbc — ваша QR-страница и визитки',
-        desc: 'Создайте за несколько минут мобильную страницу для своего бизнеса, её QR-код и визитки, готовые к печати. 14 дней бесплатно.' }
+  en: { lang: 'en', locale: 'en_GB', titre: "QR code page and business cards for small businesses | qrbc",
+        desc: "Mobile page, QR code and business cards for your business. Edit it anytime, translate it with a single QR code. 14 days free, then €18 excl. VAT/year." },
+  ru: { lang: 'ru', locale: 'ru_RU', titre: "QR-страница и визитки для вашего дела | qrbc",
+        desc: "Мобильная страница, QR-код и визитки для вашего дела. Меняйте её в любой момент, переводите на другие языки — QR-код один. 14 дней бесплатно, затем 18 € без НДС в год." }
 };
+/* Dictionnaire de l'interface (i18n.js : 'français': ['English', 'Русский']) lu une fois par instance du Worker,
+   pour envoyer l'accueil déjà traduit aux moteurs de recherche (sans attendre le JavaScript) */
+let DICO = null;
+async function dictionnaire(env, request) {
+  if (DICO) return DICO;
+  const u = new URL(request.url); u.pathname = '/i18n.js'; u.search = '';
+  const r = await env.ASSETS.fetch(new Request(u.toString()));
+  if (!r.ok) return new Map();
+  const src = await r.text();
+  const CH = String.raw`('(?:[^'\\\n]|\\.)*'|"(?:[^"\\\n]|\\.)*")`;
+  const lire = x => x.slice(1, -1).replace(/\\(.)/g, (_, c) => c === 'n' ? '\n' : c);
+  const d = new Map();
+  for (const m of src.matchAll(new RegExp('^\\s*' + CH + '\\s*:\\s*\\[\\s*' + CH + '\\s*,\\s*' + CH + '\\s*\\]', 'gm')))
+    d.set(lire(m[1]), [lire(m[2]), lire(m[3])]);
+  return (DICO = d);
+}
 async function accueilLangue(env, request, url) {
   const r = await statique(env, request, '/qrbc.html');
   const m = META_ACCUEIL[url.searchParams.get('lang')];
   if (!m || !r.ok) return r;
+  const dico = await dictionnaire(env, request), i = m.lang === 'en' ? 0 : 1;
+  // nœuds de texte traduits en entier (le texte peut arriver en plusieurs morceaux)
+  let tampon = '';
+  const traduction = {
+    text(t) {
+      tampon += t.text;
+      if (!t.lastInTextNode) { t.remove(); return; }
+      const brut = tampon; tampon = '';
+      const cle = brut.trim(), v = cle && dico.get(cle);
+      if (!v || !v[i]) { t.replace(brut, { html: true }); return; }
+      const debut = brut.indexOf(cle);
+      t.replace(brut.slice(0, debut) + esc(v[i]) + brut.slice(debut + cle.length), { html: true });
+    }
+  };
   const adresse = 'https://' + DOMAINE + '/?lang=' + m.lang;
   const attr = (a, v) => ({ element(e) { e.setAttribute(a, v); } });
   const h = new Headers(r.headers); h.delete('content-length'); h.set('content-language', m.lang);
   return new HTMLRewriter()
-    .on('html', attr('lang', m.lang))
-    .on('title', { element(e) { e.setInnerContent(m.titre); } })
+    .on('html', { element(e) { e.setAttribute('lang', m.lang); e.setAttribute('data-pretraduit', ''); } })
     .on('meta[name="description"]', attr('content', m.desc))
     .on('meta[property="og:title"]', attr('content', m.titre))
     .on('meta[property="og:description"]', attr('content', m.desc))
     .on('meta[property="og:locale"]', attr('content', m.locale))
     .on('meta[property="og:url"]', attr('content', adresse))
     .on('link[rel="canonical"]', attr('href', adresse))
+    .onDocument(traduction)
     .transform(new Response(r.body, { status: r.status, headers: h }));
 }
 

@@ -202,6 +202,47 @@
     "Ce compte est offert : rien à payer.": ["This account is complimentary: nothing to pay.", "Этот аккаунт бесплатный: платить не нужно."],
     'Nom d’utilisateur, lien ou numéro': ['Username, link or phone number', 'Имя пользователя, ссылка или номер'],
     // --- page d'accueil qrbc.app ---
+    "Votre page QR, vos cartes de visite,": ["Your QR page, your business cards,", "Ваша QR-страница и визитки —"],
+    "dans la langue de chaque client.": ["in each customer’s language.", "на языке каждого клиента."],
+    "Pour qui ?": ["Who is it for?", "Для кого?"],
+    "Pour tous ceux qui reçoivent des clients et veulent être joints, réservés ou recommandés d’un simple scan.": ["For anyone who welcomes customers and wants to be contacted, booked or recommended with a simple scan.", "Для всех, кто принимает клиентов и хочет, чтобы с ним связывались, записывались и рекомендовали его одним сканированием."],
+    "Chauffeurs VTC et taxis": ["Private drivers and taxis", "Водители такси и VTC"],
+    "Restaurants, cafés et bars": ["Restaurants, cafés and bars", "Рестораны, кафе и бары"],
+    "Artisans et dépannage": ["Tradespeople and repairs", "Мастера и ремонт"],
+    "Coiffeurs et instituts de beauté": ["Hairdressers and beauty salons", "Парикмахерские и салоны красоты"],
+    "Saunas, spas et bien-être": ["Saunas, spas and wellness", "Сауны, спа и велнес"],
+    "Locations saisonnières et conciergeries": ["Holiday rentals and concierge services", "Посуточная аренда и консьерж-сервис"],
+    "Coachs, guides et professeurs": ["Coaches, guides and teachers", "Тренеры, гиды и преподаватели"],
+    "Boutiques et commerces de proximité": ["Shops and local businesses", "Магазины и местный бизнес"],
+    "Ce que votre page fait pour vous": ["What your page does for you", "Что даёт ваша страница"],
+    "Un QR code qui ne change jamais": ["A QR code that never changes", "QR-код, который не меняется"],
+    "Changez de numéro, d’horaires ou d’offres quand vous voulez : vos cartes et affiches déjà imprimées restent valables.": ["Change your number, opening hours or offers whenever you like: the cards and posters you have already printed still work.", "Меняйте номер, часы работы или предложения когда угодно: уже напечатанные визитки и афиши продолжают работать."],
+    "Une page dans la langue de chaque client": ["A page in each customer’s language", "Страница на языке каждого клиента"],
+    "Ajoutez des langues à votre page (14 au choix), traduites par l’IA. Le même QR code l’ouvre dans la langue du téléphone de chaque visiteur.": ["Add languages to your page (14 to choose from), translated by AI. The same QR code opens it in the language of each visitor’s phone.", "Добавьте языки (14 на выбор) — ИИ переведёт страницу. Один и тот же QR-код откроет её на языке телефона каждого посетителя."],
+    "Avis Google, WhatsApp, réservation": ["Google reviews, WhatsApp, booking", "Отзывы Google, WhatsApp, запись"],
+    "Des boutons pour appeler, écrire, réserver, suivre vos réseaux ou laisser un avis : vos clients agissent en un geste.": ["Buttons to call, message, book, follow your social media or leave a review: your customers act in one tap.", "Кнопки, чтобы позвонить, написать, записаться, подписаться на соцсети или оставить отзыв: клиенту хватит одного касания."],
+    "Textes et images avec l’IA": ["Texts and images with AI", "Тексты и изображения с ИИ"],
+    "Décrivez votre activité en quelques mots : l’IA propose les textes, les pictogrammes et les images de votre page.": ["Describe your business in a few words: AI suggests the texts, icons and images for your page.", "Опишите своё дело в нескольких словах: ИИ предложит тексты, значки и изображения для страницы."],
+    "Visible sur Google": ["Visible on Google", "Видна в Google"],
+    "Titre, description et fiche « entreprise locale » sont créés automatiquement pour les moteurs de recherche.": ["Title, description and local business details are created automatically for search engines.", "Заголовок, описание и карточка местной компании создаются для поисковиков автоматически."],
+    "22 modèles de cartes de visite": ["22 business card templates", "22 шаблона визиток"],
+    "Des cartes prêtes à imprimer avec votre QR code, chez vous ou chez l’imprimeur.": ["Print-ready cards with your QR code, at home or at a print shop.", "Готовые к печати визитки с вашим QR-кодом — дома или в типографии."],
+    "Un prix simple": ["Simple pricing", "Простая цена"],
+    "14 jours d’essai gratuit, sans carte bancaire. Ensuite 18 € HT par an (21,60 € TTC) : page, QR code, cartes de visite et crédits IA compris.": ["14-day free trial, no credit card. Then €18 excl. VAT per year (€21.60 incl. VAT): page, QR code, business cards and AI credits included.", "14 дней бесплатно, без банковской карты. Затем 18 € без НДС в год (21,60 € с НДС): страница, QR-код, визитки и кредиты ИИ включены."],
+    "Pas de renouvellement automatique, pas d’engagement. Satisfait ou remboursé pendant 14 jours.": ["No automatic renewal, no commitment. 14-day money-back guarantee.", "Без автоматического продления и обязательств. Возврат денег в течение 14 дней."],
+    "Questions fréquentes": ["Frequently asked questions", "Частые вопросы"],
+    "Faut-il savoir créer un site ?": ["Do I need to know how to build a website?", "Нужно ли уметь делать сайты?"],
+    "Non. Vous choisissez une adresse, vous remplissez quelques champs et l’IA propose le reste. Tout se fait depuis votre téléphone.": ["No. You choose an address, fill in a few fields and AI suggests the rest. Everything is done from your phone.", "Нет. Вы выбираете адрес, заполняете несколько полей, а остальное предложит ИИ. Всё делается с телефона."],
+    "Et si je change de numéro ou d’horaires ?": ["What if I change my number or opening hours?", "А если я сменю номер или часы работы?"],
+    "Vous modifiez votre page en quelques secondes. Le QR code reste le même : inutile de réimprimer vos cartes.": ["You update your page in seconds. The QR code stays the same: no need to reprint your cards.", "Вы меняете страницу за несколько секунд. QR-код остаётся прежним: визитки перепечатывать не нужно."],
+    "Comment fonctionnent les traductions ?": ["How do translations work?", "Как работают переводы?"],
+    "Vous ajoutez une langue (en option) et l’IA traduit votre page. Chaque visiteur la voit dans la langue de son téléphone et peut en changer en haut de la page.": ["You add a language (optional extra) and AI translates your page. Each visitor sees it in their phone’s language and can switch at the top of the page.", "Вы добавляете язык (платная опция), и ИИ переводит страницу. Каждый посетитель видит её на языке своего телефона и может сменить язык вверху страницы."],
+    "Mes clients doivent-ils installer une appli ?": ["Do my customers need to install an app?", "Нужно ли клиентам устанавливать приложение?"],
+    "Non. Il suffit de scanner le QR code avec l’appareil photo du téléphone pour ouvrir votre page.": ["No. Scanning the QR code with their phone’s camera is enough to open your page.", "Нет. Достаточно навести камеру телефона на QR-код, чтобы открыть вашу страницу."],
+    "L’abonnement se renouvelle-t-il tout seul ?": ["Does the subscription renew automatically?", "Подписка продлевается автоматически?"],
+    "Non. Nous vous prévenons par e-mail avant l’échéance et vous renouvelez si vous le souhaitez. Sans paiement, la page est mise en pause.": ["No. We remind you by email before it ends and you renew if you wish. Without payment, the page is paused.", "Нет. Мы напомним по e-mail до окончания срока, и вы продлите, если захотите. Без оплаты страница приостанавливается."],
+    "Créer ma page gratuitement": ["Create my page for free", "Создать страницу бесплатно"],
+    "Page QR code et cartes de visite pour indépendants et commerces | qrbc": ["QR code page and business cards for small businesses | qrbc", "QR-страница и визитки для вашего дела | qrbc"],
     "qrbc — votre page QR et vos cartes de visite": ["qrbc — your QR page and business cards", "qrbc — ваша QR-страница и визитки"],
     "Votre page, votre QR code,": ["Your page, your QR code,", "Ваша страница, ваш QR-код,"],
     "vos cartes de visite.": ["your business cards.", "ваши визитки."],
@@ -914,6 +955,14 @@
 
   function choisirLangue(l) {
     if (!LANGUES[l]) return;
+    // page déjà traduite par le serveur (accueil ?lang=en|ru) : on recharge dans la langue choisie
+    if (document.documentElement.hasAttribute('data-pretraduit') && l !== langue) {
+      try { localStorage.setItem(CLE, l); } catch (e) {}
+      const u = new URL(location.href);
+      if (l === 'fr') u.searchParams.delete('lang'); else u.searchParams.set('lang', l);
+      location.replace(u.pathname + u.search + u.hash);
+      return;
+    }
     langue = l;
     try { localStorage.setItem(CLE, l); } catch (e) {}
     langueDansAdresse(l);
