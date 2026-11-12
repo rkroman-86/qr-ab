@@ -885,7 +885,10 @@ async function descriptionFond(env, cfg, ambiance, idee, pc, prudent) {
           'Photorealistic, natural colors (not oversaturated), soft natural light, professional photography. ' +
           // le générateur refuse les marques, lieux privés célèbres, personnages et personnes connues (« output flagged »)
           'Never name or depict brands, trademarks, theme parks or their attractions, mascots, cartoon or film characters, celebrities or real people: ' +
-          'replace them with a generic equivalent (e.g. "a family day out at a large amusement park" becomes "a happy family stepping out of a spacious van on a sunny day"). ' +
+          'replace them with a generic equivalent (e.g. "a family day out at a large amusement park" becomes "a happy French family stepping out of a spacious van on a sunny day near Paris, France"). ' +
+          // sans lieu précis, le générateur invente souvent un décor et des personnes d'Asie de l'Est
+          'Always anchor the scene in the business\'s real region: name the country and region or city (from the place names in the texts or the business zone; if none, France), ' +
+          'with matching local architecture, landscape, vegetation and road signs style, and describe any people as local residents of that country (e.g. "a French family", "European travellers"). ' +
           // ton toujours positif ; un véhicule « de luxe » noir devient vite un corbillard
           'Keep the mood bright, positive and inviting: never somber, funeral, ominous or dark imagery. ' +
           'Vehicles must clearly be modern, elegant passenger cars or vans for clients (e.g. a sleek dark-blue or silver sedan or minivan on a sunny road), never a hearse, ambulance or police car, and without any visible logo; show a single vehicle, whole and well separated from other objects (no overlapping or merged cars). ' +
