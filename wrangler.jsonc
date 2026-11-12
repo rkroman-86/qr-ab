@@ -13,6 +13,10 @@
   "kv_namespaces": [
     { "binding": "CLIENTS", "id": "ee57108f16d740f3a5667ca9982e0dab" }
   ],
+  // Statistiques de visites des pages clients (tables créées par le Worker au premier usage)
+  "d1_databases": [
+    { "binding": "STATS", "database_name": "qrbc-stats", "database_id": "9fd99778-a899-4369-8d35-f9a232396603" }
+  ],
   // Fichiers communs à tous les clients (copiés dans dist/ par build.sh)
   "assets": {
     "directory": "./dist",

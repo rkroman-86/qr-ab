@@ -11,6 +11,8 @@
      site:<slug>:sitemap.xml
      img:<slug>:<nom>           → image (binaire, type dans les métadonnées)
 
+   Base D1 (liaison STATS, facultative) : statistiques de visites, totaux par jour (voir « Statistiques »)
+
    Secrets (Paramètres → Variables et secrets) :
      SESSION_SECRET  → longue chaîne aléatoire (signature des sessions)
      ADMIN_TOKEN     → mot de passe de la page gestion de Roman
@@ -91,8 +93,10 @@ export default {
   async scheduled(event, env, ctx) {
     ctx.waitUntil(chargerTarifs(env).then(() => lancerRappels(env, {})).then(r => console.log('rappels', JSON.stringify(r.resume)))
       .catch(e => console.error('rappels', e.message)));
+    ctx.waitUntil(purgerStats(env).catch(e => console.error('stats', e.message)));
   },
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
+    TACHES = ctx;
     try {
       await chargerTarifs(env);
       const url = new URL(request.url);
@@ -130,6 +134,7 @@ class ErreurAPI extends Error {
 /* ===================== Domaine principal ===================== */
 async function racine(request, env, url) {
   const p = url.pathname;
+  if (p === '/api/moi') return marquerProprietaire();
   if (p === '/api/inscription' && request.method === 'POST') return inscription(request, env);
   if (p === '/api/promo' && request.method === 'GET') return verifierPromo(request, env);
   if (p === '/api/stripe/webhook' && request.method === 'POST') return webhookStripe(request, env);
@@ -181,6 +186,8 @@ async function racine(request, env, url) {
 async function siteClient(request, env, url, slug) {
   const p = url.pathname;
 
+  if (p === '/api/moi') return marquerProprietaire();
+  if (p === '/api/clic' && request.method === 'POST') return compterClic(request, env, slug);
   if (p.startsWith('/api/')) return apiClient(request, env, slug, p.slice(5));
   if (p === '/admin' || p === '/admin/' || p === '/admin.html') return statique(env, request, '/admin.html', true);
   if (FICHIERS_STATIQUES.has(p)) return statique(env, request, p);
@@ -227,11 +234,12 @@ async function siteClient(request, env, url, slug) {
     if (langs.length && nom !== 'sitemap.xml' && !url.searchParams.get('l')) {
       const pref = cookieLangue(request) || langueNavigateur(request, langs.map(x => x.l));
       if (pref && pref !== langs[0].l && compte.traductions.includes(pref))
-        return new Response(null, { status: 302, headers: { location: '/' + pref + '/' + (nom === 'accueil.html' ? 'accueil.html' : ''), 'cache-control': 'private, no-store', vary: 'Accept-Language, Cookie' } });
+        return new Response(null, { status: 302, headers: { location: '/' + pref + '/' + (nom === 'accueil.html' ? 'accueil.html' : '') + url.search, 'cache-control': 'private, no-store', vary: 'Accept-Language, Cookie' } });
     }
     let corps = await env.CLIENTS.get('site:' + slug + ':' + nom);
     if (!corps && nom !== 'sitemap.xml') corps = await pageDemarrage(env, slug, nom === 'accueil.html' ? 'home' : '');
     if (!corps) return texte('Introuvable', 404);
+    if (nom !== 'sitemap.xml') compterVisite(request, env, slug, url, (langs.length ? langs[0].l : null) || compte.langueSite || 'fr');
     return reponsePage(corps, nom, langs, langs.length ? langs[0].l : null, slug, url, !!compte.noindex);
   }
   return pageInfo('Page introuvable', 'Ce lien n’existe pas.', 404);
@@ -254,6 +262,7 @@ async function pageTraduite(request, env, url, slug, tc, reste) {
   let corps = await env.CLIENTS.get('site:' + tc.slug + ':' + nom);
   if (!corps && nom !== 'sitemap.xml') corps = await pageDemarrage(env, tc.slug, nom === 'accueil.html' ? 'home' : '');
   if (!corps) return texte('Introuvable', 404);
+  if (nom !== 'sitemap.xml') compterVisite(request, env, slug, url, tc.traduction.langue);
   return reponsePage(corps, nom, languesPage(source), tc.traduction.langue, slug, url, !!(source.noindex || tc.noindex));
 }
 function cookieLangue(request) {
@@ -390,6 +399,11 @@ async function apiClient(request, env, slug, route) {
 
   // Tout le reste exige une session valide pour CE sous-domaine
   const compte = await exigerSession(request, env, slug);
+
+  if (route === 'stats' && m === 'GET') {
+    const jours = Math.min(366, Math.max(1, parseInt(new URL(request.url).searchParams.get('jours'), 10) || 30));
+    return json(await lireStats(env, pageStats(compte), jours));
+  }
 
   if (route === 'compte' && m === 'GET') {
     const l = request.headers.get('x-qrbc-langue');              // langue des e-mails = langue de l'éditeur
@@ -1087,7 +1101,9 @@ async function gestion(request, env, action) {
       curseur = l.list_complete ? null : l.cursor;
     } while (curseur);
     comptes.sort((a, b) => String(b.cree).localeCompare(String(a.cree)));
-    return json({ comptes });
+    const st = await resumeStats(env, 30);
+    for (const c of comptes) if (!c.traduction) c.stats30 = st.pages[c.slug] || { visites: 0, clics: 0 };
+    return json({ comptes, stats30: st.total });
   }
 
   if (action === 'creer') {
@@ -1211,6 +1227,7 @@ async function gestion(request, env, action) {
     }
     const ancien = await lireCompte(env, slug);
     if (ancien) await indexerEmail(env, ancien.email, slug, false);
+    if (env.STATS && !slug.includes('.')) await env.STATS.prepare('DELETE FROM stats WHERE page = ?').bind(slug).run().catch(() => {});
     await env.CLIENTS.delete('compte:' + slug);
     return json({ ok: true });
   }
@@ -2188,6 +2205,115 @@ function pageInfo(titre, msg, status) {
 }
 function xml(corps) {
   return new Response(corps, { headers: { 'content-type': 'application/xml; charset=utf-8', 'cache-control': 'public, max-age=3600' } });
+}
+
+/* ===================== Statistiques de visites =====================
+   Base D1 (liaison STATS) : une ligne par page × jour × type × clé, avec un compteur.
+     type 'visite' (clé vide) · 'source' (qr, google, moteur, reseaux, site, direct) · 'pays' (FR, BE…)
+     'langue' (fr, en…) · 'clic' (tel, whatsapp, avis…)
+   Ni cookie de suivi ni adresse IP : seulement des totaux (mesure d'audience exemptée de consentement).
+   Non comptés : robots, préchargements, navigation interne d'une page à l'autre, propriétaire de la page
+   (cookie qrbc-moi posé quand il ouvre son éditeur). Une page = son sous-domaine (versions traduites comprises,
+   distinguées par la langue). Lignes de plus de 400 jours effacées chaque jour. */
+let TACHES = null;                  // contexte de la requête : écritures faites après l'envoi de la réponse
+let TABLES_STATS = false;
+const GARDER_STATS = 400;           // jours
+const TYPES_CLIC = new Set(['tel', 'sms', 'email', 'whatsapp', 'avis', 'maps', 'telegram', 'instagram', 'facebook', 'tiktok',
+  'youtube', 'linkedin', 'x', 'snapchat', 'pinterest', 'vk', 'lien']);
+const RE_ROBOT = /bot|crawl|spider|slurp|preview|facebookexternalhit|^whatsapp|lighthouse|headless|curl|wget|python|http-client|okhttp|monitor/i;
+
+async function tablesStats(env) {
+  if (TABLES_STATS || !env.STATS) return !!env.STATS;
+  await env.STATS.batch([
+    env.STATS.prepare("CREATE TABLE IF NOT EXISTS stats (page TEXT NOT NULL, jour TEXT NOT NULL, type TEXT NOT NULL, cle TEXT NOT NULL DEFAULT '', n INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (page, jour, type, cle)) WITHOUT ROWID"),
+    env.STATS.prepare('CREATE INDEX IF NOT EXISTS stats_jour ON stats (jour)')
+  ]);
+  return (TABLES_STATS = true);
+}
+// Jour à l'heure de Paris (AAAA-MM-JJ)
+function jourParis(d) { return new Intl.DateTimeFormat('fr-CA', { timeZone: 'Europe/Paris' }).format(d || new Date()); }
+function pageStats(compte) { return compte.traduction ? compte.traduction.source : compte.slug; }
+function visiteurHumain(request) {
+  const ua = request.headers.get('user-agent') || '';
+  if (!ua || RE_ROBOT.test(ua)) return false;
+  if (/prefetch|prerender/i.test((request.headers.get('sec-purpose') || '') + (request.headers.get('purpose') || ''))) return false;
+  return !/(?:^|;\s*)qrbc-moi=1/.test(request.headers.get('cookie') || '');
+}
+function enArrierePlan(promesse) {
+  const p = promesse.catch(e => console.error('stats', e.message));
+  if (TACHES) TACHES.waitUntil(p);
+}
+function ecrireStats(env, page, lignes) {
+  if (!env.STATS) return;
+  const jour = jourParis();
+  enArrierePlan(tablesStats(env).then(() => env.STATS.batch(lignes.map(([type, cle]) =>
+    env.STATS.prepare('INSERT INTO stats (page, jour, type, cle, n) VALUES (?, ?, ?, ?, 1) ON CONFLICT (page, jour, type, cle) DO UPDATE SET n = n + 1')
+      .bind(page, jour, type, String(cle || '').slice(0, 40))))));
+}
+function sourceVisite(url, request, slug) {
+  if (url.searchParams.get('s') === 'qr') return 'qr';
+  let h = '';
+  try { h = new URL(request.headers.get('referer') || '').hostname.toLowerCase(); } catch (e) {}
+  if (!h) return 'direct';
+  if (h === slug + '.' + DOMAINE) return null;                                     // navigation interne : déjà comptée
+  if (/(^|\.)google\./.test(h)) return 'google';
+  if (/(^|\.)(bing|duckduckgo|yandex|qwant|ecosia|yahoo|baidu|brave|startpage|ya|seznam)\./.test(h)) return 'moteur';
+  if (/(^|\.)(facebook|fb|instagram|t|twitter|x|linkedin|lnkd|tiktok|pinterest|youtube|vk|ok|telegram|whatsapp|snapchat|threads|reddit|messenger)\.(com|co|me|ru|net|in)$/.test(h)) return 'reseaux';
+  return 'site';
+}
+function compterVisite(request, env, slug, url, langue) {
+  if (!env.STATS || (request.method !== 'GET' && request.method !== 'HEAD') || !visiteurHumain(request)) return;
+  if (url.searchParams.has('moi')) return;                                       // lien « ouvrir » de l'éditeur
+  const source = sourceVisite(url, request, slug);
+  if (!source) return;
+  const pays = (request.cf && request.cf.country) || 'XX';
+  ecrireStats(env, slug, [['visite', ''], ['source', source], ['pays', /^[A-Z]{2}$/.test(pays) ? pays : 'XX'], ['langue', /^[a-z]{2}$/.test(langue || '') ? langue : 'fr']]);
+}
+async function compterClic(request, env, slug) {
+  if (env.STATS && visiteurHumain(request) && /^[a-z0-9-]+$/.test(slug)) {
+    let d = {};
+    try { d = JSON.parse(await request.text() || '{}'); } catch (e) {}
+    if (TYPES_CLIC.has(d.t) && await env.CLIENTS.get('compte:' + slug)) ecrireStats(env, slug, [['clic', d.t]]);
+  }
+  return new Response(null, { status: 204 });
+}
+// Le propriétaire (ou Roman) n'est pas compté : cookie posé pour tout qrbc.app à l'ouverture de l'éditeur
+function marquerProprietaire() {
+  return new Response(null, { status: 204, headers: {
+    'set-cookie': 'qrbc-moi=1; Domain=' + DOMAINE + '; Path=/; Max-Age=31536000; SameSite=Lax; Secure', 'cache-control': 'no-store' } });
+}
+async function lireStats(env, page, jours) {
+  const debut = jourParis(new Date(Date.now() - (jours - 1) * 86400000));
+  const res = { actif: !!env.STATS, jours, debut, fin: jourParis(), parJour: {}, source: {}, pays: {}, langue: {}, clic: {}, visites: 0, clics: 0 };
+  if (!(await tablesStats(env))) return res;
+  const { results } = await env.STATS.prepare('SELECT jour, type, cle, SUM(n) AS n FROM stats WHERE page = ? AND jour >= ? GROUP BY jour, type, cle')
+    .bind(page, debut).all();
+  for (const r of results || []) {
+    if (r.type === 'visite') { res.visites += r.n; res.parJour[r.jour] = (res.parJour[r.jour] || 0) + r.n; }
+    else if (res[r.type]) {
+      res[r.type][r.cle] = (res[r.type][r.cle] || 0) + r.n;
+      if (r.type === 'clic') { res.clics += r.n; res.clicsParJour = res.clicsParJour || {}; res.clicsParJour[r.jour] = (res.clicsParJour[r.jour] || 0) + r.n; }
+    }
+  }
+  return res;
+}
+async function resumeStats(env, jours) {
+  const out = { pages: {}, total: { visites: 0, clics: 0, actif: !!env.STATS } };
+  try {
+    if (!(await tablesStats(env))) return out;
+    const debut = jourParis(new Date(Date.now() - (jours - 1) * 86400000));
+    const { results } = await env.STATS.prepare("SELECT page, type, SUM(n) AS n FROM stats WHERE jour >= ? AND type IN ('visite', 'clic') GROUP BY page, type").bind(debut).all();
+    for (const r of results || []) {
+      const k = r.type === 'visite' ? 'visites' : 'clics';
+      (out.pages[r.page] = out.pages[r.page] || { visites: 0, clics: 0 })[k] += r.n;
+      out.total[k] += r.n;
+    }
+  } catch (e) { console.error('stats', e.message); }
+  return out;
+}
+async function purgerStats(env) {
+  if (!(await tablesStats(env))) return;
+  await env.STATS.prepare('DELETE FROM stats WHERE jour < ?').bind(jourParis(new Date(Date.now() - GARDER_STATS * 86400000))).run();
 }
 
 /* ===================== Référencement : plan du site global =====================

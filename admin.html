@@ -150,6 +150,40 @@
       .cadre > .qp{min-height:100%}
     }
 
+    /* ---------- Statistiques ---------- */
+    .vue-stats{display:none;padding:16px 16px 60px;max-width:760px;width:100%;margin:0 auto}
+    body[data-vue=stats] .vue-stats{display:block}
+    body[data-vue=stats] .corps, body[data-vue=stats] .pied-barre{display:none}
+    .st-periode{display:flex;gap:4px;padding:3px;background:var(--bg);border:1px solid var(--ligne);border-radius:10px;width:max-content;margin:0 0 14px}
+    .st-periode button{border:0;background:transparent;padding:7px 14px;border-radius:7px;font-weight:600;font-size:.86rem;color:var(--doux);cursor:pointer}
+    .st-periode button.actif{background:var(--panneau);color:var(--txt);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+    .st-tuiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+    .st-tuile{background:var(--panneau);border:1px solid var(--ligne);border-radius:14px;padding:14px 16px}
+    .st-tuile .v{font-size:2rem;font-weight:800;letter-spacing:-.02em;line-height:1.1;font-variant-numeric:tabular-nums}
+    .st-tuile .l{color:var(--doux);font-size:.85rem;margin-top:2px}
+    .st-bloc{background:var(--panneau);border:1px solid var(--ligne);border-radius:14px;padding:14px 16px;margin-bottom:14px}
+    .st-bloc h3{font-size:.95rem;margin:0 0 10px}
+    .st-graph{position:relative}
+    .st-graph svg{display:block;width:100%;height:150px;overflow:visible}
+    .st-graph rect.b{fill:var(--prim)}
+    .st-graph rect.h{fill:transparent;cursor:pointer}
+    .st-graph rect.b.sel{fill:var(--txt)}
+    .st-graph line{stroke:var(--ligne);stroke-width:1}
+    .st-axe{display:flex;justify-content:space-between;color:var(--doux);font-size:.75rem;margin-top:6px}
+    .st-info{min-height:1.4em;font-size:.86rem;color:var(--doux);margin-top:6px}
+    .st-info b{color:var(--txt)}
+    .st-liste{display:grid;gap:8px}
+    .st-ligne{display:grid;grid-template-columns:minmax(90px,38%) 1fr auto;gap:10px;align-items:center;font-size:.9rem}
+    .st-ligne .nom{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .st-ligne .barre-st{height:10px;border-radius:0 4px 4px 0;background:var(--prim);min-width:2px}
+    .st-ligne .n{font-variant-numeric:tabular-nums;font-weight:600;min-width:2.5em;text-align:right}
+    .st-vide{color:var(--doux);font-size:.9rem;margin:0}
+    .st-note{color:var(--doux);font-size:.82rem;margin:4px 2px 0}
+    @media (max-width:520px){ .onglets .txt-stats{display:none} .onglets button{padding:7px 10px} }
+    @media (min-width:900px){
+      .onglets{display:flex}
+      .onglets button[data-vue=apercu]{display:none}
+    }
     .section{background:var(--panneau);border:1px solid var(--ligne);border-radius:16px;margin-bottom:14px;overflow:hidden}
     .section > summary{list-style:none;cursor:pointer;padding:15px 16px;font-weight:700;display:flex;align-items:center;gap:10px}
     .section > summary::-webkit-details-marker{display:none}
@@ -309,6 +343,7 @@
     <div class="onglets">
       <button type="button" data-vue="edit" class="actif">Modifier</button>
       <button type="button" data-vue="apercu">Aperçu</button>
+      <button type="button" data-vue="stats" title="Statistiques"><span aria-hidden="true">📊</span><span class="txt-stats"> Statistiques</span></button>
     </div>
     <span data-langue></span>
     <button type="button" class="btn btn-mini" id="btn-deconnexion">Quitter</button>
@@ -318,6 +353,8 @@
     <div class="col-edit" id="formulaire"></div>
     <div class="col-apercu"><div class="choix-apercu" id="choix-apercu"><button type="button" data-p="contact" class="actif">Page contact</button><button type="button" data-p="home">Page Home</button></div><div class="cadre" id="apercu"></div></div>
   </div>
+
+  <div id="stats" class="vue-stats"></div>
 
   <div class="pied-barre">
     <div class="etat" id="etat">Aucune modification</div>
@@ -360,7 +397,7 @@
   async function demarrer(jeton) {
     gh = CF ? clientCloudflare(jeton) : clientGitHub(jeton, depot);
     const info = await gh.verifier();
-    if (CF) { jetonCF = jeton; afficherAbonnement(info.compte); setTimeout(retourPaiement, 0); }
+    if (CF) { jetonCF = jeton; afficherAbonnement(info.compte); setTimeout(retourPaiement, 0); fetch('/api/moi', { credentials: 'include' }).catch(() => {}); }
     const f = await gh.lire('config.json');
     shaConfig = f ? f.sha : null;
     cfg = normaliser(fusion(CONFIG_DEFAUT, f ? JSON.parse(f.texte) : {}));
@@ -676,6 +713,106 @@
     window.scrollTo(0, cible);
     requestAnimationFrame(() => window.scrollTo(0, cible)); // après la remise en page
   }));
+
+
+  /* ---------------- Statistiques (onglet) ---------------- */
+  let periodeStats = 30;
+  const NOMS_SOURCES = { qr: 'QR code', google: 'Google', moteur: 'Autres moteurs', reseaux: 'Réseaux sociaux', site: 'Autre site', direct: 'Lien direct ou inconnu' };
+  const NOMS_CLICS = { tel: 'Téléphone', sms: 'SMS', email: 'E-mail', whatsapp: 'WhatsApp', avis: 'Avis Google', maps: 'Itinéraire', lien: 'Lien web',
+    telegram: 'Telegram', instagram: 'Instagram', facebook: 'Facebook', tiktok: 'TikTok', youtube: 'YouTube', linkedin: 'LinkedIn', x: 'X', snapchat: 'Snapchat', pinterest: 'Pinterest', vk: 'VK' };
+  const langueUI = () => (window.langueInterface && window.langueInterface()) || 'fr';
+  function nomIntl(code, type) {
+    if (type === 'region' && code === 'XX') return t('Inconnu');
+    try { const n = new Intl.DisplayNames([langueUI()], { type }).of(type === 'region' ? code : code); return n ? n.charAt(0).toUpperCase() + n.slice(1) : code; } catch (e) { return code; }
+  }
+  const fmtNombre = n => new Intl.NumberFormat(langueUI()).format(n);
+  const fmtJour = (j, long) => new Intl.DateTimeFormat(langueUI(), long ? { weekday: 'short', day: 'numeric', month: 'long' } : { day: 'numeric', month: 'short' }).format(new Date(j + 'T12:00:00'));
+
+  function listeStats(titre, donnees, nommer, max) {
+    const bloc = el('div', { class: 'st-bloc' }, [el('h3', { text: titre })]);
+    const lignes = Object.entries(donnees || {}).sort((a, b) => b[1] - a[1]);
+    if (!lignes.length) { bloc.appendChild(el('p', { class: 'st-vide', text: 'Rien pour l’instant.' })); return bloc; }
+    let affichees = lignes.slice(0, max || 8);
+    const reste = lignes.slice(max || 8).reduce((s, x) => s + x[1], 0);
+    const haut = Math.max(...affichees.map(x => x[1]), reste);
+    const liste = el('div', { class: 'st-liste' });
+    const ligne = (nom, n) => liste.appendChild(el('div', { class: 'st-ligne' }, [
+      el('span', { class: 'nom', text: nom, title: nom }),
+      el('span', {}, [el('div', { class: 'barre-st', style: 'width:' + Math.max(1, Math.round(n / haut * 100)) + '%' })]),
+      el('span', { class: 'n', text: fmtNombre(n) })]));
+    affichees.forEach(([k, n]) => ligne(nommer(k), n));
+    if (reste) ligne(t('Autres'), reste);
+    bloc.appendChild(liste);
+    return bloc;
+  }
+
+  function grapheJours(s) {
+    const jours = [];
+    for (let d = new Date(s.debut + 'T12:00:00'); jours.length < s.jours; d.setDate(d.getDate() + 1)) jours.push(new Intl.DateTimeFormat('fr-CA').format(d));
+    const vals = jours.map(j => s.parJour[j] || 0), max = Math.max(1, ...vals);
+    const W = 600, H = 150, pas = W / jours.length, larg = Math.max(1, pas - Math.min(2, pas * 0.25));
+    const NS = 'http://www.w3.org/2000/svg', svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H); svg.setAttribute('preserveAspectRatio', 'none');
+    svg.setAttribute('role', 'img'); svg.setAttribute('aria-label', t('Visites par jour'));
+    const ligneBase = document.createElementNS(NS, 'line');
+    ligneBase.setAttribute('x1', 0); ligneBase.setAttribute('x2', W); ligneBase.setAttribute('y1', H - .5); ligneBase.setAttribute('y2', H - .5);
+    svg.appendChild(ligneBase);
+    const info = el('div', { class: 'st-info' });
+    const barres = [];
+    const montrer = i => {
+      barres.forEach((b, k) => b.classList.toggle('sel', k === i));
+      info.innerHTML = '';
+      info.append(el('span', { text: fmtJour(jours[i], true) + ' · ' }), el('b', { text: fmtNombre(vals[i]) }), el('span', { text: ' ' }), el('span', { text: t('Visites').toLowerCase() }));
+    };
+    jours.forEach((j, i) => {
+      const hb = vals[i] ? Math.max(3, vals[i] / max * (H - 8)) : 0;
+      const r = document.createElementNS(NS, 'rect');
+      r.setAttribute('class', 'b'); r.setAttribute('x', i * pas + (pas - larg) / 2); r.setAttribute('width', larg);
+      r.setAttribute('y', H - hb); r.setAttribute('height', hb); r.setAttribute('rx', Math.min(4, larg / 2));
+      svg.appendChild(r); barres.push(r);
+      const zone = document.createElementNS(NS, 'rect');          // zone de survol plus large que la barre
+      zone.setAttribute('class', 'h'); zone.setAttribute('x', i * pas); zone.setAttribute('width', pas); zone.setAttribute('y', 0); zone.setAttribute('height', H);
+      zone.addEventListener('mouseenter', () => montrer(i)); zone.addEventListener('click', () => montrer(i));
+      svg.appendChild(zone);
+    });
+    const meilleur = vals.indexOf(Math.max(...vals));
+    if (vals[meilleur]) setTimeout(() => montrer(meilleur), 0);
+    return el('div', { class: 'st-bloc' }, [el('h3', { text: 'Visites par jour' }),
+      el('div', { class: 'st-graph' }, [svg]),
+      el('div', { class: 'st-axe' }, [el('span', { text: fmtJour(jours[0]) }), el('span', { text: fmtJour(jours[Math.floor(jours.length / 2)]) }), el('span', { text: fmtJour(jours[jours.length - 1]) })]),
+      info]);
+  }
+
+  async function chargerStats() {
+    const z = $('#stats');
+    z.innerHTML = '';
+    const periode = el('div', { class: 'st-periode' }, [7, 30, 90].map(n => el('button', { type: 'button', class: n === periodeStats ? 'actif' : '',
+      text: n + ' ' + t('jours'), onclick: () => { periodeStats = n; chargerStats(); } })));
+    z.append(el('h2', { style: 'margin:0 0 12px;font-size:1.2rem', text: 'Statistiques' }), periode);
+    if (!CF || !jetonCF) { z.appendChild(el('p', { class: 'st-vide', text: 'Les statistiques ne sont disponibles qu’avec qrbc.app.' })); return; }
+    const att = el('p', { class: 'st-vide', text: 'Chargement…' }); z.appendChild(att);
+    let s;
+    try { s = await (await appelAPI('stats?jours=' + periodeStats, jetonCF)).json(); }
+    catch (e) { att.textContent = t('Statistiques indisponibles pour le moment.'); return; }
+    att.remove();
+    if (!s || s.erreur) { z.appendChild(el('p', { class: 'st-vide', text: (s && s.erreur) || 'Statistiques indisponibles pour le moment.' })); return; }
+    if (!s.actif) { z.appendChild(el('p', { class: 'st-vide', text: 'Les statistiques seront bientôt disponibles.' })); return; }
+    z.append(
+      el('div', { class: 'st-tuiles' }, [
+        el('div', { class: 'st-tuile' }, [el('div', { class: 'v', text: fmtNombre(s.visites) }), el('div', { class: 'l', text: 'Visites' })]),
+        el('div', { class: 'st-tuile' }, [el('div', { class: 'v', text: fmtNombre(s.clics) }), el('div', { class: 'l', text: 'Clics sur les boutons' })])
+      ]),
+      grapheJours(s),
+      listeStats('Provenance', s.source, k => t(NOMS_SOURCES[k] || k)),
+      listeStats('Boutons touchés', s.clic, k => t(NOMS_CLICS[k] || k)),
+      listeStats('Pays', s.pays, k => nomIntl(k, 'region')),
+    );
+    if (Object.keys(s.langue || {}).length > 1) z.appendChild(listeStats('Langues', s.langue, k => nomIntl(k, 'language')));
+    z.append(
+      el('p', { class: 'st-note', text: 'Visites comptées sans cookie ni donnée personnelle, hors robots et hors vos propres visites.' }),
+      el('p', { class: 'st-note', text: 'Les scans sont reconnus sur les QR codes créés depuis le 12 novembre 2026. Les cartes imprimées avant comptent en « Lien direct ou inconnu ».' }));
+  }
+  document.querySelectorAll('.onglets button[data-vue=stats]').forEach(b => b.addEventListener('click', chargerStats));
 
   /* ---------------- Aperçu ---------------- */
   let minuterie = null;
@@ -1702,7 +1839,7 @@
     /* Liens utiles */
     const urlPublique = dossierSite();
     f.appendChild(el('p', { style: 'text-align:center;color:var(--doux);font-size:.88rem;margin:18px 0' }, [
-      'Page publique : ', el('a', { class: 'lien', href: urlPublique, target: '_blank', rel: 'noopener', text: 'ouvrir ↗' })
+      'Page publique : ', el('a', { class: 'lien', href: urlPublique + (urlPublique.includes('?') ? '&' : '?') + 'moi=1', target: '_blank', rel: 'noopener', text: 'ouvrir ↗' })
     ]));
 
     /* Ordre d'affichage des sections */
@@ -1780,6 +1917,8 @@
   /* Schéma miniature d'une disposition (formes simples) */
   /* =============== QR code et carte de visite =============== */
   const URL_PUBLIQUE = dossierSite();
+  // Adresse codée dans les QR (cartes, affiches, PNG) : ?s=qr permet de compter les scans dans les statistiques
+  const URL_QR = URL_PUBLIQUE + '?s=qr';
 
   // Dessine le QR code sur un contexte 2D (zone carrée x, y, taille)
   function dessinerQR(ctx, texte, x, y, taille, couleur) {
@@ -1801,7 +1940,7 @@
     ctx.fillStyle = '#fff';
     ctx.fillRect(0, 0, taillePx, taillePx);
     const marge = Math.round(taillePx * 0.08);
-    dessinerQR(ctx, URL_PUBLIQUE, marge, marge, taillePx - 2 * marge);
+    dessinerQR(ctx, URL_QR, marge, marge, taillePx - 2 * marge);
     return cv;
   }
 
@@ -2021,7 +2160,7 @@
     if (ombre) { ctx.shadowColor = 'rgba(0,0,0,.25)'; ctx.shadowBlur = 40; ctx.shadowOffsetY = 10; }
     ctx.fillStyle = '#ffffff'; rectArrondi(ctx, x, y, taille, h, Math.round(taille * 0.07)); ctx.fill();
     ctx.restore();
-    dessinerQR(ctx, URL_PUBLIQUE, x + m, y + m, taille - 2 * m, '#111');
+    dessinerQR(ctx, URL_QR, x + m, y + m, taille - 2 * m, '#111');
     if (legende) {
       ctx.fillStyle = '#111'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
       ctx.font = '700 ' + Math.round(taille * 0.075) + 'px ' + D.fam;
@@ -2139,7 +2278,7 @@
       ctx.fillStyle = '#ececf1';
       [0, H].forEach(cy => { ctx.beginPath(); ctx.arc(xs, cy, 62, 0, Math.PI * 2); ctx.fill(); });
       const q = 470, qx = xs + (W - xs - q) / 2, qy = (H - q) / 2 - 50;
-      dessinerQR(ctx, URL_PUBLIQUE, qx, qy, q, '#111');
+      dessinerQR(ctx, URL_QR, qx, qy, q, '#111');
       legendeQR(ctx, D, 'Scannez-moi', xs + (W - xs) / 2, qy + q + 40, accentLisible(D), 44);
       let y = P + (D.logo ? dessinerLogo(ctx, D, P, P, 210) + 56 : 50);
       dessinerTextes(ctx, D, P, y, xs - P - 110, { texte, accent: accentSurFond(D, texte) }, 'left');
@@ -2151,7 +2290,7 @@
       ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
       const accent = accentLisible(D);
       const q = H - 170, qx = W - 85 - q, qy = 85;
-      dessinerQR(ctx, URL_PUBLIQUE, qx, qy, q, '#111');
+      dessinerQR(ctx, URL_QR, qx, qy, q, '#111');
       ctx.fillStyle = accent; ctx.fillRect(qx - 70, 110, 10, H - 220);
       const L = qx - 70 - 100 - 60;
       let y = 100;
@@ -2242,7 +2381,7 @@
       const accent = accentLisible(D);
       ctx.fillStyle = accent; ctx.fillRect(0, 0, W, 22);
       const q = 500, qx = W - P - 40 - q, qy = (H - q) / 2 - 40;
-      dessinerQR(ctx, URL_PUBLIQUE, qx, qy, q, '#111');
+      dessinerQR(ctx, URL_QR, qx, qy, q, '#111');
       const e = 70, L = 120, ep = 16;
       ctx.fillStyle = accent;
       [[qx - e, qy - e, 1, 1], [qx + q + e, qy - e, -1, 1], [qx - e, qy + q + e, 1, -1], [qx + q + e, qy + q + e, -1, -1]].forEach(([x, y, sx, sy]) => {
@@ -2272,7 +2411,7 @@
       const q = 480, qx = W - P - 20 - q, qy = (H - q) / 2 - 30;
       ctx.save(); ctx.strokeStyle = encre; ctx.lineWidth = 6; ctx.setLineDash([18, 12]);
       rectArrondi(ctx, qx - 40, qy - 40, q + 80, q + 140, 26); ctx.stroke(); ctx.restore();
-      dessinerQR(ctx, URL_PUBLIQUE, qx, qy, q, encre);
+      dessinerQR(ctx, URL_QR, qx, qy, q, encre);
       legendeQR(ctx, D, 'Scannez-moi', qx + q / 2, qy + q + 26, encre, 38);
       let y = P + (D.logo ? dessinerLogo(ctx, D, P, P, 190) + 52 : 40);
       dessinerTextes(ctx, D, P, y, qx - 40 - P - 90, { texte: encre, accent }, 'left');
@@ -2290,7 +2429,7 @@
       const bas = H - 110;                                   // au-dessus du liseré, légende comprise
       const q = Math.min(640, bas - y - 160);
       const qy = y + Math.max(30, (bas - y - q - 90) / 2);
-      dessinerQR(ctx, URL_PUBLIQUE, (W - q) / 2, qy, q, '#111');
+      dessinerQR(ctx, URL_QR, (W - q) / 2, qy, q, '#111');
       legendeQR(ctx, D, 'Scannez-moi', W / 2, qy + q + 34, '#777', 44);
     },
     /* Verso couleur : dos de carte aux couleurs du thème */
@@ -2330,7 +2469,7 @@
       const accent = luminance(D.d.accent) > 0.6 ? '#1a1a1a' : D.d.accent;
       ctx.fillStyle = accent; ctx.fillRect(0, H - 26, W, 26);
       const q = 520, bx = W - P - q;
-      dessinerQR(ctx, URL_PUBLIQUE, bx, (H - q) / 2 - 30, q, '#111');
+      dessinerQR(ctx, URL_QR, bx, (H - q) / 2 - 30, q, '#111');
       ctx.fillStyle = '#777'; ctx.textAlign = 'center'; ctx.font = '600 40px ' + D.fam; ctx.textBaseline = 'top';
       ctx.fillText('Scannez-moi', bx + q / 2, (H + q) / 2 - 10); ctx.textAlign = 'left';
       let y = P + (D.logo ? dessinerLogo(ctx, D, P, P, 200) + 56 : 40);
@@ -2418,7 +2557,7 @@
       ctx.fillStyle = 'rgba(255,255,255,.95)'; rectArrondi(ctx, m, m, W - 2 * m, H - 2 * m, 50); ctx.fill(); ctx.restore();
       const P = m + 90;
       const q = 480, bx = W - P - q;
-      dessinerQR(ctx, URL_PUBLIQUE, bx, (H - q) / 2 - 24, q, '#111');
+      dessinerQR(ctx, URL_QR, bx, (H - q) / 2 - 24, q, '#111');
       ctx.fillStyle = '#666'; ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.font = '600 38px ' + D.fam;
       ctx.fillText('Scannez-moi', bx + q / 2, (H + q) / 2 - 4); ctx.textAlign = 'left';
       const accent = luminance(D.d.accent) > 0.6 ? '#1a1a1a' : D.d.accent;
@@ -2462,7 +2601,7 @@
       ctx.fillStyle = '#444'; ctx.font = policeAjustee(ctx, ligne, '500', 48, 30, W - 300, D.fam);
       ctx.fillText(ligne, W / 2, y); y += 90;
       const q = Math.min(440, H - y - 90);
-      dessinerQR(ctx, URL_PUBLIQUE, (W - q) / 2, y, q, '#111');
+      dessinerQR(ctx, URL_QR, (W - q) / 2, y, q, '#111');
       ctx.textAlign = 'left';
     },
     vertical(ctx, D) {

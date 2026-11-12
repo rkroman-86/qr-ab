@@ -389,7 +389,7 @@
 
   let tousComptes = [];
   async function charger() {
-    const { comptes } = await api('liste');
+    const { comptes, stats30 } = await api('liste');
     chargerStripe().catch(() => {});
     chargerIA().catch(() => {});
     chargerEmail().catch(() => {});
@@ -402,7 +402,8 @@
     const credits = comptes.reduce((t, c) => t + ((c.ia && c.ia.credit) || 0), 0);
     $('#stats').innerHTML = '<span>Total <b>' + comptes.length + '</b></span><span>Offerts <b>' + n('gratuit') + '</b></span><span>Essais <b>' + n('essai') +
       '</b></span><span>Abonnés <b>' + n('payant') + '</b></span><span>Inactifs <b>' + comptes.filter(c => !c.actif).length + '</b></span>' +
-      '<span>Crédits IA en cours <b>' + euros(credits) + '</b></span>';
+      '<span>Crédits IA en cours <b>' + euros(credits) + '</b></span>' +
+      (stats30 && stats30.actif ? '<span>Visites 30 j <b>' + stats30.visites + '</b></span><span>Clics 30 j <b>' + stats30.clics + '</b></span>' : '');
     const nb = $('#nb-demandes'); nb.textContent = demandes; nb.classList.toggle('cache', !demandes);
     afficherListe();
   }
@@ -582,6 +583,7 @@
     if (c.aSupprimer) ligneDonnee('Conservation', 'dépassée depuis le ' + date(c.finConservation) + ' : à supprimer');
     ligneDonnee('Code promo', c.promo ? c.promo.code + (c.promo.manuel ? ' (rattaché à la main le ' + date(c.promo.le) + ')' : ' · +' + c.promo.jours + ' j à l’inscription') : '—');
     if (c.note) ligneDonnee('Note', c.note);
+    if (c.stats30) ligneDonnee('Statistiques 30 j', c.stats30.visites + ' visite' + (c.stats30.visites > 1 ? 's' : '') + ' · ' + c.stats30.clics + ' clic' + (c.stats30.clics > 1 ? 's' : '') + ' sur les boutons' + (c.traductions && c.traductions.length ? ' (toutes langues)' : ''));
     ligneDonnee('Moteurs de recherche', c.noindex ? '🚫 exclue (hors du plan du site, noindex)' : (c.traduction ? 'référencée (sauf si la page d’origine est exclue)' : 'référencée' + (c.traductions && c.traductions.length ? ' (avec ses versions traduites)' : '')));
     d.append(dl);
 

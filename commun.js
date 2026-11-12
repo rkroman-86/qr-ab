@@ -1235,3 +1235,48 @@ function genererFichiersSite(cfgBrut, base, doc) {
     urls.map(u => '  <url><loc>' + echapperHTML(u) + '</loc><lastmod>' + jour + '</lastmod></url>\n').join('') + '</urlset>\n';
   return fichiers;
 }
+
+/* =========================================================
+   Statistiques (pages publiques seulement) : un signal anonyme quand un bouton est touché
+   (type de lien seulement : téléphone, WhatsApp, avis…), et ?s=qr retiré de la barre d'adresse.
+   ========================================================= */
+function typeClic(href) {
+  const h = String(href || '').trim().toLowerCase();
+  if (h.startsWith('tel:')) return 'tel';
+  if (h.startsWith('sms:')) return 'sms';
+  if (h.startsWith('mailto:')) return 'email';
+  if (!/^https?:/.test(h)) return null;
+  let u;
+  try { u = new URL(h); } catch (e) { return null; }
+  const d = u.hostname.replace(/^(www|m|mobile)\./, ''), p = u.pathname;
+  if (d === location.hostname) return null;                               // navigation interne (Home, contact)
+  if (/(^|\.)(wa\.me|whatsapp\.com)$/.test(d)) return 'whatsapp';
+  if (/writereview|\/local\/review|g\.page\/r\//.test(h) || (/^g\.page$/.test(d) && /\/review/.test(p))) return 'avis';
+  if (/(^|\.)(maps\.app\.goo\.gl|maps\.apple\.com|waze\.com)$/.test(d) || /(^|\.)google\.[a-z.]+$/.test(d) && /^\/maps/.test(p) || /^maps\.google\./.test(d) || (d === 'goo.gl' && /^\/maps/.test(p))) return 'maps';
+  const R = { 't.me': 'telegram', 'telegram.me': 'telegram', 'instagram.com': 'instagram', 'facebook.com': 'facebook', 'fb.com': 'facebook', 'fb.me': 'facebook',
+    'tiktok.com': 'tiktok', 'youtube.com': 'youtube', 'youtu.be': 'youtube', 'linkedin.com': 'linkedin', 'x.com': 'x', 'twitter.com': 'x',
+    'snapchat.com': 'snapchat', 'pinterest.com': 'pinterest', 'pinterest.fr': 'pinterest', 'vk.com': 'vk' };
+  return R[d] || 'lien';
+}
+(function () {
+  if (typeof document === 'undefined' || typeof pageInstallable !== 'function' || !pageInstallable()) return;
+  try {
+    const u = new URL(location.href);
+    if (u.searchParams.has('s') || u.searchParams.has('moi')) {
+      if (u.searchParams.has('moi')) fetch('/api/moi', { credentials: 'include' }).catch(function () {});
+      u.searchParams.delete('s'); u.searchParams.delete('moi');
+      history.replaceState(history.state, '', u.pathname + u.search + u.hash);
+    }
+  } catch (e) {}
+  document.addEventListener('click', function (e) {
+    const a = e.target && e.target.closest && e.target.closest('a[href]');
+    if (!a) return;
+    const t = typeClic(a.getAttribute('href'));
+    if (!t) return;
+    const corps = JSON.stringify({ t: t });
+    try {
+      if (navigator.sendBeacon) navigator.sendBeacon('/api/clic', new Blob([corps], { type: 'application/json' }));
+      else fetch('/api/clic', { method: 'POST', body: corps, keepalive: true }).catch(function () {});
+    } catch (err) {}
+  }, true);
+})();
