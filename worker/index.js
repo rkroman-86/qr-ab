@@ -880,6 +880,9 @@ async function descriptionFond(env, cfg, ambiance, idee, pc, prudent) {
             : 'The image is a vertical (9:16) background for a small business mobile page, composed freely (any framing). ' +
               'Describe a concrete scene evoking the business (place, objects, atmosphere), ') +
           'never a close-up portrait of a person. ' +
+          // visages et mains sont les points faibles des générateurs : on les garde petits ou absents
+          'Prefer scenes of places, vehicles and objects. If people appear, keep them small, in the background or seen from behind: no faces in close-up, no hands holding objects in the foreground, no phones or screens. ' +
+          'Photorealistic, natural colors (not oversaturated), soft natural light, professional photography. ' +
           // le générateur refuse les marques, lieux privés célèbres, personnages et personnes connues (« output flagged »)
           'Never name or depict brands, trademarks, theme parks or their attractions, mascots, cartoon or film characters, celebrities or real people: ' +
           'replace them with a generic equivalent (e.g. "a family day out at a large amusement park" becomes "a happy family stepping out of a spacious van on a sunny day"). ' +
