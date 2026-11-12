@@ -395,6 +395,7 @@
     "TTC": ["incl. VAT", "с НДС"],
     "Retraduire depuis la page d’origine": ["Translate again from the original page", "Перевести заново с исходной страницы"],
     "La création d’images est momentanément indisponible (limite du jour atteinte). Réessayez plus tard : rien n’a été décompté.": ["Image creation is temporarily unavailable (daily limit reached). Try again later: nothing was charged.", "Создание изображений временно недоступно (достигнут дневной лимит). Попробуйте позже: ничего не списано."],
+    "Le service d’images a refusé cette image (marque, personnage ou personne célèbre dans le texte ?). Modifiez le texte ou choisissez une autre ambiance : rien n’a été décompté.": ["The image service refused this image (brand, character or famous person in the text?). Change the text or choose another style: nothing was charged.", "Сервис изображений отклонил эту картинку (марка, персонаж или известный человек в тексте?). Измените текст или выберите другой стиль: ничего не списано."],
     'Code promo (facultatif)': ['Promo code (optional)', 'Промокод (необязательно)'],
     'Code inconnu ou expiré': ['Unknown or expired code', 'Неизвестный или просроченный код'],
     'Code promo inconnu ou expiré. Corrigez-le ou laissez le champ vide.': ['Unknown or expired promo code. Fix it or leave the field empty.', 'Неизвестный или просроченный промокод. Исправьте его или оставьте поле пустым.'],

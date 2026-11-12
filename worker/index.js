@@ -623,7 +623,17 @@ async function apiClient(request, env, slug, route) {
 
     // 2 images en parallèle, graines différentes ; on garde celles qui réussissent
     const base = Date.now();
-    const essais = await Promise.allSettled([1, 2].map(i => genererImage(env, description, (base + i * 7919) % 2147483647, L, H)));
+    let essais = await Promise.allSettled([1, 2].map(i => genererImage(env, description, (base + i * 7919) % 2147483647, L, H)));
+    const echecs = essais.filter(e => e.status !== 'fulfilled');
+    if (echecs.length) {
+      // une seule reprise pour les images ratées : description plus prudente si le filtre a refusé, nouvelle graine sinon
+      const refus = echecs.some(e => /3030|flagged/i.test(String((e.reason && e.reason.message) || '')));
+      const description2 = refus ? await descriptionFond(env, cfg, ambiance, idee, pc, true) : description;
+      const reprises = await Promise.allSettled(essais.map((e, i) => e.status === 'fulfilled' ? Promise.resolve(e.value)
+        : genererImage(env, description2, (base + (i + 1) * 104729) % 2147483647, L, H)));
+      reprises.forEach((e, i) => { if (essais[i].status !== 'fulfilled') console.error('image (1re tentative)', essais[i].reason && essais[i].reason.message); });
+      essais = reprises;
+    }
     const nouvelles = [];
     for (let i = 0; i < essais.length; i++) {
       if (essais[i].status !== 'fulfilled') { console.error('image', essais[i].reason && essais[i].reason.message); continue; }
@@ -641,6 +651,8 @@ async function apiClient(request, env, slug, route) {
         console.error('QUOTA WORKERS AI ÉPUISÉ', raisons.slice(0, 200));
         throw new ErreurAPI(503, 'La création d’images est momentanément indisponible (limite du jour atteinte). Réessayez plus tard : rien n’a été décompté.');
       }
+      if (/3030|flagged/i.test(raisons))
+        throw new ErreurAPI(422, 'Le service d’images a refusé cette image (marque, personnage ou personne célèbre dans le texte ?). Modifiez le texte ou choisissez une autre ambiance : rien n’a été décompté.');
       throw new ErreurAPI(502, 'La création d’images a échoué. Réessayez dans un instant (rien n’a été décompté).');
     }
 
@@ -842,11 +854,13 @@ async function ajouterMedias(env, slug, nouvelles) {
   return garder;
 }
 /* Claude rédige la description de l'image (en anglais, sans texte dans l'image) à partir de l'activité */
-async function descriptionFond(env, cfg, ambiance, idee, pc) {
+async function descriptionFond(env, cfg, ambiance, idee, pc, prudent) {
   const style = AMBIANCES_FOND[ambiance];
   const activite = [cfg.titre, cfg.sousTitre, cfg.home && cfg.home.ia && cfg.home.ia.description, cfg.home && cfg.home.ia && cfg.home.ia.zone].filter(Boolean).join(' — ');
   const format = pc ? (pc.carre ? 'Square image' : 'Vertical image') : 'Vertical background image';
-  const secours = (pc ? [pc.titre, pc.texte.slice(0, 200)].filter(Boolean).join('. ') + (activite ? ' (' + activite.slice(0, 200) + ')' : '') : (idee || activite || 'a welcoming local business'))
+  // secours sans IA : texte brut du client (si refusé par le filtre, scène générique)
+  const secours = (prudent ? 'A welcoming, generic scene evoking a local service business, no recognizable place or brand'
+    : pc ? [pc.titre, pc.texte.slice(0, 200)].filter(Boolean).join('. ') + (activite ? ' (' + activite.slice(0, 200) + ')' : '') : (idee || activite || 'a welcoming local business'))
     + '. ' + style + '. ' + format + ', no text, no letters, no logos, no watermark.';
   const cleIA = await cleAnthropic(env);
   if (!cleIA) return secours;
@@ -863,7 +877,12 @@ async function descriptionFond(env, cfg, ambiance, idee, pc) {
               'The section text may be in any language: understand it, but write the prompt in English. '
             : 'The image is a vertical (9:16) background for a small business mobile page, composed freely (any framing). ' +
               'Describe a concrete scene evoking the business (place, objects, atmosphere), ') +
-          'never a close-up portrait of a person. Forbid any text: always end with "no text, no letters, no logos, no watermark".',
+          'never a close-up portrait of a person. ' +
+          // le générateur refuse les marques, lieux privés célèbres, personnages et personnes connues (« output flagged »)
+          'Never name or depict brands, trademarks, theme parks or their attractions, mascots, cartoon or film characters, celebrities or real people: ' +
+          'replace them with a generic equivalent (e.g. "a family day out at a large amusement park" becomes "a happy family stepping out of a spacious van on a sunny day"). ' +
+          (prudent ? 'A previous prompt for this image was rejected by the safety filter: stay especially generic and neutral (objects, place, light), no people in the foreground. ' : '') +
+          'Forbid any text: always end with "no text, no letters, no logos, no watermark".',
         messages: [{ role: 'user', content: 'Business: ' + (activite || '(not specified)') + '\nStyle: ' + style +
           (pc ? '\nSection title: ' + (pc.titre || '(none)') + '\nSection text: ' + (pc.texte || '(none)') : '') + (idee ? '\nClient idea: ' + idee : '') }]
       })
