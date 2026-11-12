@@ -1119,7 +1119,14 @@ function donneesStructurees(cfg, base) {
     sameAs: sameAs.length ? sameAs : undefined
   };
   Object.keys(o).forEach(k => o[k] === undefined && delete o[k]);
-  return JSON.stringify(o, null, 2).replace(/</g, '\\u003c');
+  // Nom du site pour Google (« site name ») : celui de l'entreprise, sinon Google prend celui du domaine parent (qrbc)
+  let racine = base;
+  try { racine = new URL('/', base).href; } catch (e) {}
+  const site = cfg.titre ? { '@type': 'WebSite', name: cfg.titre, url: racine } : null;
+  if (site && cfg.appNom && String(cfg.appNom).trim() !== cfg.titre) site.alternateName = String(cfg.appNom).trim();
+  const sortie = site ? { '@context': 'https://schema.org', '@graph': [Object.assign({}, o, { '@context': undefined }), site] } : o;
+  if (site) delete sortie['@graph'][0]['@context'];
+  return JSON.stringify(sortie, null, 2).replace(/</g, '\\u003c');
 }
 
 const CSS_BASE_SITE = `html,body{margin:0;height:100%}
