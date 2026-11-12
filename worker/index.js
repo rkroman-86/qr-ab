@@ -97,6 +97,11 @@ export default {
       await chargerTarifs(env);
       const url = new URL(request.url);
       const host = url.hostname.toLowerCase();
+      // Ancien navigateur arrivé en http:// (« Non sécurisé ») : on passe en https (sauf rappels Stripe en POST)
+      if (/"scheme":"http"/.test(request.headers.get('cf-visitor') || '') && (request.method === 'GET' || request.method === 'HEAD')) {
+        url.protocol = 'https:';
+        return Response.redirect(url.toString(), 301);
+      }
       if (host === DOMAINE || host === 'www.' + DOMAINE) return await racine(request, env, url);
       if (host.endsWith('.' + DOMAINE)) {
         const slug = host.slice(0, -(DOMAINE.length + 1));

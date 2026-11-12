@@ -818,7 +818,9 @@
     }
     if (r == null && /[.!?»)] \S/.test(cle)) {
       // message de plusieurs phrases (souvent assemblé par le serveur) : chaque phrase se traduit à part
-      const parts = cle.split(/(?<=[.!?»)])\s+(?=[A-ZÀ-ÖØ-ÞÉ«⏳✓])/u);
+      // (sans « lookbehind » : Safari ne le comprend qu'à partir d'iOS 16.4, et tout le fichier s'arrêterait)
+      const morceaux = cle.split(/([.!?»)])\s+(?=[A-ZÀ-ÖØ-ÞÉ«⏳✓])/u), parts = [];
+      for (let k = 0; k < morceaux.length; k += 2) parts.push(morceaux[k] + (morceaux[k + 1] || ''));
       if (parts.length > 1) {
         const tr = parts.map(x => t(x, lng));
         if (tr.some((x, k) => x !== parts[k])) r = tr.join(' ');
