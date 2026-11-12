@@ -325,7 +325,7 @@
   const CHAMPS_TARIFS = ['prixAnnuel', 'prixTexte', 'prixPicto', 'prixFond', 'prixExpress', 'prixPage', 'prixTraduction', 'essaiTexte', 'essaiPicto', 'essaiFond', 'payantTexte', 'payantPicto', 'payantFond'];
   const versChamps = t => ({
     prixAnnuel: t.prixAnnuel / 100, prixTexte: t.prixTexte / 100, prixPicto: t.prixPicto / 100, prixFond: t.prixFond / 100, prixExpress: t.prixExpress / 100,
-    prixPage: (t.prixPage ?? 900) / 100, prixTraduction: (t.prixTraduction ?? 150) / 100,
+    prixPage: (t.prixPage != null ? t.prixPage : 900) / 100, prixTraduction: (t.prixTraduction != null ? t.prixTraduction : 150) / 100,
     essaiTexte: t.essai.texte, essaiPicto: t.essai.picto, essaiFond: t.essai.fond,
     payantTexte: t.payant.texte, payantPicto: t.payant.picto, payantFond: t.payant.fond
   });

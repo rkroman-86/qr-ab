@@ -93,6 +93,12 @@
       linear-gradient(rgba(255,255,255,.18),rgba(255,255,255,.18)) 0 33.33%/100% 1px no-repeat,linear-gradient(rgba(255,255,255,.18),rgba(255,255,255,.18)) 0 66.66%/100% 1px no-repeat}
     .cadre-zoom{display:flex;align-items:center;gap:10px;margin:12px 0 4px}
     .cadre-zoom input{flex:1}
+    .cadre-voile{position:absolute;inset:0;pointer-events:none}
+    .cadre-teinte{display:flex;align-items:center;gap:8px;margin:6px 0 4px;flex-wrap:wrap}
+    .cadre-teinte input[type=range]{flex:1;min-width:110px}
+    .cadre-teinte .pastille{width:26px;height:26px;border-radius:50%;border:2px solid rgba(128,128,128,.55);padding:0;cursor:pointer}
+    .cadre-teinte .pastille.actif{border-color:var(--accent,#5b8cff);box-shadow:0 0 0 2px var(--accent,#5b8cff)}
+    .cadre-teinte input[type=color]{width:30px;height:28px;border:0;padding:0;background:none;cursor:pointer}
     #fen-cadre .boutons{display:flex;gap:10px;margin-top:12px}
     #fen-cadre .boutons .btn{flex:1}
 
@@ -1045,9 +1051,9 @@
     cfg.cadres = cfg.cadres || {};
     const prec = cfg.cadres[source];
     const charger = src => new Promise((ok, ko) => { const i = new Image(); i.decoding = 'async'; i.onload = () => ok(i); i.onerror = ko; i.src = imagesLocales[src] || src; });
-    let img, origine = source, rect = null;
+    let img, origine = source, rect = null, teinte = null;
     if (prec && prec.source) {
-      try { img = await charger(prec.source); origine = prec.source; rect = prec.rect; } catch (e) { img = null; }   // originale supprimée : on garde la copie
+      try { img = await charger(prec.source); origine = prec.source; rect = prec.rect; teinte = prec.teinte || { couleur: '#000000', force: 0 }; } catch (e) { img = null; }   // originale supprimée : on garde la copie
     }
     if (!img) {
       try { img = await charger(source); }
@@ -1056,11 +1062,28 @@
     const ancien = document.getElementById('fen-cadre'); if (ancien) ancien.remove();
     const fond = el('div', { id: 'fen-cadre', role: 'dialog', 'aria-modal': 'true' });
     const fen = el('div', { class: 'fen' });
-    const larg = Math.min(420, window.innerWidth - 60), haut = Math.min(Math.round(larg / ratio), window.innerHeight - 260);
+    const larg = Math.min(420, window.innerWidth - 60), haut = Math.min(Math.round(larg / ratio), window.innerHeight - 330);
     const FW = Math.round(Math.min(larg, haut * ratio)), FH = Math.round(FW / ratio);
     const zone = el('div', { class: 'cadre-zone', style: 'width:' + FW + 'px;height:' + FH + 'px' });
     const im = el('img', { src: img.src, alt: '' });
     zone.appendChild(im);
+    // Assombrir : voile de couleur (noir par défaut) incrusté dans l'image, pour masquer les défauts et faire ressortir le texte
+    if (!teinte) teinte = { couleur: '#000000', force: 20 };   // nouvelle image : légèrement assombrie
+    const voileCadre = el('div', { class: 'cadre-voile' });
+    zone.appendChild(voileCadre);
+    const forceVoile = el('input', { type: 'range', min: '0', max: '80', step: '1', value: String(teinte.force), 'aria-label': t('Assombrir') });
+    const valeurVoile = el('span', { style: 'min-width:3.2em;text-align:right;font-size:.85rem;color:var(--doux)' });
+    const choixCouleur = el('input', { type: 'color', value: teinte.couleur, 'aria-label': t('Autre couleur') });
+    const pastilles = ['#000000', '#ffffff', '#0b1f3a', '#3b2a1a'].map(c => el('button', { type: 'button', class: 'pastille', style: 'background:' + c, 'aria-label': c, onclick: () => { teinte.couleur = c; choixCouleur.value = c; majVoile(); } }));
+    function majVoile() {
+      teinte.force = Number(forceVoile.value);
+      voileCadre.style.background = teinte.couleur; voileCadre.style.opacity = String(teinte.force / 100);
+      valeurVoile.textContent = teinte.force + ' %';
+      pastilles.forEach(b => b.classList.toggle('actif', b.getAttribute('aria-label') === teinte.couleur));
+    }
+    forceVoile.addEventListener('input', majVoile);
+    choixCouleur.addEventListener('input', () => { teinte.couleur = choixCouleur.value; majVoile(); });
+    majVoile();
     const iw = img.naturalWidth, ih = img.naturalHeight;
     const base = Math.max(FW / iw, FH / ih);                 // « couvrir » : l'image remplit toujours le cadre
     let z = 1, ox = (FW - iw * base) / 2, oy = (FH - ih * base) / 2;
@@ -1109,6 +1132,8 @@
       zone,
       el('div', { class: 'cadre-zoom' }, [el('span', { text: '−' }), curseur, el('span', { text: '+' })]),
       flou,
+      el('div', { class: 'cadre-teinte' }, [el('span', { text: 'Assombrir', style: 'font-size:.9rem' }), forceVoile, valeurVoile]),
+      el('div', { class: 'cadre-teinte' }, [el('span', { text: 'Couleur', style: 'font-size:.9rem' }), ...pastilles, choixCouleur]),
       el('div', { class: 'boutons' }, [
         el('button', { type: 'button', class: 'btn', text: 'Annuler', onclick: fermer }),
         el('button', { type: 'button', class: 'btn', text: 'Recentrer', onclick: () => { z = 1; ox = (FW - iw * base) / 2; oy = (FH - ih * base) / 2; dessiner(); } }),
@@ -1128,13 +1153,14 @@
       ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, ow, oh);
       ctx.imageSmoothingQuality = 'high';
       ctx.drawImage(img, sx, sy, sw, sh, 0, 0, ow, oh);
+      if (teinte.force > 0) { ctx.globalAlpha = teinte.force / 100; ctx.fillStyle = teinte.couleur; ctx.fillRect(0, 0, ow, oh); ctx.globalAlpha = 1; }
       let data;
       try { data = cv.toDataURL('image/jpeg', 0.86); } catch (e) { alert(t('Cette image ne peut pas être lue sur cet appareil. Essayez une autre image (JPEG ou PNG de moins de 3 Mo).')); return; }
       const chemin = 'images/' + (nom === 'fond' ? 'fond' : 'article') + '-cadre-' + Date.now() + '.jpg';
       imagesLocales[chemin] = data;
       imagesAEnvoyer[chemin] = data.split(',')[1];
       // mémorise l'originale et le cadrage, pour pouvoir recadrer (et dézoomer) plus tard
-      cfg.cadres[chemin] = { source: origine, rect: { sx: Math.round(sx), sy: Math.round(sy), sw: Math.round(sw), sh: Math.round(sh) } };
+      cfg.cadres[chemin] = { source: origine, rect: { sx: Math.round(sx), sy: Math.round(sy), sw: Math.round(sw), sh: Math.round(sh) }, teinte: { couleur: teinte.couleur, force: teinte.force } };
       const utiles = new Set(JSON.stringify(Object.assign({}, cfg, { cadres: null })).match(/images\/[\w.-]+/g) || []);
       for (const k in cfg.cadres) if (!utiles.has(k) && k !== chemin) delete cfg.cadres[k];   // pas d'entrées orphelines
       fermer();
