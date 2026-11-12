@@ -1179,6 +1179,8 @@ function pageHTML(o) {
     (o.appli ? '<link rel="manifest" href="/manifest.webmanifest">\n' + meta('mobile-web-app-capable', 'yes') + meta('apple-mobile-web-app-capable', 'yes') +
       meta('apple-mobile-web-app-title', o.appli.nom) + meta('apple-mobile-web-app-status-bar-style', 'black-translucent') +
       '<link rel="apple-touch-icon" href="' + echapperHTML(o.appli.icone) + '">\n' : '') +
+    // Icône des résultats Google : carrée et multiple de 48 px → l'icône d'appli 192×192 si elle existe, sinon le logo
+    (o.appli && /^images\//.test(o.appli.icone || '') ? '<link rel="icon" type="image/png" sizes="192x192" href="' + echapperHTML(o.appli.icone) + '">\n' : '') +
     (o.icone ? '<link rel="icon" href="' + echapperHTML(o.icone) + '">\n' : '') +
     '<script type="application/ld+json">\n' + o.jsonld + '\n</script>\n' +
     '<style>' + CSS_BASE_SITE + '</style>\n<style id="qp-css">' + CSS_PAGE + '</style>\n' +
