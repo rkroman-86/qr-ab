@@ -139,6 +139,10 @@ async function racine(request, env, url) {
     return json({ disponible: !(await env.CLIENTS.get('compte:' + slug)) && !(await env.CLIENTS.get('reserve:' + slug)) });
   }
   if (p === '/' || p === '/index.html') return accueilLangue(env, request, url);
+  // Référencement : robots.txt du site principal, plan du site global (toutes les pages clients actives)
+  if (p === '/robots.txt') return texte('User-agent: *\nAllow: /\nDisallow: /gestion\nDisallow: /app/\nDisallow: /api/\n\nSitemap: https://' + DOMAINE + '/sitemap.xml\n');
+  if (p === '/sitemap.xml') return planGlobal(env, url.searchParams.has('frais'));
+  if (p === '/sitemap-site.xml') return xml(planSitePrincipal());
   if (p === '/gestion' || p === '/gestion.html') return statique(env, request, '/gestion.html', true);
   // Pages légales : français (seul faisant foi) + traductions anglaise et russe (?lang=en|ru)
   if (p === '/cgv' || p === '/cgv.html' || p === '/mentions-legales' || p === '/mentions-legales.html') {
@@ -177,7 +181,10 @@ async function siteClient(request, env, url, slug) {
   if (FICHIERS_STATIQUES.has(p)) return statique(env, request, p);
   if (p === '/robots.txt') {
     const c = await lireCompte(env, slug);
-    const plans = ['/'].concat(((c && c.traductions) || []).map(l => '/' + l + '/'));
+    // page absente, en pause ou non référencée : pas de plan du site annoncé (les pages répondent « noindex »)
+    if (!c || !actif(c) || c.emailAVerifier || c.noindex) return texte('User-agent: *\nAllow: /\nDisallow: /admin\n');
+    const plans = ['/'];
+    for (const l of c.traductions || []) { const tc = await lireCompte(env, slug + '.' + l); if (tc && actif(tc)) plans.push('/' + l + '/'); }
     return texte('User-agent: *\nAllow: /\nDisallow: /admin\n' + plans.map(x => 'Sitemap: https://' + slug + '.' + DOMAINE + x + 'sitemap.xml\n').join(''));
   }
   // Page installable comme une appli : service worker propre à la page, icônes qrbc par défaut
@@ -2168,7 +2175,70 @@ function pageInfo(titre, msg, status) {
     '<meta name="robots" content="noindex"><title>' + esc(titre) + '</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;' +
     'font:16px/1.5 system-ui,sans-serif;background:#f4f4f6;color:#17171c;text-align:center;padding:24px}a{color:#1f6feb}</style></head><body><div><h1>' +
     esc(titre) + '</h1><p>' + esc(msg) + '</p><p><a href="https://' + DOMAINE + '">' + DOMAINE + '</a></p></div></body></html>',
-    { status, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } });
+    { status, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'x-robots-tag': 'noindex' } });
+}
+function xml(corps) {
+  return new Response(corps, { headers: { 'content-type': 'application/xml; charset=utf-8', 'cache-control': 'public, max-age=3600' } });
+}
+
+/* ===================== Référencement : plan du site global =====================
+   https://qrbc.app/sitemap.xml = index des plans du site : celui du site principal + celui de chaque page client
+   publiée et active (nom.qrbc.app/sitemap.xml, versions traduites nom.qrbc.app/xx/sitemap.xml).
+   Exclues : pages en pause, e-mail non confirmé, jamais enregistrées, ou marquées « noindex ».
+   Le résultat est gardé 6 h en KV (cache:plan-global) ; ?frais le recalcule tout de suite. */
+const DUREE_CACHE_PLAN = 6 * 3600;
+function planSitePrincipal() {
+  const jour = new Date().toISOString().slice(0, 10);
+  const adresses = ['/', '/?lang=en', '/?lang=ru', '/cgv', '/mentions-legales'];
+  return '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
+    adresses.map(a => '  <url><loc>' + esc('https://' + DOMAINE + a) + '</loc><lastmod>' + jour + '</lastmod></url>\n').join('') + '</urlset>\n';
+}
+async function planGlobal(env, frais) {
+  if (!frais) {
+    const enCache = await env.CLIENTS.get('cache:plan-global');
+    if (enCache) return xml(enCache);
+  }
+  // 1. pages qui ont un plan du site publié (clé site:<page>:sitemap.xml, écrite à chaque enregistrement)
+  const publiees = [];
+  let curseur;
+  do {
+    const l = await env.CLIENTS.list({ prefix: 'site:', cursor: curseur });
+    for (const k of l.keys) {
+      const m = k.name.match(new RegExp('^site:(' + RE_PAGE + '):sitemap\\.xml$'));
+      if (m) publiees.push(m[1]);
+    }
+    curseur = l.list_complete ? null : l.cursor;
+  } while (curseur);
+  // 2. on ne garde que les pages visibles
+  const titulaires = new Map();
+  const titulaire = async c => {
+    if (!c.parent) return c;
+    if (!titulaires.has(c.parent)) titulaires.set(c.parent, await lireCompte(env, c.parent));
+    return titulaires.get(c.parent);
+  };
+  const plans = ['https://' + DOMAINE + '/sitemap-site.xml'];
+  for (const nom of publiees.sort()) {
+    const c = await lireCompte(env, nom);
+    if (!c || !actif(c) || c.noindex) continue;
+    let adresse;
+    if (c.traduction) {
+      const src = await lireCompte(env, c.traduction.source);
+      if (!src || !actif(src) || src.noindex || !(src.traductions || []).includes(c.traduction.langue)) continue;
+      const tit = await titulaire(src);
+      if (!tit || tit.emailAVerifier) continue;
+      adresse = 'https://' + c.traduction.source + '.' + DOMAINE + '/' + c.traduction.langue + '/sitemap.xml';
+    } else {
+      if (nom.includes('.')) continue;
+      const tit = await titulaire(c);
+      if (!tit || tit.emailAVerifier) continue;
+      adresse = 'https://' + nom + '.' + DOMAINE + '/sitemap.xml';
+    }
+    plans.push(adresse);
+  }
+  const corps = '<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
+    plans.map(a => '  <sitemap><loc>' + esc(a) + '</loc></sitemap>\n').join('') + '</sitemapindex>\n';
+  await env.CLIENTS.put('cache:plan-global', corps, { expirationTtl: DUREE_CACHE_PLAN });
+  return xml(corps);
 }
 /* Page d'accueil dans la langue du lien (?lang=en|ru) : les robots d'aperçu (WhatsApp, Facebook…)
    et Google lisent le titre et la description sans exécuter le JavaScript */
