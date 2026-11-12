@@ -236,7 +236,7 @@
     attente = setTimeout(() => marquer(Math.round(rail.scrollLeft / rail.clientWidth)), 60);
   }, { passive: true });
   window.addEventListener('resize', () => aller(courante, false));
-  document.querySelectorAll('[data-i],[data-aller]').forEach(b => b.addEventListener('click', () => aller(Number(b.dataset.i ?? b.dataset.aller))));
+  document.querySelectorAll('[data-i],[data-aller]').forEach(b => b.addEventListener('click', () => aller(Number(b.dataset.i != null ? b.dataset.i : b.dataset.aller))));
 
   // Première pancarte : inscription si demandé, ou si aucune page n'est connue sur cet appareil
   const depart = location.hash === '#creer' || params.has('promo') ? 1 : (location.hash === '#connexion' || location.hash === '#oubli') ? 0 : (connues.length ? 0 : 1);
