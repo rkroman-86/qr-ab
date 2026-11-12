@@ -2268,7 +2268,8 @@ let TABLES_STATS = false;
 const GARDER_STATS = 400;           // jours
 const TYPES_CLIC = new Set(['tel', 'sms', 'email', 'whatsapp', 'avis', 'maps', 'telegram', 'instagram', 'facebook', 'tiktok',
   'youtube', 'linkedin', 'x', 'snapchat', 'pinterest', 'vk', 'lien']);
-const RE_ROBOT = /bot|crawl|spider|slurp|preview|facebookexternalhit|^whatsapp|lighthouse|headless|curl|wget|python|http-client|okhttp|monitor/i;
+// Robots et outils (Googlebot, outil d'inspection Search Console, GoogleOther, aperçus de liens, audits SEO…)
+const RE_ROBOT = /bot|crawl|spider|slurp|preview|facebookexternalhit|^whatsapp|lighthouse|headless|curl|wget|python|http-client|okhttp|monitor|google-|googleother|inspectiontool|mediapartners|feedfetcher|apis-google|ahrefs|semrush|mj12|dataforseo|validator|pagespeed|gtmetrix|screaming|bingpreview|bytespider|scrapy|java\/|go-http|node-fetch|axios/i;
 
 async function tablesStats(env) {
   if (TABLES_STATS || !env.STATS) return !!env.STATS;
