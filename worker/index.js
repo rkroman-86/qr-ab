@@ -882,7 +882,7 @@ async function descriptionFond(env, cfg, ambiance, idee, pc, prudent) {
           'never a close-up portrait of a person. ' +
           // visages et mains sont les points faibles des générateurs : on les garde petits ou absents
           'Prefer scenes of places, vehicles and objects. If people appear, keep them small, in the background or seen from behind: no faces in close-up, no hands holding objects in the foreground, no phones or screens. ' +
-          'Photorealistic, natural colors (not oversaturated), soft natural light, professional photography. ' +
+          'It must look like a real candid photograph, never an illustration: write it as a photo (e.g. "real photograph, shot on a full-frame camera, 35mm lens"), with natural colors (not oversaturated), soft natural light and realistic textures; add "not a cartoon, not an illustration, not a 3D render, not CGI". ' +
           // le générateur refuse les marques, lieux privés célèbres, personnages et personnes connues (« output flagged »)
           'Never name or depict brands, trademarks, theme parks or their attractions, mascots, cartoon or film characters, celebrities or real people: ' +
           'replace them with a generic equivalent (e.g. "a family day out at a large amusement park" becomes "a happy French family stepping out of a spacious van on a sunny day near Paris, France"). ' +
