@@ -227,7 +227,7 @@ async function siteClient(request, env, url, slug) {
     let corps = await env.CLIENTS.get('site:' + slug + ':' + nom);
     if (!corps && nom !== 'sitemap.xml') corps = await pageDemarrage(env, slug, nom === 'accueil.html' ? 'home' : '');
     if (!corps) return texte('Introuvable', 404);
-    return reponsePage(corps, nom, langs, langs.length ? langs[0].l : null, slug, url);
+    return reponsePage(corps, nom, langs, langs.length ? langs[0].l : null, slug, url, !!compte.noindex);
   }
   return pageInfo('Page introuvable', 'Ce lien n’existe pas.', 404);
 }
@@ -249,7 +249,7 @@ async function pageTraduite(request, env, url, slug, tc, reste) {
   let corps = await env.CLIENTS.get('site:' + tc.slug + ':' + nom);
   if (!corps && nom !== 'sitemap.xml') corps = await pageDemarrage(env, tc.slug, nom === 'accueil.html' ? 'home' : '');
   if (!corps) return texte('Introuvable', 404);
-  return reponsePage(corps, nom, languesPage(source), tc.traduction.langue, slug, url);
+  return reponsePage(corps, nom, languesPage(source), tc.traduction.langue, slug, url, !!(source.noindex || tc.noindex));
 }
 function cookieLangue(request) {
   const m = (request.headers.get('cookie') || '').match(/(?:^|;\s*)qrbc-l=([a-z]{2})/);
@@ -263,8 +263,9 @@ function langueNavigateur(request, dispo) {
   return null;
 }
 /* Ajoute les versions linguistiques (Google + sélecteur) et retient le choix du visiteur */
-function reponsePage(corps, nom, langs, actuelle, slug, url) {
+function reponsePage(corps, nom, langs, actuelle, slug, url, exclue) {
   const h = { 'content-type': nom.endsWith('.xml') ? 'application/xml; charset=utf-8' : 'text/html; charset=utf-8', 'cache-control': 'public, max-age=60' };
+  if (exclue) h['x-robots-tag'] = 'noindex';      // page exclue des moteurs de recherche (réglage dans /gestion)
   if (langs.length && nom !== 'sitemap.xml') {
     const base = 'https://' + slug + '.' + DOMAINE;
     const fin = nom === 'accueil.html' ? 'accueil.html' : '';
@@ -1106,6 +1107,8 @@ async function gestion(request, env, action) {
     if (d.prolongerEssai) compte.finEssai = new Date(Math.max(Date.now(), Date.parse(compte.finEssai || 0) || 0) + Number(d.prolongerEssai) * 86400000).toISOString();
     if (d.payeJusqua !== undefined) compte.payeJusqua = d.payeJusqua || null;
     if (d.note !== undefined) compte.note = String(d.note);
+    // Exclure la page des moteurs de recherche (démo, test, choix du client) : hors du plan du site + en-tête noindex
+    if (d.noindex !== undefined) { if (d.noindex) compte.noindex = true; else delete compte.noindex; }
     if (d.validerEmail) { delete compte.emailAVerifier; compte.emailVerifie = new Date().toISOString(); }   // validation à la main par Roman
     // IA gratuites restantes : on repart de zéro utilisation et on ajuste l'écart avec le quota de la formule
     for (const type of TYPES_IA) {
@@ -1140,6 +1143,7 @@ async function gestion(request, env, action) {
     }
     await ecrireCompte(env, compte);
     if ((compte.pages || []).length && (d.plan || d.prolongerEssai || d.payeJusqua !== undefined)) await synchroniserPages(env, compte, false);
+    if (d.noindex !== undefined || d.plan) await env.CLIENTS.delete('cache:plan-global');   // plan du site recalculé à la prochaine lecture
     return json({ ok: true, compte: resumeCompte(compte) });
   }
 
@@ -2007,7 +2011,7 @@ function resumeCompte(c) {
   const q = QUOTAS_IA[c.plan];
   const ia = c.ia || {};
   return {
-    slug: c.slug, email: c.email, emailAVerifier: !!c.emailAVerifier, plan: c.plan, actif: actif(c), finEssai: c.finEssai, payeJusqua: c.payeJusqua, cree: c.cree, note: c.note || '', promo: c.promo || null,
+    slug: c.slug, email: c.email, emailAVerifier: !!c.emailAVerifier, noindex: !!c.noindex, plan: c.plan, actif: actif(c), finEssai: c.finEssai, payeJusqua: c.payeJusqua, cree: c.cree, note: c.note || '', promo: c.promo || null,
     ia: {
       illimite: c.plan === 'gratuit',
       texte: { utilises: ia.texte || 0, inclus: q ? Math.max(0, q.texte + ((ia.bonus && ia.bonus.texte) || 0)) : null },

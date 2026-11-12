@@ -582,6 +582,7 @@
     if (c.aSupprimer) ligneDonnee('Conservation', 'dépassée depuis le ' + date(c.finConservation) + ' : à supprimer');
     ligneDonnee('Code promo', c.promo ? c.promo.code + (c.promo.manuel ? ' (rattaché à la main le ' + date(c.promo.le) + ')' : ' · +' + c.promo.jours + ' j à l’inscription') : '—');
     if (c.note) ligneDonnee('Note', c.note);
+    ligneDonnee('Moteurs de recherche', c.noindex ? '🚫 exclue (hors du plan du site, noindex)' : (c.traduction ? 'référencée (sauf si la page d’origine est exclue)' : 'référencée' + (c.traductions && c.traductions.length ? ' (avec ses versions traduites)' : '')));
     d.append(dl);
 
     // IA : gratuites restantes (modifiables) et crédit (lecture seule)
@@ -643,6 +644,9 @@
       const v = prompt('Code promo de ' + c.slug + ' (suivi de l’apporteur ; laissez vide pour retirer).\nCela ne change pas la date de fin d’essai.', c.promo ? c.promo.code : '');
       return v === null ? null : api('modifier', { nom: c.slug, promo: v.trim() });
     });
+    bouton(c.noindex ? 'Réautoriser les moteurs' : 'Exclure des moteurs', () =>
+      confirm(c.noindex ? 'Laisser Google et les autres moteurs référencer ' + c.slug + ' ?' : 'Exclure ' + c.slug + (c.traduction ? '' : ' (et ses versions traduites)') + ' des moteurs de recherche ?\nLa page reste visible par son adresse et son QR code ; Google la retirera de ses résultats sous quelques jours.')
+        ? api('modifier', { nom: c.slug, noindex: !c.noindex }) : null);
     bouton('Note', () => {
       const n = prompt('Note interne :', c.note || '');
       return n === null ? null : api('modifier', { nom: c.slug, note: n });
