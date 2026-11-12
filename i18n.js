@@ -836,6 +836,13 @@
       const u = new URLSearchParams(location.search).get('lang');
       if (LANGUES[u]) { try { localStorage.setItem(CLE, u); } catch (e) {} return u; }
     } catch (e) {}
+    // robots des moteurs (Google, Bing…) : on garde la langue annoncée par la page publique,
+    // sinon l'accueil français serait indexé en anglais (le navigateur du robot est réglé en anglais)
+    try {
+      const lp = document.documentElement.getAttribute('lang');
+      if (document.documentElement.hasAttribute('data-lien-langue') && LANGUES[lp] &&
+          /bot|crawl|spider|slurp|lighthouse|google|bing|yandex|baidu|duckduck|facebookexternalhit|whatsapp|telegram/i.test(navigator.userAgent)) return lp;
+    } catch (e) {}
     try { const l = localStorage.getItem(CLE); if (LANGUES[l]) return l; } catch (e) {}
     const n = (navigator.language || 'fr').slice(0, 2).toLowerCase();
     return LANGUES[n] ? n : 'en';
