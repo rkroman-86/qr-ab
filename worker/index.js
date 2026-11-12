@@ -36,7 +36,9 @@ const ESSAIS_EXPRESS = 2;                       // appels IA par étape d'une cr
 const TARIFS_DEFAUT = { prixAnnuel: 1800, prixTexte: 40, prixPicto: 70, prixFond: 70, prixExpress: 150, prixPage: 900, prixTraduction: 150,
   essai: { texte: 2, picto: 2, fond: 1 }, payant: { texte: 10, picto: 5, fond: 2 } };
 const TYPES_IA = ['texte', 'picto', 'fond'];      // fond = une génération de 2 images de fond
-const MODELE_IMAGE = '@cf/black-forest-labs/flux-2-klein-9b';
+const MODELE_IMAGE = '@cf/black-forest-labs/flux-2-dev';          // FLUX.2 [dev] : bien meilleure qualité (≈ 0,05 $ l'image)
+const MODELE_IMAGE_SECOURS = '@cf/black-forest-labs/flux-2-klein-9b';   // rapide et peu coûteux, si le premier est indisponible
+const ETAPES_IMAGE = 25;
 const FOND_L = 864, FOND_H = 1536;               // portrait 9:16 (téléphone)
 const MEDIAS_MAX = 40;                           // images gardées par genre (fond, logo, article) dans la médiathèque d'un client
 let PRIX_ANNUEL = TARIFS_DEFAUT.prixAnnuel;     // centimes HT
@@ -895,15 +897,25 @@ async function descriptionFond(env, cfg, ambiance, idee, pc, prudent) {
 }
 /* FLUX.2 klein 9B sur Workers AI : entrée multipart, sortie image en base64 */
 async function genererImage(env, prompt, graine, largeur = FOND_L, hauteur = FOND_H) {
-  const form = new FormData();
-  form.append('prompt', prompt);
-  form.append('width', String(largeur));
-  form.append('height', String(hauteur));
-  form.append('seed', String(graine));
-  const corps = new Response(form);                // FormData n'expose pas sa frontière : on la récupère ainsi
-  const r = await env.AI.run(MODELE_IMAGE, { multipart: { body: corps.body, contentType: corps.headers.get('content-type') } });
-  if (!r || !r.image) throw new Error('réponse sans image');
-  return deb64(r.image);
+  const appel = async (modele, etapes) => {
+    const form = new FormData();
+    form.append('prompt', prompt);
+    form.append('width', String(largeur));
+    form.append('height', String(hauteur));
+    form.append('seed', String(graine));
+    if (etapes) form.append('steps', String(etapes));
+    const corps = new Response(form);              // FormData n'expose pas sa frontière : on la récupère ainsi
+    const r = await env.AI.run(modele, { multipart: { body: corps.body, contentType: corps.headers.get('content-type') } });
+    if (!r || !r.image) throw new Error('réponse sans image');
+    return deb64(r.image);
+  };
+  try { return await appel(MODELE_IMAGE, ETAPES_IMAGE); }
+  catch (e) {
+    const msg = String((e && e.message) || e);
+    if (/3030|flagged/i.test(msg)) throw e;        // image refusée par le filtre : le modèle de secours la refuserait aussi
+    console.error('image ' + MODELE_IMAGE + ' indisponible, modèle de secours :', msg.slice(0, 160));
+    return appel(MODELE_IMAGE_SECOURS, 0);
+  }
 }
 
 async function imageClient(env, slug, nom, compte) {
