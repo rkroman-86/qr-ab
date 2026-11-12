@@ -634,7 +634,15 @@ async function apiClient(request, env, slug, route) {
       await env.CLIENTS.put('img:' + racineDe(compte) + ':' + chemin.slice(7), octets, { metadata: { type } });
       nouvelles.push({ chemin, genre: pc ? 'article' : 'fond', source: 'ia', le: new Date().toISOString(), ambiance, idee: pc ? pc.titre : idee });
     }
-    if (!nouvelles.length) throw new ErreurAPI(502, 'La création d’images a échoué. Réessayez dans un instant (rien n’a été décompté).');
+    if (!nouvelles.length) {
+      // quota journalier de Cloudflare Workers AI épuisé (plan gratuit : ~3 créations de 2 images par jour) : message clair
+      const raisons = essais.map(e => String((e.reason && e.reason.message) || '')).join(' ');
+      if (/4006|daily free allocation|neurons/i.test(raisons)) {
+        console.error('QUOTA WORKERS AI ÉPUISÉ', raisons.slice(0, 200));
+        throw new ErreurAPI(503, 'La création d’images est momentanément indisponible (limite du jour atteinte). Réessayez plus tard : rien n’a été décompté.');
+      }
+      throw new ErreurAPI(502, 'La création d’images a échoué. Réessayez dans un instant (rien n’a été décompté).');
+    }
 
     const medias = await ajouterMedias(env, racineDe(compte), nouvelles);
     const fonds = medias.filter(x => x.genre === 'fond');
