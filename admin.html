@@ -156,6 +156,8 @@
       .cadre > .qp{min-height:100%}
     }
 
+    .seo-alertes{display:grid;gap:4px;margin:4px 0 10px}
+    .seo-alerte{font-size:.84rem;line-height:1.4;color:var(--err)}
     /* ---------- Statistiques ---------- */
     .vue-stats{display:none;padding:16px 16px 60px;max-width:760px;width:100%;margin:0 auto}
     body[data-vue=stats] .vue-stats{display:block}
@@ -3478,7 +3480,7 @@
       box.appendChild(el('div', { class: 'ia-art ia-seo' }, [
         el('span', { class: 'etiq', text: 'Référencement Google' }),
         el('div', { class: 'aide', style: 'margin:0', text: 'Mot-clé principal : ' + (S.motCle || '—') + (S.motsCles.length ? ' · secondaires : ' + S.motsCles.join(', ') : '') }),
-        el('label', { class: 'champ', style: 'margin:0' }, [el('span', { text: 'Titre dans Google' }), t]), compteur(t, 50, 60),
+        el('label', { class: 'champ', style: 'margin:0' }, [el('span', { text: 'Titre dans Google' }), t]), compteur(t, 50, 60), zoneAlertesTitre(t),
         el('label', { class: 'champ', style: 'margin:0' }, [el('span', { text: 'Description dans Google' }), d]), compteur(d, 120, 155)
       ]));
     }
@@ -3511,6 +3513,47 @@
     return box;
   }
 
+
+  /* Conseils automatiques sur le titre Google (affichés sous le champ, mis à jour à la frappe) */
+  const sansAccents = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  function alertesTitre(titre) {
+    const brut = String(titre || '').trim(), out = [];
+    if (!brut) return out;
+    const norm = sansAccents(brut), compact = norm.replace(/[^a-z0-9]/g, '');
+    if (/qr-?bc/.test(norm)) out.push(['Retirez « qrbc » : c’est le nom de l’outil, pas celui de votre entreprise.']);
+    if (brut.length > 60) out.push(['Titre trop long : Google le coupera après environ 60 caractères.']);
+    else if (brut.length < 30) out.push(['Titre un peu court : ajoutez votre activité et votre ville.']);
+    const nom = sansAccents(cfg.titre).replace(/[^a-z0-9]/g, '');
+    if (nom.length >= 2 && !compact.includes(nom)) out.push(['Ajoutez le nom de votre entreprise à la fin du titre :', cfg.titre]);
+    // répétition : deux mots qui se suivent présents deux fois, ou un mot important présent trois fois
+    const origine = brut.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(m => m.length > 1);
+    const mots = origine.map(sansAccents);
+    const affiche = k => { const i = mots.findIndex((m, j) => (m + ' ' + (mots[j + 1] || '')) === k || m === k); return i < 0 ? k : (k.includes(' ') ? origine[i] + ' ' + origine[i + 1] : origine[i]); };
+    const vus = {};
+    let repete = '';
+    for (let i = 0; i < mots.length - 1 && !repete; i++) {
+      const k = mots[i] + ' ' + mots[i + 1];
+      if (vus[k] !== undefined && vus[k] < i - 1) repete = k; else if (vus[k] === undefined) vus[k] = i;
+    }
+    if (!repete) {
+      const n = {};
+      mots.forEach(m => { if (m.length >= 5) n[m] = (n[m] || 0) + 1; });
+      repete = Object.keys(n).find(m => n[m] >= 3) || '';
+    }
+    if (repete) out.push(['Le titre se répète, Google risque de le réécrire :', '« ' + affiche(repete) + ' »']);
+    return out;
+  }
+  function zoneAlertesTitre(champ) {
+    const z = el('div', { class: 'seo-alertes' });
+    const maj = () => {
+      z.innerHTML = '';
+      alertesTitre(champ.value).forEach(([msg, extra]) => z.appendChild(el('div', { class: 'seo-alerte' },
+        [el('span', { text: '⚠️ ' }), el('span', { text: msg }), extra ? el('b', { text: ' ' + extra }) : null].filter(Boolean))));
+    };
+    champ.addEventListener('input', maj); maj();
+    return z;
+  }
+
   function sectionSEO() {
     cfg.seo = Object.assign({ titre: '', description: '', zone: (cfg.home.ia && cfg.home.ia.zone) || '' }, cfg.seo || {});
     const S = cfg.seo;
@@ -3525,7 +3568,7 @@
       const m2 = () => { const n = c.value.length; cpt.textContent = max ? n + ' caractères (idéal ' + min + '–' + max + ')' : ''; cpt.style.color = max && n > max ? 'var(--err)' : ''; };
       c.addEventListener('input', () => { S[cle] = c.value; m2(); maj(); changement(); });
       m2();
-      return el('div', {}, [el('label', { class: 'champ', style: 'margin-bottom:4px' }, [el('span', { text: etiq }), c]), cpt]);
+      return el('div', {}, [el('label', { class: 'champ', style: 'margin-bottom:4px' }, [el('span', { text: etiq }), c]), cpt, cle === 'titre' ? zoneAlertesTitre(c) : null].filter(Boolean));
     };
     maj();
     return section('seo', 'Référencement Google', false, [

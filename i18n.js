@@ -201,6 +201,12 @@
     "Le paiement en ligne n’est pas encore ouvert.": ["Online payment is not open yet.", "Онлайн-оплата пока недоступна."],
     "Ce compte est offert : rien à payer.": ["This account is complimentary: nothing to pay.", "Этот аккаунт бесплатный: платить не нужно."],
     'Nom d’utilisateur, lien ou numéro': ['Username, link or phone number', 'Имя пользователя, ссылка или номер'],
+    // --- éditeur : conseils sur le titre Google ---
+    "Retirez « qrbc » : c’est le nom de l’outil, pas celui de votre entreprise.": ["Remove “qrbc”: it is the name of the tool, not of your business.", "Уберите «qrbc»: это название сервиса, а не вашей компании."],
+    "Titre trop long : Google le coupera après environ 60 caractères.": ["Title too long: Google will cut it after about 60 characters.", "Заголовок слишком длинный: Google обрежет его примерно после 60 символов."],
+    "Titre un peu court : ajoutez votre activité et votre ville.": ["Title a bit short: add your business type and your city.", "Заголовок коротковат: добавьте вид деятельности и город."],
+    "Ajoutez le nom de votre entreprise à la fin du titre :": ["Add your business name at the end of the title:", "Добавьте название компании в конец заголовка:"],
+    "Le titre se répète, Google risque de le réécrire :": ["The title repeats itself, Google may rewrite it:", "В заголовке есть повтор, Google может его переписать:"],
     // --- éditeur : onglet Statistiques ---
     "Statistiques": ["Statistics", "Статистика"],
     "Rien pour l’instant.": ["Nothing yet.", "Пока ничего нет."],
