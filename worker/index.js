@@ -885,7 +885,7 @@ async function descriptionFond(env, cfg, ambiance, idee, pc, prudent) {
           'replace them with a generic equivalent (e.g. "a family day out at a large amusement park" becomes "a happy family stepping out of a spacious van on a sunny day"). ' +
           // ton toujours positif ; un véhicule « de luxe » noir devient vite un corbillard
           'Keep the mood bright, positive and inviting: never somber, funeral, ominous or dark imagery. ' +
-          'Vehicles must clearly be modern, elegant passenger cars or vans for clients (e.g. a sleek dark-blue or silver sedan or minivan on a sunny road), never a hearse, ambulance or police car, and without any visible logo. ' +
+          'Vehicles must clearly be modern, elegant passenger cars or vans for clients (e.g. a sleek dark-blue or silver sedan or minivan on a sunny road), never a hearse, ambulance or police car, and without any visible logo; show a single vehicle, whole and well separated from other objects (no overlapping or merged cars). ' +
           (prudent ? 'A previous prompt for this image was rejected by the safety filter: stay especially generic and neutral (objects, place, light), no people in the foreground. ' : '') +
           'Forbid any text: always end with "no text, no letters, no logos, no watermark".',
         messages: [{ role: 'user', content: 'Business: ' + (activite || '(not specified)') + '\nStyle: ' + style +
