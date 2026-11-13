@@ -279,8 +279,12 @@ function langueNavigateur(request, dispo) {
   return null;
 }
 /* Ajoute les versions linguistiques (Google + sélecteur) et retient le choix du visiteur */
+/* Format téléphone sur ordinateur (copie de CSS_BUREAU de commun.js) : injecté dans le <head> dès le chargement,
+   sinon la page s'affiche d'abord en pleine largeur puis « saute » quand commun.js l'applique. */
+const CSS_BUREAU = `#qp-decor{display:none} @media (min-width:700px) and (min-aspect-ratio:1/1){   #page{justify-content:center;position:relative;z-index:1}   #page>.qp,#page>.qh{flex:none;width:min(480px,max(390px,50vh));box-shadow:0 0 0 1px rgba(255,255,255,.08),0 20px 80px rgba(0,0,0,.55)}   #qp-decor{display:block;position:fixed;inset:-60px;z-index:0;background-size:cover;background-position:center;filter:blur(30px) brightness(.5);pointer-events:none;transition:background-image .4s} }`;
 function reponsePage(corps, nom, langs, actuelle, slug, url, exclue) {
   const h = { 'content-type': nom.endsWith('.xml') ? 'application/xml; charset=utf-8' : 'text/html; charset=utf-8', 'cache-control': 'public, max-age=60' };
+  if (/\.html$/.test(nom) && corps.indexOf('qp-css-bureau') < 0) corps = corps.replace('</head>', '<style id="qp-css-bureau">' + CSS_BUREAU + '</style>\n</head>');
   if (exclue) h['x-robots-tag'] = 'noindex';      // page exclue des moteurs de recherche (réglage dans /gestion)
   if (langs.length && nom !== 'sitemap.xml') {
     const base = 'https://' + slug + '.' + DOMAINE;
