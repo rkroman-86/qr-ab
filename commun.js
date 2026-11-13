@@ -220,6 +220,27 @@ function couleurIcone(hex) {
   return (0.2126 * r + 0.7152 * g + 0.0722 * b) > 0.7 ? '#111111' : '#ffffff';
 }
 
+/* ---------- Page publiée vue sur ordinateur ou tablette à l'horizontale ----------
+   La page garde la forme d'un téléphone, centrée sur un fond flouté. Appliqué à l'exécution
+   (commun.js est servi à jour) : les pages déjà publiées en profitent sans être réenregistrées. */
+const CSS_BUREAU = `#qp-decor{display:none}
+@media (min-width:700px) and (min-aspect-ratio:1/1){
+  #page{justify-content:center;position:relative;z-index:1}
+  #page>.qp,#page>.qh{flex:none;width:min(480px,max(390px,50vh));box-shadow:0 0 0 1px rgba(255,255,255,.08),0 20px 80px rgba(0,0,0,.55)}
+  #qp-decor{display:block;position:fixed;inset:-60px;z-index:0;background-size:cover;background-position:center;filter:blur(30px) brightness(.5);pointer-events:none}
+}`;
+function formatBureau(doc, racine) {
+  if (!doc.getElementById('qp-css-bureau')) {
+    const st = doc.createElement('style'); st.id = 'qp-css-bureau'; st.textContent = CSS_BUREAU; doc.head.appendChild(st);
+  }
+  let decor = doc.getElementById('qp-decor');
+  if (!decor) { decor = doc.createElement('div'); decor.id = 'qp-decor'; decor.setAttribute('aria-hidden', 'true'); doc.body.insertBefore(decor, doc.body.firstChild); }
+  setTimeout(function () {          // après le rendu : reprend la première image de fond de la page
+    const img = racine.querySelector('[style*="background-image"]');
+    decor.style.backgroundImage = img ? img.style.backgroundImage : 'none';
+  }, 0);
+}
+
 /* ---------- Styles de la page (injectés une fois) ---------- */
 const CSS_PAGE = `
 .qp{--fond:#f5f1ea;--fond2:#e9e0d2;--texte:#2b2620;--accent:#2b2620;--police:system-ui;--rayon:14px;
@@ -422,6 +443,7 @@ function rendrePage(cfgBrut, racine, opts) {
   const res = opts.resoudre || (x => x);
   const doc = racine.ownerDocument;
   injecterCSS(doc);
+  if (racine.id === 'page') formatBureau(doc, racine);
 
   racine.innerHTML = '';
   const page = doc.createElement('div');
@@ -941,6 +963,7 @@ function rendreHome(cfgBrut, racine, opts) {
   const res = opts.resoudre || (x => x);
   const doc = racine.ownerDocument;
   injecterCSS(doc);
+  if (racine.id === 'page') formatBureau(doc, racine);
   racine.innerHTML = '';
 
   const home = doc.createElement('div');
@@ -1144,14 +1167,7 @@ const CSS_BASE_SITE = `html,body{margin:0;height:100%}
 #page{min-height:100vh;min-height:100dvh;display:flex}
 #page>.qp{min-height:100vh;min-height:100dvh}
 #page>.qh{height:100vh;height:100dvh}
-body.mode-home{overflow:hidden}
-#qp-decor{display:none}
-/* Écran d'ordinateur ou tablette à l'horizontale : la page garde la forme d'un téléphone, centrée sur un fond flouté */
-@media (min-width:700px) and (min-aspect-ratio:1/1){
-  #page{justify-content:center;position:relative;z-index:1}
-  #page>.qp,#page>.qh{flex:none;width:min(480px,max(390px,50vh));box-shadow:0 0 0 1px rgba(255,255,255,.08),0 20px 80px rgba(0,0,0,.55)}
-  #qp-decor{display:block;position:fixed;inset:-60px;z-index:0;background-size:cover;background-position:center;filter:blur(30px) brightness(.5);pointer-events:none}
-}`;
+body.mode-home{overflow:hidden}`;
 
 /* Script de démarrage commun aux pages générées */
 const BOOT_SITE = `(function(){
@@ -1168,10 +1184,6 @@ const BOOT_SITE = `(function(){
     if (montrerHome) rendreHome(cfg, racine, { hrefContact: vueFixe === 'home' ? './#contact' : '#contact' });
     else rendrePage(cfg, racine, { lienHome: avecHome, hrefHome: c.home.arrivee === 'home' ? '#accueil' : 'accueil.html' });
     document.body.style.background = c.design.fond;
-    var decor = document.getElementById('qp-decor');
-    if (!decor) { decor = document.createElement('div'); decor.id = 'qp-decor'; decor.setAttribute('aria-hidden', 'true'); document.body.insertBefore(decor, document.body.firstChild); }
-    var avecImage = racine.querySelector('[style*="background-image"]');
-    decor.style.backgroundImage = avecImage ? avecImage.style.backgroundImage : 'none';
   }
   if ('serviceWorker' in navigator && /\.qrbc\.app$/i.test(location.hostname)) navigator.serviceWorker.register('/sw.js').catch(function () {});
   fetch('config.json?t=' + Date.now(), { cache: 'no-store' })
