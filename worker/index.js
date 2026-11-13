@@ -488,7 +488,7 @@ async function apiClient(request, env, slug, route) {
     await limiter(env, 'ia:' + slug + ':' + jour, IA_PAR_JOUR, 86400 * 2, 'Limite quotidienne de l’IA atteinte. Réessayez demain.');
     const corps = {
       model: MODELE_PAR_TYPE[type] || MODELES_IA[0],
-      max_tokens: Math.min(Number(d.max_tokens) || 1000, type === 'picto' ? 8000 : 4000),
+      max_tokens: Math.min(Number(d.max_tokens) || 1000, 8000),
       system: d.system, tools: outils, tool_choice: d.tool_choice, messages: d.messages
     };
     const r = await fetch(env.ANTHROPIC_URL || 'https://api.anthropic.com/v1/messages', {
