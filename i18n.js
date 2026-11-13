@@ -234,7 +234,8 @@
     "Visites comptées sans cookie ni donnée personnelle, hors robots et hors vos propres visites.": ["Visits are counted without cookies or personal data, excluding bots and your own visits.", "Посещения считаются без cookie и персональных данных, без роботов и ваших собственных визитов."],
     "Les scans sont reconnus sur les QR codes créés depuis le 12 novembre 2026. Les cartes imprimées avant comptent en « Lien direct ou inconnu ».": ["Scans are recognised on QR codes created since 12 November 2026. Cards printed earlier count as “Direct link or unknown”.", "Сканирования распознаются для QR-кодов, созданных с 12 ноября 2026 года. Визитки, напечатанные раньше, учитываются как «Прямая ссылка или неизвестно»."],
     // --- page d'accueil qrbc.app ---
-    "Votre page QR, vos cartes de visite,": ["Your QR page, your business cards,", "Ваша QR-страница и визитки —"],
+    "qrbc, c’est « QR Business Card » : la carte de visite qui ne se périme jamais.": ["qrbc stands for “QR Business Card”: the business card that never goes out of date.", "qrbc — это «QR Business Card»: визитка, которая никогда не устаревает."],
+    "Votre carte de visite QR, votre page,": ["Your QR business card, your page,", "Ваша визитка с QR-кодом и страница —"],
     "dans la langue de chaque client.": ["in each customer’s language.", "на языке каждого клиента."],
     "Pour qui ?": ["Who is it for?", "Для кого?"],
     "Pour tous ceux qui reçoivent des clients et veulent être joints, réservés ou recommandés d’un simple scan.": ["For anyone who welcomes customers and wants to be contacted, booked or recommended with a simple scan.", "Для всех, кто принимает клиентов и хочет, чтобы с ним связывались, записывались и рекомендовали его одним сканированием."],
@@ -274,7 +275,7 @@
     "L’abonnement se renouvelle-t-il tout seul ?": ["Does the subscription renew automatically?", "Подписка продлевается автоматически?"],
     "Non. Nous vous prévenons par e-mail avant l’échéance et vous renouvelez si vous le souhaitez. Sans paiement, la page est mise en pause.": ["No. We remind you by email before it ends and you renew if you wish. Without payment, the page is paused.", "Нет. Мы напомним по e-mail до окончания срока, и вы продлите, если захотите. Без оплаты страница приостанавливается."],
     "Créer ma page gratuitement": ["Create my page for free", "Создать страницу бесплатно"],
-    "Page QR code et cartes de visite pour indépendants et commerces | qrbc": ["QR code page and business cards for small businesses | qrbc", "QR-страница и визитки для вашего дела | qrbc"],
+    "Carte de visite QR code multilingue | qrbc – QR Business Card": ["QR Business Card in your customers’ language | qrbc", "Визитка с QR-кодом на любом языке | qrbc – QR Business Card"],
     "qrbc — votre page QR et vos cartes de visite": ["qrbc — your QR page and business cards", "qrbc — ваша QR-страница и визитки"],
     "Votre page, votre QR code,": ["Your page, your QR code,", "Ваша страница, ваш QR-код,"],
     "vos cartes de visite.": ["your business cards.", "ваши визитки."],

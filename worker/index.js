@@ -2427,10 +2427,10 @@ async function planGlobal(env, frais) {
 /* Page d'accueil dans la langue du lien (?lang=en|ru) : les robots d'aperçu (WhatsApp, Facebook…)
    et Google lisent le titre et la description sans exécuter le JavaScript */
 const META_ACCUEIL = {
-  en: { lang: 'en', locale: 'en_GB', titre: "QR code page and business cards for small businesses | qrbc",
-        desc: "Mobile page, QR code and business cards for your business. Edit it anytime, translate it with a single QR code. 14 days free, then €18 excl. VAT/year." },
-  ru: { lang: 'ru', locale: 'ru_RU', titre: "QR-страница и визитки для вашего дела | qrbc",
-        desc: "Мобильная страница, QR-код и визитки для вашего дела. Меняйте её в любой момент, переводите на другие языки — QR-код один. 14 дней бесплатно, затем 18 € без НДС в год." }
+  en: { lang: 'en', locale: 'en_GB', titre: "QR Business Card in your customers’ language | qrbc",
+        desc: "QR business card and mobile page for your business. Edit it anytime, translate it with a single QR code. 14 days free, then €18 excl. VAT/year." },
+  ru: { lang: 'ru', locale: 'ru_RU', titre: "Визитка с QR-кодом на любом языке | qrbc – QR Business Card",
+        desc: "Визитка с QR-кодом и мобильная страница для вашего дела. Меняйте её в любой момент, переводите — QR-код один. 14 дней бесплатно, затем 18 € без НДС в год." }
 };
 /* Dictionnaire de l'interface (i18n.js : 'français': ['English', 'Русский']) lu une fois par instance du Worker,
    pour envoyer l'accueil déjà traduit aux moteurs de recherche (sans attendre le JavaScript) */
