@@ -1251,8 +1251,19 @@ function genererFichiersSite(cfgBrut, base, doc) {
   }
 
   const jour = new Date().toISOString().slice(0, 10);
-  fichiers['sitemap.xml'] = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
-    urls.map(u => '  <url><loc>' + echapperHTML(u) + '</loc><lastmod>' + jour + '</lastmod></url>\n').join('') + '</urlset>\n';
+  // Images déclarées dans le plan du site (Google Images) : logo et fond sur la page contact, images des pancartes sur la page Home
+  const imagesDe = {};
+  const ajouterImage = (page, chemin) => {
+    const u = chemin && urlAbsolue(base, chemin);
+    if (u && /^https?:/i.test(u)) (imagesDe[page] = imagesDe[page] || []).includes(u) || imagesDe[page].push(u);
+  };
+  const pageContact = base, pageHome = typeof arriveeHome !== 'undefined' && arriveeHome ? base : base + 'accueil.html';
+  ajouterImage(pageContact, cfg.logo); ajouterImage(pageContact, d.imageFond);
+  if (cfg.home && cfg.home.actif) (cfg.home.articles || []).forEach(a => { if (a && !a.masque && a.image && (a.style === 'photo' || a.style === 'image')) ajouterImage(pageHome, a.image); });
+  fichiers['sitemap.xml'] = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">\n' +
+    urls.map(u => '  <url><loc>' + echapperHTML(u) + '</loc><lastmod>' + jour + '</lastmod>' +
+      (imagesDe[u] || []).slice(0, 20).map(i => '<image:image><image:loc>' + echapperHTML(i) + '</image:loc></image:image>').join('') +
+      '</url>\n').join('') + '</urlset>\n';
   return fichiers;
 }
 
