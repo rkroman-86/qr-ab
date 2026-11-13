@@ -227,7 +227,7 @@ const CSS_BUREAU = `#qp-decor{display:none}
 @media (min-width:700px) and (min-aspect-ratio:1/1){
   #page{justify-content:center;position:relative;z-index:1}
   #page>.qp,#page>.qh{flex:none;width:min(480px,max(390px,50vh));box-shadow:0 0 0 1px rgba(255,255,255,.08),0 20px 80px rgba(0,0,0,.55)}
-  #qp-decor{display:block;position:fixed;inset:-60px;z-index:0;background-size:cover;background-position:center;filter:blur(30px) brightness(.5);pointer-events:none}
+  #qp-decor{display:block;position:fixed;inset:-60px;z-index:0;background-size:cover;background-position:center;filter:blur(30px) brightness(.5);pointer-events:none;transition:background-image .4s}
 }`;
 function formatBureau(doc, racine) {
   if (!doc.getElementById('qp-css-bureau')) {
@@ -235,9 +235,22 @@ function formatBureau(doc, racine) {
   }
   let decor = doc.getElementById('qp-decor');
   if (!decor) { decor = doc.createElement('div'); decor.id = 'qp-decor'; decor.setAttribute('aria-hidden', 'true'); doc.body.insertBefore(decor, doc.body.firstChild); }
-  setTimeout(function () {          // après le rendu : reprend la première image de fond de la page
-    const img = racine.querySelector('[style*="background-image"]');
-    decor.style.backgroundImage = img ? img.style.backgroundImage : 'none';
+  setTimeout(function () {          // après le rendu : reprend l'image de fond de la page
+    const fondCss = racine.querySelector('[style*="background-image"]');
+    if (fondCss) { decor.style.backgroundImage = fondCss.style.backgroundImage; return; }
+    // Page d'accueil : image de la pancarte affichée (sinon la plus proche qui en a une), suivie au défilement
+    const panneaux = [].slice.call(racine.querySelectorAll('.qh-panneau'));
+    const images = panneaux.map(function (p) { const im = p.querySelector('img.qh-photo-img, .qh-img img'); return im ? im.src : ''; });
+    const defile = racine.querySelector('.qh-defile');
+    let actuelle = null;
+    function maj() {
+      const i = defile && defile.clientHeight ? Math.round(defile.scrollTop / defile.clientHeight) : 0;
+      let src = '';
+      for (let k = 0; k < images.length && !src; k++) src = images[i - k] || images[i + k] || '';
+      if (src !== actuelle) { actuelle = src; decor.style.backgroundImage = src ? 'url("' + src.replace(/"/g, '%22') + '")' : 'none'; }
+    }
+    maj();
+    if (defile) defile.addEventListener('scroll', maj, { passive: true });
   }, 0);
 }
 
