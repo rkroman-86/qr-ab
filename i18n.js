@@ -201,6 +201,15 @@
     "Le paiement en ligne n’est pas encore ouvert.": ["Online payment is not open yet.", "Онлайн-оплата пока недоступна."],
     "Ce compte est offert : rien à payer.": ["This account is complimentary: nothing to pay.", "Этот аккаунт бесплатный: платить не нужно."],
     'Nom d’utilisateur, lien ou numéro': ['Username, link or phone number', 'Имя пользователя, ссылка или номер'],
+    // --- éditeur : description détaillée pour l'IA ---
+    "Ex. : Chauffeur privé avec Mercedes Classe V 7 places. Transferts aéroports Orly, CDG et Beauvais, gares, Disneyland, excursions en Normandie et à Versailles. Disponible 24/24, sièges enfants, je parle français, anglais et arabe. Accueil avec pancarte à l’aéroport.": ["E.g. Private driver with a 7-seat Mercedes V-Class. Airport transfers to Orly, CDG and Beauvais, train stations, Disneyland, trips to Normandy and Versailles. Available 24/7, child seats, I speak French, English and Arabic. Meet and greet with a name sign at the airport.", "Например: Частный водитель, Mercedes V-класса на 7 мест. Трансферы в аэропорты Орли, Шарль-де-Голль и Бове, на вокзалы, в Диснейленд, поездки в Нормандию и Версаль. Работаю 24/7, детские кресла, говорю по-французски, по-английски и по-русски. Встреча в аэропорту с табличкой."],
+    "Plus vous donnez de détails, meilleurs seront les textes et le référencement Google : services précis, lieux desservis, horaires, langues parlées, équipements, ce qui vous distingue. L’IA n’invente rien : elle n’utilise que ce que vous écrivez.": ["The more details you give, the better the texts and your Google ranking: specific services, areas served, opening hours, languages spoken, equipment, what makes you different. The AI invents nothing: it only uses what you write.", "Чем больше подробностей, тем лучше тексты и позиции в Google: конкретные услуги, районы обслуживания, часы работы, языки, оборудование, ваши отличия. ИИ ничего не выдумывает: он использует только то, что вы напишете."],
+    "1. Votre activité, avec un maximum de détails": ["1. Your business, with as many details as possible", "1. Ваша деятельность — как можно подробнее"],
+    "Décrivez votre activité avec le plus de détails possible : l’IA s’occupe du reste.": ["Describe your business in as much detail as possible: the AI does the rest.", "Опишите свою деятельность как можно подробнее — остальное сделает ИИ."],
+    "Trop court : ajoutez des détails": ["Too short: add details", "Слишком коротко: добавьте подробностей"],
+    "Un peu court": ["A bit short", "Коротковато"],
+    "Bien": ["Good", "Хорошо"],
+    "Très bien, l’IA a de quoi travailler": ["Very good, the AI has plenty to work with", "Отлично, ИИ есть с чем работать"],
     // --- éditeur : texte de remplacement des images ---
     "Description de l’image (Google, malvoyants)": ["Image description (Google, visually impaired)", "Описание изображения (Google, для слабовидящих)"],
     "Ex. : Mercedes Classe V devant l’aéroport d’Orly": ["E.g. Mercedes V-Class in front of Orly airport", "Например: Mercedes V-класса у аэропорта Орли"],

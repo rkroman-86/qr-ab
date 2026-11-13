@@ -156,6 +156,11 @@
       .cadre > .qp{min-height:100%}
     }
 
+    .jauge-details{display:flex;align-items:center;gap:10px;margin-top:6px;font-size:.82rem;color:var(--doux)}
+    .jd-barre{flex:0 0 90px;height:6px;border-radius:3px;background:var(--ligne);overflow:hidden}
+    .jd-barre i{display:block;height:100%;border-radius:3px;background:var(--err);transition:width .2s}
+    .jauge-details[data-niveau='1'] .jd-barre i{background:#d9952b}
+    .jauge-details[data-niveau='2'] .jd-barre i, .jauge-details[data-niveau='3'] .jd-barre i{background:#2f9e5b}
     .seo-alertes{display:grid;gap:4px;margin:4px 0 10px}
     .seo-alerte{font-size:.84rem;line-height:1.4;color:var(--err)}
     /* ---------- Statistiques ---------- */
@@ -1529,7 +1534,7 @@
     const ia = cfg.home.ia = Object.assign({ description: '', zone: '', nombre: 4, ton: 'pro' }, cfg.home.ia || {});
     const telActuel = (cfg.boutons.find(b => b && (b.type === 'tel' || b.type === 'whatsapp') && String(b.valeur || '').trim()) || {}).valeur || '';
     const nom = el('input', { type: 'text', value: titreParDefaut() ? '' : cfg.titre, placeholder: 'Ex. : Alex VTC', autocomplete: 'organization' });
-    const desc = el('textarea', { rows: 4, value: ia.description, placeholder: 'Ex. : chauffeur privé avec van 7 places, transferts aéroports, excursions, mise à disposition' });
+    const desc = el('textarea', { rows: 6, value: ia.description, placeholder: t('Ex. : Chauffeur privé avec Mercedes Classe V 7 places. Transferts aéroports Orly, CDG et Beauvais, gares, Disneyland, excursions en Normandie et à Versailles. Disponible 24/24, sièges enfants, je parle français, anglais et arabe. Accueil avec pancarte à l’aéroport.') });
     const zone = el('input', { type: 'text', value: ia.zone, placeholder: 'Ex. : Nice, Monaco, Cannes et toute la Côte d’Azur' });
     const tel = el('input', { type: 'tel', value: telActuel, placeholder: 'Ex. : 06 12 34 56 78 (facultatif)', autocomplete: 'tel' });
     const ton = el('select', {}, Object.keys(TONS_IA).map(k => el('option', { value: k, text: TONS_IA[k], selected: ia.ton === k })));
@@ -1538,9 +1543,9 @@
     F.fen.innerHTML = '';
     F.fen.append(
       el('h2', { text: '⚡ Votre activité' }),
-      el('p', { class: 'sous', text: 'Quelques mots suffisent : l’IA s’occupe du reste.' }),
+      el('p', { class: 'sous', text: 'Décrivez votre activité avec le plus de détails possible : l’IA s’occupe du reste.' }),
       champ('Nom de l’entreprise', nom),
-      champ('Votre activité', desc),
+      el('label', { class: 'champ' }, [el('span', { text: 'Votre activité' }), desc, jaugeDetails(desc)]),
       champ('Zone d’action', zone),
       champ('Téléphone (Appeler et WhatsApp)', tel),
       champ('Ton des textes', ton),
@@ -2832,15 +2837,33 @@
     return [...m];
   }
 
+
+  /* Sous la description donnée à l'IA : conseil + jauge de détail (plus de détails = meilleurs textes et référencement) */
+  function jaugeDetails(champ) {
+    const conseil = el('div', { class: 'aide', style: 'margin:6px 0 0', text: 'Plus vous donnez de détails, meilleurs seront les textes et le référencement Google : services précis, lieux desservis, horaires, langues parlées, équipements, ce qui vous distingue. L’IA n’invente rien : elle n’utilise que ce que vous écrivez.' });
+    const barre = el('i'), etat = el('span');
+    const jauge = el('div', { class: 'jauge-details' }, [el('div', { class: 'jd-barre' }, [barre]), etat]);
+    const maj = () => {
+      const n = champ.value.trim().length;
+      const niv = n < 60 ? 0 : n < 160 ? 1 : n < 280 ? 2 : 3;
+      barre.style.width = Math.min(100, Math.round(n / 3)) + '%';
+      jauge.dataset.niveau = niv;
+      etat.textContent = t(['Trop court : ajoutez des détails', 'Un peu court', 'Bien', 'Très bien, l’IA a de quoi travailler'][niv]);
+    };
+    champ.addEventListener('input', maj); maj();
+    return el('div', {}, [jauge, conseil]);
+  }
+
   async function redigerAvecIA(brief, express) {
     const systeme = [
       'Tu es rédacteur web. Tu écris les pancartes de la page d’accueil mobile d’une petite entreprise.',
-      'Chaque pancarte occupe tout l’écran d’un téléphone : un titre court et un texte bref.',
+      'Chaque pancarte occupe tout l’écran d’un téléphone : un titre court et un texte clair, concret et informatif.',
       'Règles :',
       '- Écris dans la langue de la description fournie par le client.',
       '- N’invente aucun fait vérifiable absent des informations : prix, chiffres, années d’expérience, labels, certifications, diplômes, noms, adresses, horaires, avis clients, garanties, marques. Si une information manque, reste général.',
       '- Titre : 2 à 6 mots, 40 caractères maximum, sans point final.',
-      '- Texte : 2 à 4 phrases, 380 caractères maximum. Un seul retour à la ligne autorisé.',
+      '- Texte : 3 à 5 phrases, entre 300 et 460 caractères. Un seul retour à la ligne autorisé.',
+      '- Sois précis plutôt que général : reprends tous les détails utiles donnés par le client (services, lieux, véhicule, horaires, langues, publics, déroulement, ce qui le distingue) et répartis-les sur les pancartes. Chaque phrase doit apporter une information.',
       '- Pas d’emoji, pas de hashtag, pas de superlatif creux (« le meilleur », « n°1 », « incontournable »).',
       '- Chaque pancarte traite un sujet différent, sans répétition d’une pancarte à l’autre.',
       '- S’il y a plusieurs pancartes : la première présente l’entreprise, la dernière invite à prendre contact en citant les moyens de contact disponibles.',
@@ -3405,7 +3428,7 @@
       return boite;
     }
 
-    const desc = el('textarea', { rows: 3, value: ia.description, placeholder: 'Ex. : chauffeur privé avec van 7 places, transferts aéroports, excursions, mise à disposition' });
+    const desc = el('textarea', { rows: 6, value: ia.description, placeholder: t('Ex. : Chauffeur privé avec Mercedes Classe V 7 places. Transferts aéroports Orly, CDG et Beauvais, gares, Disneyland, excursions en Normandie et à Versailles. Disponible 24/24, sièges enfants, je parle français, anglais et arabe. Accueil avec pancarte à l’aéroport.') });
     desc.addEventListener('input', () => { ia.description = desc.value; });
     const zone = el('input', { type: 'text', value: ia.zone, placeholder: 'Ex. : Paris et Île-de-France, Normandie' });
     zone.addEventListener('input', () => { ia.zone = zone.value; });
@@ -3439,7 +3462,7 @@
     boite.append(
       el('b', { class: 'ia-titre', text: '✨ Rédaction par l’IA' }),
       el('div', { class: 'aide', style: 'margin:4px 0 12px', text: 'Décrivez votre activité : l’IA rédige les pancartes, vous relisez, corrigez si besoin et validez.' }),
-      el('label', { class: 'champ' }, [el('span', { text: '1. Votre activité en quelques mots' }), desc]),
+      el('label', { class: 'champ' }, [el('span', { text: '1. Votre activité, avec un maximum de détails' }), desc, jaugeDetails(desc)]),
       el('label', { class: 'champ' }, [el('span', { text: '2. Zone d’action' }), zone]),
       el('div', { class: 'grille2' }, [
         el('label', { class: 'champ' }, [el('span', { text: '3. Nombre de pancartes' }), nb]),

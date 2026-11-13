@@ -362,8 +362,10 @@ const CSS_PAGE = `
 .qh-p-photo::before{content:"";position:absolute;inset:0;z-index:1;background:linear-gradient(180deg,rgba(0,0,0,.15) 0%,rgba(0,0,0,.05) 35%,rgba(0,0,0,.78) 100%)}
 .qh-p-texte{justify-content:center;background:linear-gradient(165deg,var(--fond),var(--fond2))}
 .qh-p-image{padding:0;justify-content:flex-start;background:var(--fond)}
-.qh-p-image .qh-img{height:46%;flex-shrink:0;background:#111 center/cover no-repeat;margin-top:58px}
-.qh-p-image .qh-corps{padding:28px 30px 60px 26px;flex:1;display:flex;flex-direction:column;justify-content:center}
+.qh-p-image .qh-img{flex:1 1 46%;min-height:10%;background:#111 center/cover no-repeat;margin-top:58px}
+.qh-p-image .qh-corps{padding:24px 30px 56px 26px;flex:0 0 auto;display:flex;flex-direction:column;justify-content:center}
+@media (max-height:760px){.qh-titre{font-size:1.8rem}.qh-p-texte .qh-titre{font-size:2.1rem}.qh-texte{font-size:.97rem;line-height:1.5}.qh-panneau:not(.qh-p-image){padding-top:80px;padding-bottom:58px}.qh-p-image .qh-corps{padding:18px 26px 48px 22px}.qh-num,.qh-trait{margin-bottom:10px}}
+@media (max-height:640px){.qh-titre{font-size:1.55rem}.qh-texte{font-size:.92rem;line-height:1.45}}
 .qh-corps{position:relative;z-index:1;max-width:620px}
 .qh-num{font-size:.78rem;letter-spacing:.18em;font-weight:700;opacity:.7;margin-bottom:12px}
 .qh-trait{width:46px;height:4px;border-radius:2px;background:var(--accent);margin-bottom:18px}
