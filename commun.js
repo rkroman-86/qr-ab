@@ -323,7 +323,9 @@ const CSS_PAGE = `
 .qh-panneau{position:relative;height:100%;min-height:100%;scroll-snap-align:start;scroll-snap-stop:always;overflow:hidden;
   display:flex;flex-direction:column;justify-content:flex-end;padding:88px 30px 70px 26px}
 .qh-p-photo{color:#fff;background:#111 center/cover no-repeat}
-.qh-p-photo::before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.15) 0%,rgba(0,0,0,.05) 35%,rgba(0,0,0,.78) 100%)}
+.qh-photo-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0}
+.qh-img img{display:block;width:100%;height:100%;object-fit:cover}
+.qh-p-photo::before{content:"";position:absolute;inset:0;z-index:1;background:linear-gradient(180deg,rgba(0,0,0,.15) 0%,rgba(0,0,0,.05) 35%,rgba(0,0,0,.78) 100%)}
 .qh-p-texte{justify-content:center;background:linear-gradient(165deg,var(--fond),var(--fond2))}
 .qh-p-image{padding:0;justify-content:flex-start;background:var(--fond)}
 .qh-p-image .qh-img{height:46%;flex-shrink:0;background:#111 center/cover no-repeat;margin-top:58px}
@@ -987,13 +989,22 @@ function rendreHome(cfgBrut, racine, opts) {
     const style = (a.style === 'photo' || a.style === 'image') && !a.image ? 'texte' : (HOME_STYLES[a.style] ? a.style : 'texte');
     const p = doc.createElement('section');
     p.className = 'qh-panneau qh-p-' + style;
-    const url = a.image ? 'url("' + res(a.image).replace(/"/g, '%22') + '")' : '';
-    if (style === 'photo') p.style.backgroundImage = url;
+    // Vraie image <img> (et non un fond CSS) : lisible par Google Images et par les lecteurs d'écran.
+    // Texte de remplacement : celui saisi par le client, sinon « titre de la pancarte – nom de l'entreprise ».
+    const image = () => {
+      const im = doc.createElement('img');
+      im.src = res(a.image);
+      im.alt = String(a.alt || '').trim() || [a.titre, cfg.titre].filter(Boolean).join(' – ');
+      im.setAttribute('decoding', 'async');
+      if (i > 0) im.setAttribute('loading', 'lazy');
+      return im;
+    };
+    if (style === 'photo') { const im = image(); im.className = 'qh-photo-img'; p.appendChild(im); }
     if (style === 'image') {
-      const im = doc.createElement('div');
-      im.className = 'qh-img';
-      im.style.backgroundImage = url;
-      p.appendChild(im);
+      const cadre = doc.createElement('div');
+      cadre.className = 'qh-img';
+      cadre.appendChild(image());
+      p.appendChild(cadre);
     }
     const corps = doc.createElement('div');
     corps.className = 'qh-corps';

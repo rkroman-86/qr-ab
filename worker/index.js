@@ -1990,7 +1990,7 @@ function textesATraduire(cfg) {
   (cfg.boutons || []).forEach((b, i) => { if (b) { mettre('boutons.' + i + '.texte', b.texte); mettre('boutons.' + i + '.message', b.message); } });
   const h = cfg.home || {};
   mettre('home.boutonContact', h.boutonContact); mettre('home.lienTexte', h.lienTexte);
-  (h.articles || []).forEach((a, i) => { if (a) { mettre('home.articles.' + i + '.titre', a.titre); mettre('home.articles.' + i + '.texte', a.texte); } });
+  (h.articles || []).forEach((a, i) => { if (a) { mettre('home.articles.' + i + '.titre', a.titre); mettre('home.articles.' + i + '.texte', a.texte); mettre('home.articles.' + i + '.alt', a.alt); } });
   if (h.ia) mettre('home.ia.description', h.ia.description);
   const seo = cfg.seo || {};
   mettre('seo.titre', seo.titre); mettre('seo.description', seo.description); mettre('seo.motCle', seo.motCle);

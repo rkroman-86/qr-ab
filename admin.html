@@ -3603,6 +3603,8 @@
           const cles = Object.keys(HOME_STYLES);
           carte.querySelectorAll('.segments button').forEach((b, k) => b.classList.toggle('actif', cles[k] === 'photo'));
         } }),
+      champTexte('Description de l’image (Google, malvoyants)', a, 'alt',
+        { ph: [a.titre, cfg.titre].filter(Boolean).join(' – ') || t('Ex. : Mercedes Classe V devant l’aéroport d’Orly') }),
       el('div', { class: 'bc-actions' }, [
         el('button', { type: 'button', class: 'btn btn-mini', text: '↑', disabled: i === 0, onclick: () => deplacer(-1) }),
         el('button', { type: 'button', class: 'btn btn-mini', text: '↓', disabled: i === n - 1, onclick: () => deplacer(1) }),

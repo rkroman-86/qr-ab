@@ -201,6 +201,9 @@
     "Le paiement en ligne n’est pas encore ouvert.": ["Online payment is not open yet.", "Онлайн-оплата пока недоступна."],
     "Ce compte est offert : rien à payer.": ["This account is complimentary: nothing to pay.", "Этот аккаунт бесплатный: платить не нужно."],
     'Nom d’utilisateur, lien ou numéro': ['Username, link or phone number', 'Имя пользователя, ссылка или номер'],
+    // --- éditeur : texte de remplacement des images ---
+    "Description de l’image (Google, malvoyants)": ["Image description (Google, visually impaired)", "Описание изображения (Google, для слабовидящих)"],
+    "Ex. : Mercedes Classe V devant l’aéroport d’Orly": ["E.g. Mercedes V-Class in front of Orly airport", "Например: Mercedes V-класса у аэропорта Орли"],
     // --- éditeur : conseils sur le titre Google ---
     "Retirez « qrbc » : c’est le nom de l’outil, pas celui de votre entreprise.": ["Remove “qrbc”: it is the name of the tool, not of your business.", "Уберите «qrbc»: это название сервиса, а не вашей компании."],
     "Titre trop long : Google le coupera après environ 60 caractères.": ["Title too long: Google will cut it after about 60 characters.", "Заголовок слишком длинный: Google обрежет его примерно после 60 символов."],
