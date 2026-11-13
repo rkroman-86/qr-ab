@@ -1144,7 +1144,14 @@ const CSS_BASE_SITE = `html,body{margin:0;height:100%}
 #page{min-height:100vh;min-height:100dvh;display:flex}
 #page>.qp{min-height:100vh;min-height:100dvh}
 #page>.qh{height:100vh;height:100dvh}
-body.mode-home{overflow:hidden}`;
+body.mode-home{overflow:hidden}
+#qp-decor{display:none}
+/* Écran d'ordinateur ou tablette à l'horizontale : la page garde la forme d'un téléphone, centrée sur un fond flouté */
+@media (min-width:700px) and (min-aspect-ratio:1/1){
+  #page{justify-content:center;position:relative;z-index:1}
+  #page>.qp,#page>.qh{flex:none;width:min(480px,max(390px,50vh));box-shadow:0 0 0 1px rgba(255,255,255,.08),0 20px 80px rgba(0,0,0,.55)}
+  #qp-decor{display:block;position:fixed;inset:-60px;z-index:0;background-size:cover;background-position:center;filter:blur(30px) brightness(.5);pointer-events:none}
+}`;
 
 /* Script de démarrage commun aux pages générées */
 const BOOT_SITE = `(function(){
@@ -1161,6 +1168,10 @@ const BOOT_SITE = `(function(){
     if (montrerHome) rendreHome(cfg, racine, { hrefContact: vueFixe === 'home' ? './#contact' : '#contact' });
     else rendrePage(cfg, racine, { lienHome: avecHome, hrefHome: c.home.arrivee === 'home' ? '#accueil' : 'accueil.html' });
     document.body.style.background = c.design.fond;
+    var decor = document.getElementById('qp-decor');
+    if (!decor) { decor = document.createElement('div'); decor.id = 'qp-decor'; decor.setAttribute('aria-hidden', 'true'); document.body.insertBefore(decor, document.body.firstChild); }
+    var avecImage = racine.querySelector('[style*="background-image"]');
+    decor.style.backgroundImage = avecImage ? avecImage.style.backgroundImage : 'none';
   }
   if ('serviceWorker' in navigator && /\.qrbc\.app$/i.test(location.hostname)) navigator.serviceWorker.register('/sw.js').catch(function () {});
   fetch('config.json?t=' + Date.now(), { cache: 'no-store' })
