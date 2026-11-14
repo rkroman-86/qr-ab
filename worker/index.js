@@ -173,6 +173,7 @@ async function racine(request, env, url) {
     return new Response(r.body, { status: r.status, headers: h });
   }
   if (FICHIERS_PWA.has(p) || FICHIERS_STATIQUES.has(p)) return statique(env, request, p);
+  if (/^\/videos\/qrbc-(fr|en|ru)\.mp4$/.test(p)) return servirVideo(env, request, p);   // vidéos de présentation de l'accueil
 
   // Éditeur dans l'appli : /app/<page>/…  (même origine que l'appli installée)
   const m = p.match(new RegExp('^/app/(' + RE_PAGE + ')(/.*)?$'));
@@ -2607,6 +2608,23 @@ async function accueilLangue(env, request, url) {
     .on('link[rel="canonical"]', attr('href', adresse))
     .onDocument(traduction)
     .transform(new Response(r.body, { status: r.status, headers: h }));
+}
+
+/* Vidéo avec réponses partielles (206) : Safari sur iPhone/iPad refuse de lire une vidéo sans elles. */
+async function servirVideo(env, request, chemin) {
+  const u = new URL(request.url); u.pathname = chemin;
+  const r = await env.ASSETS.fetch(new Request(u.toString(), { method: 'GET' }));
+  if (!r.ok) return r;
+  const buf = await r.arrayBuffer(), total = buf.byteLength;
+  const h = new Headers({ 'content-type': 'video/mp4', 'accept-ranges': 'bytes', 'cache-control': 'public, max-age=86400' });
+  const m = /^bytes=(\d*)-(\d*)$/.exec(request.headers.get('range') || '');
+  if (!m) { h.set('content-length', String(total)); return new Response(request.method === 'HEAD' ? null : buf, { status: 200, headers: h }); }
+  let debut = m[1] === '' ? Math.max(0, total - Number(m[2])) : Number(m[1]);
+  let fin = m[1] !== '' && m[2] !== '' ? Math.min(Number(m[2]), total - 1) : total - 1;
+  if (debut >= total || debut > fin) { h.set('content-range', 'bytes */' + total); return new Response(null, { status: 416, headers: h }); }
+  h.set('content-range', 'bytes ' + debut + '-' + fin + '/' + total);
+  h.set('content-length', String(fin - debut + 1));
+  return new Response(request.method === 'HEAD' ? null : buf.slice(debut, fin + 1), { status: 206, headers: h });
 }
 
 async function statique(env, request, chemin, sansCache) {
