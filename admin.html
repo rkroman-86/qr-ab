@@ -1843,6 +1843,13 @@
         couleur('Boutons', d, 'accent', plusDeTheme)
       ]),
       el('label', { class: 'champ' }, [el('span', { text: 'Police' }), policeSel]),
+      ...([
+        segments('Texte sur l’image de fond', { auto: 'Auto', blanc: 'Blanc', theme: 'Couleur choisie' }, d, 'texteImage'),
+        (() => { const sel = el('select', {}, [['auto', 'Ombre légère (conseillé)'], ['aucun', 'Aucun'], ['ombre', 'Ombre forte'], ['contour', 'Contour'], ['bandeau', 'Bandeau derrière le texte']]
+            .map(o => el('option', { value: o[0], text: o[1], selected: (d.effetTexte || 'auto') === o[0] })));
+          sel.addEventListener('change', () => { d.effetTexte = sel.value; changement(); });
+          return el('label', { class: 'champ' }, [el('span', { text: 'Effet pour lire le texte sur l’image' }), sel]); })()
+      ]),
       segments('Forme des boutons', { carre: 'Carré', arrondi: 'Arrondi', pilule: 'Pilule' }, d, 'forme'),
       segments('Style des boutons', { plein: 'Plein', contour: 'Contour', doux: 'Doux' }, d, 'style'),
       bascule('Ombre sous les boutons', d, 'ombre'),

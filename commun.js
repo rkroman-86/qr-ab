@@ -130,11 +130,47 @@ const CONFIG_DEFAUT = {
   design: {
     theme: 'sable', fond: '#f5f1ea', fond2: '#e9e0d2', texte: '#2b2620', accent: '#2b2620',
     imageFond: '', voile: 40, police: 'moderne', forme: 'arrondi', style: 'plein',
-    ombre: true, carte: false, logoRond: false, nomsReseaux: false, reseauxTheme: false, tousRonds: false, disposition: 'centre',
+    texteImage: 'auto', effetTexte: 'auto', ombre: true, carte: false, logoRond: false, nomsReseaux: false, reseauxTheme: false, tousRonds: false, disposition: 'centre',
     installer: true
   },
   boutons: []
 };
+
+/* ---------- Lisibilité du texte sur l'image de fond ----------
+   texteImage : 'auto' (texte foncé du thème → blanc sur la photo, assombrie par le voile), 'blanc', 'theme'.
+   effetTexte : 'auto' (ombre légère), 'aucun', 'ombre', 'contour', 'bandeau'.
+   Styles posés directement sur les éléments : les pages déjà publiées en profitent sans réenregistrement. */
+function luminance(hex) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || '').trim());
+  if (!m) return 0.5;
+  const n = parseInt(m[1], 16), c = [n >> 16, (n >> 8) & 255, n & 255].map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+  return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+}
+function lisibiliteTexte(d, page, contenu) {
+  const mode = d.texteImage || 'auto';
+  let couleur = d.texte;
+  if (mode === 'blanc' || (mode === 'auto' && luminance(d.texte) < 0.18)) couleur = '#ffffff';
+  page.style.setProperty('--texte', couleur);
+  const clair = luminance(couleur) >= 0.18;
+  const sombre = clair ? '0,0,0' : '255,255,255';          // couleur de l'ombre, du contour ou du bandeau
+  const effet = d.effetTexte || 'auto';
+  const textes = contenu.querySelectorAll('.qp-titre, .qp-sous, .qp-pied');
+  const ombre = effet === 'ombre' ? '0 2px 4px rgba(' + sombre + ',.85), 0 0 18px rgba(' + sombre + ',.6)'
+    : effet === 'contour' ? [[-1, -1], [1, -1], [-1, 1], [1, 1], [0, 2], [2, 0], [0, -2], [-2, 0]].map(x => x[0] + 'px ' + x[1] + 'px 0 rgba(' + sombre + ',.9)').join(', ')
+    : effet === 'auto' ? '0 1px 3px rgba(' + sombre + ',.7), 0 0 12px rgba(' + sombre + ',.35)' : '';
+  for (let i = 0; i < textes.length; i++) {
+    textes[i].style.textShadow = ombre;
+    if (effet !== 'aucun' && textes[i].className.indexOf('qp-titre') < 0) textes[i].style.opacity = '1';
+  }
+  if (effet === 'bandeau') {
+    const blocs = contenu.querySelectorAll('.qp-entete-txt, .qp-pied');
+    for (let i = 0; i < blocs.length; i++) {
+      const b = blocs[i].style;
+      b.background = 'rgba(' + sombre + ',.55)'; b.padding = '12px 16px'; b.borderRadius = '14px';
+      b.webkitBackdropFilter = b.backdropFilter = 'blur(6px)';
+    }
+  }
+}
 
 /* ---------- Utilitaires ---------- */
 function fusion(base, extra) {
@@ -613,6 +649,7 @@ function rendrePage(cfgBrut, racine, opts) {
     c.appendChild(f);
   }
 
+  if (d.imageFond) lisibiliteTexte(d, page, c);
   page.appendChild(c);
   if (opts.lienHome) {
     const l = doc.createElement('a');
