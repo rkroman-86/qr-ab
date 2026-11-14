@@ -328,6 +328,23 @@
     .pied-barre .etat{flex:1;font-size:.86rem;color:var(--doux);line-height:1.3}
     .pied-barre .etat.ok{color:var(--ok)} .pied-barre .etat.err{color:var(--err)}
     .pied-barre .btn-prim{min-width:130px}
+    .btn-aide{flex:none;width:44px;height:44px;border-radius:50%;border:1px solid var(--ligne);background:var(--bg);font-size:1.25rem;cursor:pointer;position:relative;padding:0}
+    .btn-aide.actif{border-color:var(--prim);box-shadow:0 0 0 2px color-mix(in srgb,var(--prim) 35%,transparent)}
+    .btn-aide.nouveau::after{content:'';position:absolute;top:2px;right:2px;width:10px;height:10px;border-radius:50%;background:var(--prim)}
+    .aide-panneau{position:fixed;left:10px;right:10px;bottom:calc(76px + env(safe-area-inset-bottom));z-index:7;max-width:520px;max-height:min(70vh,620px);
+      display:flex;flex-direction:column;background:var(--panneau);border:1px solid var(--ligne);border-radius:16px;box-shadow:0 12px 40px rgba(0,0,0,.35);overflow:hidden}
+    .aide-tete{display:flex;align-items:center;gap:6px;padding:10px 12px;border-bottom:1px solid var(--ligne)}
+    .aide-tete b{flex:1;font-size:.95rem}
+    .aide-ico{border:0;background:none;color:var(--txt);font-size:1.05rem;cursor:pointer;padding:6px 8px;border-radius:8px}
+    .aide-fil{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px;-webkit-overflow-scrolling:touch}
+    .aide-msg{max-width:88%;padding:9px 12px;border-radius:14px;font-size:.9rem;line-height:1.45;white-space:pre-wrap;word-wrap:break-word}
+    .aide-msg.q{align-self:flex-end;background:var(--prim);color:#fff;border-bottom-right-radius:4px}
+    .aide-msg.r{align-self:flex-start;background:color-mix(in srgb,var(--txt) 8%,var(--bg));color:var(--txt);border-bottom-left-radius:4px}
+    .aide-msg.err{color:var(--err)}
+    .aide-saisie{display:flex;gap:8px;padding:10px 12px;border-top:1px solid var(--ligne)}
+    .aide-saisie textarea{flex:1;resize:none;max-height:120px;font:inherit;font-size:.95rem;padding:9px 11px;border-radius:12px;border:1px solid var(--ligne);background:var(--bg);color:var(--txt)}
+    .aide-saisie .btn-prim{min-width:0;width:46px;padding:0}
+    .aide-pied{font-size:.72rem;color:var(--doux);padding:0 12px 8px}
     a.lien{color:var(--prim);font-weight:600;text-decoration:none}
   </style>
 </head>
@@ -370,8 +387,22 @@
   <div id="stats" class="vue-stats"></div>
 
   <div class="pied-barre">
+    <button type="button" class="btn-aide cache" id="btn-aide" title="Assistant" aria-label="Assistant">❓</button>
     <div class="etat" id="etat">Aucune modification</div>
     <button type="button" class="btn btn-prim" id="btn-enregistrer" disabled>Enregistrer</button>
+  </div>
+  <div class="aide-panneau cache" id="aide-panneau" role="dialog" aria-label="Assistant">
+    <div class="aide-tete">
+      <b>❓ <span>Assistant</span></b>
+      <button type="button" class="aide-ico" id="aide-effacer" title="Nouvelle conversation" aria-label="Nouvelle conversation">🗑</button>
+      <button type="button" class="aide-ico" id="aide-reduire" title="Réduire" aria-label="Réduire">▾</button>
+    </div>
+    <div class="aide-fil" id="aide-fil"></div>
+    <form class="aide-saisie" id="aide-form">
+      <textarea id="aide-question" rows="1" maxlength="1500" placeholder="Votre question…"></textarea>
+      <button type="submit" class="btn btn-prim" id="aide-envoyer" aria-label="Envoyer">➤</button>
+    </form>
+    <div class="aide-pied" id="aide-pied"></div>
   </div>
 </div>
 
@@ -410,7 +441,7 @@
   async function demarrer(jeton) {
     gh = CF ? clientCloudflare(jeton) : clientGitHub(jeton, depot);
     const info = await gh.verifier();
-    if (CF) { jetonCF = jeton; afficherAbonnement(info.compte); setTimeout(retourPaiement, 0); fetch('/api/moi', { credentials: 'include' }).catch(() => {}); }
+    if (CF) { jetonCF = jeton; aide.activer(); afficherAbonnement(info.compte); setTimeout(retourPaiement, 0); fetch('/api/moi', { credentials: 'include' }).catch(() => {}); }
     const f = await gh.lire('config.json');
     shaConfig = f ? f.sha : null;
     cfg = normaliser(fusion(CONFIG_DEFAUT, f ? JSON.parse(f.texte) : {}));
@@ -1731,6 +1762,72 @@
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   }
+
+  /* ---------------- Assistant « ❓ Aide » ----------------
+     Fenêtre réductible au-dessus de la barre du bas : on lit la réponse, on réduit pour appliquer, on rouvre pour relire.
+     La conversation est gardée sur l'appareil (par page) jusqu'à « Nouvelle conversation ». */
+  const aide = (() => {
+    const btn = $('#btn-aide'), pan = $('#aide-panneau'), fil = $('#aide-fil'), form = $('#aide-form'), q = $('#aide-question'), pied = $('#aide-pied');
+    let fils = [], restantes = null, enCours = false;
+    const cle = () => 'qp-aide:' + (APP || location.hostname);
+    const sauver = () => { try { localStorage.setItem(cle(), JSON.stringify(fils.slice(-30))); } catch (e) {} };
+    const charger = () => { try { const l = JSON.parse(localStorage.getItem(cle()) || '[]'); fils = Array.isArray(l) ? l : []; } catch (e) { fils = []; } };
+    function enrichir(txt) {            // texte simple : échappé, **gras**
+      const d = document.createElement('div'); d.textContent = txt;
+      return d.innerHTML.replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>');
+    }
+    function bulle(m) {
+      const b = el('div', { class: 'aide-msg ' + (m.role === 'user' ? 'q' : 'r') + (m.err ? ' err' : '') });
+      if (m.role === 'user') b.textContent = m.content; else if (m.err) b.textContent = t(m.content); else b.innerHTML = enrichir(m.content);
+      b.setAttribute('data-no-i18n', '');
+      return b;
+    }
+    function afficher() {
+      fil.innerHTML = '';
+      fil.appendChild(el('div', { class: 'aide-msg r', text: 'Bonjour ! Posez votre question sur la création de votre page : je vous explique où toucher, étape par étape. Réduisez cette fenêtre pour appliquer, puis rouvrez-la pour relire.' }));
+      fils.forEach(m => fil.appendChild(bulle(m)));
+      if (enCours) fil.appendChild(el('div', { class: 'aide-msg r', text: '…' }));
+      pied.textContent = restantes === null ? '' : t('Questions restantes aujourd’hui : ') + restantes;
+      requestAnimationFrame(() => { fil.scrollTop = fil.scrollHeight; });
+    }
+    function ouvrir() { pan.classList.remove('cache'); btn.classList.add('actif'); btn.classList.remove('nouveau'); afficher(); setTimeout(() => q.focus(), 50); }
+    function reduire() { pan.classList.add('cache'); btn.classList.remove('actif'); }
+    function contexte() {
+      const d = cfg.design || {};
+      return {
+        langueEditeur: langueUI(), vueApercu: typeof vueApercu !== 'undefined' ? vueApercu : '', modificationsNonEnregistrees: modifie,
+        titre: cfg.titre, sousTitre: cfg.sousTitre, pied: cfg.pied ? 'oui' : 'non', logo: cfg.logo ? 'oui' : 'non',
+        design: { theme: d.theme, couleurs: [d.fond, d.fond2, d.texte, d.accent], police: d.police, disposition: d.disposition, forme: d.forme, style: d.style,
+          imageFond: d.imageFond ? 'oui' : 'non', voile: d.voile, texteImage: d.texteImage, effetTexte: d.effetTexte, tousRonds: d.tousRonds, installer: d.installer },
+        boutons: (cfg.boutons || []).map(b => ({ action: b.type, texte: b.texte, rempli: !!String(b.valeur || '').trim(), masque: !!b.masque })),
+        reseaux: (cfg.reseaux || []).filter(x => x.actif && String(x.valeur || '').trim()).map(x => x.id),
+        home: cfg.home ? { actif: !!cfg.home.actif, pancartes: (cfg.home.articles || []).map(a => ({ titre: a.titre, style: a.style, image: a.image ? 'oui' : 'non', masque: !!a.masque })) } : null
+      };
+    }
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      const texte = q.value.trim();
+      if (!texte || enCours) return;
+      fils.push({ role: 'user', content: texte }); q.value = ''; q.style.height = '';
+      enCours = true; afficher();
+      try {
+        const msgs = fils.filter(m => !m.err).map(m => ({ role: m.role, content: m.content }));
+        const j = await (await appelAPI('aide', jetonCF, { method: 'POST', body: JSON.stringify({ messages: msgs, contexte: contexte(), langue: langueUI() }) })).json();
+        fils.push({ role: 'assistant', content: j.reponse }); restantes = j.restantes;
+        if (pan.classList.contains('cache')) btn.classList.add('nouveau');
+      } catch (err) {
+        fils.push({ role: 'assistant', content: err.message || t('L’assistant ne répond pas pour le moment. Réessayez dans un instant.'), err: true });
+        if (err.code === 'aide_quota') restantes = 0;
+      }
+      enCours = false; sauver(); afficher();
+    });
+    q.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && !('ontouchstart' in window)) { e.preventDefault(); form.requestSubmit ? form.requestSubmit() : form.dispatchEvent(new Event('submit', { cancelable: true })); } });
+    q.addEventListener('input', () => { q.style.height = ''; q.style.height = Math.min(120, q.scrollHeight) + 'px'; });
+    btn.addEventListener('click', () => pan.classList.contains('cache') ? ouvrir() : reduire());
+    $('#aide-reduire').addEventListener('click', reduire);
+    $('#aide-effacer').addEventListener('click', () => { fils = []; sauver(); afficher(); q.focus(); });
+    return { activer() { if (!CF) return; charger(); btn.classList.remove('cache'); } };
+  })();
 
   /* ---------------- Modèles de boutons ---------------- */
   const MODELES = {
