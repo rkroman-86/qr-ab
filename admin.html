@@ -335,7 +335,9 @@
       display:flex;flex-direction:column;background:var(--panneau);border:1px solid var(--ligne);border-radius:16px;box-shadow:0 12px 40px rgba(0,0,0,.35);overflow:hidden}
     .aide-tete{display:flex;align-items:center;gap:6px;padding:10px 12px;border-bottom:1px solid var(--ligne)}
     .aide-tete b{flex:1;font-size:.95rem}
-    .aide-ico{border:0;background:none;color:var(--txt);font-size:1.05rem;cursor:pointer;padding:6px 8px;border-radius:8px}
+    .aide-ico{border:0;background:none;color:var(--txt);font-size:1.05rem;cursor:pointer;padding:6px 10px;border-radius:8px;line-height:1}
+    #aide-effacer{margin-right:18px}
+    #aide-reduire{font-size:1.6rem;padding:2px 10px;border:1px solid var(--ligne)}
     .aide-fil{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px;-webkit-overflow-scrolling:touch}
     .aide-msg{max-width:88%;padding:9px 12px;border-radius:14px;font-size:.9rem;line-height:1.45;white-space:pre-wrap;word-wrap:break-word}
     .aide-msg.q{align-self:flex-end;background:var(--prim);color:#fff;border-bottom-right-radius:4px}
@@ -1825,7 +1827,10 @@
     q.addEventListener('input', () => { q.style.height = ''; q.style.height = Math.min(120, q.scrollHeight) + 'px'; });
     btn.addEventListener('click', () => pan.classList.contains('cache') ? ouvrir() : reduire());
     $('#aide-reduire').addEventListener('click', reduire);
-    $('#aide-effacer').addEventListener('click', () => { fils = []; sauver(); afficher(); q.focus(); });
+    $('#aide-effacer').addEventListener('click', () => {
+      if (!fils.length || !confirm(t('Effacer toute la conversation ?'))) return;
+      fils = []; sauver(); afficher(); q.focus();
+    });
     return { activer() { if (!CF) return; charger(); btn.classList.remove('cache'); } };
   })();
 

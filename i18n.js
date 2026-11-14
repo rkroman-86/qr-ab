@@ -328,6 +328,7 @@
     "Contour": ["Outline", "Контур"],
     "Bandeau derrière le texte": ["Band behind the text", "Подложка под текстом"],
     "Vous avez posé 50 questions aujourd’hui : l’assistant sera de nouveau disponible demain. Pour une question urgente : support@qrbc.app.": ["You have asked 50 questions today: the assistant will be available again tomorrow. For an urgent question: support@qrbc.app.", "Сегодня вы задали 50 вопросов: помощник снова будет доступен завтра. Срочный вопрос: support@qrbc.app."],
+    "Effacer toute la conversation ?": ["Delete the whole conversation?", "Удалить весь разговор?"],
     "Assistant": ["Assistant", "Помощник"],
     "Nouvelle conversation": ["New conversation", "Новый разговор"],
     "Réduire": ["Minimise", "Свернуть"],
