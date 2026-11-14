@@ -989,6 +989,41 @@ async function inscription(request, env) {
   return json({ ok: true, adresse: 'https://' + slug + '.' + DOMAINE + '/', editeur: '/app/' + slug + '/', verifier: !!conf, envoye, compte: resumeCompte(compte) });
 }
 
+/* Design de départ d'une nouvelle page : choisi d'après le nom de l'activité (mots-clés FR/EN/RU), sinon au hasard,
+   pour que les nouveaux sites ne se ressemblent pas tous. Couleurs reprises de THEMES (commun.js). */
+const THEMES_INIT = {
+  sable:   ['#f5f1ea', '#e9e0d2', '#2b2620', '#2b2620'],
+  nuit:    ['#0f1115', '#1d2230', '#f3f4f6', '#e6c07b'],
+  riviera: ['#e8f4f8', '#bfe0ec', '#0d3b4f', '#0d6e8c'],
+  olive:   ['#f2f2e6', '#dfe3c8', '#2f3a1f', '#5b6b2f'],
+  corail:  ['#fff4ef', '#ffd9cc', '#4a1f14', '#e0603f'],
+  luxe:    ['#111111', '#111111', '#f5efe0', '#c9a45c'],
+  blanc:   ['#ffffff', '#ffffff', '#111111', '#111111']
+};
+const ACTIVITES_DESIGN = [
+  { re: /vtc|chauffeur|taxi|limo|prestige|luxe|luxury|yacht|concierg|jet|drive|transfert|шофер|такси|водител|трансфер|люкс/, themes: ['luxe', 'nuit'], polices: ['elegant', 'classique'] },
+  { re: /restau|caf[eé]|bar\b|pizz|bistro|brasser|traiteur|boulang|p[aâ]tiss|cuisine|food|burger|sushi|cr[eê]pe|glac|chocolat|ресторан|каф|пицц|кухн|пекар/, themes: ['corail', 'sable'], polices: ['classique', 'arrondi'] },
+  { re: /spa|sauna|massag|beaut|coiff|esth[eé]ti|ongl|nail|yoga|bien[- ]?[eê]tre|wellness|barb|maquill|soin|салон|массаж|красот|сауна|баня|маникюр|парикмах/, themes: ['sable', 'olive'], polices: ['elegant', 'arrondi'] },
+  { re: /plage|mer\b|nautiq|bateau|boat|voile|surf|plong|dive|kayak|villa|location|vacan|h[oô]tel|g[iî]te|riviera|azur|camping|море|яхт|отел|вилл|аренд/, themes: ['riviera', 'blanc'], polices: ['moderne', 'elegant'] },
+  { re: /jardin|paysag|garden|bio\b|ferme|farm|vin\b|vins|cave|domaine|wine|fleur|flor|mara[iî]ch|olive|сад|ферм|вин|цвет/, themes: ['olive', 'sable'], polices: ['classique', 'elegant'] },
+  { re: /informati|tech|web|digital|d[eé]pann|plomb|[eé]lectric|artisan|b[aâ]timent|r[eé]nov|ma[cç]on|menuis|serrur|garage|m[eé]cani|auto\b|clim|chauff|компьют|ремонт|сантех|электр|строит/, themes: ['blanc', 'nuit'], polices: ['moderne', 'mono'] },
+  { re: /enfant|kids|cr[eè]che|nounou|anim(al|aux)|chien|chat\b|toilett|v[eé]t[eé]rin|f[eê]te|party|jouet|dessin|дет|собак|кош|праздн/, themes: ['corail', 'riviera'], polices: ['arrondi', 'moderne'] }
+];
+function designInitial(titre) {
+  const hasard = l => l[Math.floor(Math.random() * l.length)];
+  const t = String(titre || '').toLowerCase();
+  const act = ACTIVITES_DESIGN.find(a => a.re.test(t));
+  const theme = act ? hasard(act.themes) : hasard(Object.keys(THEMES_INIT));
+  const [fond, fond2, texte, accent] = THEMES_INIT[theme];
+  return {
+    theme, fond, fond2, texte, accent,
+    police: act ? hasard(act.polices) : hasard(['moderne', 'elegant', 'classique', 'arrondi']),
+    forme: hasard(['arrondi', 'arrondi', 'pilule', 'carre']),
+    style: hasard(['plein', 'plein', 'doux', 'contour']),
+    disposition: hasard(['centre', 'centre', 'haut', 'bas', 'carte'])
+  };
+}
+
 async function creerCompte(env, o) {
   if (await env.CLIENTS.get('compte:' + o.slug)) throw new ErreurAPI(409, 'Ce nom est déjà pris.');
   if (await env.CLIENTS.get('reserve:' + o.slug)) throw new ErreurAPI(409, 'Ce nom est déjà pris.');
@@ -1002,7 +1037,7 @@ async function creerCompte(env, o) {
   await ecrireCompte(env, compte);
   await indexerEmail(env, compte.email, o.slug, true);
   if (!(await env.CLIENTS.get('site:' + o.slug + ':config.json'))) {
-    await env.CLIENTS.put('site:' + o.slug + ':config.json', JSON.stringify({ titre: o.titre || '' }, null, 2));
+    await env.CLIENTS.put('site:' + o.slug + ':config.json', JSON.stringify({ titre: o.titre || '', design: designInitial(o.titre) }, null, 2));
   }
   return compte;
 }
