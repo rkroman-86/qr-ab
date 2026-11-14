@@ -58,6 +58,26 @@
   .promo-chiffres b{color:var(--txt)}
   .promo .actions{margin-top:2px}
   /* Onglets */
+  /* ---------- Stats du site principal ---------- */
+  .st-periode{display:flex;gap:4px;padding:3px;background:var(--bg);border:1px solid var(--ligne);border-radius:10px;width:max-content;margin:0 0 14px}
+  .st-periode button{border:0;background:transparent;padding:7px 14px;border-radius:7px;font-weight:600;font-size:.86rem;color:var(--doux);min-height:34px}
+  .st-periode button.actif{background:var(--panneau);color:var(--txt);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+  .st-tuiles{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+  .st-tuile{background:var(--panneau);border:1px solid var(--ligne);border-radius:14px;padding:12px 14px}
+  .st-tuile .v{font-size:1.7rem;font-weight:800;letter-spacing:-.02em;line-height:1.1;font-variant-numeric:tabular-nums}
+  .st-tuile .l{color:var(--doux);font-size:.8rem;margin-top:2px}
+  .st-graph svg{display:block;width:100%;height:140px}
+  .st-graph rect.b{fill:var(--prim)} .st-graph rect.b.sel{fill:var(--txt)} .st-graph rect.h{fill:transparent;cursor:pointer}
+  .st-graph line{stroke:var(--ligne)}
+  .st-axe{display:flex;justify-content:space-between;color:var(--doux);font-size:.75rem;margin-top:6px}
+  .st-info{min-height:1.4em;font-size:.86rem;color:var(--doux);margin-top:6px} .st-info b{color:var(--txt)}
+  .st-liste{display:grid;gap:8px}
+  .st-ligne{display:grid;grid-template-columns:minmax(90px,38%) 1fr auto;gap:10px;align-items:center;font-size:.9rem}
+  .st-ligne .nom{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .st-ligne .barre-st{height:10px;border-radius:0 4px 4px 0;background:var(--prim);min-width:2px}
+  .st-ligne .n{font-variant-numeric:tabular-nums;font-weight:600;min-width:2.5em;text-align:right}
+  .st-vide{color:var(--doux);font-size:.9rem;margin:0}
+  .boite h3{font-size:.95rem;margin:0 0 10px}
   .onglets{display:flex;gap:4px;background:var(--panneau);border:1px solid var(--ligne);border-radius:12px;padding:4px;margin:0 0 16px;position:sticky;top:8px;z-index:5}
   .onglets button{flex:1;border:0;background:none;font-weight:600;color:var(--doux);min-height:40px}
   .onglets button[aria-selected="true"]{background:var(--bg);color:var(--txt)}
@@ -100,6 +120,7 @@
     <nav class="onglets" role="tablist">
       <button type="button" role="tab" data-onglet="clients" aria-selected="true">Clients<b id="nb-demandes" class="cache"></b></button>
       <button type="button" role="tab" data-onglet="reglages" aria-selected="false">Réglages</button>
+      <button type="button" role="tab" data-onglet="stats" aria-selected="false">Stats</button>
     </nav>
 
     <section id="onglet-clients">
@@ -121,6 +142,8 @@
       <div class="msg" id="m-liste"></div>
       <div class="cartes" id="liste"></div>
     </section>
+
+    <section id="onglet-stats" class="cache"><div id="stats-site"></div></section>
 
     <section id="onglet-reglages" class="cache">
     <div class="boite" id="b-rappels">
@@ -396,6 +419,8 @@
     chargerPromos().catch(() => {});
     if (!tarifsDefaut) chargerTarifs().catch(() => {});
     $('#f-connexion').classList.add('cache'); $('#zone').classList.remove('cache');
+    fetch('/api/moi', { credentials: 'include' }).catch(() => {});   // tes visites ne sont pas comptées
+    if (!$('#onglet-stats').classList.contains('cache')) chargerStatsSite();
     tousComptes = comptes;
     const n = p => comptes.filter(c => c.plan === p).length;
     const demandes = comptes.filter(c => c.demande).length;
@@ -530,11 +555,79 @@
     if (ok) { $('#m-promo').className = 'msg ok'; $('#m-promo').textContent = '✓ Code ajouté et actif.'; $('#p-code').value = ''; $('#p-note').value = ''; }
   });
 
+
+  /* ---------- Stats du site principal qrbc.app ---------- */
+  let periodeSite = 30;
+  const SOURCES_SITE = { qr: 'QR code', promo: 'Lien d’apporteur (?promo=)', google: 'Google', moteur: 'Autres moteurs', reseaux: 'Réseaux sociaux', site: 'Autre site', direct: 'Lien direct ou inconnu' };
+  const PAGES_SITE = { accueil: 'Accueil', app: 'Appli / connexion', cgv: 'CGV', 'mentions-legales': 'Mentions légales' };
+  const nombre = n => n.toLocaleString('fr-FR');
+  const jourCourt = (j, long) => new Date(j + 'T12:00:00').toLocaleDateString('fr-FR', long ? { weekday: 'short', day: 'numeric', month: 'long' } : { day: 'numeric', month: 'short' });
+  const pays = c => { if (c === 'XX') return 'Inconnu'; try { return new Intl.DisplayNames(['fr'], { type: 'region' }).of(c); } catch (e) { return c; } };
+  function listeSite(titre, donnees, nommer) {
+    const b = el('div', { class: 'boite' }, [el('h3', { text: titre })]);
+    const l = Object.entries(donnees || {}).sort((a, c) => c[1] - a[1]);
+    if (!l.length) { b.append(el('p', { class: 'st-vide', text: 'Rien pour l’instant.' })); return b; }
+    const vus = l.slice(0, 8), reste = l.slice(8).reduce((s, x) => s + x[1], 0), max = Math.max(...vus.map(x => x[1]), reste);
+    const z = el('div', { class: 'st-liste' });
+    const ligne = (nom, n) => z.append(el('div', { class: 'st-ligne' }, [el('span', { class: 'nom', text: nom, title: nom }),
+      el('span', {}, [el('div', { class: 'barre-st', style: 'width:' + Math.max(1, Math.round(n / max * 100)) + '%' })]), el('span', { class: 'n', text: nombre(n) })]));
+    vus.forEach(([k, n]) => ligne(nommer(k), n));
+    if (reste) ligne('Autres', reste);
+    b.append(z); return b;
+  }
+  function grapheSite(s) {
+    const jrs = [];
+    for (let d = new Date(s.debut + 'T12:00:00'); jrs.length < s.jours; d.setDate(d.getDate() + 1)) jrs.push(new Intl.DateTimeFormat('fr-CA').format(d));
+    const v = jrs.map(j => s.parJour[j] || 0), ins = jrs.map(j => (s.inscriptionsParJour || {})[j] || 0), max = Math.max(1, ...v);
+    const W = 600, H = 140, pas = W / jrs.length, larg = Math.max(1, pas - Math.min(2, pas * .25)), NS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(NS, 'svg'); svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H); svg.setAttribute('preserveAspectRatio', 'none');
+    svg.setAttribute('role', 'img'); svg.setAttribute('aria-label', 'Visites par jour');
+    const base = document.createElementNS(NS, 'line'); base.setAttribute('x1', 0); base.setAttribute('x2', W); base.setAttribute('y1', H - .5); base.setAttribute('y2', H - .5); svg.append(base);
+    const info = el('div', { class: 'st-info' }), barres = [];
+    const montrer = i => { barres.forEach((b, k) => b.classList.toggle('sel', k === i)); info.innerHTML = '';
+      info.append(jourCourt(jrs[i], true) + ' · ', el('b', { text: nombre(v[i]) }), ' visite' + (v[i] > 1 ? 's' : '') + (ins[i] ? ' · ' : ''), ins[i] ? el('b', { text: nombre(ins[i]) }) : '', ins[i] ? ' inscription' + (ins[i] > 1 ? 's' : '') : ''); };
+    jrs.forEach((j, i) => {
+      const hb = v[i] ? Math.max(3, v[i] / max * (H - 8)) : 0, r = document.createElementNS(NS, 'rect');
+      r.setAttribute('class', 'b'); r.setAttribute('x', i * pas + (pas - larg) / 2); r.setAttribute('width', larg); r.setAttribute('y', H - hb); r.setAttribute('height', hb); r.setAttribute('rx', Math.min(4, larg / 2));
+      svg.append(r); barres.push(r);
+      const z = document.createElementNS(NS, 'rect'); z.setAttribute('class', 'h'); z.setAttribute('x', i * pas); z.setAttribute('width', pas); z.setAttribute('y', 0); z.setAttribute('height', H);
+      z.addEventListener('mouseenter', () => montrer(i)); z.addEventListener('click', () => montrer(i)); svg.append(z);
+    });
+    setTimeout(() => montrer(jrs.length - 1), 0);
+    return el('div', { class: 'boite' }, [el('h3', { text: 'Visites par jour' }), el('div', { class: 'st-graph' }, [svg]),
+      el('div', { class: 'st-axe' }, [el('span', { text: jourCourt(jrs[0]) }), el('span', { text: jourCourt(jrs[Math.floor(jrs.length / 2)]) }), el('span', { text: jourCourt(jrs[jrs.length - 1]) })]), info]);
+  }
+  async function chargerStatsSite() {
+    const z = $('#stats-site'); z.innerHTML = '';
+    z.append(el('h2', { text: 'Statistiques de qrbc.app', style: 'margin:0 0 10px;font-size:1.15rem' }),
+      el('div', { class: 'st-periode' }, [7, 30, 90, 365].map(n => el('button', { type: 'button', class: n === periodeSite ? 'actif' : '', text: n === 365 ? '1 an' : n + ' jours', onclick: () => { periodeSite = n; chargerStatsSite(); } }))));
+    const att = el('p', { class: 'st-vide', text: 'Chargement…' }); z.append(att);
+    let s;
+    try { s = await api('stats-site?jours=' + periodeSite); } catch (e) { att.textContent = 'Statistiques indisponibles : ' + e.message; return; }
+    att.remove();
+    if (!s.actif) { z.append(el('p', { class: 'st-vide', text: 'Base de statistiques non branchée.' })); return; }
+    const taux = s.visites ? (s.inscriptions / s.visites * 100).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' %' : '—';
+    z.append(
+      el('div', { class: 'st-tuiles' }, [
+        el('div', { class: 'st-tuile' }, [el('div', { class: 'v', text: nombre(s.visites) }), el('div', { class: 'l', text: 'Visites' })]),
+        el('div', { class: 'st-tuile' }, [el('div', { class: 'v', text: nombre(s.inscriptions) }), el('div', { class: 'l', text: 'Inscriptions' })]),
+        el('div', { class: 'st-tuile' }, [el('div', { class: 'v', text: taux }), el('div', { class: 'l', text: 'Visites → inscription' })])]),
+      grapheSite(s),
+      listeSite('Provenance', s.source, k => SOURCES_SITE[k] || k),
+      listeSite('Page d’arrivée', s.page, k => PAGES_SITE[k] || k),
+      listeSite('Pays', s.pays, pays),
+      listeSite('Langue choisie', s.langue, k => ({ fr: 'Français', en: 'Anglais', ru: 'Russe' })[k] || k),
+      listeSite('Inscriptions par code promo', s.inscription, k => k || 'Sans code'),
+      el('p', { class: 'infos', text: 'Visiteurs de qrbc.app (accueil, appli, pages légales), sans cookie ni donnée personnelle, hors robots et hors tes propres visites. Une visite = une arrivée sur le site ; la navigation d’une page à l’autre n’est pas recomptée. Compté depuis le 14 novembre 2026. Les visites des pages clients restent dans l’onglet Clients.' }));
+  }
+
   /* ---------- Onglets ---------- */
   function onglet(nom) {
     document.querySelectorAll('.onglets button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.onglet === nom)));
     $('#onglet-clients').classList.toggle('cache', nom !== 'clients');
     $('#onglet-reglages').classList.toggle('cache', nom !== 'reglages');
+    $('#onglet-stats').classList.toggle('cache', nom !== 'stats');
+    if (nom === 'stats' && jeton) chargerStatsSite();
     $('#f-creer').classList.add('cache');
     try { sessionStorage.setItem('qrbc-gestion-onglet', nom); } catch (e) {}
   }

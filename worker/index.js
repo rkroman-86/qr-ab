@@ -152,7 +152,7 @@ async function racine(request, env, url) {
     if (err) return json({ disponible: false, raison: err });
     return json({ disponible: !(await env.CLIENTS.get('compte:' + slug)) && !(await env.CLIENTS.get('reserve:' + slug)) });
   }
-  if (p === '/' || p === '/index.html') return accueilLangue(env, request, url);
+  if (p === '/' || p === '/index.html') { compterVisiteSite(request, env, url, 'accueil'); return accueilLangue(env, request, url); }
   // Référencement : robots.txt du site principal, plan du site global (toutes les pages clients actives)
   if (p === '/robots.txt') return texte('User-agent: *\nAllow: /\nDisallow: /gestion\nDisallow: /app/\nDisallow: /api/\n\nSitemap: https://' + DOMAINE + '/sitemap.xml\n');
   if (p === '/sitemap.xml') return planGlobal(env, url.searchParams.has('frais'));
@@ -161,9 +161,10 @@ async function racine(request, env, url) {
   // Pages légales : français (seul faisant foi) + traductions anglaise et russe (?lang=en|ru)
   if (p === '/cgv' || p === '/cgv.html' || p === '/mentions-legales' || p === '/mentions-legales.html') {
     const base = p.replace(/\.html$/, ''), l = url.searchParams.get('lang');
+    compterVisiteSite(request, env, url, base.slice(1));
     return statique(env, request, base + (l === 'en' || l === 'ru' ? '.' + l : '') + '.html');
   }
-  if (p === '/app' || p === '/app/') return statique(env, request, '/app.html', true);
+  if (p === '/app' || p === '/app/') { compterVisiteSite(request, env, url, 'app'); return statique(env, request, '/app.html', true); }
   if (p === '/favicon.ico') return statique(env, request, '/favicon.png');
   if (p === '/sw.js') {
     // le service worker doit toujours être relu, sinon les mises à jour de l'appli tardent
@@ -1056,6 +1057,7 @@ async function inscription(request, env) {
     joursBonus: promo ? promo.jours : 0, promo: promo ? { code: promo.code, jours: promo.jours, le: new Date().toISOString() } : null });
   let envoye = false;
   if (conf) { try { await envoyerLienVerif(env, conf, compte); envoye = true; } catch (e) { console.error('e-mail de validation', e.message); } }
+  ecrireStats(env, PAGE_SITE, [['inscription', String((compte.promo && compte.promo.code) || '').slice(0, 30)]]);
   return json({ ok: true, adresse: 'https://' + slug + '.' + DOMAINE + '/', editeur: '/app/' + slug + '/', verifier: !!conf, envoye, compte: resumeCompte(compte) });
 }
 
@@ -1239,6 +1241,10 @@ async function gestion(request, env, action) {
     return json({ promos, essai: JOURS_ESSAI });
   }
 
+  if (action === 'stats-site') {
+    const jours = Math.min(366, Math.max(1, parseInt(new URL(request.url).searchParams.get('jours'), 10) || 30));
+    return json(await lireStats(env, PAGE_SITE, jours));
+  }
   if (action === 'liste') {
     const comptes = [];
     let curseur;
@@ -2408,12 +2414,13 @@ function ecrireStats(env, page, lignes) {
     env.STATS.prepare('INSERT INTO stats (page, jour, type, cle, n) VALUES (?, ?, ?, ?, 1) ON CONFLICT (page, jour, type, cle) DO UPDATE SET n = n + 1')
       .bind(page, jour, type, String(cle || '').slice(0, 40))))));
 }
-function sourceVisite(url, request, slug) {
+function sourceVisite(url, request, slug, hotesInternes) {
   if (url.searchParams.get('s') === 'qr') return 'qr';
+  if (url.searchParams.get('promo')) return 'promo';
   let h = '';
   try { h = new URL(request.headers.get('referer') || '').hostname.toLowerCase(); } catch (e) {}
   if (!h) return 'direct';
-  if (h === slug + '.' + DOMAINE) return null;                                     // navigation interne : déjà comptée
+  if ((hotesInternes || [slug + '.' + DOMAINE]).includes(h)) return null;            // navigation interne : déjà comptée
   if (/(^|\.)google\./.test(h)) return 'google';
   if (/(^|\.)(bing|duckduckgo|yandex|qwant|ecosia|yahoo|baidu|brave|startpage|ya|seznam)\./.test(h)) return 'moteur';
   if (/(^|\.)(facebook|fb|instagram|t|twitter|x|linkedin|lnkd|tiktok|pinterest|youtube|vk|ok|telegram|whatsapp|snapchat|threads|reddit|messenger)\.(com|co|me|ru|net|in)$/.test(h)) return 'reseaux';
@@ -2426,6 +2433,17 @@ function compterVisite(request, env, slug, url, langue) {
   if (!source) return;
   const pays = (request.cf && request.cf.country) || 'XX';
   ecrireStats(env, slug, [['visite', ''], ['source', source], ['pays', /^[A-Z]{2}$/.test(pays) ? pays : 'XX'], ['langue', /^[a-z]{2}$/.test(langue || '') ? langue : 'fr']]);
+}
+// Site principal qrbc.app : mêmes statistiques, rangées sous la page « @site » (nom impossible pour un client),
+// avec en plus la page d'arrivée (accueil, app, cgv, mentions-legales) et les inscriptions.
+const PAGE_SITE = '@site';
+function compterVisiteSite(request, env, url, page) {
+  if (!env.STATS || (request.method !== 'GET' && request.method !== 'HEAD') || !visiteurHumain(request)) return;
+  const source = sourceVisite(url, request, '', [DOMAINE, 'www.' + DOMAINE]);
+  if (!source) return;
+  const pays = (request.cf && request.cf.country) || 'XX', l = url.searchParams.get('lang');
+  ecrireStats(env, PAGE_SITE, [['visite', ''], ['source', source], ['page', page], ['pays', /^[A-Z]{2}$/.test(pays) ? pays : 'XX'],
+    ['langue', l === 'en' || l === 'ru' ? l : 'fr']]);
 }
 async function compterClic(request, env, slug) {
   if (env.STATS && visiteurHumain(request) && /^[a-z0-9-]+$/.test(slug)) {
@@ -2442,7 +2460,7 @@ function marquerProprietaire() {
 }
 async function lireStats(env, page, jours) {
   const debut = jourParis(new Date(Date.now() - (jours - 1) * 86400000));
-  const res = { actif: !!env.STATS, jours, debut, fin: jourParis(), parJour: {}, source: {}, pays: {}, langue: {}, clic: {}, visites: 0, clics: 0 };
+  const res = { actif: !!env.STATS, jours, debut, fin: jourParis(), parJour: {}, source: {}, pays: {}, langue: {}, clic: {}, page: {}, inscription: {}, visites: 0, clics: 0, inscriptions: 0 };
   if (!(await tablesStats(env))) return res;
   const { results } = await env.STATS.prepare('SELECT jour, type, cle, SUM(n) AS n FROM stats WHERE page = ? AND jour >= ? GROUP BY jour, type, cle')
     .bind(page, debut).all();
@@ -2451,6 +2469,7 @@ async function lireStats(env, page, jours) {
     else if (res[r.type]) {
       res[r.type][r.cle] = (res[r.type][r.cle] || 0) + r.n;
       if (r.type === 'clic') { res.clics += r.n; res.clicsParJour = res.clicsParJour || {}; res.clicsParJour[r.jour] = (res.clicsParJour[r.jour] || 0) + r.n; }
+      if (r.type === 'inscription') { res.inscriptions += r.n; res.inscriptionsParJour = res.inscriptionsParJour || {}; res.inscriptionsParJour[r.jour] = (res.inscriptionsParJour[r.jour] || 0) + r.n; }
     }
   }
   return res;
@@ -2460,7 +2479,7 @@ async function resumeStats(env, jours) {
   try {
     if (!(await tablesStats(env))) return out;
     const debut = jourParis(new Date(Date.now() - (jours - 1) * 86400000));
-    const { results } = await env.STATS.prepare("SELECT page, type, SUM(n) AS n FROM stats WHERE jour >= ? AND type IN ('visite', 'clic') GROUP BY page, type").bind(debut).all();
+    const { results } = await env.STATS.prepare("SELECT page, type, SUM(n) AS n FROM stats WHERE jour >= ? AND type IN ('visite', 'clic') AND page != '" + PAGE_SITE + "' GROUP BY page, type").bind(debut).all();
     for (const r of results || []) {
       const k = r.type === 'visite' ? 'visites' : 'clics';
       (out.pages[r.page] = out.pages[r.page] || { visites: 0, clics: 0 })[k] += r.n;
