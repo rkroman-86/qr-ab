@@ -69,10 +69,12 @@ qrbc.app (QR-BC, édité par KPS) permet de créer en quelques minutes, depuis u
 - Toutes les images importées ou créées par l'IA sont gardées dans « Mes images » et réutilisables partout (fond, pancartes), sur toutes les pages du compte. Une image peut être supprimée ; si elle est utilisée sur la page, elle reste affichée tant qu'on ne la change pas.
 
 ## Page Home (mini-site à pancartes)
+- Vocabulaire : les clients appellent parfois les pancartes « cartes », « cards », « carduri », « карточки » ou « slides ». Ne pas confondre avec les cartes de visite (section QR code et carte de visite) : en cas de doute, demander de quoi il s'agit.
 - « Activer la page Home » : une suite de pancartes plein écran, on passe de l'une à l'autre en glissant. Un lien « Découvrir l'entreprise » (texte modifiable) y mène depuis la page contact.
 - Chaque pancarte a un titre, un texte et un style : Photo plein écran, Image + texte, ou Texte seul. Les flèches changent l'ordre ; on peut masquer ou supprimer une pancarte (10 au maximum).
 - « ✨ Image IA » sur chaque pancarte : crée 2 images inspirées du titre et du texte de la pancarte. Une pancarte « Texte seul » passe automatiquement en « Photo plein écran » quand on lui ajoute une image.
-- Rédaction IA des pancartes : décrire l'activité avec un maximum de détails (et la zone) ; l'IA rédige les pancartes, vous relisez, corrigez et validez. L'IA n'invente rien : elle n'utilise que ce que vous écrivez.
+- « ✨ Texte IA » sur chaque pancarte : rédige ou améliore cette pancarte seulement, sans toucher aux autres (décompté comme un texte IA). Écrire d'abord un titre ou une idée pour choisir le sujet ; laisser vide pour que l'IA propose un sujet non traité ailleurs. « ↩ Annuler » revient au texte précédent. Pratique pour ajouter une pancarte sans tout réécrire.
+- Rédaction IA de toutes les pancartes d'un coup : décrire l'activité avec un maximum de détails (et la zone) ; l'IA rédige les pancartes, vous relisez, corrigez et validez. L'IA n'invente rien : elle n'utilise que ce que vous écrivez.
 
 ## QR code et carte de visite
 - « ⬇ QR code (PNG) » : le QR code de la page, à imprimer ou afficher. Le QR mène toujours à nom.qrbc.app : il reste valable même si la page change.

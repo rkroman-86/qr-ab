@@ -1789,7 +1789,7 @@
       fil.appendChild(el('div', { class: 'aide-msg r', text: 'Bonjour ! Posez votre question sur la création de votre page : je vous explique où toucher, étape par étape. Réduisez cette fenêtre pour appliquer, puis rouvrez-la pour relire.' }));
       fils.forEach(m => fil.appendChild(bulle(m)));
       if (enCours) fil.appendChild(el('div', { class: 'aide-msg r', text: '…' }));
-      pied.textContent = restantes === null ? '' : t('Questions restantes aujourd’hui : ') + restantes;
+      pied.textContent = restantes === null ? '' : t('Questions restantes aujourd’hui :') + ' ' + restantes;
       requestAnimationFrame(() => { fil.scrollTop = fil.scrollHeight; });
     }
     function ouvrir() { pan.classList.remove('cache'); btn.classList.add('actif'); btn.classList.remove('nouveau'); afficher(); setTimeout(() => q.focus(), 50); }
@@ -2963,6 +2963,59 @@
     return el('div', {}, [jauge, conseil]);
   }
 
+  /* ✨ Texte IA d'une seule pancarte : rédige (ou améliore) cette pancarte sans toucher aux autres.
+     Décompté comme un texte IA (même outil que la rédaction complète). */
+  async function redigerPancarte(i) {
+    const arts = cfg.home.articles, a = arts[i], ia = cfg.home.ia || {};
+    const seo = cfg.seo || {};
+    const systeme = [
+      'Tu es rédacteur web. Tu écris UNE pancarte de la page d’accueil mobile d’une petite entreprise : elle occupe tout l’écran d’un téléphone, avec un titre court et un texte clair, concret et informatif.',
+      'Règles :',
+      '- Écris dans la langue des textes existants de la page (titre, pancartes, description) ; à défaut, en français.',
+      '- Si la pancarte a déjà un titre ou un texte, garde son sujet : améliore-le, complète-le et rends-le plus concret. Si elle est vide, choisis un sujet utile qui n’est pas déjà traité par les autres pancartes.',
+      '- N’invente aucun fait vérifiable absent des informations : prix, chiffres, années d’expérience, labels, certifications, diplômes, noms, adresses, horaires, avis clients, garanties, marques. Si une information manque, reste général.',
+      '- Titre : 2 à 6 mots, 40 caractères maximum, sans point final.',
+      '- Texte : 3 à 5 phrases, entre 300 et 460 caractères. Un seul retour à la ligne autorisé.',
+      '- Ne répète pas ce que disent les autres pancartes.',
+      '- Si c’est la dernière pancarte et qu’elle parle de contact, cite les moyens de contact disponibles.',
+      '- Référencement : si un mot-clé principal ou des lieux sont connus, places-en un naturellement dans le titre ou le texte, sans bourrage.',
+      '- Pas d’emoji, pas de hashtag, pas de superlatif creux.',
+      '- Corrige silencieusement les fautes de frappe évidentes.',
+      '- Réponds uniquement en appelant l’outil proposer_articles avec exactement une pancarte.'
+    ].join('\n');
+    const autres = arts.map((x, k) => k === i || x.masque || !(x.titre || x.texte) ? '' : '- Pancarte ' + (k + 1) + ' : ' + (x.titre || '') + ' — ' + String(x.texte || '').slice(0, 160)).filter(Boolean);
+    const infos = [
+      'Nom de l’entreprise : ' + (cfg.titre || '(non précisé)'),
+      cfg.sousTitre ? 'Accroche : ' + cfg.sousTitre : '',
+      ia.description ? 'Description de l’activité par le client : ' + ia.description : '',
+      (ia.zone || seo.zone) ? 'Zone d’action : ' + (ia.zone || seo.zone) : '',
+      seo.motCle ? 'Mot-clé principal : ' + seo.motCle : '',
+      cfg.pied ? 'Mention en bas de page : ' + cfg.pied : '',
+      'Moyens de contact disponibles : ' + (moyensDeContact().join(', ') || '(non précisés)'),
+      'Ton souhaité : ' + (TONS_IA[ia.ton] || TONS_IA.pro),
+      autres.length ? 'Autres pancartes (ne pas répéter) :\n' + autres.join('\n') : 'Pas d’autre pancarte pour l’instant.',
+      'Pancarte à rédiger : n° ' + (i + 1) + ' sur ' + arts.length + (i === arts.length - 1 && arts.length > 1 ? ' (la dernière)' : ''),
+      'Titre actuel : ' + (a.titre || '(vide)'),
+      'Texte actuel : ' + (a.texte || '(vide)')
+    ].filter(Boolean).join('\n');
+    const r = await appelIA({
+      model: MODELE_IA, max_tokens: 1500, system: systeme,
+      tools: [{ name: 'proposer_articles', description: 'Renvoie la pancarte rédigée.',
+        input_schema: { type: 'object', properties: { articles: { type: 'array', items: { type: 'object', properties: { titre: { type: 'string' }, texte: { type: 'string' } }, required: ['titre', 'texte'] } } }, required: ['articles'] } }],
+      tool_choice: { type: 'tool', name: 'proposer_articles' },
+      messages: [{ role: 'user', content: infos }]
+    });
+    let j = null;
+    try { j = await r.json(); } catch (e) {}
+    if (!r.ok) throw new Error((j && j.error && j.error.message) || (j && j.erreur) || 'Le service IA est surchargé. Réessayez dans un instant.');
+    const outil = (j.content || []).find(c => c.type === 'tool_use' && c.input);
+    let liste = outil && outil.input && outil.input.articles;
+    if (typeof liste === 'string') { try { liste = JSON.parse(liste); } catch (e) { liste = null; } }
+    const p = Array.isArray(liste) && liste.find(x => x && (x.titre || x.texte));
+    if (!p) throw new Error('Réponse vide de l’IA. Réessayez.');
+    return { titre: String(p.titre || '').trim().replace(/[.\s]+$/, ''), texte: String(p.texte || '').trim() };
+  }
+
   async function redigerAvecIA(brief, express) {
     const systeme = [
       'Tu es rédacteur web. Tu écris les pancartes de la page d’accueil mobile d’une petite entreprise.',
@@ -3722,10 +3775,37 @@
       [L[i], L[j]] = [L[j], L[i]];
       construireFormulaire(); changement();
     };
+    const champTitre = champTexte('Titre', a, 'titre', { ph: 'Qui sommes-nous ?' });
+    const champCorps = (() => { const c = champTexte('Texte', a, 'texte', { multi: true, ph: 'Votre texte…' }); c.querySelector('textarea').rows = 5; return c; })();
+    // ✨ Texte IA : rédige ou améliore cette pancarte seulement (avec « Annuler » pour revenir au texte précédent)
+    const msgIA = el('div', { class: 'msg', style: 'margin:0' });
+    let avantIA = null;
+    const annulerIA = el('button', { type: 'button', class: 'btn btn-mini cache', text: '↩ Annuler', onclick: () => {
+      if (!avantIA) return;
+      a.titre = avantIA.titre; a.texte = avantIA.texte; avantIA = null;
+      champTitre.querySelector('input').value = a.titre || ''; champCorps.querySelector('textarea').value = a.texte || '';
+      annulerIA.classList.add('cache'); msgIA.textContent = ''; changement(); majApercu();
+    } });
+    const texteIA = el('button', { type: 'button', class: 'btn btn-mini', text: '✨ Texte IA', onclick: async () => {
+      texteIA.disabled = true; texteIA.textContent = t('Rédaction…'); msgIA.className = 'msg'; msgIA.textContent = '';
+      try {
+        const p = await redigerPancarte(i);
+        avantIA = { titre: a.titre || '', texte: a.texte || '' };
+        a.titre = p.titre; a.texte = p.texte;
+        champTitre.querySelector('input').value = a.titre; champCorps.querySelector('textarea').value = a.texte;
+        annulerIA.classList.remove('cache');
+        msgIA.className = 'msg ok'; msgIA.textContent = t('Relisez et corrigez si besoin, puis Enregistrer.');
+        changement(); majApercu();
+      } catch (e) { msgIA.className = 'msg err'; msgIA.textContent = e.message; }
+      texteIA.disabled = false; texteIA.textContent = t('✨ Texte IA');
+    } });
     carte.append(
       el('div', { class: 'ac-tete' }, [el('b', { text: 'Pancarte ' + (i + 1) }), caseAfficher(a, carte)]),
-      champTexte('Titre', a, 'titre', { ph: 'Qui sommes-nous ?' }),
-      (() => { const c = champTexte('Texte', a, 'texte', { multi: true, ph: 'Votre texte…' }); c.querySelector('textarea').rows = 5; return c; })(),
+      champTitre,
+      champCorps,
+      el('div', { class: 'bc-actions', style: 'margin:-4px 0 4px' }, [texteIA, annulerIA]),
+      el('div', { class: 'aide', style: 'margin:0 0 10px', text: 'L’IA rédige cette pancarte sans toucher aux autres. Écrivez d’abord un titre ou une idée pour choisir le sujet ; laissez vide pour qu’elle en propose un.' }),
+      msgIA,
       segments('Mise en page', HOME_STYLES, a, 'style'),
       choixImage('Image', a, 'image', { nom: 'article', max: 1600, fond: true, photo: true, ratio: () => a.style === 'image' ? RATIO_BANDEAU : RATIO_ECRAN,
         ia: () => ({ titre: a.titre || '', texte: a.texte || '', style: a.style || '' }),
