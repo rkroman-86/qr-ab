@@ -514,6 +514,15 @@ async function apiClient(request, env, slug, route) {
     return new Response(txt, { status, headers: h });
   }
 
+  // Tarifs du moment en clair pour l'assistant (réglés dans /gestion)
+  function tarifsLisibles() {
+    const e = c => (c / 100).toFixed(2).replace('.', ',') + ' €';
+    return 'abonnement ' + e(PRIX_ANNUEL) + '/an ; au-delà des quotas : texte IA ' + e(PRIX_IA.texte) + ', création de pictos ' + e(PRIX_IA.picto) +
+      ', création de 2 images (fond ou pancarte) ' + e(PRIX_IA.fond) + ' ; création express (abonné) ' + e(PRIX_EXPRESS) +
+      ' ; page supplémentaire ou version traduite ' + e(PRIX_PAGE) + '/an ; retraduction ' + e(PRIX_TRADUCTION) +
+      ' ; recharge minimum ' + e(RECHARGE_MIN) + ' ; inclus essai 14 jours : ' + QUOTAS_IA.essai.texte + ' textes, ' + QUOTAS_IA.essai.picto + ' pictos, ' + QUOTAS_IA.essai.fond +
+      ' créations d’images ; inclus abonnement par an : ' + QUOTAS_IA.payant.texte + ' textes, ' + QUOTAS_IA.payant.picto + ' pictos, ' + QUOTAS_IA.payant.fond + ' créations d’images';
+  }
   /* ---------- Assistant « ❓ Aide » de l'éditeur : répond aux questions sur la création, d'après le mode d'emploi ----------
      Gratuit pour tous (même essai terminé), 50 questions par compte et par jour. */
   if (route === 'aide' && m === 'POST') {
@@ -542,6 +551,7 @@ async function apiClient(request, env, slug, route) {
     try {
       const c = d.contexte && typeof d.contexte === 'object' ? d.contexte : {};
       contexte = 'Contexte de la page en cours (aperçu non forcément enregistré) : ' + JSON.stringify(c).slice(0, 2500) +
+        '\nTarifs ACTUELS (ils priment sur tout montant écrit dans le mode d’emploi ; prix HT, TVA 20 % en plus) : ' + tarifsLisibles() +
         '\nCompte : ' + JSON.stringify({ page: compte.slug, plan: tit.plan, actif: actif(tit), finEssai: tit.finEssai, payeJusqua: tit.payeJusqua, versionTraduite: !!compte.traduction }).slice(0, 600);
     } catch (e) { }
     const corps = {

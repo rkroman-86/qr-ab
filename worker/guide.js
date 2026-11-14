@@ -3,6 +3,8 @@
    Pas d'accent grave (backtick) dans ce texte. */
 export const GUIDE = `# Mode d'emploi de l'éditeur qrbc.app
 
+Les montants et quotas à jour sont donnés à part (« Tarifs ACTUELS ») : toujours utiliser ceux-là.
+
 qrbc.app (QR-BC, édité par KPS) permet de créer en quelques minutes, depuis un téléphone, une page mobile pour une activité (commerce, artisan, VTC, restaurant, location…), avec son QR code, des cartes de visite à imprimer et une petite appli installable. L'adresse de la page est nom.qrbc.app.
 
 ## L'écran de l'éditeur
@@ -18,7 +20,7 @@ qrbc.app (QR-BC, édité par KPS) permet de créer en quelques minutes, depuis u
 - Elle remplace les pancartes, l'accroche, le logo et le fond actuels ; les anciennes images restent dans « Mes images ».
 - Ensuite : tout vérifier dans l'aperçu, corriger si besoin, puis « Enregistrer » pour publier.
 - Si une étape échoue, elle peut être relancée sans frais pendant 30 minutes (« Réessayer »).
-- Coût : pendant l'essai, une partie des créations gratuites ; pour un abonné, 1,50 € HT ; gratuit pour un compte offert. Pas disponible sur une version traduite.
+- Coût : pendant l'essai, une partie des créations gratuites ; pour un abonné, le prix de la création express (tarifs actuels) ; gratuit pour un compte offert. Pas disponible sur une version traduite.
 
 ## Textes
 - Nom de l'établissement (titre), sous-titre (accroche) et texte en bas de page (adresse, horaires…).
@@ -95,13 +97,13 @@ qrbc.app (QR-BC, édité par KPS) permet de créer en quelques minutes, depuis u
 ## Plusieurs pages et traductions (« Mes pages »)
 - Le bandeau « Mes pages » / « Une autre activité ou une autre langue ? » permet d'ajouter une nouvelle page (autre activité : nouveau nom, nouvelle adresse, nouveau QR code) ou une version traduite de la page (14 langues, même adresse et même QR code, le visiteur la voit dans la langue de son téléphone, avec un choix de langue en haut à droite).
 - Tout reste sur le même compte : un seul mot de passe, une seule échéance, images partagées. On passe d'une page à l'autre sans retaper le mot de passe.
-- Prix : 9 € HT par an et par page ou langue, payé au prorata jusqu'à l'échéance commune, avec les crédits IA d'un abonnement. Réservé aux abonnés (pas pendant l'essai). La première traduction est offerte ; « Retraduire depuis la page d'origine » coûte 1,50 € HT (après avoir modifié la page d'origine). La version traduite peut aussi être corrigée à la main.
+- Prix (tarifs actuels) : par an et par page ou langue, payé au prorata jusqu'à l'échéance commune, avec les crédits IA d'un abonnement. Réservé aux abonnés (pas pendant l'essai). La première traduction est offerte ; « Retraduire depuis la page d'origine » est payant (tarifs actuels ; après avoir modifié la page d'origine). La version traduite peut aussi être corrigée à la main.
 
 ## Essai, abonnement et crédits IA
-- Essai gratuit de 14 jours sans carte bancaire. Abonnement : 18 € HT par an (21,60 € TTC), sans renouvellement automatique : un e-mail prévient avant l'échéance (J-30, J-7, J-1) avec un bouton de paiement.
+- Essai gratuit de 14 jours sans carte bancaire. Abonnement annuel (prix dans les tarifs actuels), sans renouvellement automatique : un e-mail prévient avant l'échéance (J-30, J-7, J-1) avec un bouton de paiement.
 - Sans paiement à l'échéance, la page est mise en pause (données gardées 90 jours). Payer la remet en ligne.
-- Inclus : essai 2 textes IA, 2 pictos, 2 créations d'images ; abonnement 10 textes, 5 pictos, 2 créations d'images par an. Une création = 2 images (fond ou pancarte).
-- Au-delà : crédit prépayé, « Recharger le crédit IA » (5 € HT minimum) : 0,40 € HT le texte, 0,70 € HT le picto, 0,70 € HT la création de 2 images. Le crédit non utilisé est déduit du renouvellement.
+- Quotas IA inclus pendant l'essai et chaque année d'abonnement : voir les tarifs actuels. Une création d'images = 2 images (fond ou pancarte).
+- Au-delà : crédit prépayé, « Recharger le crédit IA » (montant minimum et prix unitaires dans les tarifs actuels). Le crédit non utilisé est déduit du renouvellement.
 - Chaque génération IA consomme le quota ou le crédit même si le résultat ne plaît pas (voir CGV). Les questions à l'assistant « ❓ » sont gratuites (50 par jour).
 - Paiement par carte via Stripe ; facture envoyée par e-mail. Garantie satisfait ou remboursé 14 jours.
 
