@@ -963,6 +963,9 @@ async function descriptionFond(env, cfg, ambiance, idee, pc, prudent) {
           // ton toujours positif ; un véhicule « de luxe » noir devient vite un corbillard
           'Keep the mood bright, positive and inviting: never somber, funeral, ominous or dark imagery. ' +
           'Vehicles must clearly be modern, elegant passenger cars or vans for clients (e.g. a sleek dark-blue or silver sedan or minivan on a sunny road), never a hearse, ambulance or police car, and without any visible logo; show a single vehicle, whole and well separated from other objects (no overlapping or merged cars). ' +
+          // métiers techniques : le générateur montre volontiers des tuyaux ou des câbles en travers d'une pièce de luxe
+          'For trades and technical services (plumbing, heating, air conditioning, electricity, building, renovation…), show the finished result as the client sees it: a clean, tidy, realistic finished room or installation. ' +
+          'Never exposed pipes, tubes, wires, cables or technical parts running across a finished room, along walls or over windows; taps, showers and fixtures must come straight out of the wall or the counter in a plausible way, as in a real high-end home. Nothing physically impossible or unfinished. ' +
           (prudent ? 'A previous prompt for this image was rejected by the safety filter: stay especially generic and neutral (objects, place, light), no people in the foreground. ' : '') +
           'Forbid any text: always end with "no text, no letters, no logos, no watermark".',
         messages: [{ role: 'user', content: 'Business: ' + (activite || '(not specified)') + '\nStyle: ' + style +
