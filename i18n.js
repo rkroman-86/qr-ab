@@ -243,6 +243,7 @@
     "Visites comptées sans cookie ni donnée personnelle, hors robots et hors vos propres visites.": ["Visits are counted without cookies or personal data, excluding bots and your own visits.", "Посещения считаются без cookie и персональных данных, без роботов и ваших собственных визитов."],
     "Les scans sont reconnus sur les QR codes créés depuis le 12 novembre 2026. Les cartes imprimées avant comptent en « Lien direct ou inconnu ».": ["Scans are recognised on QR codes created since 12 November 2026. Cards printed earlier count as “Direct link or unknown”.", "Сканирования распознаются для QR-кодов, созданных с 12 ноября 2026 года. Визитки, напечатанные раньше, учитываются как «Прямая ссылка или неизвестно»."],
     // --- page d'accueil qrbc.app ---
+    "Suivez-nous sur Facebook": ["Follow us on Facebook", "Мы в Facebook"],
     "qrbc, c’est « QR Business Card » : la carte de visite qui ne se périme jamais.": ["qrbc stands for “QR Business Card”: the business card that never goes out of date.", "qrbc — это «QR Business Card»: визитка, которая никогда не устаревает."],
     "Votre carte de visite QR, votre page,": ["Your QR business card, your page,", "Ваша визитка с QR-кодом и страница —"],
     "dans la langue de chaque client.": ["in each customer’s language.", "на языке каждого клиента."],
