@@ -356,11 +356,10 @@
 <script>
 /* Vidéo de présentation dans la langue de la page (FR / EN / RU), muette, en boucle, en bas à droite.
    Dès que le visiteur fait défiler la page, elle se réduit en petite vignette semi-transparente (toucher = l'agrandir).
-   Fermée avec la × : elle ne revient pas pendant 30 jours, même après rechargement. */
+   Fermée avec la × : cachée jusqu'au prochain chargement de la page. */
 (function () {
   var boite = document.getElementById('video-promo'), v = document.getElementById('video-promo-v');
-  var CLE = 'qrbc-video-fermee', JOURS = 30;
-  try { var f = Number(localStorage.getItem(CLE)); if (f && Date.now() - f < JOURS * 864e5) return; } catch (e) {}
+  try { localStorage.removeItem('qrbc-video-fermee'); } catch (e) {}   // ancienne fermeture retenue : oubliée
   function langue() {
     var l = (window.langueInterface && window.langueInterface()) || document.documentElement.lang || 'fr';
     l = String(l).slice(0, 2);
@@ -396,7 +395,6 @@
   document.getElementById('video-promo-fermer').addEventListener('click', function (e) {
     e.stopPropagation();
     boite.hidden = true; v.pause(); v.removeAttribute('src'); v.load();
-    try { localStorage.setItem(CLE, String(Date.now())); } catch (e2) {}
   });
   window.addEventListener('scroll', majTaille, { passive: true });
   window.addEventListener('resize', placer);
