@@ -103,8 +103,11 @@
   .faq details p{margin:10px 0 0;color:var(--doux)}
   .cta{display:inline-block;padding:14px 22px;border-radius:12px;background:var(--prim);color:var(--prim-txt);text-decoration:none;font-weight:700}
   /* Vidéo de présentation flottante : sous l'en-tête à l'ouverture, reste visible au défilement, sans le son, en boucle */
-  .video-promo{position:fixed;z-index:20;right:max(12px,env(safe-area-inset-right));top:var(--video-haut,84px);height:44vh;aspect-ratio:9/16;
-    border-radius:16px;overflow:hidden;background:#000;box-shadow:0 10px 34px rgba(0,0,0,.35);transition:opacity .3s}
+  .video-promo{position:fixed;z-index:20;right:max(12px,env(safe-area-inset-right));bottom:var(--video-bas,max(12px,env(safe-area-inset-bottom)));height:44vh;aspect-ratio:9/16;
+    border-radius:16px;overflow:hidden;background:#000;box-shadow:0 10px 34px rgba(0,0,0,.35);transition:height .35s ease,opacity .35s ease,border-radius .35s}
+  .video-promo.mini{height:18vh;min-height:120px;opacity:.6;border-radius:12px;cursor:pointer}
+  .video-promo.mini:hover{opacity:1}
+  .video-promo.mini button{width:22px;height:22px;line-height:22px;font-size:13px;top:4px;right:4px}
   .video-promo[hidden]{display:none}
   .video-promo video{width:100%;height:100%;object-fit:cover;display:block}
   .video-promo button{position:absolute;top:6px;right:6px;width:28px;height:28px;border-radius:50%;border:0;background:rgba(0,0,0,.55);color:#fff;font-size:16px;line-height:28px;cursor:pointer;padding:0}
@@ -351,20 +354,17 @@
 })();
 </script>
 <script>
-/* Vidéo de présentation dans la langue de la page (FR / EN / RU), muette, en boucle.
-   Placée juste sous l'en-tête à l'ouverture, puis fixe à l'écran pendant le défilement. Fermée = cachée pour la visite. */
+/* Vidéo de présentation dans la langue de la page (FR / EN / RU), muette, en boucle, en bas à droite.
+   Dès que le visiteur fait défiler la page, elle se réduit en petite vignette semi-transparente (toucher = l'agrandir).
+   Fermée avec la × : elle ne revient pas pendant 30 jours, même après rechargement. */
 (function () {
   var boite = document.getElementById('video-promo'), v = document.getElementById('video-promo-v');
-  try { if (sessionStorage.getItem('qrbc-video-fermee')) return; } catch (e) {}
+  var CLE = 'qrbc-video-fermee', JOURS = 30;
+  try { var f = Number(localStorage.getItem(CLE)); if (f && Date.now() - f < JOURS * 864e5) return; } catch (e) {}
   function langue() {
     var l = (window.langueInterface && window.langueInterface()) || document.documentElement.lang || 'fr';
     l = String(l).slice(0, 2);
     return l === 'en' || l === 'ru' ? l : 'fr';
-  }
-  function placer() {
-    var h = document.querySelector('header');
-    var bas = h ? h.getBoundingClientRect().bottom + window.scrollY : 70;
-    boite.style.setProperty('--video-haut', Math.round(Math.max(8, bas + 10)) + 'px');
   }
   var actuelle = '';
   function charger() {
@@ -374,16 +374,34 @@
     v.src = '/videos/qrbc-' + l + '.mp4';
     var p = v.play(); if (p && p.catch) p.catch(function () {});
   }
-  v.addEventListener('loadeddata', function () { placer(); boite.hidden = false; });
-  v.addEventListener('error', function () { boite.hidden = true; });
-  document.getElementById('video-promo-fermer').addEventListener('click', function () {
-    boite.hidden = true; v.pause(); v.removeAttribute('src'); v.load();
-    try { sessionStorage.setItem('qrbc-video-fermee', '1'); } catch (e) {}
+  // au-dessus du bandeau « installer sur iPhone » s'il est affiché
+  function placer() {
+    var ios = document.querySelector('.ios');
+    var h = ios && ios.offsetParent !== null && !ios.hidden ? ios.getBoundingClientRect().height + 12 : 0;
+    boite.style.setProperty('--video-bas', 'calc(max(12px, env(safe-area-inset-bottom)) + ' + Math.round(h) + 'px)');
+  }
+  var agrandieA = null;            // position de défilement où le visiteur a rouvert la vignette
+  function majTaille() {
+    var y = window.scrollY || 0;
+    if (y < 40) { agrandieA = null; boite.classList.remove('mini'); return; }
+    if (agrandieA !== null && Math.abs(y - agrandieA) < 200) return;   // rouverte à la main : on la laisse grande un moment
+    agrandieA = null; boite.classList.add('mini');
+  }
+  boite.addEventListener('click', function (e) {
+    if (e.target.id === 'video-promo-fermer' || !boite.classList.contains('mini')) return;
+    boite.classList.remove('mini'); agrandieA = window.scrollY || 0;
   });
+  v.addEventListener('loadeddata', function () { placer(); majTaille(); boite.hidden = false; });
+  v.addEventListener('error', function () { boite.hidden = true; });
+  document.getElementById('video-promo-fermer').addEventListener('click', function (e) {
+    e.stopPropagation();
+    boite.hidden = true; v.pause(); v.removeAttribute('src'); v.load();
+    try { localStorage.setItem(CLE, String(Date.now())); } catch (e2) {}
+  });
+  window.addEventListener('scroll', majTaille, { passive: true });
   window.addEventListener('resize', placer);
-  // la langue peut changer après le chargement (i18n.js) : on suit l'attribut lang de la page
   new MutationObserver(charger).observe(document.documentElement, { attributes: true, attributeFilter: ['lang'] });
-  placer(); charger();
+  charger();
 })();
 </script>
 </body>
