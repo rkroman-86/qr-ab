@@ -38,8 +38,8 @@
     #fen-abo h2,#fen-express h2,    #fen-pages h2{margin:0 0 4px;font-size:1.2rem}
     #fen-abo .sous,#fen-express .sous,    #fen-pages .sous{color:var(--doux);margin:0 0 16px;font-size:.92rem}
     #fen-abo .alerte-abo,#fen-express .alerte-abo,    #fen-pages .alerte-abo{background:var(--bg);border:1px solid var(--err);color:var(--txt);border-radius:12px;padding:12px;margin:0 0 16px;font-size:.92rem}
-    #fen-abo .compteur,#fen-express .compteur,    #fen-pages .compteur{display:flex;justify-content:space-between;padding:10px 0;border-top:1px solid var(--ligne);font-size:.95rem}
-    #fen-abo .compteur b,#fen-express .compteur b,    #fen-pages .compteur b{font-variant-numeric:tabular-nums}
+    .cpt-section .compteur,#fen-abo .compteur,#fen-express .compteur,    #fen-pages .compteur{display:flex;justify-content:space-between;padding:10px 0;border-top:1px solid var(--ligne);font-size:.95rem}
+    .cpt-section .compteur b,#fen-abo .compteur b,#fen-express .compteur b,    #fen-pages .compteur b{font-variant-numeric:tabular-nums}
     #fen-abo .offre,#fen-express .offre,    #fen-pages .offre{margin-top:16px;padding:16px;border-radius:14px;border:1px solid var(--prim);background:var(--bg)}
     #fen-abo .offre .prix,#fen-express .offre .prix,    #fen-pages .offre .prix{font-size:1.5rem;font-weight:800;letter-spacing:-.02em}
     #fen-abo .offre ul,#fen-express .offre ul,    #fen-pages .offre ul{margin:8px 0 12px;padding-left:18px;color:var(--doux);font-size:.9rem}
@@ -573,7 +573,10 @@
     fond.appendChild(boite); document.body.appendChild(fond); document.body.style.overflow = 'hidden';
 
     let p;
-    try { p = await (await appelAPI('profil', jetonCF)).json(); }
+    try {
+      p = await (await appelAPI('profil', jetonCF)).json();
+      try { afficherAbonnement((await (await appelAPI('compte', jetonCF)).json()).compte); } catch (e2) {}   // compteurs à jour
+    }
     catch (e) { corps.textContent = ''; corps.appendChild(el('p', { class: 'msg err', text: e.message })); return; }
     const f = p.facturation || {};
 
@@ -583,6 +586,27 @@
       el('p', { class: 'cpt-aide' }, [el('span', { text: 'E-mail : ' }), el('b', { 'data-no-i18n': '', text: p.email || '—' })]),
       el('p', { class: 'cpt-aide' }, [el('span', { text: 'Page principale : ' }), el('b', { 'data-no-i18n': '', text: p.page + '.qrbc.app' })])
     ]);
+
+    // 1 bis. Solde et créations IA restantes
+    const c = compteCF || {};
+    const ligneC = (lib, val) => el('div', { class: 'compteur' }, [el('span', { text: lib }), el('b', { 'data-no-i18n': '', text: val })]);
+    const solde = el('div', { class: 'cpt-section' }, [el('h3', { text: 'Mon solde' })]);
+    const fin = c.plan === 'essai' ? c.finEssai : c.plan === 'payant' ? c.payeJusqua : null;
+    const etats = { gratuit: 'Compte offert', essai: c.actif ? 'Essai gratuit' : 'Essai terminé', payant: c.actif ? 'Abonnement actif' : 'Abonnement expiré', suspendu: 'Compte suspendu' };
+    solde.appendChild(el('div', { class: 'compteur' }, [el('span', { text: etats[c.plan] || 'Abonnement' }),
+      el('b', { 'data-no-i18n': '', text: fin ? new Date(fin).toLocaleDateString() : '—' })]));
+    if (c.ia && c.ia.illimite) solde.appendChild(el('p', { class: 'cpt-aide', style: 'margin-top:8px', text: 'Créations IA illimitées.' }));
+    else if (c.ia) {
+      solde.appendChild(ligneC('Crédit IA', euros(c.ia.credit || 0) + ' HT'));
+      const types = [['texte', 'Rédactions IA restantes'], ['picto', 'Créations de motifs restantes']];
+      if (c.ia.fond) types.push(['fond', 'Créations d’images de fond restantes']);
+      types.forEach(([k, lib]) => {
+        const r = resteIA(k);
+        if (r) solde.appendChild(ligneC(lib, r.inclus + ' / ' + r.total + (r.parCredit ? ' (+' + r.parCredit + ')' : '')));
+      });
+      if (c.plan === 'payant') solde.appendChild(el('p', { class: 'cpt-aide', style: 'margin-top:8px', text: 'Entre parenthèses : créations possibles en plus avec votre crédit.' }));
+    }
+    solde.appendChild(el('button', { type: 'button', class: 'btn btn-mini', style: 'margin-top:10px', text: c.plan === 'payant' && c.actif ? 'Recharger mon crédit' : 'Mon abonnement', onclick: () => { fermer(); ouvrirAbonnement(); } }));
 
     // 2. Facturation
     const champ = (etiq, attrs) => { const i = el('input', Object.assign({ type: 'text' }, attrs)); return { i, bloc: el('label', { class: 'opt' }, [el('span', { class: 'etiq', text: etiq }), i]) }; };
@@ -677,7 +701,7 @@
     // 5. Déconnexion (le bouton « Quitter » de la barre est masqué sur petit écran)
     const sortie = el('div', { class: 'cpt-section' }, [el('button', { type: 'button', class: 'btn', text: 'Se déconnecter', onclick: () => { fermer(); $('#btn-deconnexion').click(); } })]);
 
-    corps.textContent = ''; corps.append(ident, formF, sectF, formM, sortie);
+    corps.textContent = ''; corps.append(ident, solde, formF, sectF, formM, sortie);
   }
 
   /* Retour de la page de paiement Stripe : ?paiement=ok&session_id=… ou ?paiement=annule */
