@@ -2064,8 +2064,25 @@ async function clientStripePour(env, st, tit) {
   } catch (e) { console.error('client stripe', e.message); return null; }   // jamais bloquant : paiement avec l'e-mail seul
 }
 
+/* La facture créée par Checkout peut rester « ouverte » alors que le paiement a réussi :
+   on lui rattache le paiement (sinon on la marque payée hors Stripe) pour qu'elle soit acquittée. */
+async function solderFacture(env, session) {
+  if (!session || !session.invoice) return;
+  try {
+    const st = await lireStripe(env);
+    if (!st) return;
+    const id = typeof session.invoice === 'string' ? session.invoice : session.invoice.id;
+    const f = await stripe(env, st, 'GET', '/invoices/' + id);
+    if (f.status !== 'open') return;
+    const pi = typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent && session.payment_intent.id;
+    try { if (!pi) throw new Error('pas de paiement'); await stripe(env, st, 'POST', '/invoices/' + id + '/attach_payment', { payment_intent: pi }); }
+    catch (e) { await stripe(env, st, 'POST', '/invoices/' + id + '/pay', { paid_out_of_band: 'true' }); }
+  } catch (e) { console.error('facture non soldée', session.id, e.message); }
+}
+
 async function encaisserSession(env, session) {
   if (!session || session.payment_status !== 'paid') return 'non payé';
+  await solderFacture(env, session);
   const md = session.metadata || {};
   let compte = await lireCompte(env, md.genre === 'page' ? md.titulaire : md.slug);
   if (!compte) return 'compte introuvable';
