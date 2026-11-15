@@ -119,6 +119,17 @@
     .btn-plein{width:100%}
     .btn:disabled{opacity:.55;cursor:default}
     .btn-mini{min-height:36px;padding:6px 10px;font-size:.88rem}
+    .btn-compte{font-size:1.05rem;padding:6px 9px;flex:none}
+    @media (max-width:480px){ .barre.avec-compte #btn-deconnexion{display:none} }
+    .cpt-section{border-top:1px solid var(--ligne);padding-top:14px;margin-top:16px}
+    .cpt-section:first-child{border-top:0;margin-top:0;padding-top:0}
+    .cpt-section h3{font-size:1rem;margin:0 0 4px}
+    .cpt-aide{font-size:.85rem;color:var(--doux);margin:0 0 12px}
+    .cpt-deux{display:flex;gap:10px} .cpt-deux > *{flex:1;min-width:0}
+    .cpt-facture{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--ligne)}
+    .cpt-facture:last-child{border-bottom:0}
+    .cpt-facture .cpt-txt{flex:1;min-width:0;font-size:.9rem}
+    .cpt-facture .cpt-txt small{display:block;color:var(--doux)}
     .msg{font-size:.9rem;margin-top:10px;min-height:1.2em}
     .msg.err{color:var(--err)} .msg.ok{color:var(--ok)}
     .case{display:flex;align-items:center;gap:8px;margin:4px 0 16px;color:var(--doux);font-size:.9rem}
@@ -378,6 +389,7 @@
       <button type="button" data-vue="stats" title="Statistiques"><span aria-hidden="true">📊</span><span class="txt-stats"> Statistiques</span></button>
     </div>
     <span data-langue></span>
+    <button type="button" class="btn btn-mini btn-compte cache" id="btn-compte" title="Mon compte" aria-label="Mon compte">👤</button>
     <button type="button" class="btn btn-mini" id="btn-deconnexion">Quitter</button>
   </div>
 
@@ -443,7 +455,7 @@
   async function demarrer(jeton) {
     gh = CF ? clientCloudflare(jeton) : clientGitHub(jeton, depot);
     const info = await gh.verifier();
-    if (CF) { jetonCF = jeton; aide.activer(); afficherAbonnement(info.compte); setTimeout(retourPaiement, 0); fetch('/api/moi', { credentials: 'include' }).catch(() => {}); }
+    if (CF) { jetonCF = jeton; $('#btn-compte').classList.remove('cache'); $('.barre').classList.add('avec-compte'); aide.activer(); afficherAbonnement(info.compte); setTimeout(retourPaiement, 0); fetch('/api/moi', { credentials: 'include' }).catch(() => {}); }
     const f = await gh.lire('config.json');
     shaConfig = f ? f.sha : null;
     cfg = normaliser(fusion(CONFIG_DEFAUT, f ? JSON.parse(f.texte) : {}));
@@ -540,6 +552,133 @@
     majQuotas();
   }
   $('#abonnement').addEventListener('click', () => ouvrirAbonnement());
+
+  /* ---------------- Mon compte : facturation, factures, mot de passe ---------------- */
+  const PAYS_FACT = ['FR','BE','CH','LU','MC','DE','ES','IT','PT','NL','AT','IE','PL','RO','BG','GR','CZ','SK','HU','SI','HR','DK','SE','FI','EE','LV','LT','CY','MT','GB','UA','MD','RU','US','CA'];
+  function nomPays(code) {
+    let l = 'fr';
+    try { l = localStorage.getItem('qp-langue') || 'fr'; } catch (e) {}
+    try { return new Intl.DisplayNames([l], { type: 'region' }).of(code) || code; } catch (e) { return code; }
+  }
+  $('#btn-compte').addEventListener('click', () => ouvrirCompte());
+  async function ouvrirCompte() {
+    const fond = el('div', { class: 'modale-fond' });
+    const boite = el('div', { class: 'modale', role: 'dialog', 'aria-modal': 'true' });
+    const fermer = () => { fond.remove(); document.body.style.overflow = ''; document.removeEventListener('keydown', esc); };
+    const esc = e => { if (e.key === 'Escape') fermer(); };
+    document.addEventListener('keydown', esc);
+    fond.addEventListener('click', e => { if (e.target === fond) fermer(); });
+    const corps = el('div', { class: 'modale-corps' }, [el('p', { class: 'cpt-aide', text: 'Chargement…' })]);
+    boite.append(el('div', { class: 'modale-tete' }, [el('b', { text: '👤 Mon compte' }), el('button', { type: 'button', class: 'btn btn-mini', text: '✕', 'aria-label': 'Fermer', onclick: fermer })]), corps);
+    fond.appendChild(boite); document.body.appendChild(fond); document.body.style.overflow = 'hidden';
+
+    let p;
+    try { p = await (await appelAPI('profil', jetonCF)).json(); }
+    catch (e) { corps.textContent = ''; corps.appendChild(el('p', { class: 'msg err', text: e.message })); return; }
+    const f = p.facturation || {};
+
+    // 1. Identifiant
+    const ident = el('div', { class: 'cpt-section' }, [
+      el('h3', { text: 'Identifiant' }),
+      el('p', { class: 'cpt-aide' }, [el('span', { text: 'E-mail : ' }), el('b', { 'data-no-i18n': '', text: p.email || '—' })]),
+      el('p', { class: 'cpt-aide' }, [el('span', { text: 'Page principale : ' }), el('b', { 'data-no-i18n': '', text: p.page + '.qrbc.app' })])
+    ]);
+
+    // 2. Facturation
+    const champ = (etiq, attrs) => { const i = el('input', Object.assign({ type: 'text' }, attrs)); return { i, bloc: el('label', { class: 'opt' }, [el('span', { class: 'etiq', text: etiq }), i]) }; };
+    const nom = champ('Nom de l’entreprise (ou votre nom)', { value: f.nom || '', maxLength: 100, autocomplete: 'organization' });
+    const adr = champ('Adresse', { value: f.adresse || '', maxLength: 150, autocomplete: 'street-address' });
+    const cp = champ('Code postal', { value: f.cp || '', maxLength: 20, autocomplete: 'postal-code' });
+    const ville = champ('Ville', { value: f.ville || '', maxLength: 80, autocomplete: 'address-level2' });
+    const tva = champ('N° de TVA intracommunautaire (facultatif)', { value: f.tva || '', maxLength: 20, placeholder: 'FR12345678901', autocapitalize: 'characters', spellcheck: false });
+    const pays = el('select', { 'data-no-i18n': '' }, PAYS_FACT.map(c => el('option', { value: c, text: nomPays(c) })));
+    pays.value = f.pays || 'FR';
+    const msgF = el('div', { class: 'msg' });
+    const btnF = el('button', { type: 'submit', class: 'btn btn-prim', text: 'Enregistrer' });
+    const formF = el('form', { class: 'cpt-section' }, [
+      el('h3', { text: 'Informations de facturation' }),
+      el('p', { class: 'cpt-aide', text: 'Elles apparaîtront sur vos prochaines factures.' }),
+      nom.bloc, adr.bloc, el('div', { class: 'cpt-deux' }, [cp.bloc, ville.bloc]),
+      el('label', { class: 'opt' }, [el('span', { class: 'etiq', text: 'Pays' }), pays]),
+      tva.bloc, btnF, msgF
+    ]);
+    formF.addEventListener('submit', async e => {
+      e.preventDefault();
+      btnF.disabled = true; msgF.className = 'msg'; msgF.textContent = 'Enregistrement…';
+      try {
+        await appelAPI('profil', jetonCF, { method: 'POST', body: JSON.stringify({ nom: nom.i.value, adresse: adr.i.value, cp: cp.i.value, ville: ville.i.value, pays: pays.value, tva: tva.i.value }) });
+        msgF.className = 'msg ok'; msgF.textContent = '✓ ' + t('Informations enregistrées.');
+      } catch (err) { msgF.className = 'msg err'; msgF.textContent = err.message; }
+      finally { btnF.disabled = false; }
+    });
+
+    // 3. Factures
+    const GENRES = { abonnement: 'Abonnement', recharge: 'Recharge de crédit IA', page: 'Page ou langue ajoutée' };
+    const liste = el('div');
+    if (!p.factures.length) liste.appendChild(el('p', { class: 'cpt-aide', text: 'Aucune facture pour l’instant.' }));
+    p.factures.forEach(x => {
+      const m = String(x.note).match(/([\d.,]+) € TTC/);
+      const btn = el('button', { type: 'button', class: 'btn btn-mini', text: 'Télécharger' });
+      const err = el('small', { class: 'msg err', style: 'margin:0' });
+      btn.addEventListener('click', async () => {
+        const fen = window.open('', '_blank');           // ouverte tout de suite : sinon bloquée après l'attente
+        btn.disabled = true; err.textContent = '';
+        try {
+          const j = await (await appelAPI('facture?ref=' + encodeURIComponent(x.ref), jetonCF)).json();
+          if (fen) fen.location.href = j.url; else location.href = j.url;
+        } catch (e2) { if (fen) fen.close(); err.textContent = e2.message; }
+        finally { btn.disabled = false; }
+      });
+      liste.appendChild(el('div', { class: 'cpt-facture' }, [
+        el('div', { class: 'cpt-txt' }, [
+          el('b', { text: GENRES[x.genre] || x.genre }),
+          el('small', { 'data-no-i18n': '', text: new Date(x.le).toLocaleDateString() + (m ? ' · ' + m[1].replace('.', ',') + ' € TTC' : '') + (x.page !== p.page ? ' · ' + x.page : '') }),
+          err
+        ]), btn
+      ]));
+    });
+    const sectF = el('div', { class: 'cpt-section' }, [el('h3', { text: 'Mes factures' }), liste]);
+
+    // 4. Mot de passe
+    const mdpA = el('input', { type: 'password', autocomplete: 'current-password' });
+    const mdpN = el('input', { type: 'password', autocomplete: 'new-password', minLength: 10 });
+    const mdpC = el('input', { type: 'password', autocomplete: 'new-password', minLength: 10 });
+    const msgM = el('div', { class: 'msg' });
+    const btnM = el('button', { type: 'submit', class: 'btn btn-prim', text: 'Changer le mot de passe' });
+    const formM = el('form', { class: 'cpt-section' }, [
+      el('h3', { text: 'Mot de passe' }),
+      el('p', { class: 'cpt-aide', text: 'Un seul mot de passe pour toutes vos pages. Les autres appareils seront déconnectés.' }),
+      el('label', { class: 'opt' }, [el('span', { class: 'etiq', text: 'Mot de passe actuel' }), mdpA]),
+      el('label', { class: 'opt' }, [el('span', { class: 'etiq', text: 'Nouveau mot de passe (10 caractères minimum)' }), mdpN]),
+      el('label', { class: 'opt' }, [el('span', { class: 'etiq', text: 'Confirmez le nouveau mot de passe' }), mdpC]),
+      btnM, msgM
+    ]);
+    formM.addEventListener('submit', async e => {
+      e.preventDefault();
+      msgM.className = 'msg err';
+      if (mdpN.value.length < 10) { msgM.textContent = t('Le nouveau mot de passe doit faire au moins 10 caractères.'); return; }
+      if (mdpN.value !== mdpC.value) { msgM.textContent = t('Les deux mots de passe ne correspondent pas.'); return; }
+      btnM.disabled = true; msgM.className = 'msg'; msgM.textContent = '…';
+      try {
+        const j = await (await appelAPI('mdp', jetonCF, { method: 'POST', body: JSON.stringify({ ancien: mdpA.value, nouveau: mdpN.value }) })).json();
+        if (j.jeton) {                                       // l'ancienne session n'est plus valable : on garde la nouvelle
+          jetonCF = j.jeton; gh = clientCloudflare(j.jeton);
+          try {
+            if (sessionStorage.getItem(CLE_STOCK)) sessionStorage.setItem(CLE_STOCK, j.jeton);
+            if (localStorage.getItem(CLE_STOCK)) localStorage.setItem(CLE_STOCK, j.jeton);
+          } catch (e3) {}
+        }
+        mdpA.value = mdpN.value = mdpC.value = '';
+        msgM.className = 'msg ok'; msgM.textContent = '✓ ' + t('Mot de passe modifié.');
+      } catch (err) { msgM.className = 'msg err'; msgM.textContent = err.message; }
+      finally { btnM.disabled = false; }
+    });
+
+    // 5. Déconnexion (le bouton « Quitter » de la barre est masqué sur petit écran)
+    const sortie = el('div', { class: 'cpt-section' }, [el('button', { type: 'button', class: 'btn', text: 'Se déconnecter', onclick: () => { fermer(); $('#btn-deconnexion').click(); } })]);
+
+    corps.textContent = ''; corps.append(ident, formF, sectF, formM, sortie);
+  }
 
   /* Retour de la page de paiement Stripe : ?paiement=ok&session_id=… ou ?paiement=annule */
   async function retourPaiement() {

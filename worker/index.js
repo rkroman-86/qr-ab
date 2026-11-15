@@ -474,9 +474,36 @@ async function apiClient(request, env, slug, route) {
     const tit = await titulaireDe(env, compte);                 // un seul mot de passe pour toutes les pages du compte
     if (!(await verifierMdp(tit, String(ancien || '')))) throw new ErreurAPI(401, 'Ancien mot de passe incorrect.');
     verifierForceMdp(nouveau);
-    Object.assign(tit, await hacherMdp(String(nouveau)), { version: (tit.version || 1) + 1 });
+    Object.assign(tit, await hacherMdp(String(nouveau)), { version: (tit.version || 1) + 1 });   // déconnecte les autres appareils
     await ecrireCompte(env, tit);
-    return json({ ok: true });
+    const jeton = await signerSession(env, { s: slug, v: tit.version, e: Math.floor(Date.now() / 1000) + 30 * 86400 });
+    return json({ ok: true, jeton });
+  }
+
+  /* Espace « Mon compte » : infos de facturation et factures (portés par la page principale) */
+  if (route === 'profil' && m === 'GET') {
+    const tit = await titulaireDe(env, compte);
+    return json({ email: tit.email, page: tit.slug, facturation: tit.facturation || null, factures: await facturesDe(env, tit) });
+  }
+  if (route === 'profil' && m === 'POST') {
+    const tit = await titulaireDe(env, compte);
+    tit.facturation = nettoyerFacturation(await corpsJSON(request));
+    await ecrireCompte(env, tit);
+    return json({ ok: true, facturation: tit.facturation });
+  }
+  if (route === 'facture' && m === 'GET') {
+    const tit = await titulaireDe(env, compte);
+    const ref = new URL(request.url).searchParams.get('ref') || '';
+    if (!(await facturesDe(env, tit)).some(f => f.ref === ref)) throw new ErreurAPI(404, 'Facture introuvable.');
+    const st = await lireStripe(env);
+    if (!st) throw new ErreurAPI(503, 'Le paiement en ligne n’est pas configuré.');
+    if ((ref.startsWith('cs_live_') ? 'live' : 'test') !== st.mode) throw new ErreurAPI(404, 'Facture introuvable.');
+    const session = await stripe(env, st, 'GET', '/checkout/sessions/' + ref);
+    if (!session.invoice) throw new ErreurAPI(404, 'Pas de facture pour ce paiement (antérieur à la facturation automatique). Écrivez à support@' + DOMAINE + '.');
+    const fact = await stripe(env, st, 'GET', '/invoices/' + session.invoice);
+    const url = fact.invoice_pdf || fact.hosted_invoice_url;
+    if (!url) throw new ErreurAPI(404, 'Facture pas encore disponible. Réessayez dans un instant.');
+    return json({ url, numero: fact.number || '' });
   }
 
   if (route === 'ia' && m === 'POST') {
@@ -623,10 +650,12 @@ async function apiClient(request, env, slug, route) {
     const st = await lireStripe(env);
     if (!st) throw new ErreurAPI(503, 'Le paiement en ligne n’est pas encore ouvert.');
     const retour = retourSur(dd.retour, slug);
+    const clientStripe = await clientStripePour(env, st, tit);    // infos de facturation → acheteur sur la facture
     const session = await stripe(env, st, 'POST', '/checkout/sessions', {
       mode: 'payment',
       client_reference_id: slug,
-      customer_email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(tit.email || '') ? tit.email : undefined,
+      customer: clientStripe || undefined,
+      customer_email: clientStripe ? undefined : (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(tit.email || '') ? tit.email : undefined),
       line_items: [{ quantity: 1, tax_rates: [st.taxRate], price_data: { currency: 'eur', unit_amount: montant, product_data: { name: libelle } } }],
       metadata: Object.assign({ slug, genre, montant: String(montant), deduction: String(deduction) }, extra),
       payment_intent_data: { metadata: { slug, genre }, description: libelle },
@@ -1913,6 +1942,50 @@ async function webhookStripe(request, env) {
 }
 
 /* Applique un paiement Checkout réussi, une seule fois (webhook et retour du client peuvent arriver tous les deux) */
+/* ===================== Mon compte : facturation ===================== */
+const PAYS_FACTURATION = ['FR','BE','CH','LU','MC','DE','ES','IT','PT','NL','AT','IE','PL','RO','BG','GR','CZ','SK','HU','SI','HR','DK','SE','FI','EE','LV','LT','CY','MT','GB','UA','MD','RU','US','CA'];
+function nettoyerFacturation(d) {
+  const c = (v, n) => String(v || '').replace(/\s+/g, ' ').trim().slice(0, n);
+  const f = { nom: c(d.nom, 100), adresse: c(d.adresse, 150), cp: c(d.cp, 20), ville: c(d.ville, 80),
+    pays: PAYS_FACTURATION.includes(String(d.pays || '').toUpperCase()) ? String(d.pays).toUpperCase() : 'FR',
+    tva: c(d.tva, 20).toUpperCase().replace(/[\s.-]/g, '') };
+  if (f.tva && !/^[A-Z]{2}[A-Z0-9]{2,13}$/.test(f.tva)) throw new ErreurAPI(400, 'Numéro de TVA invalide (exemple : FR12345678901).');
+  if (!f.nom && (f.adresse || f.ville || f.tva)) throw new ErreurAPI(400, 'Indiquez le nom de l’entreprise (ou votre nom).');
+  return f.nom ? f : null;
+}
+/* Paiements Stripe du compte entier (page principale et pages rattachées), les plus récents d'abord */
+async function facturesDe(env, tit) {
+  const l = [];
+  for (const c of await membresGroupe(env, tit))
+    for (const p of (c.paiements || [])) if (p.ref && /^cs_(live|test)_/.test(p.ref)) l.push({ le: p.le, genre: p.genre, note: p.note || '', ref: p.ref, page: c.slug });
+  return l.sort((a, b) => String(b.le).localeCompare(String(a.le))).slice(0, 50);
+}
+/* Client Stripe tenu à jour avec les infos de facturation (nom, adresse, n° TVA). Sans infos : null (e-mail seul). */
+async function clientStripePour(env, st, tit) {
+  const f = tit.facturation;
+  if (!f || !f.nom) return null;
+  try {
+    const ids = tit.clientStripe || {};
+    const donnees = { name: f.nom, email: tit.email || undefined, preferred_locales: [tit.langue === 'en' ? 'en' : tit.langue === 'ru' ? 'ru' : 'fr'],
+      address: { line1: f.adresse || undefined, postal_code: f.cp || undefined, city: f.ville || undefined, country: f.pays || 'FR' },
+      metadata: { page: tit.slug } };
+    let id = ids[st.mode];
+    if (id) { try { await stripe(env, st, 'POST', '/customers/' + id, donnees); } catch (e) { id = null; } }
+    if (!id) {
+      id = (await stripe(env, st, 'POST', '/customers', donnees)).id;
+      tit.clientStripe = Object.assign({}, ids, { [st.mode]: id });
+      await ecrireCompte(env, tit);
+    }
+    // n° de TVA : on remplace l'ancien s'il a changé
+    const actuels = (await stripe(env, st, 'GET', '/customers/' + id + '/tax_ids')).data || [];
+    if (!actuels.some(x => x.value === f.tva)) {
+      for (const x of actuels) await stripe(env, st, 'DELETE', '/customers/' + id + '/tax_ids/' + x.id).catch(() => {});
+      if (f.tva) await stripe(env, st, 'POST', '/customers/' + id + '/tax_ids', { type: f.tva.startsWith('GB') ? 'gb_vat' : f.tva.startsWith('CH') ? 'ch_vat' : 'eu_vat', value: f.tva }).catch(e => console.error('tva', e.message));
+    }
+    return id;
+  } catch (e) { console.error('client stripe', e.message); return null; }   // jamais bloquant : paiement avec l'e-mail seul
+}
+
 async function encaisserSession(env, session) {
   if (!session || session.payment_status !== 'paid') return 'non payé';
   const md = session.metadata || {};
