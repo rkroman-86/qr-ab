@@ -111,7 +111,7 @@
   <h1>Gestion qrbc</h1>
 
   <form class="boite" id="f-connexion">
-    <label><span>Jeton de gestion (secret ADMIN_TOKEN)</span><input type="password" id="jeton" autocomplete="current-password" required></label>
+    <label><span>Mot de passe de gestion</span><input type="password" id="jeton" autocomplete="current-password" required></label>
     <button class="prim">Entrer</button>
     <div class="msg" id="m-connexion"></div>
   </form>
@@ -121,6 +121,7 @@
       <button type="button" role="tab" data-onglet="clients" aria-selected="true">Clients<b id="nb-demandes" class="cache"></b></button>
       <button type="button" role="tab" data-onglet="reglages" aria-selected="false">Réglages</button>
       <button type="button" role="tab" data-onglet="stats" aria-selected="false">Stats</button>
+      <button type="button" role="tab" data-onglet="entreprise" aria-selected="false" title="Mon entreprise" aria-label="Mon entreprise" style="flex:0 0 52px">👤</button>
     </nav>
 
     <section id="onglet-clients">
@@ -144,6 +145,46 @@
     </section>
 
     <section id="onglet-stats" class="cache"><div id="stats-site"></div></section>
+
+    <section id="onglet-entreprise" class="cache">
+      <form class="boite" id="f-vendeur">
+        <h2>Mon entreprise (vendeur)</h2>
+        <p class="infos">Ces coordonnées apparaissent sur les factures Stripe, dans les CGV et les mentions légales (FR, EN, RU) et en bas des e-mails. À changer le jour où le service est revendu.</p>
+        <div class="g2">
+          <label><span>Raison sociale</span><input id="v-raison" required></label>
+          <label><span>Nom commercial (marque)</span><input id="v-marque"></label>
+          <label><span>Forme juridique</span><input id="v-forme" placeholder="SARL à associé unique, SAS…"></label>
+          <label><span>Capital social</span><input id="v-capital" placeholder="100 €"></label>
+          <label><span>SIREN</span><input id="v-siren"></label>
+          <label><span>Ville du RCS (greffe)</span><input id="v-rcs" placeholder="Nice"></label>
+          <label><span>N° de TVA intracommunautaire</span><input id="v-tva"></label>
+          <label><span>Adresse du siège</span><input id="v-adresse"></label>
+          <label><span>Dirigeant (directeur de la publication)</span><input id="v-dirigeant"></label>
+          <label><span>Fonction</span><input id="v-fonction" placeholder="gérant, président…"></label>
+          <label><span>E-mail de contact (support)</span><input id="v-email" type="email" required></label>
+          <label><span>Téléphone</span><input id="v-telephone" type="tel"></label>
+        </div>
+        <button class="prim">Enregistrer</button>
+        <div class="msg" id="m-vendeur"></div>
+      </form>
+
+      <div class="boite">
+        <h2>Logo des factures et des reçus</h2>
+        <p class="infos">Le logo, l’icône et les couleurs des factures, des reçus et de la page de paiement se règlent dans Stripe (Stripe ne permet pas de les changer depuis une autre application).</p>
+        <a href="https://dashboard.stripe.com/settings/branding" target="_blank" rel="noopener"><button type="button">Ouvrir Stripe → Branding</button></a>
+        <p class="infos" style="margin-top:12px">Numérotation des factures (préfixe QRBC) : <a href="https://dashboard.stripe.com/settings/billing/invoice" target="_blank" rel="noopener">Stripe → Paramètres des factures</a>.</p>
+      </div>
+
+      <form class="boite" id="f-motdepasse">
+        <h2>Mot de passe de gestion</h2>
+        <p class="infos" id="mdp-etat"></p>
+        <label><span>Nouveau mot de passe (12 caractères minimum)</span><input type="password" id="g-mdp1" autocomplete="new-password" minlength="12" required></label>
+        <label><span>Confirmez</span><input type="password" id="g-mdp2" autocomplete="new-password" minlength="12" required></label>
+        <button class="prim">Changer le mot de passe</button>
+        <div class="msg" id="m-motdepasse"></div>
+        <p class="infos">En cas d’oubli : Cloudflare → Stockage KV → CLIENTS → supprimer la clé <code>config:admin</code>, puis entrer avec le secret ADMIN_TOKEN du Worker.</p>
+      </form>
+    </section>
 
     <section id="onglet-reglages" class="cache">
     <div class="boite" id="b-rappels">
@@ -627,6 +668,8 @@
     $('#onglet-clients').classList.toggle('cache', nom !== 'clients');
     $('#onglet-reglages').classList.toggle('cache', nom !== 'reglages');
     $('#onglet-stats').classList.toggle('cache', nom !== 'stats');
+    $('#onglet-entreprise').classList.toggle('cache', nom !== 'entreprise');
+    if (nom === 'entreprise' && jeton) chargerVendeur();
     if (nom === 'stats' && jeton) chargerStatsSite();
     $('#f-creer').classList.add('cache');
     try { sessionStorage.setItem('qrbc-gestion-onglet', nom); } catch (e) {}
@@ -766,6 +809,40 @@
     const m = $('#m-connexion'); m.className = 'msg'; m.textContent = 'Vérification…';
     try { await charger(); try { sessionStorage.setItem('qrbc-gestion', jeton); } catch (x) {} m.textContent = ''; }
     catch (err) { m.className = 'msg err'; m.textContent = err.message; }
+  });
+
+  /* ---------- 👤 Mon entreprise ---------- */
+  const CHAMPS_V = ['raison', 'marque', 'forme', 'capital', 'siren', 'rcs', 'tva', 'adresse', 'dirigeant', 'fonction', 'email', 'telephone'];
+  function afficherVendeur(r) {
+    CHAMPS_V.forEach(k => { $('#v-' + k).value = r.vendeur[k] || ''; });
+    $('#mdp-etat').textContent = r.motDePassePerso ? 'Mot de passe personnel en place.' : 'Vous entrez encore avec le secret ADMIN_TOKEN de Cloudflare : choisissez un mot de passe personnel.';
+  }
+  async function chargerVendeur() {
+    try { afficherVendeur(await api('vendeur')); }
+    catch (e) { const m = $('#m-vendeur'); m.className = 'msg err'; m.textContent = e.message; }
+  }
+  $('#f-vendeur').addEventListener('submit', async e => {
+    e.preventDefault();
+    const m = $('#m-vendeur'); m.className = 'msg'; m.textContent = 'Enregistrement…';
+    const corps = {}; CHAMPS_V.forEach(k => { corps[k] = $('#v-' + k).value; });
+    try { afficherVendeur(await api('vendeur', corps)); m.className = 'msg ok'; m.textContent = '✓ Enregistré : factures, pages légales et e-mails à jour.'; }
+    catch (err) { m.className = 'msg err'; m.textContent = err.message; }
+  });
+  $('#f-motdepasse').addEventListener('submit', async e => {
+    e.preventDefault();
+    const m = $('#m-motdepasse'), a = $('#g-mdp1').value, b = $('#g-mdp2').value;
+    m.className = 'msg err';
+    if (a.length < 12) { m.textContent = 'Au moins 12 caractères.'; return; }
+    if (a !== b) { m.textContent = 'Les deux mots de passe ne correspondent pas.'; return; }
+    m.className = 'msg'; m.textContent = '…';
+    try {
+      await api('motdepasse', { nouveau: a });
+      jeton = a;                                         // la suite des appels utilise le nouveau mot de passe
+      try { sessionStorage.setItem('qrbc-gestion', jeton); } catch (x) {}
+      e.target.reset();
+      m.className = 'msg ok'; m.textContent = '✓ Mot de passe changé. Notez-le : l’ancien ne fonctionne plus.';
+      chargerVendeur();
+    } catch (err) { m.className = 'msg err'; m.textContent = err.message; }
   });
 
   $('#c-nom').addEventListener('input', e => { e.target.value = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''); });

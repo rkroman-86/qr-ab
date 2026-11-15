@@ -70,7 +70,19 @@ async function lireTarifs(env) {
     essai: Object.assign({}, D.essai, t.essai), payant: Object.assign({}, D.payant, t.payant)
   };
 }
+/* Coordonnées du vendeur (factures, pages légales, e-mails) : réglables dans /gestion → 👤, pour une revente du service */
+const VENDEUR_DEFAUT = {
+  raison: 'KPS', marque: 'QR-BC', forme: 'SARL à associé unique', capital: '100 €',
+  adresse: '216 boulevard Édouard VII, 06310 Beaulieu-sur-Mer, France', siren: '982 543 878', rcs: 'Nice', tva: 'FR11982543878',
+  dirigeant: 'Roman Komkov', fonction: 'gérant', email: 'support@qrbc.app', telephone: '+33 7 68 07 76 77'
+};
+let VENDEUR = VENDEUR_DEFAUT;
+async function lireVendeur(env) {
+  try { const t = await env.CLIENTS.get('config:vendeur'); if (t) return Object.assign({}, VENDEUR_DEFAUT, JSON.parse(t)); } catch (e) {}
+  return VENDEUR_DEFAUT;
+}
 async function chargerTarifs(env) {
+  VENDEUR = await lireVendeur(env);
   const t = await lireTarifs(env);
   PRIX_ANNUEL = t.prixAnnuel;
   PRIX_IA = { texte: t.prixTexte, picto: t.prixPicto, fond: t.prixFond };
@@ -165,7 +177,10 @@ async function racine(request, env, url) {
   if (p === '/cgv' || p === '/cgv.html' || p === '/mentions-legales' || p === '/mentions-legales.html') {
     const base = p.replace(/\.html$/, ''), l = url.searchParams.get('lang');
     compterVisiteSite(request, env, url, base.slice(1));
-    return statique(env, request, base + (l === 'en' || l === 'ru' ? '.' + l : '') + '.html');
+    const r = await statique(env, request, base + (l === 'en' || l === 'ru' ? '.' + l : '') + '.html');
+    if (!r.ok) return r;
+    const html = (await r.text()).replace(/\{\{(\w+)\}\}/g, (x, k) => k in VENDEUR ? esc(VENDEUR[k]) : x);
+    return new Response(html, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=300' } });
   }
   if (p === '/app' || p === '/app/') { compterVisiteSite(request, env, url, 'app'); return statique(env, request, '/app.html', true); }
   if (p === '/favicon.ico') return statique(env, request, '/favicon.png');
@@ -662,11 +677,11 @@ async function apiClient(request, env, slug, route) {
       invoice_creation: { enabled: true, invoice_data: {
         description: libelle,
         custom_fields: [
-          { name: 'Vendeur', value: 'KPS (QR-BC) – RCS Nice 982 543 878' },
-          { name: 'N° TVA', value: 'FR11982543878' }
+          { name: 'Vendeur', value: (VENDEUR.raison + (VENDEUR.marque ? ' (' + VENDEUR.marque + ')' : '') + ' – RCS ' + VENDEUR.rcs + ' ' + VENDEUR.siren).slice(0, 140) },
+          { name: 'N° TVA', value: String(VENDEUR.tva || '—').slice(0, 140) }
         ],
-        footer: 'KPS – SARL à associé unique au capital de 100 € – RCS Nice 982 543 878 – TVA FR11982543878 – ' +
-          '216 boulevard Édouard VII, 06310 Beaulieu-sur-Mer – support@' + DOMAINE + '\n' +
+        footer: [VENDEUR.raison, VENDEUR.forme + (VENDEUR.capital ? ' au capital de ' + VENDEUR.capital : ''), 'RCS ' + VENDEUR.rcs + ' ' + VENDEUR.siren,
+          'TVA ' + VENDEUR.tva, VENDEUR.adresse, VENDEUR.email].filter(Boolean).join(' – ') + '\n' +
           'Facture acquittée. Entre professionnels, en cas de retard de paiement : pénalités au taux légal majoré ' +
           'et indemnité forfaitaire de 40 € pour frais de recouvrement. CGV : https://' + DOMAINE + '/cgv'
       } },
@@ -1181,13 +1196,47 @@ function erreurSlug(slug) {
 }
 
 /* ===================== Gestion (Roman) ===================== */
+/* Mot de passe de gestion : celui choisi dans /gestion (haché dans KV, config:admin), sinon le secret ADMIN_TOKEN.
+   Secours en cas d'oubli : supprimer la clé config:admin dans Cloudflare KV, puis entrer avec ADMIN_TOKEN. */
+const CACHE_ADMIN = new Map();                        // empreinte rapide → expiration (évite PBKDF2 à chaque appel)
+async function adminValide(env, jeton) {
+  if (!jeton) return false;
+  const t = await env.CLIENTS.get('config:admin');
+  if (!t) return !!env.ADMIN_TOKEN && egaliteSure(jeton, env.ADMIN_TOKEN);
+  const c = JSON.parse(t);
+  const cle = c.hash + ':' + b64(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(jeton))));
+  if ((CACHE_ADMIN.get(cle) || 0) > Date.now()) return true;
+  if (!(await verifierMdp(c, jeton))) return false;
+  CACHE_ADMIN.set(cle, Date.now() + 10 * 60000);
+  return true;
+}
 async function gestion(request, env, action) {
   const jeton = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
-  if (!env.ADMIN_TOKEN || !(await egaliteSure(jeton, env.ADMIN_TOKEN))) {
+  if (!(await adminValide(env, jeton))) {
     await new Promise(r => setTimeout(r, 800));
     throw new ErreurAPI(401, 'Accès refusé.');
   }
   const d = request.method === 'POST' ? await corpsJSON(request) : {};
+
+  // 👤 Mon entreprise : coordonnées du vendeur et mot de passe de gestion
+  if (action === 'vendeur') {
+    if (request.method === 'POST') {
+      const v = {};
+      for (const k of Object.keys(VENDEUR_DEFAUT)) v[k] = String(d[k] == null ? '' : d[k]).replace(/\s+/g, ' ').trim().slice(0, 200);
+      if (!v.raison) throw new ErreurAPI(400, 'La raison sociale est obligatoire.');
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.email)) throw new ErreurAPI(400, 'E-mail de contact invalide.');
+      await env.CLIENTS.put('config:vendeur', JSON.stringify(v));
+      VENDEUR = await lireVendeur(env);
+    }
+    return json({ vendeur: VENDEUR, motDePassePerso: !!(await env.CLIENTS.get('config:admin')) });
+  }
+  if (action === 'motdepasse' && request.method === 'POST') {
+    const n = String(d.nouveau || '');
+    if (n.length < 12) throw new ErreurAPI(400, 'Le mot de passe de gestion doit faire au moins 12 caractères.');
+    await env.CLIENTS.put('config:admin', JSON.stringify(Object.assign(await hacherMdp(n), { le: new Date().toISOString() })));
+    CACHE_ADMIN.clear();
+    return json({ ok: true });
+  }
 
   if (action === 'tarifs') {
     if (request.method === 'GET') return json({ tarifs: await lireTarifs(env), defaut: TARIFS_DEFAUT });
@@ -1801,10 +1850,10 @@ function mailRappel(c, due, groupe) {
     '<p style="margin:22px 0"><a href="' + lien + '" style="display:inline-block;background:#d9572b;color:#fff;text-decoration:none;padding:13px 20px;border-radius:10px;font-weight:700">' + esc(T.bouton) + '</a></p>' +
     (avant ? '<p style="margin:0 0 22px">' + esc(T.voirTxt) + ' <a href="https://' + site + '/" style="color:#d9572b;font-weight:700">' + esc(site) + '</a></p>' : '') +
     '<p style="color:#6a665d;font-size:13px;border-top:1px solid #e8e3d8;padding-top:14px">' + esc(T.pied) + '<br>' +
-    'KPS · qrbc.app · <a href="mailto:support@' + DOMAINE + '" style="color:#6a665d">support@' + DOMAINE + '</a> · <a href="' + lienCgv + '" style="color:#6a665d">' + esc(T.cgv) + '</a></p></div>';
+    esc(VENDEUR.raison) + ' · qrbc.app · <a href="mailto:' + esc(VENDEUR.email) + '" style="color:#6a665d">' + esc(VENDEUR.email) + '</a> · <a href="' + lienCgv + '" style="color:#6a665d">' + esc(T.cgv) + '</a></p></div>';
   const brut = s => s.replace(/<[^>]+>/g, '');
   const texte = T.salut + '\n\n' + brut(T.corps) + '\n\n' + T.prix + '\n\n' + T.bouton + ' : ' + lien +
-    (avant ? '\n' + T.voir + ' : https://' + site + '/' : '') + '\n\n' + T.pied + '\nKPS · qrbc.app · support@' + DOMAINE;
+    (avant ? '\n' + T.voir + ' : https://' + site + '/' : '') + '\n\n' + T.pied + '\n' + VENDEUR.raison + ' · qrbc.app · ' + VENDEUR.email;
   return { sujet: T.sujet, html, texte };
 }
 function plurielRu(n, un, peu, beaucoup) { const a = n % 10, b = n % 100; return a === 1 && b !== 11 ? un : a >= 2 && a <= 4 && (b < 12 || b > 14) ? peu : beaucoup; }
