@@ -77,6 +77,20 @@ const VENDEUR_DEFAUT = {
   dirigeant: 'Roman Komkov', fonction: 'gérant', email: 'support@qrbc.app', telephone: '+33 7 68 07 76 77'
 };
 let VENDEUR = VENDEUR_DEFAUT;
+/* Mentions légales ajoutées à chaque facture Stripe (champs personnalisés + pied de page) */
+function mentionsFacture() {
+  const v = VENDEUR;
+  return {
+    champs: [
+      { name: 'Vendeur', value: (v.raison + (v.marque ? ' (' + v.marque + ')' : '') + ' – RCS ' + v.rcs + ' ' + v.siren).slice(0, 140) },
+      { name: 'N° TVA', value: String(v.tva || '—').slice(0, 140) }
+    ],
+    pied: [v.raison, v.forme + (v.capital ? ' au capital de ' + v.capital : ''), 'RCS ' + v.rcs + ' ' + v.siren, 'TVA ' + v.tva, v.adresse, v.email]
+      .filter(Boolean).join(' – ') + '\n' +
+      'Facture acquittée. Entre professionnels, en cas de retard de paiement : pénalités au taux légal majoré ' +
+      'et indemnité forfaitaire de 40 € pour frais de recouvrement. CGV : https://' + DOMAINE + '/cgv'
+  };
+}
 async function lireVendeur(env) {
   try { const t = await env.CLIENTS.get('config:vendeur'); if (t) return Object.assign({}, VENDEUR_DEFAUT, JSON.parse(t)); } catch (e) {}
   return VENDEUR_DEFAUT;
@@ -676,14 +690,8 @@ async function apiClient(request, env, slug, route) {
       payment_intent_data: { metadata: { slug, genre }, description: libelle },
       invoice_creation: { enabled: true, invoice_data: {
         description: libelle,
-        custom_fields: [
-          { name: 'Vendeur', value: (VENDEUR.raison + (VENDEUR.marque ? ' (' + VENDEUR.marque + ')' : '') + ' – RCS ' + VENDEUR.rcs + ' ' + VENDEUR.siren).slice(0, 140) },
-          { name: 'N° TVA', value: String(VENDEUR.tva || '—').slice(0, 140) }
-        ],
-        footer: [VENDEUR.raison, VENDEUR.forme + (VENDEUR.capital ? ' au capital de ' + VENDEUR.capital : ''), 'RCS ' + VENDEUR.rcs + ' ' + VENDEUR.siren,
-          'TVA ' + VENDEUR.tva, VENDEUR.adresse, VENDEUR.email].filter(Boolean).join(' – ') + '\n' +
-          'Facture acquittée. Entre professionnels, en cas de retard de paiement : pénalités au taux légal majoré ' +
-          'et indemnité forfaitaire de 40 € pour frais de recouvrement. CGV : https://' + DOMAINE + '/cgv'
+        custom_fields: mentionsFacture().champs,
+        footer: mentionsFacture().pied
       } },
       // Stripe active par défaut « Managed Payments » (Stripe vendeur, TVA mondiale, frais en plus) :
       // on facture nous-mêmes avec notre taux de TVA, donc désactivé pour nos sessions
@@ -1229,6 +1237,17 @@ async function gestion(request, env, action) {
       VENDEUR = await lireVendeur(env);
     }
     return json({ vendeur: VENDEUR, motDePassePerso: !!(await env.CLIENTS.get('config:admin')) });
+  }
+  if (action === 'facture-apercu') {
+    let derniere = null;
+    const st = await lireStripe(env);
+    if (st) {
+      try {
+        const l = (await stripe(env, st, 'GET', '/invoices', { limit: '1' })).data || [];
+        if (l[0]) derniere = { numero: l[0].number || '', le: new Date(l[0].created * 1000).toISOString(), url: l[0].invoice_pdf || l[0].hosted_invoice_url || '' };
+      } catch (e) { derniere = { erreur: e.message }; }
+    }
+    return json({ mentions: mentionsFacture(), vendeur: VENDEUR, tva: TVA, prixAnnuel: PRIX_ANNUEL, derniere });
   }
   if (action === 'motdepasse' && request.method === 'POST') {
     const n = String(d.nouveau || '');

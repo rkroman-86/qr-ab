@@ -169,7 +169,13 @@
       </form>
 
       <div class="boite">
-        <h2>Logo des factures et des reçus</h2>
+        <h2>Factures</h2>
+        <div class="actions" style="margin-bottom:12px">
+          <button type="button" class="prim" id="btn-apercu-facture">👁 Aperçu d’une facture</button>
+          <button type="button" id="btn-derniere-facture">Dernière facture émise</button>
+        </div>
+        <div class="msg" id="m-facture"></div>
+        <h2 style="margin-top:16px">Logo des factures et des reçus</h2>
         <p class="infos">Le logo, l’icône et les couleurs des factures, des reçus et de la page de paiement se règlent dans Stripe (Stripe ne permet pas de les changer depuis une autre application).</p>
         <a href="https://dashboard.stripe.com/settings/branding" target="_blank" rel="noopener"><button type="button">Ouvrir Stripe → Branding</button></a>
         <p class="infos" style="margin-top:12px">Numérotation des factures (préfixe QRBC) : <a href="https://dashboard.stripe.com/settings/billing/invoice" target="_blank" rel="noopener">Stripe → Paramètres des factures</a>.</p>
@@ -828,6 +834,43 @@
     try { afficherVendeur(await api('vendeur', corps)); m.className = 'msg ok'; m.textContent = '✓ Enregistré : factures, pages légales et e-mails à jour.'; }
     catch (err) { m.className = 'msg err'; m.textContent = err.message; }
   });
+  /* Aperçu : facture d'exemple avec les mentions actuelles (le vrai PDF est fabriqué par Stripe) */
+  const echap = t => String(t == null ? '' : t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  $('#btn-apercu-facture').addEventListener('click', async () => {
+    const fen = window.open('', '_blank');
+    const m = $('#m-facture'); m.className = 'msg'; m.textContent = '';
+    try {
+      const r = await api('facture-apercu');
+      const v = r.vendeur, ht = r.prixAnnuel / 100, tva = ht * r.tva / 100, eur = n => n.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
+      const champs = r.mentions.champs.map(c => '<tr><td>' + echap(c.name) + '</td><td>' + echap(c.value) + '</td></tr>').join('');
+      const html = '<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Aperçu de facture</title>' +
+        '<style>body{font:14px/1.5 system-ui,sans-serif;color:#1b1a17;background:#eee;margin:0;padding:16px}.f{background:#fff;max-width:720px;margin:auto;padding:28px;border-radius:6px}' +
+        '.bandeau{background:#fff3b0;padding:8px 12px;border-radius:6px;margin-bottom:18px;font-size:13px}h1{font-size:22px;margin:0}.l{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;margin:18px 0}' +
+        'table{width:100%;border-collapse:collapse}td,th{padding:7px 4px;border-bottom:1px solid #e8e3d8;text-align:left;vertical-align:top}.d{text-align:right}.pied{margin-top:24px;font-size:12px;color:#6a665d;white-space:pre-line}small{color:#6a665d}</style></head><body><div class="f">' +
+        '<div class="bandeau">Aperçu avec vos coordonnées actuelles. Le vrai PDF est mis en page par Stripe (logo, couleurs) ; client et montants ci-dessous sont des exemples.</div>' +
+        '<div class="l"><div><h1>Facture</h1><small>N° QRBC-0000 · ' + new Date().toLocaleDateString('fr-FR') + ' · acquittée</small></div><img src="/icon-192.png" alt="" width="56" height="56" style="border-radius:12px"></div>' +
+        '<div class="l"><div><b>' + echap(v.marque || v.raison) + '</b><br>' + echap(v.adresse) + '<br>' + echap(v.email) + (v.telephone ? '<br>' + echap(v.telephone) : '') + '</div>' +
+        '<div><small>Facturé à</small><br><b>Client exemple SARL</b><br>1 rue de l’Exemple, 06000 Nice, France<br>N° TVA : FR00123456789</div></div>' +
+        '<table><tr><th>Description</th><th class="d">Qté</th><th class="d">Prix HT</th><th class="d">Montant</th></tr>' +
+        '<tr><td>Abonnement qrbc 1 an — exemple.qrbc.app</td><td class="d">1</td><td class="d">' + eur(ht) + '</td><td class="d">' + eur(ht) + '</td></tr>' +
+        '<tr><td colspan="3" class="d">Total HT</td><td class="d">' + eur(ht) + '</td></tr><tr><td colspan="3" class="d">TVA (' + r.tva + ' %)</td><td class="d">' + eur(tva) + '</td></tr>' +
+        '<tr><td colspan="3" class="d"><b>Total TTC payé</b></td><td class="d"><b>' + eur(ht + tva) + '</b></td></tr></table>' +
+        '<table style="margin-top:18px">' + champs + '</table><div class="pied">' + echap(r.mentions.pied) + '</div></div></body></html>';
+      if (fen) { fen.document.open(); fen.document.write(html); fen.document.close(); }
+      else { m.className = 'msg err'; m.textContent = 'Fenêtre bloquée par le navigateur.'; }
+    } catch (e) { if (fen) fen.close(); m.className = 'msg err'; m.textContent = e.message; }
+  });
+  $('#btn-derniere-facture').addEventListener('click', async () => {
+    const fen = window.open('', '_blank');
+    const m = $('#m-facture'); m.className = 'msg'; m.textContent = '…';
+    try {
+      const r = await api('facture-apercu'), d = r.derniere;
+      if (!d || d.erreur || !d.url) { if (fen) fen.close(); m.className = 'msg err'; m.textContent = d && d.erreur ? d.erreur : 'Aucune facture émise pour l’instant (ou Stripe non connecté).'; return; }
+      m.className = 'msg'; m.textContent = (d.numero ? d.numero + ' · ' : '') + date(d.le) + ' — attention : elle porte les coordonnées en vigueur à sa date.';
+      if (fen) fen.location.href = d.url; else location.href = d.url;
+    } catch (e) { if (fen) fen.close(); m.className = 'msg err'; m.textContent = e.message; }
+  });
+
   $('#f-motdepasse').addEventListener('submit', async e => {
     e.preventDefault();
     const m = $('#m-motdepasse'), a = $('#g-mdp1').value, b = $('#g-mdp2').value;
