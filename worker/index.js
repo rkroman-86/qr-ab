@@ -530,7 +530,7 @@ async function apiClient(request, env, slug, route) {
     const session = await stripe(env, st, 'GET', '/checkout/sessions/' + ref);
     if (!session.invoice) throw new ErreurAPI(404, 'Pas de facture pour ce paiement (antérieur à la facturation automatique). Écrivez à support@' + DOMAINE + '.');
     const fact = await stripe(env, st, 'GET', '/invoices/' + session.invoice);
-    const url = fact.invoice_pdf || fact.hosted_invoice_url;
+    const url = fact.hosted_invoice_url || fact.invoice_pdf;   // page Stripe « Payée » avec facture et reçu à télécharger
     if (!url) throw new ErreurAPI(404, 'Facture pas encore disponible. Réessayez dans un instant.');
     return json({ url, numero: fact.number || '' });
   }
@@ -1246,7 +1246,7 @@ async function gestion(request, env, action) {
     if (st) {
       try {
         const l = (await stripe(env, st, 'GET', '/invoices', { limit: '1' })).data || [];
-        if (l[0]) derniere = { numero: l[0].number || '', le: new Date(l[0].created * 1000).toISOString(), url: l[0].invoice_pdf || l[0].hosted_invoice_url || '' };
+        if (l[0]) derniere = { numero: l[0].number || '', le: new Date(l[0].created * 1000).toISOString(), url: l[0].hosted_invoice_url || l[0].invoice_pdf || '' };
       } catch (e) { derniere = { erreur: e.message }; }
     }
     return json({ mentions: mentionsFacture(), vendeur: VENDEUR, tva: TVA, prixAnnuel: PRIX_ANNUEL, derniere });
