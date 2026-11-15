@@ -630,7 +630,17 @@ async function apiClient(request, env, slug, route) {
       line_items: [{ quantity: 1, tax_rates: [st.taxRate], price_data: { currency: 'eur', unit_amount: montant, product_data: { name: libelle } } }],
       metadata: Object.assign({ slug, genre, montant: String(montant), deduction: String(deduction) }, extra),
       payment_intent_data: { metadata: { slug, genre }, description: libelle },
-      invoice_creation: { enabled: true },
+      invoice_creation: { enabled: true, invoice_data: {
+        description: libelle,
+        custom_fields: [
+          { name: 'Vendeur', value: 'KPS (QR-BC) – RCS Nice 982 543 878' },
+          { name: 'N° TVA', value: 'FR11982543878' }
+        ],
+        footer: 'KPS – SARL à associé unique au capital de 100 € – RCS Nice 982 543 878 – TVA FR11982543878 – ' +
+          '216 boulevard Édouard VII, 06310 Beaulieu-sur-Mer – support@' + DOMAINE + '\n' +
+          'Facture acquittée. Entre professionnels, en cas de retard de paiement : pénalités au taux légal majoré ' +
+          'et indemnité forfaitaire de 40 € pour frais de recouvrement. CGV : https://' + DOMAINE + '/cgv'
+      } },
       // Stripe active par défaut « Managed Payments » (Stripe vendeur, TVA mondiale, frais en plus) :
       // on facture nous-mêmes avec notre taux de TVA, donc désactivé pour nos sessions
       managed_payments: { enabled: false },
