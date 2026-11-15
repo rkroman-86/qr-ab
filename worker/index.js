@@ -2028,15 +2028,19 @@ async function facturesDe(env, tit) {
     for (const p of (c.paiements || [])) if (p.ref && /^cs_(live|test)_/.test(p.ref)) l.push({ le: p.le, genre: p.genre, note: p.note || '', ref: p.ref, page: c.slug });
   return l.sort((a, b) => String(b.le).localeCompare(String(a.le))).slice(0, 50);
 }
-/* Client Stripe tenu à jour avec les infos de facturation (nom, adresse, n° TVA). Sans infos : null (e-mail seul). */
+/* Client Stripe de chaque compte, tenu à jour avec les infos de facturation (nom, adresse, n° TVA).
+   Langue du client fixée au français : factures et reçus en français (obligation légale en France),
+   la page de paiement, elle, reste dans la langue du navigateur. */
 async function clientStripePour(env, st, tit) {
-  const f = tit.facturation;
-  if (!f || !f.nom) return null;
+  const f = tit.facturation || {};
+  if (!f.nom && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(tit.email || '')) return null;
   try {
     const ids = tit.clientStripe || {};
-    const donnees = { name: f.nom, email: tit.email || undefined, preferred_locales: [tit.langue === 'en' ? 'en' : tit.langue === 'ru' ? 'ru' : 'fr'],
-      address: { line1: f.adresse || undefined, postal_code: f.cp || undefined, city: f.ville || undefined, country: f.pays || 'FR' },
-      metadata: { page: tit.slug } };
+    const donnees = { email: tit.email || undefined, preferred_locales: ['fr'], metadata: { page: tit.slug } };
+    if (f.nom) {
+      donnees.name = f.nom;
+      donnees.address = { line1: f.adresse || undefined, postal_code: f.cp || undefined, city: f.ville || undefined, country: f.pays || 'FR' };
+    } else if ((tit.clientStripe || {})[st.mode]) { donnees.name = ''; donnees.address = ''; }   // infos retirées : on les efface aussi chez Stripe
     let id = ids[st.mode];
     if (id) { try { await stripe(env, st, 'POST', '/customers/' + id, donnees); } catch (e) { id = null; } }
     if (!id) {
@@ -2046,7 +2050,7 @@ async function clientStripePour(env, st, tit) {
     }
     // n° de TVA : on remplace l'ancien s'il a changé
     const actuels = (await stripe(env, st, 'GET', '/customers/' + id + '/tax_ids')).data || [];
-    if (!actuels.some(x => x.value === f.tva)) {
+    if (f.tva ? !actuels.some(x => x.value === f.tva) : actuels.length) {
       for (const x of actuels) await stripe(env, st, 'DELETE', '/customers/' + id + '/tax_ids/' + x.id).catch(() => {});
       if (f.tva) await stripe(env, st, 'POST', '/customers/' + id + '/tax_ids', { type: f.tva.startsWith('GB') ? 'gb_vat' : f.tva.startsWith('CH') ? 'ch_vat' : 'eu_vat', value: f.tva }).catch(e => console.error('tva', e.message));
     }
