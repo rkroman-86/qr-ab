@@ -338,6 +338,7 @@
     "L’IA rédige cette pancarte sans toucher aux autres. Écrivez d’abord un titre ou une idée pour choisir le sujet ; laissez vide pour qu’elle en propose un.": ["The AI writes this card without touching the others. Type a title or an idea first to choose the topic; leave it empty and it will suggest one.", "ИИ пишет эту карточку, не трогая остальные. Сначала впишите заголовок или идею, чтобы задать тему; оставьте пустым — ИИ предложит сам."],
     "Présentation de qrbc.app en vidéo": ["qrbc.app video presentation", "Видеопрезентация qrbc.app"],
     "Fermer la vidéo": ["Close the video", "Закрыть видео"],
+    "Réduire la vidéo": ["Shrink the video", "Уменьшить видео"],
     "Assistant": ["Assistant", "Помощник"],
     "Nouvelle conversation": ["New conversation", "Новый разговор"],
     "Réduire": ["Minimise", "Свернуть"],

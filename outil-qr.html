@@ -103,6 +103,14 @@
   footer p{margin:.35em 0}
   footer a{color:inherit}
   [hidden]{display:none!important}
+  /* Vidéo de présentation flottante (comme l'accueil) : pas de fermeture, un bouton pour la réduire ; toucher la vignette = taille de départ */
+  .video-promo{position:fixed;z-index:20;right:max(12px,env(safe-area-inset-right));bottom:max(12px,env(safe-area-inset-bottom));height:44vh;aspect-ratio:9/16;
+    border-radius:16px;overflow:hidden;background:#000;box-shadow:0 10px 34px rgba(0,0,0,.35);transition:height .35s ease,opacity .35s ease,border-radius .35s}
+  .video-promo.mini{height:18vh;min-height:120px;opacity:.6;border-radius:12px;cursor:pointer}
+  .video-promo.mini:hover{opacity:1}
+  .video-promo.mini button{display:none}
+  .video-promo video{width:100%;height:100%;object-fit:cover;display:block}
+  .video-promo button{position:absolute;top:6px;right:6px;width:30px;height:30px;border-radius:50%;border:0;background:rgba(0,0,0,.55);color:#fff;cursor:pointer;padding:0;display:grid;place-items:center}
 </style>
 </head>
 <body>
@@ -114,6 +122,11 @@
       <a href="/?depuis=outil-qr#inscription" class="lien-qrbc">Créer ma page</a>
     </div>
   </header>
+
+  <div class="video-promo" id="video-promo" hidden>
+    <video id="video-promo-v" muted autoplay loop playsinline preload="auto" disablepictureinpicture disableremoteplayback aria-label="Présentation de qrbc.app en vidéo"></video>
+    <button type="button" id="video-promo-reduire" aria-label="Réduire la vidéo" title="Réduire la vidéo"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M14 10l6-6M14 10h5M14 10V5M10 14l-6 6M10 14H5M10 14v5"/></svg></button>
+  </div>
 
   <h1>Générateur de QR code gratuit</h1>
   <p class="chapeau">Sans inscription, sans filigrane, et vos QR codes n’expirent jamais. Tout se passe dans votre navigateur : rien n’est envoyé ni enregistré.</p>
@@ -394,6 +407,48 @@
   }
   new MutationObserver(majLiens).observe(document.documentElement, { attributes: true, attributeFilter: ['lang'] });
   majLiens();
+})();
+</script>
+<script>
+/* Vidéo de présentation dans la langue de la page (FR / EN / RU), muette, en boucle, en bas à droite.
+   Se réduit au défilement ou avec le bouton ; toucher la vignette la remet à sa taille de départ. Pas de fermeture. */
+(function () {
+  var boite = document.getElementById('video-promo'), v = document.getElementById('video-promo-v');
+  function langue() {
+    var l = (window.langueInterface && window.langueInterface()) || document.documentElement.lang || 'fr';
+    l = String(l).slice(0, 2);
+    return l === 'en' || l === 'ru' ? l : 'fr';
+  }
+  var actuelle = '';
+  function charger() {
+    var l = langue();
+    if (l === actuelle) return;
+    actuelle = l;
+    v.src = '/videos/qrbc-' + l + '.mp4';
+    var p = v.play(); if (p && p.catch) p.catch(function () {});
+  }
+  var agrandieA = null;            // position de défilement où le visiteur a rouvert la vignette
+  var reduiteMain = false;         // réduite avec le bouton : reste petite jusqu'au prochain toucher
+  function majTaille() {
+    if (reduiteMain) return;
+    var y = window.scrollY || 0;
+    if (y < 40) { agrandieA = null; boite.classList.remove('mini'); return; }
+    if (agrandieA !== null && Math.abs(y - agrandieA) < 200) return;   // rouverte à la main : on la laisse grande un moment
+    agrandieA = null; boite.classList.add('mini');
+  }
+  document.getElementById('video-promo-reduire').addEventListener('click', function (e) {
+    e.stopPropagation();
+    reduiteMain = true; agrandieA = null; boite.classList.add('mini');
+  });
+  boite.addEventListener('click', function () {
+    if (!boite.classList.contains('mini')) return;
+    reduiteMain = false; boite.classList.remove('mini'); agrandieA = window.scrollY || 0;
+  });
+  v.addEventListener('loadeddata', function () { majTaille(); boite.hidden = false; });
+  v.addEventListener('error', function () { boite.hidden = true; });
+  window.addEventListener('scroll', majTaille, { passive: true });
+  new MutationObserver(charger).observe(document.documentElement, { attributes: true, attributeFilter: ['lang'] });
+  charger();
 })();
 </script>
 </body>
