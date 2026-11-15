@@ -595,6 +595,7 @@
     const etats = { gratuit: 'Compte offert', essai: c.actif ? 'Essai gratuit' : 'Essai terminé', payant: c.actif ? 'Abonnement actif' : 'Abonnement expiré', suspendu: 'Compte suspendu' };
     solde.appendChild(el('div', { class: 'compteur' }, [el('span', { text: etats[c.plan] || 'Abonnement' }),
       el('b', { 'data-no-i18n': '', text: fin ? new Date(fin).toLocaleDateString() : '—' })]));
+    if (c.ia && c.ia.commune) solde.appendChild(el('p', { class: 'cpt-aide', style: 'margin:6px 0 0', text: 'Commun à toutes les pages du compte.' }));
     if (c.ia && c.ia.illimite) solde.appendChild(el('p', { class: 'cpt-aide', style: 'margin-top:8px', text: 'Créations IA illimitées.' }));
     else if (c.ia) {
       solde.appendChild(ligneC('Crédit IA', euros(c.ia.credit || 0) + ' HT'));

@@ -546,7 +546,8 @@ async function apiClient(request, env, slug, route) {
     const outils = Array.isArray(d.tools) ? d.tools : [];
     const type = outils.length === 1 ? OUTILS_IA[outils[0] && outils[0].name] : null;
     if (!type) throw new ErreurAPI(400, 'Demande IA non reconnue.');
-    const mode = modeFacturation(compte, type, request.headers.get('x-qrbc-express') === '1');   // lève 402 si rien n'est disponible
+    const porte = await reserveIA(env, compte);
+    const mode = modeFacturation(porte, type, request.headers.get('x-qrbc-express') === '1', compte);   // lève 402 si rien n'est disponible
     const jour = new Date().toISOString().slice(0, 10);
     await limiter(env, 'ia:' + slug + ':' + jour, IA_PAR_JOUR, 86400 * 2, 'Limite quotidienne de l’IA atteinte. Réessayez demain.');
     const corps = {
@@ -566,8 +567,7 @@ async function apiClient(request, env, slug, route) {
     if (r.ok) {
       // On ne compte qu'une réponse réussie ; on relit le compte pour ne pas écraser une écriture concurrente
       const frais = (await lireCompte(env, slug)) || compte;
-      facturer(frais, type, mode);
-      await ecrireCompte(env, frais);
+      await facturerReserve(env, frais, porte, type, mode);
       h['x-qrbc-compte'] = encodeURIComponent(JSON.stringify(await resumeAvecOffre(env, frais)));
     }
     // Une clé refusée côté serveur ne doit pas ressembler à une session expirée pour le client
@@ -740,7 +740,8 @@ async function apiClient(request, env, slug, route) {
     const dd = await corpsJSON(request);
     if (dd.pancarte && typeof dd.pancarte === 'object' && !String(dd.pancarte.titre || '').trim() && !String(dd.pancarte.texte || '').trim())
       throw new ErreurAPI(400, 'Écrivez d’abord le titre ou le texte de la pancarte : l’image s’en inspire.');
-    const mode = modeFacturation(compte, 'fond', request.headers.get('x-qrbc-express') === '1');
+    const porte = await reserveIA(env, compte);
+    const mode = modeFacturation(porte, 'fond', request.headers.get('x-qrbc-express') === '1', compte);
     const jour = new Date().toISOString().slice(0, 10);
     await limiter(env, 'ia:' + slug + ':' + jour, IA_PAR_JOUR, 86400 * 2, 'Limite quotidienne de l’IA atteinte. Réessayez demain.');
     const ambiance = AMBIANCES_FOND[dd.ambiance] ? dd.ambiance : 'photo';
@@ -800,8 +801,7 @@ async function apiClient(request, env, slug, route) {
     const fonds = medias.filter(x => x.genre === 'fond');
 
     const frais = (await lireCompte(env, slug)) || compte;
-    facturer(frais, 'fond', mode);
-    await ecrireCompte(env, frais);
+    await facturerReserve(env, frais, porte, 'fond', mode);
     return json({ nouvelles, fonds, medias, compte: await resumeAvecOffre(env, frais) });
   }
 
@@ -818,15 +818,17 @@ async function apiClient(request, env, slug, route) {
       : 'Abonnement inactif : l’IA est désactivée.', compte.plan === 'essai' ? 'essai_termine' : 'abonnement_inactif');
     if (!(await cleAnthropic(env))) throw new ErreurAPI(503, 'La rédaction IA n’est pas encore activée sur le serveur.');
     if (expressEnCours(compte)) return json({ express: compte.express, compte: await resumeAvecOffre(env, compte), reprise: true });
-    const cout = coutExpress(compte);
+    const porte = await reserveIA(env, compte);
+    const cout = coutExpress(porte);
     if (!cout.possible) throw new ErreurAPI(402, cout.message, cout.code);
-    compte.ia = compte.ia || {};
-    if (compte.plan === 'essai') for (const k of TYPES_IA) compte.ia[k] = (compte.ia[k] || 0) + (cout.essai[k] || 0);
-    if (compte.plan === 'payant') {
-      compte.credit = Math.max(0, (compte.credit || 0) - cout.prix);
-      compte.ia.depense = (compte.ia.depense || 0) + cout.prix;
+    porte.ia = porte.ia || {};
+    if (porte.plan === 'essai') for (const k of TYPES_IA) porte.ia[k] = (porte.ia[k] || 0) + (cout.essai[k] || 0);
+    if (porte.plan === 'payant') {
+      porte.credit = Math.max(0, (porte.credit || 0) - cout.prix);
+      porte.ia.depense = (porte.ia.depense || 0) + cout.prix;
     }
-    compte.ia.express = (compte.ia.express || 0) + 1;
+    porte.ia.express = (porte.ia.express || 0) + 1;
+    if (porte !== compte) await ecrireCompte(env, porte);
     // restant = appels possibles par étape : 1 + 1 reprise (réponse IA reçue mais illisible, coupure réseau…)
     const n = ESSAIS_EXPRESS;
     const restant = compte.plan === 'essai'
@@ -885,7 +887,7 @@ async function apiClient(request, env, slug, route) {
     if (!actif(compte)) throw new ErreurAPI(402, 'Abonnement inactif : renouvelez-le depuis votre page principale.', 'abonnement_inactif');
     const cleIA = await cleAnthropic(env);
     if (!cleIA) throw new ErreurAPI(503, 'La traduction IA n’est pas encore activée sur le serveur.');
-    const tit = await titulaireDe(env, compte);
+    const tit = await reserveIA(env, compte);
     const offerte = compte.aTraduire || compte.plan === 'gratuit';
     let payeur = null;
     if (!offerte) {
@@ -1370,6 +1372,7 @@ async function gestion(request, env, action) {
         try { titre = (JSON.parse(await env.CLIENTS.get('site:' + c.slug + ':config.json') || '{}').titre) || ''; } catch (e) {}
         const res = resumeCompte(c);
         if ((c.pages || []).length) res.renouvellement = await prixGroupe(env, c);   // abonnement + pages rattachées
+        if (c.parent && c.plan !== 'gratuit') res.ia = { commune: c.parent };      // IA comptée sur la réserve de la page principale
         comptes.push(Object.assign(res, { paiements: c.paiements || [], titre, depenseIA: (c.ia && c.ia.depense) || 0, adresse: adressePage(c),
           rappels: c.rappels || {}, langue: c.langue || 'fr', aSupprimer: aSupprimer(c),
           finConservation: echeanceCompte(c) ? new Date(Date.parse(echeanceCompte(c)) + JOURS_CONSERVATION * 86400000).toISOString() : null }));
@@ -1415,10 +1418,12 @@ async function gestion(request, env, action) {
       if (!Number.isInteger(n) || n < 0 || n > 1000) throw new ErreurAPI(400, 'IA restantes : nombre entier entre 0 et 1 000.');
       const q = QUOTAS_IA[compte.plan];
       if (!q) throw new ErreurAPI(400, 'Ce compte n’a pas de quota (offert ou suspendu).');
-      compte.ia = compte.ia || {};
-      compte.ia.bonus = compte.ia.bonus || {};
-      compte.ia[type] = 0;
-      compte.ia.bonus[type] = n - q[type];
+      const porte = await reserveIA(env, compte);               // réserve commune du compte
+      porte.ia = porte.ia || {};
+      porte.ia.bonus = porte.ia.bonus || {};
+      porte.ia[type] = 0;
+      porte.ia.bonus[type] = n - q[type] * facteurQuota(porte);
+      if (porte !== compte) await ecrireCompte(env, porte);
     }
     if (d.email !== undefined) {
       const nouvel = String(d.email).trim().toLowerCase();
@@ -1455,8 +1460,9 @@ async function gestion(request, env, action) {
     return json({ ok: true, encaisse: r.aPayer, deduction: r.deduction, compte: resumeCompte(compte) });
   }
   if (action === 'crediter') {
-    const compte = await lireCompte(env, String(d.nom || ''));
-    if (!compte) throw new ErreurAPI(404, 'Compte introuvable.');
+    const page = await lireCompte(env, String(d.nom || ''));
+    if (!page) throw new ErreurAPI(404, 'Compte introuvable.');
+    const compte = await reserveIA(env, page);                   // crédit commun : toujours sur la page principale
     const montant = Math.round(Number(d.euros) * 100);
     if (!Number.isFinite(montant) || montant === 0 || Math.abs(montant) > 100000) throw new ErreurAPI(400, 'Montant invalide.');
     compte.credit = Math.max(0, (compte.credit || 0) + montant);
@@ -2061,8 +2067,12 @@ async function clientStripePour(env, st, tit) {
 async function encaisserSession(env, session) {
   if (!session || session.payment_status !== 'paid') return 'non payé';
   const md = session.metadata || {};
-  const compte = await lireCompte(env, md.genre === 'page' ? md.titulaire : md.slug);
+  let compte = await lireCompte(env, md.genre === 'page' ? md.titulaire : md.slug);
   if (!compte) return 'compte introuvable';
+  if (md.genre === 'recharge' && compte.parent) {                // le crédit va dans la réserve commune du compte
+    if ((compte.refsPayees || []).includes(session.id)) return 'déjà appliqué';
+    compte = await reserveIA(env, compte);
+  }
   if ((compte.refsPayees || []).includes(session.id)) return 'déjà appliqué';
   const montant = Number(md.montant) || 0;
   const ttc = (session.amount_total / 100).toFixed(2) + ' € TTC';
@@ -2115,6 +2125,11 @@ async function dechiffrer(env, valeur) {
 
 async function resumeAvecOffre(env, c) {
   const r = resumeCompte(c);
+  if (c.parent || (c.pages || []).length) {                   // réserve IA commune, portée par la page principale
+    const porte = await reserveIA(env, c);
+    r.ia = Object.assign(resumeCompte(porte).ia, { commune: porte.slug });
+    r.ia.express = Object.assign({ prix: PRIX_EXPRESS, enCours: expressEnCours(c) ? c.express : null }, coutExpress(porte));
+  }
   r.offre.enLigne = !!(await env.CLIENTS.get('config:stripe'));
   r.offre.prixPage = PRIX_PAGE; r.offre.prixTraduction = PRIX_TRADUCTION;
   if (c.parent) r.renouvellement = null;                        // l'abonnement se règle depuis la page principale
@@ -2360,9 +2375,9 @@ function resumeCompte(c) {
     slug: c.slug, email: c.email, emailAVerifier: !!c.emailAVerifier, noindex: !!c.noindex, plan: c.plan, actif: actif(c), finEssai: c.finEssai, payeJusqua: c.payeJusqua, cree: c.cree, note: c.note || '', promo: c.promo || null,
     ia: {
       illimite: c.plan === 'gratuit',
-      texte: { utilises: ia.texte || 0, inclus: q ? Math.max(0, q.texte + ((ia.bonus && ia.bonus.texte) || 0)) : null },
-      picto: { utilises: ia.picto || 0, inclus: q ? Math.max(0, q.picto + ((ia.bonus && ia.bonus.picto) || 0)) : null },
-      fond: { utilises: ia.fond || 0, inclus: q ? Math.max(0, (q.fond || 0) + ((ia.bonus && ia.bonus.fond) || 0)) : null },
+      texte: { utilises: ia.texte || 0, inclus: q ? Math.max(0, q.texte * facteurQuota(c) + ((ia.bonus && ia.bonus.texte) || 0)) : null },
+      picto: { utilises: ia.picto || 0, inclus: q ? Math.max(0, q.picto * facteurQuota(c) + ((ia.bonus && ia.bonus.picto) || 0)) : null },
+      fond: { utilises: ia.fond || 0, inclus: q ? Math.max(0, (q.fond || 0) * facteurQuota(c) + ((ia.bonus && ia.bonus.fond) || 0)) : null },
       credit: c.credit || 0,                       // centimes
       prix: PRIX_IA,
       express: Object.assign({ prix: PRIX_EXPRESS, enCours: expressEnCours(c) ? c.express : null }, coutExpress(c))
@@ -2377,19 +2392,53 @@ function resumeCompte(c) {
 }
 
 /* Inclus dans le quota, débité du crédit, ou refus avec l'offre adaptée */
-function modeFacturation(c, type, express) {
+/* Réserve IA commune à tout le compte : crédit en € et créations incluses portés par la page principale.
+   Chaque page rattachée apporte les créations d'un abonnement à la réserve. */
+function facteurQuota(c) { return c && c.plan === 'payant' ? 1 + (c.pages || []).length : 1; }
+async function reserveIA(env, compte) {
+  const tit = compte.parent ? ((await lireCompte(env, compte.parent)) || compte) : compte;
+  if ((tit.pages || []).length && !tit.iaCommune) await mutualiserIA(env, tit, compte);
+  return tit;
+}
+/* Une seule fois par compte : les compteurs et le crédit des pages rattachées rejoignent la page principale.
+   courant = objet déjà en mémoire chez l'appelant (mis à jour sur place pour ne pas réécrire d'anciennes valeurs). */
+async function mutualiserIA(env, tit, courant) {
+  tit.ia = tit.ia || {};
+  for (const s of tit.pages || []) {
+    const c = courant && courant.slug === s ? courant : await lireCompte(env, s);
+    if (!c || c.parent !== tit.slug) continue;
+    const ia = c.ia || {};
+    for (const k of TYPES_IA) {
+      tit.ia[k] = (tit.ia[k] || 0) + (ia[k] || 0);
+      if (ia.bonus && ia.bonus[k]) { tit.ia.bonus = tit.ia.bonus || {}; tit.ia.bonus[k] = (tit.ia.bonus[k] || 0) + ia.bonus[k]; }
+    }
+    tit.ia.depense = (tit.ia.depense || 0) + (ia.depense || 0);
+    if (c.credit) {
+      tit.credit = (tit.credit || 0) + c.credit;
+      journaliser(tit, 'correction', c.credit, 'crédit IA de ' + s + ' regroupé');
+      journaliser(c, 'correction', -c.credit, 'crédit IA regroupé sur ' + tit.slug);
+    }
+    c.credit = 0;
+    c.ia = { depuis: ia.depuis, express: ia.express };
+    await ecrireCompte(env, c);
+  }
+  tit.iaCommune = true;
+  await ecrireCompte(env, tit);
+}
+function modeFacturation(c, type, express, page) {
   if (express) {
     // Une étape de création express ne touche jamais aux créations normales : déjà réglée, ou refusée
-    if (expressEnCours(c) && c.express.restant[type] > 0) return 'express';
+    const p = page || c;
+    if (expressEnCours(p) && p.express.restant[type] > 0) return 'express';
     throw new ErreurAPI(402, 'Les essais de cette étape de la création express sont épuisés. Rien n’a été décompté : écrivez-nous si le problème continue.', 'express_epuise');
   }
   if (c.plan === 'gratuit') return 'illimite';
   const q = QUOTAS_IA[c.plan];
   const utilises = (c.ia && c.ia[type]) || 0;
   const bonus = (c.ia && c.ia.bonus && c.ia.bonus[type]) || 0;
-  if (q && utilises < (q[type] || 0) + bonus) return 'inclus';
+  if (q && utilises < (q[type] || 0) * facteurQuota(c) + bonus) return 'inclus';
   if (c.plan === 'payant' && (c.credit || 0) >= PRIX_IA[type]) return 'credit';
-  const n = q ? (q[type] || 0) : 0, np = QUOTAS_IA.payant[type] || 0;
+  const n = q ? (q[type] || 0) * facteurQuota(c) : 0, np = QUOTAS_IA.payant[type] || 0;
   const nom = k => type === 'texte' ? (k > 1 ? 'rédactions IA' : 'rédaction IA')
     : type === 'fond' ? (k > 1 ? 'créations d’images de fond' : 'création d’images de fond')
     : (k > 1 ? 'créations de motifs IA' : 'création de motifs IA');
@@ -2404,6 +2453,13 @@ function modeFacturation(c, type, express) {
     : 'La ' + nom(1) + ' n’est pas incluse dans l’abonnement. ') + 'Rechargez votre crédit (' + euros(RECHARGE_MIN) + ' HT minimum, ' + unite + ').', 'credit_insuffisant');
 }
 function euros(c) { return ((c || 0) / 100).toFixed(2).replace('.', ',').replace(',00', '') + ' €'; }
+/* Décompte après une génération réussie : l'express sur la page, le reste sur la réserve (relue juste avant) */
+async function facturerReserve(env, page, porte, type, mode) {
+  if (mode === 'express' || porte.slug === page.slug) { facturer(page, type, mode); await ecrireCompte(env, page); return; }
+  const r = (await lireCompte(env, porte.slug)) || porte;
+  facturer(r, type, mode);
+  await ecrireCompte(env, r);
+}
 function facturer(c, type, mode) {
   if (mode === 'express') {                      // déjà payé au lancement de la création express
     if (c.express && c.express.restant) {

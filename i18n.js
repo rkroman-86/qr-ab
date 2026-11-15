@@ -498,6 +498,7 @@
     'Mise à jour du référencement…': ['Updating SEO…', 'Обновление SEO…'],
     '✓ Publié. Visible sur la page d’ici 1 à 2 minutes.': ['✓ Published. Live on the page within 1–2 minutes.', '✓ Опубликовано. Изменения появятся на странице через 1–2 минуты.'],
     'Accès refusé : jeton expiré. Prévenez Roman.': ['Access denied: token expired. Contact your administrator.', 'Доступ запрещён: токен истёк. Свяжитесь с администратором.'],
+    'Commun à toutes les pages du compte.': ['Shared by all pages of the account.', 'Общий для всех страниц аккаунта.'],
     'Mon solde': ['My balance', 'Мой баланс'],
     'Créations IA illimitées.': ['Unlimited AI creations.', 'Неограниченные создания с ИИ.'],
     'Entre parenthèses : créations possibles en plus avec votre crédit.': ['In brackets: extra creations possible with your credit.', 'В скобках: дополнительные создания за счёт вашего кредита.'],

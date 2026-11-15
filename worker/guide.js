@@ -97,7 +97,7 @@ qrbc.app (QR-BC, édité par KPS) permet de créer en quelques minutes, depuis u
 
 ## Plusieurs pages et traductions (« Mes pages »)
 - Le bandeau « Mes pages » / « Une autre activité ou une autre langue ? » permet d'ajouter une nouvelle page (autre activité : nouveau nom, nouvelle adresse, nouveau QR code) ou une version traduite de la page (14 langues, même adresse et même QR code, le visiteur la voit dans la langue de son téléphone, avec un choix de langue en haut à droite).
-- Tout reste sur le même compte : un seul mot de passe, une seule échéance, images partagées. On passe d'une page à l'autre sans retaper le mot de passe.
+- Tout reste sur le même compte : un seul mot de passe, une seule échéance, images partagées, et une réserve IA commune (créations incluses et crédit IA utilisables sur n'importe quelle page ; chaque page ajoutée apporte les créations d'un abonnement). On passe d'une page à l'autre sans retaper le mot de passe.
 - Prix (tarifs actuels) : par an et par page ou langue, payé au prorata jusqu'à l'échéance commune, avec les crédits IA d'un abonnement. Réservé aux abonnés (pas pendant l'essai). La première traduction est offerte ; « Retraduire depuis la page d'origine » est payant (tarifs actuels ; après avoir modifié la page d'origine). La version traduite peut aussi être corrigée à la main.
 
 ## Essai, abonnement et crédits IA

@@ -732,7 +732,8 @@
     // IA : gratuites restantes (modifiables) et crédit (lecture seule)
     const ia = c.ia || {};
     const boiteIA = el('div', { class: 'ia' });
-    if (ia.illimite) boiteIA.append(el('div', { class: 'illimite', text: '✨ IA illimitée (compte offert)' }));
+    if (ia.commune) boiteIA.append(el('div', { class: 'illimite', text: '🔗 IA et crédit communs au compte : voir la page principale ' + ia.commune + '.' }));
+    else if (ia.illimite) boiteIA.append(el('div', { class: 'illimite', text: '✨ IA illimitée (compte offert)' }));
     else if (ia.texte && ia.texte.inclus != null) {
       const restant = x => Math.max(0, x.inclus - x.utilises);
       const champ = (lib, x) => {
