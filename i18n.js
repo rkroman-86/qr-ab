@@ -299,6 +299,7 @@
     "Une appli sur votre écran d’accueil.": ["An app on your home screen.", "Приложение на главном экране."],
     "Modifiez votre page et imprimez vos cartes depuis votre téléphone, sans passer par un navigateur.": ["Edit your page and print your cards from your phone, without a browser.", "Меняйте страницу и печатайте визитки с телефона, без браузера."],
     "Essai gratuit de 14 jours": ["14-day free trial", "Бесплатный пробный период 14 дней"],
+    "14 jours gratuits sans carte bancaire, puis 18 € HT/an (1,50 €/mois HT).": ["14 days free, no credit card, then €18/year excl. VAT (€1.50/month).", "14 дней бесплатно, без банковской карты, затем 18 € в год без НДС (1,50 € в месяц)."],
     "Sans carte bancaire. Votre page est en ligne immédiatement.": ["No credit card. Your page is online immediately.", "Без банковской карты. Страница сразу появляется в сети."],
     "Votre page est prête 🎉": ["Your page is ready 🎉", "Ваша страница готова 🎉"],
     "Adresse :": ["Address:", "Адрес:"],

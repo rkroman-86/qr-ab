@@ -147,8 +147,8 @@
 
     <form id="inscription" novalidate>
       <div id="etape-form">
-        <h2>Essai gratuit de 14 jours</h2>
-        <p class="sous">Sans carte bancaire. Votre page est en ligne immédiatement.</p>
+        <h2>Votre page en 5 minutes</h2>
+        <p class="sous" id="essai-sous">14 jours gratuits sans carte bancaire, puis 18 € HT/an (1,50 €/mois HT).</p>
         <label><span>Adresse de votre page</span>
           <div class="adresse"><input type="text" id="nom" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="30" placeholder="votre-nom" required><div class="suffixe">.qrbc.app</div></div>
           <div class="dispo" id="dispo"></div>
@@ -285,6 +285,17 @@
   if (dejaInstallee) location.replace('/app' + location.search + (/inscription|creer/.test(location.hash) ? '#creer' : ''));
 
 
+  /* Sous-titre du formulaire : durée réelle de l'essai (14 jours + jours offerts par le code promo) */
+  function majEssai(n) {
+    const z = document.getElementById('essai-sous'); if (!z) return;
+    const l = String(document.documentElement.lang || 'fr').slice(0, 2);
+    const t = {
+      fr: n + ' jours gratuits sans carte bancaire, puis 18 € HT/an (1,50 €/mois HT).',
+      en: n + ' days free, no credit card, then €18/year excl. VAT (€1.50/month).',
+      ru: n + ' дней бесплатно, без банковской карты, затем 18 € в год без НДС (1,50 € в месяц).'
+    };
+    z.textContent = t[l] || t.fr;
+  }
   /* Code promo : prérempli par un lien d'apporteur (?promo=CODE), vérifié en direct */
   function champPromo(input, zone) {
     let code = '';
@@ -299,6 +310,7 @@
         const j = await (await fetch('/api/promo?code=' + encodeURIComponent(v))).json();
         zone.className = 'dispo ' + (j.valide ? 'ok' : 'ko');
         zone.textContent = j.valide ? '✓ ' + j.essai + ' jours + ' + j.jours + ' jours offerts' : (j.erreur || 'Code inconnu ou expiré');
+        majEssai(j.valide ? (j.essai || 14) + (j.jours || 0) : 14);
       } catch (e) {}
     };
     input.addEventListener('input', () => { input.value = input.value.toLowerCase().replace(/\s/g, ''); clearTimeout(minu); minu = setTimeout(verifier, 400); });
