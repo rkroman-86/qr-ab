@@ -153,6 +153,9 @@ async function racine(request, env, url) {
     return json({ disponible: !(await env.CLIENTS.get('compte:' + slug)) && !(await env.CLIENTS.get('reserve:' + slug)) });
   }
   if (p === '/' || p === '/index.html') { compterVisiteSite(request, env, url, 'accueil'); return accueilLangue(env, request, url); }
+  // Générateur de QR code gratuit (attire des visiteurs depuis Google, invite à créer une page)
+  if (p === '/generateur-qr-code') { compterVisiteSite(request, env, url, 'generateur-qr'); return pageSiteTraduite(env, request, url, '/outil-qr.html', META_OUTIL, '/generateur-qr-code'); }
+  if (p === '/generateur-qr-code/' || p === '/generateur-qr' || p === '/qr-code-gratuit') return Response.redirect(url.origin + '/generateur-qr-code' + url.search, 301);
   // Référencement : robots.txt du site principal, plan du site global (toutes les pages clients actives)
   if (p === '/robots.txt') return texte('User-agent: *\nAllow: /\nDisallow: /gestion\nDisallow: /app/\nDisallow: /api/\n\nSitemap: https://' + DOMAINE + '/sitemap.xml\n');
   if (p === '/sitemap.xml') return planGlobal(env, url.searchParams.has('frais'));
@@ -1058,7 +1061,9 @@ async function inscription(request, env) {
     joursBonus: promo ? promo.jours : 0, promo: promo ? { code: promo.code, jours: promo.jours, le: new Date().toISOString() } : null });
   let envoye = false;
   if (conf) { try { await envoyerLienVerif(env, conf, compte); envoye = true; } catch (e) { console.error('e-mail de validation', e.message); } }
-  ecrireStats(env, PAGE_SITE, [['inscription', String((compte.promo && compte.promo.code) || '').slice(0, 30)]]);
+  // provenance : code promo, sinon page d'où vient le visiteur (« via:outil-qr » = générateur de QR code)
+  const depuis = String(d.depuis || '').toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 25);
+  ecrireStats(env, PAGE_SITE, [['inscription', (compte.promo && compte.promo.code) ? String(compte.promo.code).slice(0, 30) : depuis ? 'via:' + depuis : '']]);
   return json({ ok: true, adresse: 'https://' + slug + '.' + DOMAINE + '/', editeur: '/app/' + slug + '/', verifier: !!conf, envoye, compte: resumeCompte(compte) });
 }
 
@@ -2502,7 +2507,7 @@ async function purgerStats(env) {
 const DUREE_CACHE_PLAN = 6 * 3600;
 function planSitePrincipal() {
   const jour = new Date().toISOString().slice(0, 10);
-  const adresses = ['/', '/?lang=en', '/?lang=ru', '/cgv', '/mentions-legales'];
+  const adresses = ['/', '/?lang=en', '/?lang=ru', '/generateur-qr-code', '/generateur-qr-code?lang=en', '/generateur-qr-code?lang=ru', '/cgv', '/mentions-legales'];
   return '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
     adresses.map(a => '  <url><loc>' + esc('https://' + DOMAINE + a) + '</loc><lastmod>' + jour + '</lastmod></url>\n').join('') + '</urlset>\n';
 }
@@ -2577,29 +2582,49 @@ async function dictionnaire(env, request) {
     d.set(lire(m[1]), [lire(m[2]), lire(m[3])]);
   return (DICO = d);
 }
-async function accueilLangue(env, request, url) {
-  const r = await statique(env, request, '/qrbc.html');
-  const m = META_ACCUEIL[url.searchParams.get('lang')];
+const META_OUTIL = {
+  en: { lang: 'en', locale: 'en_GB', titre: 'Free QR code generator, no sign-up | qrbc',
+        desc: 'Create a free QR code in seconds: link, text, WhatsApp, Wi-Fi, contact. No sign-up, no watermark, and it never expires. PNG and SVG.' },
+  ru: { lang: 'ru', locale: 'ru_RU', titre: 'Бесплатный генератор QR-кодов без регистрации | qrbc',
+        desc: 'Создайте бесплатный QR-код за пару секунд: ссылка, текст, WhatsApp, Wi-Fi, контакт. Без регистрации, без водяных знаков, без срока действия. PNG и SVG.' }
+};
+function accueilLangue(env, request, url) { return pageSiteTraduite(env, request, url, '/qrbc.html', META_ACCUEIL, '/'); }
+/* Page publique de qrbc.app envoyée déjà traduite (?lang=en|ru) : textes (dictionnaire de i18n.js), balises meta,
+   adresse canonique, et chaînes des données structurées (JSON-LD) dont la traduction existe dans le dictionnaire. */
+async function pageSiteTraduite(env, request, url, fichier, metas, chemin) {
+  const r = await statique(env, request, fichier);
+  const m = metas[url.searchParams.get('lang')];
   if (!m || !r.ok) return r;
   const dico = await dictionnaire(env, request), i = m.lang === 'en' ? 0 : 1;
-  // nœuds de texte traduits en entier (le texte peut arriver en plusieurs morceaux)
-  let tampon = '';
+  const trad = x => { const v = dico.get(String(x).trim()); return v && v[i] ? v[i] : x; };
+  // JSON-LD : traduit avant le passage dans HTMLRewriter (le texte d'un <script> arrive en morceaux)
+  let html = await r.text();
+  html = html.replace(/(<script type="application\/ld\+json">)([\s\S]*?)(<\/script>)/g, (tout, a, corps, b) => {
+    try {
+      const parcourir = o => typeof o === 'string' ? trad(o) : Array.isArray(o) ? o.map(parcourir)
+        : o && typeof o === 'object' ? Object.fromEntries(Object.entries(o).map(([k, v]) => [k, k === '@type' || k === '@id' || k === 'url' ? v : parcourir(v)])) : o;
+      return a + JSON.stringify(parcourir(JSON.parse(corps))).replace(/</g, '\\u003c') + b;
+    } catch (e) { return tout; }
+  });
+  // nœuds de texte traduits en entier (le texte peut arriver en plusieurs morceaux) ; le contenu des <script> reste tel quel
+  let tampon = '', dansScript = false;
   const traduction = {
     text(t) {
       tampon += t.text;
       if (!t.lastInTextNode) { t.remove(); return; }
       const brut = tampon; tampon = '';
-      const cle = brut.trim(), v = cle && dico.get(cle);
+      const cle = brut.trim(), v = !dansScript && cle && dico.get(cle);
       if (!v || !v[i]) { t.replace(brut, { html: true }); return; }
       const debut = brut.indexOf(cle);
       t.replace(brut.slice(0, debut) + esc(v[i]) + brut.slice(debut + cle.length), { html: true });
     }
   };
-  const adresse = 'https://' + DOMAINE + '/?lang=' + m.lang;
+  const adresse = 'https://' + DOMAINE + chemin + '?lang=' + m.lang;
   const attr = (a, v) => ({ element(e) { e.setAttribute(a, v); } });
   const h = new Headers(r.headers); h.delete('content-length'); h.set('content-language', m.lang);
   return new HTMLRewriter()
     .on('html', { element(e) { e.setAttribute('lang', m.lang); e.setAttribute('data-pretraduit', ''); } })
+    .on('script', { element(e) { dansScript = true; e.onEndTag(() => { dansScript = false; }); } })
     .on('meta[name="description"]', attr('content', m.desc))
     .on('meta[property="og:title"]', attr('content', m.titre))
     .on('meta[property="og:description"]', attr('content', m.desc))
@@ -2607,7 +2632,7 @@ async function accueilLangue(env, request, url) {
     .on('meta[property="og:url"]', attr('content', adresse))
     .on('link[rel="canonical"]', attr('href', adresse))
     .onDocument(traduction)
-    .transform(new Response(r.body, { status: r.status, headers: h }));
+    .transform(new Response(html, { status: r.status, headers: h }));
 }
 
 /* Vidéo avec réponses partielles (206) : Safari sur iPhone/iPad refuse de lire une vidéo sans elles. */

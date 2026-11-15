@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="fr" data-lien-langue>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Générateur de QR code gratuit, sans inscription | qrbc</title>
+<meta name="description" content="Créez un QR code gratuit en quelques secondes : lien, texte, WhatsApp, Wi-Fi, contact. Sans inscription, sans filigrane, et il n’expire jamais. PNG et SVG.">
+<link rel="canonical" href="https://qrbc.app/generateur-qr-code">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="qrbc">
+<meta property="og:url" content="https://qrbc.app/generateur-qr-code">
+<meta property="og:title" content="Générateur de QR code gratuit, sans inscription | qrbc">
+<meta property="og:description" content="Créez un QR code gratuit en quelques secondes : lien, texte, WhatsApp, Wi-Fi, contact. Sans inscription, sans filigrane, et il n’expire jamais. PNG et SVG.">
+<meta property="og:locale" content="fr_FR">
+<meta property="og:image" content="https://qrbc.app/icon-512.png">
+<link rel="alternate" hreflang="fr" href="https://qrbc.app/generateur-qr-code">
+<link rel="alternate" hreflang="en" href="https://qrbc.app/generateur-qr-code?lang=en">
+<link rel="alternate" hreflang="ru" href="https://qrbc.app/generateur-qr-code?lang=ru">
+<link rel="alternate" hreflang="x-default" href="https://qrbc.app/generateur-qr-code">
+<script type="application/ld+json">{"@context": "https://schema.org", "@graph": [
+{"@type": "WebApplication", "name": "Générateur de QR code gratuit", "url": "https://qrbc.app/generateur-qr-code", "applicationCategory": "UtilitiesApplication", "operatingSystem": "Web", "isAccessibleForFree": true, "offers": {"@type": "Offer", "price": "0", "priceCurrency": "EUR"}, "publisher": {"@id": "https://qrbc.app/#org"}},
+{"@type": "FAQPage", "mainEntity": [
+{"@type": "Question", "name": "Ce générateur est-il vraiment gratuit ?", "acceptedAnswer": {"@type": "Answer", "text": "Oui, sans limite et sans inscription. Pas de filigrane, pas de publicité dans le QR code."}},
+{"@type": "Question", "name": "Mon QR code va-t-il expirer ?", "acceptedAnswer": {"@type": "Answer", "text": "Non. Un QR code statique ne dépend d’aucun serveur : il fonctionnera aussi longtemps que le lien ou l’information qu’il contient."}},
+{"@type": "Question", "name": "Mes données sont-elles envoyées quelque part ?", "acceptedAnswer": {"@type": "Answer", "text": "Non. Le QR code est calculé dans votre navigateur. Vos mots de passe Wi-Fi, numéros et textes ne quittent pas votre appareil."}},
+{"@type": "Question", "name": "Puis-je modifier un QR code déjà imprimé ?", "acceptedAnswer": {"@type": "Answer", "text": "Pas un QR code statique. Pour changer le contenu sans réimprimer, faites pointer le QR code vers une page que vous pouvez modifier, comme une page qrbc."}},
+{"@type": "Question", "name": "Quelle taille pour l’impression ?", "acceptedAnswer": {"@type": "Answer", "text": "Au moins 2 cm de côté sur une carte de visite. Pour une affiche, comptez environ 1 cm de côté par 10 cm de distance de lecture, avec une marge blanche autour."}},
+{"@type": "Question", "name": "PNG ou SVG ?", "acceptedAnswer": {"@type": "Answer", "text": "PNG pour un usage courant : écran, document, impression maison. SVG pour un imprimeur : le dessin reste net à n’importe quelle taille."}}
+]}]}</script>
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#1b1a17">
+<link rel="icon" href="/favicon.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<style>
+  :root{--bg:#f6f4ef;--panneau:#fff;--ligne:#e3dfd6;--txt:#1b1a17;--doux:#6a665d;--prim:#1b1a17;--prim-txt:#f6f4ef;--accent:#d9572b;--ok:#1a7f37;--err:#cf222e}
+  @media (prefers-color-scheme: dark){:root{--bg:#121110;--panneau:#1c1b19;--ligne:#2e2c29;--txt:#f1eee8;--doux:#a19c92;--prim:#f1eee8;--prim-txt:#121110;--accent:#ef7a4f}}
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{font:16px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--txt)}
+  .page{max-width:1040px;margin:0 auto;padding:20px 16px 48px}
+  header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:32px}
+  .marque{font-weight:800;font-size:1.25rem;letter-spacing:-.02em;color:inherit;text-decoration:none}
+  .marque span{color:var(--accent)}
+  .hd-actions{display:flex;align-items:center;gap:14px}
+  .hd-actions a{color:var(--doux);font-size:.9rem;text-decoration:none;white-space:nowrap}
+  .langue select{background:var(--panneau);color:var(--txt);border:1px solid var(--ligne);border-radius:9px;padding:6px 8px;font:inherit;font-size:.85rem;font-weight:600}
+  h1{font-size:clamp(1.9rem,6vw,2.9rem);line-height:1.08;letter-spacing:-.03em;margin:0 0 14px}
+  .chapeau{font-size:1.08rem;color:var(--doux);margin:0 0 26px;max-width:38em}
+  .outil{display:grid;gap:20px;grid-template-columns:1fr;background:var(--panneau);border:1px solid var(--ligne);border-radius:18px;padding:20px}
+  @media (min-width:820px){.outil{grid-template-columns:1.15fr .85fr;padding:26px}}
+  .outil h2{font-size:1.05rem;margin:0 0 12px}
+  .types{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px}
+  .types button{padding:8px 14px;border:1px solid var(--ligne);border-radius:99px;background:var(--bg);color:var(--txt);font:inherit;font-size:.92rem;cursor:pointer}
+  .types button[aria-pressed="true"]{background:var(--prim);color:var(--prim-txt);border-color:var(--prim)}
+  label{display:block;margin-bottom:12px}
+  label>span{display:block;font-size:.8rem;font-weight:600;color:var(--doux);margin-bottom:5px}
+  input[type=text],input[type=url],input[type=tel],input[type=email],input[type=password],textarea,select{width:100%;padding:11px 12px;border:1px solid var(--ligne);border-radius:10px;background:var(--bg);color:inherit;font:inherit;min-height:46px;outline:none}
+  textarea{min-height:96px;resize:vertical}
+  input:focus,textarea:focus,select:focus{border-color:var(--accent)}
+  .deux{display:grid;gap:0 12px;grid-template-columns:1fr 1fr}
+  .case{display:flex;gap:9px;align-items:center;font-size:.92rem;color:var(--doux)}
+  .aide{font-size:.85rem;color:var(--doux);margin:-4px 0 12px}
+  .couleurs{display:flex;gap:18px;flex-wrap:wrap;margin-top:6px;padding-top:14px;border-top:1px solid var(--ligne)}
+  .couleurs label{display:flex;align-items:center;gap:8px;margin:0;font-size:.9rem;color:var(--doux)}
+  .couleurs label>span{display:inline;margin:0;font-size:.9rem;font-weight:400}
+  .couleurs input{width:42px;height:34px;border:1px solid var(--ligne);border-radius:8px;padding:2px;background:var(--bg)}
+  .apercu{display:flex;flex-direction:column;align-items:center;gap:12px}
+  .cadre{width:100%;max-width:300px;aspect-ratio:1;border-radius:14px;border:1px dashed var(--ligne);display:grid;place-items:center;overflow:hidden;background:#fff}
+  .cadre svg{width:100%;height:100%;display:block}
+  .cadre p{color:#6a665d;font-size:.9rem;text-align:center;padding:20px;margin:0}
+  .boutons{display:flex;gap:10px;width:100%;max-width:300px}
+  .boutons button{flex:1;padding:12px 8px;border:0;border-radius:12px;background:var(--prim);color:var(--prim-txt);font:inherit;font-weight:700;font-size:.92rem;cursor:pointer;min-height:48px}
+  .boutons button.second{background:transparent;color:var(--txt);border:1px solid var(--ligne)}
+  .boutons button:disabled{opacity:.45;cursor:default}
+  .etat{font-size:.88rem;min-height:1.3em;text-align:center;max-width:300px;margin:0}
+  .etat.err{color:var(--err)} .etat.ok{color:var(--ok)}
+  .pub{margin-top:22px;padding:20px;border-radius:16px;background:var(--prim);color:var(--prim-txt)}
+  .pub h2{margin:0 0 6px;font-size:1.2rem}
+  .pub p{margin:0 0 12px;opacity:.85;max-width:44em}
+  .pub ul{margin:0 0 16px;padding-left:1.2em;opacity:.9}
+  .pub a{display:inline-block;padding:13px 20px;border-radius:12px;background:var(--accent);color:#fff;text-decoration:none;font-weight:700}
+  .pub small{display:block;margin-top:8px;opacity:.7}
+  .infos{margin-top:56px;display:grid;gap:48px}
+  .infos h2{font-size:clamp(1.35rem,4vw,1.8rem);letter-spacing:-.02em;margin:0 0 14px}
+  .infos p{max-width:44em}
+  .etapes{list-style:none;padding:0;margin:0;display:grid;gap:14px}
+  .etapes li{display:grid;grid-template-columns:28px 1fr;gap:10px}
+  .etapes b{display:block}
+  .etapes span{color:var(--doux);font-size:.95rem}
+  .num{width:28px;height:28px;border-radius:50%;background:var(--panneau);border:1px solid var(--ligne);display:grid;place-items:center;font-weight:700;font-size:.85rem}
+  .usages{display:grid;gap:14px;grid-template-columns:1fr}
+  @media (min-width:640px){.usages{grid-template-columns:1fr 1fr}}
+  @media (min-width:960px){.usages{grid-template-columns:1fr 1fr 1fr}}
+  .usages article{padding:18px;border:1px solid var(--ligne);border-radius:14px;background:var(--panneau)}
+  .usages h3{font-size:1rem;margin:0 0 6px}
+  .usages p{margin:0;color:var(--doux);font-size:.93rem}
+  .usages a{color:var(--accent);font-weight:600}
+  .doux{color:var(--doux)}
+  .faq details{border-bottom:1px solid var(--ligne);padding:14px 0}
+  .faq summary{cursor:pointer;font-weight:600}
+  .faq details p{margin:10px 0 0;color:var(--doux)}
+  footer{margin-top:56px;color:var(--doux);font-size:.85rem}
+  footer p{margin:.35em 0}
+  footer a{color:inherit}
+  [hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <a class="marque lien-qrbc" href="/?depuis=outil-qr">qrbc<span>.</span></a>
+    <div class="hd-actions">
+      <span class="langue" data-langue></span>
+      <a href="/?depuis=outil-qr#inscription" class="lien-qrbc">Créer ma page</a>
+    </div>
+  </header>
+
+  <h1>Générateur de QR code gratuit</h1>
+  <p class="chapeau">Sans inscription, sans filigrane, et vos QR codes n’expirent jamais. Tout se passe dans votre navigateur : rien n’est envoyé ni enregistré.</p>
+
+  <section class="outil" aria-label="Générateur de QR code">
+    <div>
+      <h2>Que doit ouvrir votre QR code ?</h2>
+      <div class="types" role="group" id="types">
+        <button type="button" data-type="lien" aria-pressed="true">Lien</button>
+        <button type="button" data-type="texte" aria-pressed="false">Texte</button>
+        <button type="button" data-type="whatsapp" aria-pressed="false">WhatsApp</button>
+        <button type="button" data-type="wifi" aria-pressed="false">Wi-Fi</button>
+        <button type="button" data-type="tel" aria-pressed="false">Téléphone</button>
+        <button type="button" data-type="email" aria-pressed="false">E-mail</button>
+        <button type="button" data-type="contact" aria-pressed="false">Contact</button>
+      </div>
+
+      <div data-champs="lien">
+        <label><span>Adresse du site ou du lien</span><input type="url" id="lien-url" placeholder="https://exemple.fr" autocomplete="url" autocapitalize="none" spellcheck="false"></label>
+        <p class="aide">Astuce : pour les avis Google, collez le lien « Demander des avis » de votre fiche Google.</p>
+      </div>
+      <div data-champs="texte" hidden>
+        <label><span>Votre texte</span><textarea id="texte-txt" maxlength="1200"></textarea></label>
+      </div>
+      <div data-champs="whatsapp" hidden>
+        <label><span>Numéro WhatsApp (avec l’indicatif du pays)</span><input type="tel" id="wa-num" placeholder="+33 6 12 34 56 78" autocomplete="tel"></label>
+        <label><span>Message prérempli (facultatif)</span><textarea id="wa-msg" maxlength="500" placeholder="Bonjour, je voudrais réserver…"></textarea></label>
+      </div>
+      <div data-champs="wifi" hidden>
+        <label><span>Nom du réseau (SSID)</span><input type="text" id="wifi-ssid" autocapitalize="none" spellcheck="false"></label>
+        <label><span>Mot de passe</span><input type="text" id="wifi-mdp" autocapitalize="none" spellcheck="false" autocomplete="off"></label>
+        <label><span>Sécurité</span>
+          <select id="wifi-type">
+            <option value="WPA">WPA / WPA2 / WPA3</option>
+            <option value="WEP">WEP</option>
+            <option value="nopass">Aucune</option>
+          </select></label>
+        <label class="case"><input type="checkbox" id="wifi-cache"> <span>Réseau masqué</span></label>
+      </div>
+      <div data-champs="tel" hidden>
+        <label><span>Numéro de téléphone</span><input type="tel" id="tel-num" placeholder="+33 6 12 34 56 78" autocomplete="tel"></label>
+      </div>
+      <div data-champs="email" hidden>
+        <label><span>Adresse e-mail</span><input type="email" id="mail-adr" autocomplete="email" autocapitalize="none" spellcheck="false"></label>
+        <label><span>Objet (facultatif)</span><input type="text" id="mail-objet" maxlength="150"></label>
+        <label><span>Message (facultatif)</span><textarea id="mail-msg" maxlength="500"></textarea></label>
+      </div>
+      <div data-champs="contact" hidden>
+        <div class="deux">
+          <label><span>Prénom</span><input type="text" id="vc-prenom" autocomplete="given-name"></label>
+          <label><span>Nom de famille</span><input type="text" id="vc-nom" autocomplete="family-name"></label>
+        </div>
+        <label><span>Société</span><input type="text" id="vc-societe" autocomplete="organization"></label>
+        <div class="deux">
+          <label><span>Téléphone</span><input type="tel" id="vc-tel" autocomplete="tel"></label>
+          <label><span>E-mail</span><input type="email" id="vc-mail" autocomplete="email" autocapitalize="none"></label>
+        </div>
+        <label><span>Site web</span><input type="url" id="vc-site" autocomplete="url" autocapitalize="none" spellcheck="false"></label>
+      </div>
+
+      <div class="couleurs">
+        <label><input type="color" id="coul-qr" value="#000000"> <span>Couleur du QR code</span></label>
+        <label><input type="color" id="coul-fond" value="#ffffff"> <span>Couleur du fond</span></label>
+      </div>
+    </div>
+
+    <div class="apercu">
+      <div class="cadre" id="cadre"><p>Votre QR code apparaîtra ici.</p></div>
+      <div class="boutons">
+        <button type="button" id="btn-png" disabled>Télécharger en PNG</button>
+        <button type="button" id="btn-svg" class="second" disabled>SVG</button>
+      </div>
+      <p class="etat" id="etat"></p>
+    </div>
+  </section>
+
+  <aside class="pub">
+    <h2>Ce QR code est figé.</h2>
+    <p>Si votre lien, votre numéro ou vos horaires changent, il faudra le réimprimer. Avec une page qrbc, votre QR code ne change jamais : vous modifiez la page, pas le QR.</p>
+    <ul>
+      <li>Une page mobile à votre nom : appeler, WhatsApp, avis Google, réservation</li>
+      <li>Traduite dans la langue de chaque client</li>
+      <li>Cartes de visite prêtes à imprimer</li>
+    </ul>
+    <a href="/?depuis=outil-qr#inscription" class="lien-qrbc">Créer ma page gratuitement</a>
+    <small>14 jours gratuits, sans carte bancaire.</small>
+  </aside>
+
+  <div class="infos">
+    <section>
+      <h2>Comment créer un QR code ?</h2>
+      <ol class="etapes">
+        <li><div class="num">1</div><div><b>Choisissez le type</b><span>Lien, texte, WhatsApp, Wi-Fi, téléphone, e-mail ou fiche contact.</span></div></li>
+        <li><div class="num">2</div><div><b>Remplissez les champs</b><span>Le QR code se met à jour pendant que vous tapez.</span></div></li>
+        <li><div class="num">3</div><div><b>Téléchargez-le</b><span>En PNG pour l’écran ou l’imprimante, en SVG pour un imprimeur ou un logiciel de mise en page.</span></div></li>
+      </ol>
+    </section>
+    <section>
+      <h2>Quel QR code pour quel usage ?</h2>
+      <div class="usages">
+        <article><h3>Avis Google</h3><p>Sur votre fiche Google, touchez « Demander des avis », copiez le lien et créez un QR code « Lien ». Posez-le sur le comptoir ou joignez-le à la facture.</p></article>
+        <article><h3>WhatsApp</h3><p>Vos clients vous écrivent d’un scan, avec un message déjà prêt.</p></article>
+        <article><h3>Wi-Fi</h3><p>Vos clients se connectent sans taper le mot de passe. Idéal pour une location, un café ou une salle d’attente.</p></article>
+        <article><h3>Fiche contact</h3><p>Le téléphone propose d’enregistrer votre nom, votre numéro et votre e-mail dans ses contacts.</p></article>
+        <article><h3>Menu ou carte</h3><p>Créez un QR code « Lien » vers votre menu en ligne, à poser sur les tables.</p></article>
+        <article><h3>Tout à la fois</h3><p>Un seul QR code pour appeler, écrire, réserver et laisser un avis : c’est ce que fait une page qrbc.</p><p><a href="/?depuis=outil-qr" class="lien-qrbc">Découvrir qrbc →</a></p></article>
+      </div>
+    </section>
+    <section>
+      <h2>QR code statique ou dynamique ?</h2>
+      <p>Le QR code créé ici est statique : l’information est écrite dans le dessin lui-même. Il fonctionne pour toujours, sans abonnement, mais il ne peut plus être modifié après impression.</p>
+      <p class="doux">Beaucoup de sites « gratuits » créent en réalité des QR codes dynamiques qui passent par leurs serveurs, et les coupent à la fin de l’essai : les cartes déjà imprimées ne mènent alors plus nulle part.</p>
+      <p class="doux">Avec qrbc, votre QR code ouvre votre propre page, à votre nom. Vous changez son contenu quand vous voulez, sans réimprimer.</p>
+    </section>
+    <section class="faq">
+      <h2>Questions fréquentes</h2>
+      <details><summary>Ce générateur est-il vraiment gratuit ?</summary><p>Oui, sans limite et sans inscription. Pas de filigrane, pas de publicité dans le QR code.</p></details>
+      <details><summary>Mon QR code va-t-il expirer ?</summary><p>Non. Un QR code statique ne dépend d’aucun serveur : il fonctionnera aussi longtemps que le lien ou l’information qu’il contient.</p></details>
+      <details><summary>Mes données sont-elles envoyées quelque part ?</summary><p>Non. Le QR code est calculé dans votre navigateur. Vos mots de passe Wi-Fi, numéros et textes ne quittent pas votre appareil.</p></details>
+      <details><summary>Puis-je modifier un QR code déjà imprimé ?</summary><p>Pas un QR code statique. Pour changer le contenu sans réimprimer, faites pointer le QR code vers une page que vous pouvez modifier, comme une page qrbc.</p></details>
+      <details><summary>Quelle taille pour l’impression ?</summary><p>Au moins 2 cm de côté sur une carte de visite. Pour une affiche, comptez environ 1 cm de côté par 10 cm de distance de lecture, avec une marge blanche autour.</p></details>
+      <details><summary>PNG ou SVG ?</summary><p>PNG pour un usage courant : écran, document, impression maison. SVG pour un imprimeur : le dessin reste net à n’importe quelle taille.</p></details>
+    </section>
+  </div>
+
+  <footer>
+    <p>qrbc.app — pages QR et cartes de visite</p>
+    <p class="liens"><a href="/?depuis=outil-qr" class="lien-qrbc">Accueil</a> · <a href="/cgv">Conditions générales de vente</a> · <a href="/mentions-legales">Mentions légales et confidentialité</a> · <a href="mailto:support@qrbc.app" data-no-i18n>support@qrbc.app</a></p>
+  </footer>
+</div>
+<script src="/qrcode.js"></script>
+<script src="/i18n.js"></script>
+<script>
+/* Générateur de QR code : tout est calculé dans le navigateur (aucun envoi au serveur).
+   Pas de « lookbehind » ni d'opérateur ?? : anciens Safari (iPad). */
+(function () {
+  'use strict';
+  var $ = function (s) { return document.getElementById(s); };
+  var tr = function (s) { return window.t ? window.t(s) : s; };
+  qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8'];      // accents, cyrillique, emoji
+
+  var type = 'lien', actuel = null, minu = null;
+
+  /* ---------- Contenu du QR selon le type ---------- */
+  function val(id) { return ($(id).value || '').trim(); }
+  function chiffres(n) { return n.replace(/[^\d+]/g, '').replace(/(?!^)\+/g, ''); }
+  function echWifi(s) { return s.replace(/([\\;,:"])/g, '\\$1'); }
+  function echVc(s) { return s.replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/([,;])/g, '\\$1'); }
+  function avecSchema(u) { return /^[a-z][a-z0-9+.-]*:/i.test(u) ? u : 'https://' + u; }
+
+  // renvoie { texte } ou { erreur } ou null (champ vide)
+  function contenu() {
+    if (type === 'lien') { var u = val('lien-url'); return u ? { texte: avecSchema(u) } : null; }
+    if (type === 'texte') { var t = $('texte-txt').value; return t.trim() ? { texte: t } : null; }
+    if (type === 'whatsapp') {
+      var n = val('wa-num'); if (!n) return null;
+      var d = chiffres(n).replace(/^\+/, '').replace(/^00/, '');
+      if (d.length < 8 || !/^\+|^00/.test(n.replace(/\s/g, ''))) return { erreur: 'Numéro invalide : indiquez l’indicatif du pays, par exemple +33.' };
+      var m = val('wa-msg');
+      return { texte: 'https://wa.me/' + d + (m ? '?text=' + encodeURIComponent(m) : '') };
+    }
+    if (type === 'wifi') {
+      var s = $('wifi-ssid').value; if (!s) return null;
+      var k = $('wifi-type').value, p = $('wifi-mdp').value;
+      return { texte: 'WIFI:T:' + k + ';S:' + echWifi(s) + ';' + (k !== 'nopass' ? 'P:' + echWifi(p) + ';' : '') + ($('wifi-cache').checked ? 'H:true;' : '') + ';' };
+    }
+    if (type === 'tel') { var tl = chiffres(val('tel-num')); return tl.replace('+', '').length >= 3 ? { texte: 'tel:' + tl } : null; }
+    if (type === 'email') {
+      var a = val('mail-adr'); if (!a) return null;
+      var q = [];
+      if (val('mail-objet')) q.push('subject=' + encodeURIComponent(val('mail-objet')));
+      if (val('mail-msg')) q.push('body=' + encodeURIComponent($('mail-msg').value.trim()));
+      return { texte: 'mailto:' + a + (q.length ? '?' + q.join('&') : '') };
+    }
+    if (type === 'contact') {
+      var pr = val('vc-prenom'), no = val('vc-nom'), so = val('vc-societe'), te = chiffres(val('vc-tel')), em = val('vc-mail'), si = val('vc-site');
+      if (!pr && !no && !so && !te && !em) return null;
+      var l = ['BEGIN:VCARD', 'VERSION:3.0', 'N:' + echVc(no) + ';' + echVc(pr) + ';;;', 'FN:' + echVc((pr + ' ' + no).trim() || so)];
+      if (so) l.push('ORG:' + echVc(so));
+      if (te) l.push('TEL;TYPE=CELL:' + te);
+      if (em) l.push('EMAIL:' + em);
+      if (si) l.push('URL:' + avecSchema(si));
+      l.push('END:VCARD');
+      return { texte: l.join('\r\n') };
+    }
+    return null;
+  }
+
+  /* ---------- Contraste : un QR clair sur fond foncé est mal lu par beaucoup de téléphones ---------- */
+  function lum(hex) {
+    var c = [1, 3, 5].map(function (i) {
+      var v = parseInt(hex.substr(i, 2), 16) / 255;
+      return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  }
+  function contrasteOk(qr, fond) { var a = lum(qr), b = lum(fond); return b > a && (b + 0.05) / (a + 0.05) >= 3; }
+
+  /* ---------- Dessin ---------- */
+  var MARGE = 4;                     // zone blanche réglementaire : 4 modules
+  function matrice(texte) {
+    var q = qrcode(0, 'M'); q.addData(texte); q.make();
+    return q;
+  }
+  function svg(q, qr, fond) {
+    var n = q.getModuleCount(), tot = n + 2 * MARGE, d = '';
+    for (var r = 0; r < n; r++) for (var c = 0; c < n; c++) if (q.isDark(r, c)) d += 'M' + (c + MARGE) + ' ' + (r + MARGE) + 'h1v1h-1z';
+    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + tot + ' ' + tot + '" shape-rendering="crispEdges">' +
+      '<rect width="' + tot + '" height="' + tot + '" fill="' + fond + '"/><path d="' + d + '" fill="' + qr + '"/></svg>';
+  }
+  function etat(msg, cls) { var e = $('etat'); e.textContent = msg ? tr(msg) : ''; e.className = 'etat' + (cls ? ' ' + cls : ''); }
+
+  function generer() {
+    var c = contenu(), cadre = $('cadre');
+    var qr = $('coul-qr').value, fond = $('coul-fond').value;
+    actuel = null;
+    $('btn-png').disabled = $('btn-svg').disabled = true;
+    if (!c) { cadre.innerHTML = '<p>' + tr('Votre QR code apparaîtra ici.') + '</p>'; etat(''); return; }
+    if (c.erreur) { etat(c.erreur, 'err'); return; }
+    var q;
+    try { q = matrice(c.texte); } catch (e) { etat('Contenu trop long pour un QR code.', 'err'); return; }
+    cadre.innerHTML = svg(q, qr, fond);
+    actuel = { q: q, qr: qr, fond: fond };
+    $('btn-png').disabled = $('btn-svg').disabled = false;
+    if (!contrasteOk(qr, fond)) etat('Contraste trop faible : certains téléphones risquent de ne pas lire ce QR code. Choisissez un QR foncé sur fond clair.', 'err');
+    else etat('');
+  }
+  function plusTard() { clearTimeout(minu); minu = setTimeout(generer, 150); }
+
+  /* ---------- Téléchargements ---------- */
+  function telecharger(blob, nom) {
+    var u = URL.createObjectURL(blob), a = document.createElement('a');
+    a.href = u; a.download = nom; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(u); }, 4000);
+    etat('QR code téléchargé ✓', 'ok');
+  }
+  $('btn-svg').addEventListener('click', function () {
+    if (!actuel) return;
+    telecharger(new Blob([svg(actuel.q, actuel.qr, actuel.fond)], { type: 'image/svg+xml' }), 'qr-code-' + type + '.svg');
+  });
+  $('btn-png').addEventListener('click', function () {
+    if (!actuel) return;
+    var q = actuel.q, n = q.getModuleCount(), tot = n + 2 * MARGE;
+    var m = Math.max(4, Math.ceil(1200 / tot)), cv = document.createElement('canvas');
+    cv.width = cv.height = tot * m;
+    var ctx = cv.getContext('2d');
+    ctx.fillStyle = actuel.fond; ctx.fillRect(0, 0, cv.width, cv.height);
+    ctx.fillStyle = actuel.qr;
+    for (var r = 0; r < n; r++) for (var c = 0; c < n; c++) if (q.isDark(r, c)) ctx.fillRect((c + MARGE) * m, (r + MARGE) * m, m, m);
+    cv.toBlob(function (b) { if (b) telecharger(b, 'qr-code-' + type + '.png'); }, 'image/png');
+  });
+
+  /* ---------- Choix du type (aussi par l'adresse : ?type=wifi) ---------- */
+  function choisir(t) {
+    if (!document.querySelector('[data-champs="' + t + '"]')) return;
+    type = t;
+    Array.prototype.forEach.call(document.querySelectorAll('#types button'), function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-type') === t)); });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-champs]'), function (z) { z.hidden = z.getAttribute('data-champs') !== t; });
+    generer();
+  }
+  $('types').addEventListener('click', function (e) {
+    var b = e.target.closest ? e.target.closest('button[data-type]') : null;
+    if (b) choisir(b.getAttribute('data-type'));
+  });
+  document.querySelector('.outil').addEventListener('input', plusTard);
+  document.querySelector('.outil').addEventListener('change', plusTard);
+  try { var tp = new URLSearchParams(location.search).get('type'); if (tp) choisir(tp); } catch (e) {}
+
+  /* Liens vers l'inscription : dans la langue de la page */
+  function majLiens() {
+    var l = (window.langueInterface && window.langueInterface()) || 'fr';
+    Array.prototype.forEach.call(document.querySelectorAll('a.lien-qrbc'), function (a) {
+      var u = new URL(a.getAttribute('href'), location.href);
+      if (l === 'fr') u.searchParams.delete('lang'); else u.searchParams.set('lang', l);
+      a.setAttribute('href', u.pathname + u.search + u.hash);
+    });
+    generer();                      // textes de l'aperçu dans la nouvelle langue
+  }
+  new MutationObserver(majLiens).observe(document.documentElement, { attributes: true, attributeFilter: ['lang'] });
+  majLiens();
+})();
+</script>
+</body>
+</html>

@@ -559,7 +559,7 @@
   /* ---------- Stats du site principal qrbc.app ---------- */
   let periodeSite = 30;
   const SOURCES_SITE = { qr: 'QR code', promo: 'Lien d’apporteur (?promo=)', google: 'Google', moteur: 'Autres moteurs', reseaux: 'Réseaux sociaux', site: 'Autre site', direct: 'Lien direct ou inconnu' };
-  const PAGES_SITE = { accueil: 'Accueil', app: 'Appli / connexion', cgv: 'CGV', 'mentions-legales': 'Mentions légales' };
+  const PAGES_SITE = { accueil: 'Accueil', app: 'Appli / connexion', 'generateur-qr': 'Générateur de QR code', cgv: 'CGV', 'mentions-legales': 'Mentions légales' };
   const nombre = n => n.toLocaleString('fr-FR');
   const jourCourt = (j, long) => new Date(j + 'T12:00:00').toLocaleDateString('fr-FR', long ? { weekday: 'short', day: 'numeric', month: 'long' } : { day: 'numeric', month: 'short' });
   const pays = c => { if (c === 'XX') return 'Inconnu'; try { return new Intl.DisplayNames(['fr'], { type: 'region' }).of(c); } catch (e) { return c; } };
@@ -617,8 +617,8 @@
       listeSite('Page d’arrivée', s.page, k => PAGES_SITE[k] || k),
       listeSite('Pays', s.pays, pays),
       listeSite('Langue choisie', s.langue, k => ({ fr: 'Français', en: 'Anglais', ru: 'Russe' })[k] || k),
-      listeSite('Inscriptions par code promo', s.inscription, k => k || 'Sans code'),
-      el('p', { class: 'infos', text: 'Visiteurs de qrbc.app (accueil, appli, pages légales), sans cookie ni donnée personnelle, hors robots et hors tes propres visites. Une visite = une arrivée sur le site ; la navigation d’une page à l’autre n’est pas recomptée. Compté depuis le 14 novembre 2026. Les visites des pages clients restent dans l’onglet Clients.' }));
+      listeSite('Inscriptions par code promo ou provenance', s.inscription, k => !k ? 'Sans code' : k === 'via:outil-qr' ? 'Sans code, venu du générateur de QR' : k.indexOf('via:') === 0 ? 'Sans code, venu de ' + k.slice(4) : k),
+      el('p', { class: 'infos', text: 'Visiteurs de qrbc.app (accueil, générateur de QR code, appli, pages légales), sans cookie ni donnée personnelle, hors robots et hors tes propres visites. Une visite = une arrivée sur le site ; la navigation d’une page à l’autre n’est pas recomptée. Compté depuis le 14 novembre 2026. Les visites des pages clients restent dans l’onglet Clients.' }));
   }
 
   /* ---------- Onglets ---------- */
