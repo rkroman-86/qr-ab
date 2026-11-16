@@ -190,10 +190,20 @@ async function racine(request, env, url) {
   // Pages légales : français (seul faisant foi) + traductions anglaise et russe (?lang=en|ru)
   if (p === '/cgv' || p === '/cgv.html' || p === '/mentions-legales' || p === '/mentions-legales.html') {
     const base = p.replace(/\.html$/, ''), l = url.searchParams.get('lang');
+    const langue = l === 'en' || l === 'ru' ? l : '';
+    // une seule adresse par page et par langue pour Google : /cgv.html et ?lang=fr redirigent vers l'adresse propre
+    if ((request.method === 'GET' || request.method === 'HEAD') &&
+        (p.endsWith('.html') || (l && !langue) || [...url.searchParams.keys()].some(k => k !== 'lang')))
+      return Response.redirect('https://' + DOMAINE + base + (langue ? '?lang=' + langue : ''), 301);
     compterVisiteSite(request, env, url, base.slice(1));
-    const r = await statique(env, request, base + (l === 'en' || l === 'ru' ? '.' + l : '') + '.html');
+    const r = await statique(env, request, base + (langue ? '.' + langue : '') + '.html');
     if (!r.ok) return r;
-    const html = (await r.text()).replace(/\{\{(\w+)\}\}/g, (x, k) => k in VENDEUR ? esc(VENDEUR[k]) : x);
+    const adr = lg => 'https://' + DOMAINE + base + (lg && lg !== 'fr' ? '?lang=' + lg : '');
+    const liens = '<link rel="canonical" href="' + adr(langue) + '">\n' +
+      ['fr', 'en', 'ru'].map(lg => '<link rel="alternate" hreflang="' + lg + '" href="' + adr(lg) + '">').join('\n') +
+      '\n<link rel="alternate" hreflang="x-default" href="' + adr('') + '">\n';
+    const html = (await r.text()).replace(/\{\{(\w+)\}\}/g, (x, k) => k in VENDEUR ? esc(VENDEUR[k]) : x)
+      .replace(/<\/head>/i, liens + '</head>');
     return new Response(html, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=300' } });
   }
   if (p === '/app' || p === '/app/') { compterVisiteSite(request, env, url, 'app'); return statique(env, request, '/app.html', true); }
@@ -2735,7 +2745,7 @@ async function purgerStats(env) {
 const DUREE_CACHE_PLAN = 6 * 3600;
 function planSitePrincipal() {
   const jour = new Date().toISOString().slice(0, 10);
-  const adresses = ['/', '/?lang=en', '/?lang=ru', '/generateur-qr-code', '/generateur-qr-code?lang=en', '/generateur-qr-code?lang=ru', '/cgv', '/mentions-legales'];
+  const adresses = ['/', '/?lang=en', '/?lang=ru', '/generateur-qr-code', '/generateur-qr-code?lang=en', '/generateur-qr-code?lang=ru', '/cgv', '/cgv?lang=en', '/cgv?lang=ru', '/mentions-legales', '/mentions-legales?lang=en', '/mentions-legales?lang=ru'];
   return '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
     adresses.map(a => '  <url><loc>' + esc('https://' + DOMAINE + a) + '</loc><lastmod>' + jour + '</lastmod></url>\n').join('') + '</urlset>\n';
 }
