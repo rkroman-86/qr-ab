@@ -20,7 +20,7 @@
    ========================================================= */
 
 const DOMAINE = 'qrbc.app';
-const JOURS_ESSAI = 14;
+const JOURS_ESSAI = 30;                        // essai gratuit d'un mois pour tout le monde (offre v2 du 17/11/2026)
 const IA_PAR_JOUR = 30;                       // garde-fou anti-abus, par client et par jour
 const MODELES_IA = ['claude-sonnet-5-5', 'claude-haiku-5-5'];
 // Le serveur choisit le modèle selon le travail : rédaction soignée → Sonnet, pictogrammes SVG → Haiku (le moins coûteux)
@@ -30,13 +30,17 @@ const MODELE_PAR_TYPE = { texte: 'claude-sonnet-5-5', picto: 'claude-haiku-5-5' 
 const DUREE_EXPRESS = 30 * 60 * 1000;
 const ESSAIS_EXPRESS = 2;                       // appels IA par étape d'une création express (1 + 1 reprise)          // une création express payée reste utilisable 30 min (reprise après une erreur)
 
-/* ---------- Offre et IA ----------
+/* ---------- Offre et IA (offre v2 du 17/11/2026) ----------
    gratuit : illimité (comptes offerts, démos)
-   essai   : 2 textes + 2 pictos pour toute la durée de l'essai
-   payant  : 10 textes + 5 pictos par année d'abonnement, puis crédit prépayé */
+   essai   : 1 mois gratuit sans carte, quotas « essai »
+   payant  : abonnement Stripe reconduit automatiquement, formule « mensuel » (quotas par mois) ou « annuel »
+             (quotas « payant », par an), résiliable à tout moment ; anciens abonnés : paiement annuel unique (sans `abo`)
+   Au-delà des quotas : crédit prépayé */
 // Tarifs et quotas : réglables dans /gestion (config:tarifs) ; valeurs par défaut ci-dessous
-const TARIFS_DEFAUT = { prixAnnuel: 1800, prixTexte: 40, prixPicto: 70, prixFond: 70, prixExpress: 150, prixPage: 900, prixTraduction: 150,
-  essai: { texte: 2, picto: 2, fond: 1 }, payant: { texte: 10, picto: 5, fond: 2 } };
+// Abonnements (offre v2) : montants TTC en centimes, TVA incluse (prix ronds affichés : 1,99 € / 19,99 €)
+const TARIFS_DEFAUT = { prixAnnuel: 1800, prixTexte: 10, prixPicto: 50, prixFond: 50, prixExpress: 100, prixPage: 900, prixTraduction: 20,
+  aboMensuel: 199, aboAnnuel: 1999, pageMensuel: 99, pageAnnuel: 999,
+  essai: { texte: 10, picto: 2, fond: 2 }, payant: { texte: 30, picto: 10, fond: 10 }, mensuel: { texte: 5, picto: 2, fond: 2 } };
 const TYPES_IA = ['texte', 'picto', 'fond'];      // fond = une génération de 2 images de fond
 const MODELE_IMAGE = '@cf/black-forest-labs/flux-2-dev';          // FLUX.2 [dev] : bien meilleure qualité (≈ 0,05 $ l'image)
 const MODELE_IMAGE_SECOURS = '@cf/black-forest-labs/flux-2-klein-9b';   // rapide et peu coûteux, si le premier est indisponible
@@ -50,7 +54,9 @@ const RENOUVELER_AVANT = 30;                    // jours avant l'échéance où 
 const STRIPE_API = 'https://api.stripe.com/v1';
 const RESEND_API = 'https://api.resend.com';
 const DUREE_LIEN_MDP = 3600;                    // secondes de validité d'un lien « mot de passe oublié »
-let QUOTAS_IA = { essai: TARIFS_DEFAUT.essai, payant: TARIFS_DEFAUT.payant };
+let QUOTAS_IA = { essai: TARIFS_DEFAUT.essai, payant: TARIFS_DEFAUT.payant, mensuel: TARIFS_DEFAUT.mensuel };   // payant = formule annuelle
+let OFFRE = { mensuel: { prix: TARIFS_DEFAUT.aboMensuel, page: TARIFS_DEFAUT.pageMensuel }, annuel: { prix: TARIFS_DEFAUT.aboAnnuel, page: TARIFS_DEFAUT.pageAnnuel } };   // TTC
+const HT = ttc => Math.round(ttc * 100 / (100 + TVA));
 let PRIX_IA = { texte: TARIFS_DEFAUT.prixTexte, picto: TARIFS_DEFAUT.prixPicto, fond: TARIFS_DEFAUT.prixFond };   // centimes HT, débités du crédit au-delà du quota
 let PRIX_EXPRESS = TARIFS_DEFAUT.prixExpress;   // centimes HT, création express pour un abonné (débité du crédit)
 let PRIX_PAGE = TARIFS_DEFAUT.prixPage;         // centimes HT par an, page supplémentaire (ou version traduite) d'un compte
@@ -67,7 +73,8 @@ async function lireTarifs(env) {
   return {
     prixAnnuel: t.prixAnnuel ?? D.prixAnnuel, prixTexte: t.prixTexte ?? D.prixTexte, prixPicto: t.prixPicto ?? D.prixPicto, prixFond: t.prixFond ?? D.prixFond,
     prixExpress: t.prixExpress ?? D.prixExpress, prixPage: t.prixPage ?? D.prixPage, prixTraduction: t.prixTraduction ?? D.prixTraduction,
-    essai: Object.assign({}, D.essai, t.essai), payant: Object.assign({}, D.payant, t.payant)
+    aboMensuel: t.aboMensuel ?? D.aboMensuel, aboAnnuel: t.aboAnnuel ?? D.aboAnnuel, pageMensuel: t.pageMensuel ?? D.pageMensuel, pageAnnuel: t.pageAnnuel ?? D.pageAnnuel,
+    essai: Object.assign({}, D.essai, t.essai), payant: Object.assign({}, D.payant, t.payant), mensuel: Object.assign({}, D.mensuel, t.mensuel)
   };
 }
 /* Coordonnées du vendeur (factures, pages légales, e-mails) : réglables dans /gestion → 👤, pour une revente du service */
@@ -103,7 +110,8 @@ async function chargerTarifs(env) {
   PRIX_EXPRESS = t.prixExpress;
   PRIX_PAGE = t.prixPage;
   PRIX_TRADUCTION = t.prixTraduction;
-  QUOTAS_IA = { essai: t.essai, payant: t.payant };
+  QUOTAS_IA = { essai: t.essai, payant: t.payant, mensuel: t.mensuel };
+  OFFRE = { mensuel: { prix: t.aboMensuel, page: t.pageMensuel }, annuel: { prix: t.aboAnnuel, page: t.pageAnnuel } };
   return t;
 }
 // Le type d'appel est décidé par le serveur d'après l'outil demandé, jamais par le client
@@ -172,6 +180,7 @@ async function racine(request, env, url) {
   if (p === '/api/mdp-oublie' && request.method === 'POST') return mdpOublie(request, env);
   if (p === '/api/mdp-reinit' && request.method === 'POST') return mdpReinit(request, env);
   if (p === '/api/verifier-email' && request.method === 'POST') return verifierEmail(request, env);
+  if (p === '/api/etape' && request.method === 'POST') return compterEtape(request, env, url);
   if (p === '/api/disponible') {
     const slug = (url.searchParams.get('nom') || '').toLowerCase();
     const err = erreurSlug(slug);
@@ -504,6 +513,11 @@ async function apiClient(request, env, slug, route) {
       const txt = new TextDecoder().decode(octets);
       if (chemin === 'config.json') { try { JSON.parse(txt); } catch (e) { throw new ErreurAPI(400, 'Configuration invalide.'); } }
       await env.CLIENTS.put(cle, txt);
+      if (chemin === 'index.html' && !compte.publie && !compte.parent) {   // 1re page enregistrée (étapes d'inscription)
+        compte.publie = new Date().toISOString();
+        await ecrireCompte(env, compte);
+        if (compte.plan === 'essai') ecrireStats(env, PAGE_SITE, [['etape', 'publie']]);
+      }
     }
     return json({ sha: 'kv' });
   }
@@ -536,6 +550,12 @@ async function apiClient(request, env, slug, route) {
     if (!(await facturesDe(env, tit)).some(f => f.ref === ref)) throw new ErreurAPI(404, 'Facture introuvable.');
     const st = await lireStripe(env);
     if (!st) throw new ErreurAPI(503, 'Le paiement en ligne n’est pas configuré.');
+    if (ref.startsWith('in_')) {                                 // facture d'abonnement : directement chez Stripe
+      const fa = await stripe(env, st, 'GET', '/invoices/' + ref);
+      const u = fa.hosted_invoice_url || fa.invoice_pdf;
+      if (!u) throw new ErreurAPI(404, 'Facture pas encore disponible. Réessayez dans un instant.');
+      return json({ url: u, numero: fa.number || '' });
+    }
     if ((ref.startsWith('cs_live_') ? 'live' : 'test') !== st.mode) throw new ErreurAPI(404, 'Facture introuvable.');
     const session = await stripe(env, st, 'GET', '/checkout/sessions/' + ref);
     if (!session.invoice) throw new ErreurAPI(404, 'Pas de facture pour ce paiement (antérieur à la facturation automatique). Écrivez à support@' + DOMAINE + '.');
@@ -588,11 +608,13 @@ async function apiClient(request, env, slug, route) {
   // Tarifs du moment en clair pour l'assistant (réglés dans /gestion)
   function tarifsLisibles() {
     const e = c => (c / 100).toFixed(2).replace('.', ',') + ' €';
-    return 'abonnement ' + e(PRIX_ANNUEL) + '/an ; au-delà des quotas : texte IA ' + e(PRIX_IA.texte) + ', création de pictos ' + e(PRIX_IA.picto) +
+    return 'abonnement sans engagement ' + e(OFFRE.mensuel.prix) + ' TTC/mois ou ' + e(OFFRE.annuel.prix) + ' TTC/an (2 mois offerts), reconduit automatiquement, résiliable à tout moment (effet à la fin de la période payée) ; ' +
+      'page supplémentaire ou version traduite ' + e(OFFRE.mensuel.page) + ' TTC/mois ou ' + e(OFFRE.annuel.page) + ' TTC/an ; essai gratuit ' + JOURS_ESSAI + ' jours sans carte bancaire ; ' +
+      'quotas IA mensuel : ' + QUOTAS_IA.mensuel.texte + ' textes, ' + QUOTAS_IA.mensuel.picto + ' pictos, ' + QUOTAS_IA.mensuel.fond + ' créations d’images par mois ; anciens abonnés : ' + e(PRIX_ANNUEL) + ' HT/an ; au-delà des quotas (prix HT) : texte IA ' + e(PRIX_IA.texte) + ', création de pictos ' + e(PRIX_IA.picto) +
       ', création de 2 images (fond ou pancarte) ' + e(PRIX_IA.fond) + ' ; création express (abonné) ' + e(PRIX_EXPRESS) +
-      ' ; page supplémentaire ou version traduite ' + e(PRIX_PAGE) + '/an ; retraduction ' + e(PRIX_TRADUCTION) +
-      ' ; recharge minimum ' + e(RECHARGE_MIN) + ' ; inclus essai 14 jours : ' + QUOTAS_IA.essai.texte + ' textes, ' + QUOTAS_IA.essai.picto + ' pictos, ' + QUOTAS_IA.essai.fond +
-      ' créations d’images ; inclus abonnement par an : ' + QUOTAS_IA.payant.texte + ' textes, ' + QUOTAS_IA.payant.picto + ' pictos, ' + QUOTAS_IA.payant.fond + ' créations d’images';
+      ' ; anciens abonnés : page supplémentaire ' + e(PRIX_PAGE) + ' HT/an ; retraduction ' + e(PRIX_TRADUCTION) +
+      ' ; recharge minimum ' + e(RECHARGE_MIN) + ' ; inclus essai : ' + QUOTAS_IA.essai.texte + ' textes, ' + QUOTAS_IA.essai.picto + ' pictos, ' + QUOTAS_IA.essai.fond +
+      ' créations d’images ; inclus formule annuelle, par an : ' + QUOTAS_IA.payant.texte + ' textes, ' + QUOTAS_IA.payant.picto + ' pictos, ' + QUOTAS_IA.payant.fond + ' créations d’images';
   }
   /* ---------- Assistant « ❓ Aide » de l'éditeur : répond aux questions sur la création, d'après le mode d'emploi ----------
      Gratuit pour tous (même essai terminé), 50 questions par compte et par jour. */
@@ -656,9 +678,20 @@ async function apiClient(request, env, slug, route) {
     const genre = dd.genre === 'recharge' ? 'recharge' : dd.genre === 'page' ? 'page' : 'abonnement';
     let montant, deduction = 0, libelle, extra = {};
     const tit = await titulaireDe(env, compte);
+    if (genre === 'abonnement' && (dd.formule === 'mensuel' || dd.formule === 'annuel')) {
+      // Offre v2 : abonnement reconduit automatiquement (Stripe), mensuel ou annuel
+      if (compte.parent) throw new ErreurAPI(400, 'L’abonnement de toutes vos pages se règle depuis votre page principale (' + compte.parent + '.' + DOMAINE + ').');
+      if (compte.plan === 'gratuit') throw new ErreurAPI(400, 'Ce compte est offert : rien à payer.');
+      if (aboActif(compte)) throw new ErreurAPI(400, 'Vous avez déjà un abonnement en cours : gérez-le depuis « Mon abonnement ».', 'deja_abonne');
+      const st = await lireStripe(env);
+      if (!st) throw new ErreurAPI(503, 'Le paiement en ligne n’est pas encore ouvert.');
+      const session = await sessionAbonnement(env, st, compte, dd.formule, retourSur(dd.retour, slug));
+      return json({ url: session.url });
+    }
     if (genre === 'abonnement') {
       if (compte.parent) throw new ErreurAPI(400, 'L’abonnement de toutes vos pages se règle depuis votre page principale (' + compte.parent + '.' + DOMAINE + ').');
       if (compte.plan === 'gratuit') throw new ErreurAPI(400, 'Ce compte est offert : rien à payer.');
+      if (aboActif(compte)) throw new ErreurAPI(400, 'Vous avez déjà un abonnement en cours : gérez-le depuis « Mon abonnement ».', 'deja_abonne');
       if (compte.plan === 'payant' && actif(compte) && Date.parse(compte.payeJusqua) - Date.now() > RENOUVELER_AVANT * 86400000)
         throw new ErreurAPI(400, 'Le renouvellement sera possible ' + RENOUVELER_AVANT + ' jours avant l’échéance.');
       const r = await prixGroupe(env, compte);
@@ -674,6 +707,7 @@ async function apiClient(request, env, slug, route) {
       const o = offreAjout(tit);
       if (!o.possible) throw new ErreurAPI(402, o.raison);
       if (o.gratuit) throw new ErreurAPI(400, 'Compte offert : la page est créée sans paiement.');
+      if (o.ligne) throw new ErreurAPI(400, 'La page s’ajoute à votre abonnement, sans passer par la page de paiement.', 'ligne_abonnement');
       const a = await preparerAjout(env, tit, compte, dd);
       if (a.type === 'page') await env.CLIENTS.put('reserve:' + a.cible, tit.slug, { expirationTtl: 3600 });   // le temps de payer
       montant = o.prix;
@@ -721,7 +755,101 @@ async function apiClient(request, env, slug, route) {
     const etat = await encaisserSession(env, session);
     const frais = await lireCompte(env, slug);
     const nouvelle = session.metadata.genre === 'page' && (etat === 'appliqué' || etat === 'déjà appliqué') ? session.metadata.cible : null;
-    return json({ paye: session.payment_status === 'paid', etat, nouvellePage: nouvelle, compte: await resumeAvecOffre(env, frais) });
+    const paye = session.mode === 'subscription' ? (etat === 'appliqué' || etat === 'déjà appliqué') : session.payment_status === 'paid';
+    return json({ paye, etat, abonnement: session.mode === 'subscription', nouvellePage: nouvelle, compte: await resumeAvecOffre(env, frais) });
+  }
+
+  /* ---------- Mon abonnement (offre v2) ---------- */
+  if (route.startsWith('abonnement/') && m === 'POST') {
+    const tit = await titulaireDe(env, compte);
+    const st = await lireStripe(env);
+    if (!st) throw new ErreurAPI(503, 'Le paiement en ligne n’est pas configuré.');
+    const dd = await corpsJSON(request);
+    const reponse = async () => json({ ok: true, compte: await resumeAvecOffre(env, (await lireCompte(env, slug)) || compte) });
+    const enregistrer = async () => { await ecrireCompte(env, tit); await synchroniserPages(env, tit, false); };
+
+    if (route === 'abonnement/portail') {                     // carte bancaire et factures : portail client Stripe
+      const client = (tit.abo && tit.abo.client) || ((tit.clientStripe || {})[st.mode]);
+      if (!client) throw new ErreurAPI(400, 'Aucun moyen de paiement enregistré pour ce compte.');
+      return json({ url: await sessionPortail(env, st, client, retourSur(dd.retour, slug)) });
+    }
+    if (!tit.abo || (!aboActif(tit) && route !== 'abonnement/reprendre')) throw new ErreurAPI(400, 'Aucun abonnement en cours.', 'sans_abonnement');
+
+    if (route === 'abonnement/resilier') {
+      if (tit.aboSuivant) {                                   // passage au mensuel prévu : annulé aussi
+        try { await stripe(env, st, 'DELETE', '/subscriptions/' + tit.aboSuivant.id); } catch (e) { console.error('annulation suivant', e.message); }
+        delete tit.aboSuivant;
+      }
+      const sub = await stripe(env, st, 'POST', '/subscriptions/' + tit.abo.id, { cancel_at_period_end: 'true' });
+      appliquerAbo(tit, sub, st.mode);
+      await enregistrer();
+      const conf = await lireEmail(env).catch(() => null);   // confirmation sur support durable (obligation légale)
+      if (conf && tit.email) { try { const mm = mailAbo(tit, 'resiliation', {}); await envoyerEmail(env, conf, tit.email, mm.sujet, mm.html, mm.texte); } catch (e) { console.error('e-mail résiliation', e.message); } }
+      return reponse();
+    }
+    if (route === 'abonnement/reprendre') {
+      if (Date.parse(tit.abo.fin || 0) < Date.now() || !['active', 'trialing', 'past_due'].includes(tit.abo.statut))
+        throw new ErreurAPI(400, 'L’abonnement est terminé : choisissez une formule pour vous réabonner.', 'termine');
+      if (tit.aboSuivant) {                                   // on garde l'annuel : le mensuel prévu est annulé
+        try { await stripe(env, st, 'DELETE', '/subscriptions/' + tit.aboSuivant.id); } catch (e) { console.error('annulation suivant', e.message); }
+        delete tit.aboSuivant;
+      }
+      appliquerAbo(tit, await stripe(env, st, 'POST', '/subscriptions/' + tit.abo.id, { cancel_at_period_end: 'false' }), st.mode);
+      await enregistrer();
+      return reponse();
+    }
+    if (route === 'abonnement/formule') {
+      const vers = dd.formule === 'annuel' ? 'annuel' : dd.formule === 'mensuel' ? 'mensuel' : null;
+      if (!vers) throw new ErreurAPI(400, 'Formule inconnue.');
+      if (tit.abo.formule === vers && !tit.aboSuivant) throw new ErreurAPI(400, 'C’est déjà votre formule.');
+      const c = await confAbo(env, st);
+      const sub = await stripe(env, st, 'GET', '/subscriptions/' + tit.abo.id);
+      const { abo: lA, page: lP } = lignesAbo(sub);
+      const items = { 0: { id: lA.id, price: await prixStripe(env, st, 'abo', vers, OFFRE[vers].prix) } };
+      if (lP) items[1] = { id: lP.id, price: await prixStripe(env, st, 'page', vers, OFFRE[vers].page) };
+      if (vers === 'annuel') {
+        if (tit.aboSuivant) {                                 // retour à l'annuel avant l'échéance : le mensuel prévu est annulé
+          try { await stripe(env, st, 'DELETE', '/subscriptions/' + tit.aboSuivant.id); } catch (e) {}
+          delete tit.aboSuivant;
+          appliquerAbo(tit, await stripe(env, st, 'POST', '/subscriptions/' + tit.abo.id, { cancel_at_period_end: 'false' }), st.mode);
+          await enregistrer();
+          return reponse();
+        }
+        // mensuel → annuel tout de suite : Stripe déduit le mois en cours (prorata) ; quotas annuels dès le paiement
+        tit.quotasAuPaiement = true;
+        await ecrireCompte(env, tit);
+        const maj = await stripe(env, st, 'POST', '/subscriptions/' + sub.id, { items, proration_behavior: 'always_invoice', payment_behavior: 'pending_if_incomplete', cancel_at_period_end: 'false' });
+        if (maj.pending_update) { delete tit.quotasAuPaiement; await ecrireCompte(env, tit); throw new ErreurAPI(402, 'Le paiement a été refusé par votre banque : vous restez en formule mensuelle. Vérifiez votre carte (« Carte et factures ») puis réessayez.', 'paiement_refuse'); }
+        const frais = (await lireCompte(env, tit.slug)) || tit;   // le webhook a pu passer entre-temps
+        appliquerAbo(frais, maj, st.mode);
+        if (frais.abo && frais.abo.statut === 'trialing') delete frais.quotasAuPaiement;   // rien de payé pendant l'essai : quotas au 1er paiement
+        await ecrireCompte(env, frais); await synchroniserPages(env, frais, false);
+        return reponse();
+      }
+      // annuel → mensuel : à l'échéance. Pendant l'essai Stripe (rien encore payé), le changement est immédiat.
+      if (sub.status === 'trialing') {
+        appliquerAbo(tit, await stripe(env, st, 'POST', '/subscriptions/' + sub.id, { items, proration_behavior: 'none' }), st.mode);
+        await enregistrer();
+        return reponse();
+      }
+      let pm = sub.default_payment_method;
+      if (!pm) { try { const cu = await stripe(env, st, 'GET', '/customers/' + tit.abo.client); pm = cu.invoice_settings && cu.invoice_settings.default_payment_method; } catch (e) {} }
+      if (pm && typeof pm === 'object') pm = pm.id;
+      if (!pm) throw new ErreurAPI(400, 'Enregistrez d’abord votre carte (« Carte et factures »), puis réessayez.', 'sans_carte');
+      const lignes = { 0: { price: items[0].price, quantity: '1' } };
+      if (lP && lP.quantity) lignes[1] = { price: items[1].price, quantity: String(lP.quantity) };
+      const nouveau = await stripe(env, st, 'POST', '/subscriptions', {
+        customer: tit.abo.client, items: lignes, default_payment_method: pm, trial_end: String(sub.current_period_end),
+        default_tax_rates: [c.taxRateTTC], metadata: { slug: tit.slug, formule: 'mensuel', depuis: 'payant', suivant: '1' },
+        description: 'qrbc — ' + tit.slug + '.' + DOMAINE + ' (formule mensuelle après l’annuel)'
+      });
+      await env.CLIENTS.put('abo:' + nouveau.id, tit.slug);
+      tit.aboSuivant = etatAbo(nouveau, st.mode, null);
+      appliquerAbo(tit, await stripe(env, st, 'POST', '/subscriptions/' + sub.id, { cancel_at_period_end: 'true' }), st.mode);
+      await enregistrer();
+      return reponse();
+    }
+    throw new ErreurAPI(404, 'Action inconnue.');
   }
 
   /* ---------- Images de fond par l'IA ---------- */
@@ -861,7 +989,7 @@ async function apiClient(request, env, slug, route) {
         traductions: c.traductions || [], adresse: adressePage(c), actif: actif(c) });
     }
     const o = offreAjout(tit);
-    return json({ pages, courant: slug, titulaire: tit.slug, ajout: o, prixTraduction: PRIX_TRADUCTION, prixPage: PRIX_PAGE,
+    return json({ pages, courant: slug, titulaire: tit.slug, ajout: o, prixTraduction: PRIX_TRADUCTION, prixPage: PRIX_PAGE, formules: OFFRE,
       tva: TVA, langues: LANGUES_PAGE, credit: compte.credit || 0, creditTitulaire: tit.credit || 0 });
   }
   if (route === 'pages/disponible' && m === 'GET') {
@@ -875,8 +1003,24 @@ async function apiClient(request, env, slug, route) {
     const tit = await titulaireDe(env, compte);
     const o = offreAjout(tit);
     if (!o.possible) throw new ErreurAPI(402, o.raison, 'ajout_impossible');
-    if (!o.gratuit) throw new ErreurAPI(400, 'Paiement nécessaire.', 'paiement');
+    if (!o.gratuit && !o.ligne) throw new ErreurAPI(400, 'Paiement nécessaire.', 'paiement');
     const a = await preparerAjout(env, tit, compte, await corpsJSON(request));
+    if (o.ligne) {                                       // abonné : une ligne de plus sur l'abonnement, prorata prélevé tout de suite
+      if (a.type === 'page') await env.CLIENTS.put('reserve:' + a.cible, tit.slug, { expirationTtl: 600 });
+      const st = await lireStripe(env);
+      if (!st) throw new ErreurAPI(503, 'Le paiement en ligne n’est pas configuré.');
+      let maj;
+      try { maj = await changerPagesAbo(env, st, tit, +1); }
+      catch (e) { await env.CLIENTS.delete('reserve:' + a.cible); throw e; }
+      const frais = (await lireCompte(env, tit.slug)) || tit;   // la facture du prorata a pu être notée entre-temps par le webhook
+      appliquerAbo(frais, maj, st.mode);
+      journaliser(frais, 'page', 0, 'ligne d’abonnement · ' + a.cible);
+      const page = await creerPageSup(env, frais, a);
+      await ecrireCompte(env, frais);
+      await synchroniserPages(env, frais, false);
+      const jt = await signerSession(env, { s: page.slug, v: frais.version || 1, e: Math.floor(Date.now() / 1000) + 30 * 86400 });
+      return json({ ok: true, cree: page.slug, jeton: jt });
+    }
     const page = await creerPageSup(env, tit, a);
     await ecrireCompte(env, tit);
     const session = await signerSession(env, { s: page.slug, v: tit.version || 1, e: Math.floor(Date.now() / 1000) + 30 * 86400 });
@@ -1137,7 +1281,7 @@ async function inscription(request, env) {
   if (conf) { try { await envoyerLienVerif(env, conf, compte); envoye = true; } catch (e) { console.error('e-mail de validation', e.message); } }
   // provenance : code promo, sinon page d'où vient le visiteur (« via:outil-qr » = générateur de QR code)
   const depuis = String(d.depuis || '').toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 25);
-  ecrireStats(env, PAGE_SITE, [['inscription', (compte.promo && compte.promo.code) ? String(compte.promo.code).slice(0, 30) : depuis ? 'via:' + depuis : '']]);
+  ecrireStats(env, PAGE_SITE, [['inscription', (compte.promo && compte.promo.code) ? String(compte.promo.code).slice(0, 30) : depuis ? 'via:' + depuis : ''], ['etape', 'envoi']]);
   return json({ ok: true, adresse: 'https://' + slug + '.' + DOMAINE + '/', editeur: '/app/' + slug + '/', verifier: !!conf, envoye, compte: resumeCompte(compte) });
 }
 
@@ -1259,7 +1403,7 @@ async function gestion(request, env, action) {
         if (l[0]) derniere = { numero: l[0].number || '', le: new Date(l[0].created * 1000).toISOString(), url: l[0].hosted_invoice_url || l[0].invoice_pdf || '' };
       } catch (e) { derniere = { erreur: e.message }; }
     }
-    return json({ mentions: mentionsFacture(), vendeur: VENDEUR, tva: TVA, prixAnnuel: PRIX_ANNUEL, derniere });
+    return json({ mentions: mentionsFacture(), vendeur: VENDEUR, tva: TVA, prixAnnuel: PRIX_ANNUEL, formules: OFFRE, derniere });
   }
   if (action === 'motdepasse' && request.method === 'POST') {
     const n = String(d.nouveau || '');
@@ -1289,10 +1433,17 @@ async function gestion(request, env, action) {
       prixExpress: centimes(d.prixExpress ?? (TARIFS_DEFAUT.prixExpress / 100), 'Prix d’une création express'),
       prixPage: centimes(d.prixPage ?? (TARIFS_DEFAUT.prixPage / 100), 'Prix annuel d’une page supplémentaire'),
       prixTraduction: centimes(d.prixTraduction ?? (TARIFS_DEFAUT.prixTraduction / 100), 'Prix d’une traduction'),
+      aboMensuel: centimes(d.aboMensuel ?? (TARIFS_DEFAUT.aboMensuel / 100), 'Abonnement mensuel'),
+      aboAnnuel: centimes(d.aboAnnuel ?? (TARIFS_DEFAUT.aboAnnuel / 100), 'Abonnement annuel'),
+      pageMensuel: centimes(d.pageMensuel ?? (TARIFS_DEFAUT.pageMensuel / 100), 'Page supplémentaire (mensuel)'),
+      pageAnnuel: centimes(d.pageAnnuel ?? (TARIFS_DEFAUT.pageAnnuel / 100), 'Page supplémentaire (annuel)'),
       essai: { texte: entier(d.essaiTexte, 'Rédactions de l’essai'), picto: entier(d.essaiPicto, 'Motifs de l’essai'), fond: entier(d.essaiFond, 'Fonds de l’essai') },
-      payant: { texte: entier(d.payantTexte, 'Rédactions de l’abonnement'), picto: entier(d.payantPicto, 'Motifs de l’abonnement'), fond: entier(d.payantFond, 'Fonds de l’abonnement') }
+      payant: { texte: entier(d.payantTexte, 'Rédactions de l’abonnement annuel'), picto: entier(d.payantPicto, 'Motifs de l’abonnement annuel'), fond: entier(d.payantFond, 'Images de l’abonnement annuel') },
+      mensuel: { texte: entier(d.mensuelTexte ?? TARIFS_DEFAUT.mensuel.texte, 'Rédactions du mensuel'), picto: entier(d.mensuelPicto ?? TARIFS_DEFAUT.mensuel.picto, 'Motifs du mensuel'), fond: entier(d.mensuelFond ?? TARIFS_DEFAUT.mensuel.fond, 'Images du mensuel') }
     };
-    if (t.prixAnnuel < 100) throw new ErreurAPI(400, 'Abonnement annuel : 1 € minimum (paiement par carte).');
+    if (t.prixAnnuel < 100) throw new ErreurAPI(400, 'Ancien abonnement annuel : 1 € minimum (paiement par carte).');
+    if (t.aboMensuel < 50 || t.aboAnnuel < 50) throw new ErreurAPI(400, 'Abonnement : 0,50 € minimum (paiement par carte).');
+    if (t.pageMensuel < 50 || t.pageAnnuel < 50) throw new ErreurAPI(400, 'Page supplémentaire : 0,50 € minimum (paiement par carte).');
     t.le = new Date().toISOString();
     await env.CLIENTS.put('config:tarifs', JSON.stringify(t));
     await chargerTarifs(env);
@@ -1426,9 +1577,9 @@ async function gestion(request, env, action) {
       if (v === undefined) continue;
       const n = Number(v);
       if (!Number.isInteger(n) || n < 0 || n > 1000) throw new ErreurAPI(400, 'IA restantes : nombre entier entre 0 et 1 000.');
-      const q = QUOTAS_IA[compte.plan];
-      if (!q) throw new ErreurAPI(400, 'Ce compte n’a pas de quota (offert ou suspendu).');
       const porte = await reserveIA(env, compte);               // réserve commune du compte
+      const q = quotasDe(porte);
+      if (!q) throw new ErreurAPI(400, 'Ce compte n’a pas de quota (offert ou suspendu).');
       porte.ia = porte.ia || {};
       porte.ia.bonus = porte.ia.bonus || {};
       porte.ia[type] = 0;
@@ -1464,6 +1615,7 @@ async function gestion(request, env, action) {
     const compte = await lireCompte(env, String(d.nom || ''));
     if (!compte) throw new ErreurAPI(404, 'Compte introuvable.');
     if (compte.parent) throw new ErreurAPI(400, 'Page rattachée à ' + compte.parent + ' : enregistrez le paiement sur la page principale.');
+    if (aboActif(compte)) throw new ErreurAPI(400, 'Ce client a un abonnement Stripe en cours (' + compte.abo.formule + ') : il est prélevé automatiquement.');
     const r = await prixGroupe(env, compte);
     await appliquerAbonnementGroupe(env, compte, r.aPayer, r.deduction, 'manuel');
     await ecrireCompte(env, compte);
@@ -1501,8 +1653,20 @@ async function gestion(request, env, action) {
     const cible = await lireCompte(env, slug);
     if (cible && (cible.pages || []).length) throw new ErreurAPI(400, 'Ce compte a des pages rattachées (' + cible.pages.join(', ') + ') : supprimez-les d’abord.');
     if (cible && cible.traductions && cible.traductions.length) throw new ErreurAPI(400, 'Cette page a des versions traduites (' + cible.traductions.map(l => slug + '.' + l).join(', ') + ') : supprimez-les d’abord.');
+    if (cible && !cible.parent && (aboActif(cible) || cible.aboSuivant)) {   // plus de prélèvement pour une page supprimée
+      const st = await lireStripe(env);
+      if (!st) throw new ErreurAPI(400, 'Stripe n’est pas connecté : arrêtez d’abord l’abonnement ' + cible.abo.id + ' dans Stripe.');
+      for (const a of [cible.abo, cible.aboSuivant]) if (a && a.id) {
+        try { await stripe(env, st, 'DELETE', '/subscriptions/' + a.id); }
+        catch (e) { if (!/No such subscription|canceled/i.test(e.message)) throw new ErreurAPI(502, 'Impossible d’arrêter l’abonnement Stripe ' + a.id + ' : ' + e.message); }
+      }
+    }
     if (cible && cible.parent) {                     // page rattachée : on la retire de sa page principale (les images communes restent)
       const tit = await lireCompte(env, cible.parent);
+      if (tit && aboActif(tit)) {                   // une ligne « page » de moins sur l'abonnement (sans remboursement)
+        const st = await lireStripe(env);
+        if (st) { try { await changerPagesAbo(env, st, tit, -1); } catch (e) { console.error('ligne page', e.message); } }
+      }
       if (tit) { tit.pages = (tit.pages || []).filter(x => x !== slug); await ecrireCompte(env, tit); }
       if (cible.traduction) {
         const src = await lireCompte(env, cible.traduction.source);
@@ -1660,7 +1824,7 @@ async function verifierEmail(request, env) {
   if (!compte) { await env.CLIENTS.delete(cle); throw new ErreurAPI(410, 'Ce compte n’existe plus.'); }
   if (compte.email !== info.email) { await env.CLIENTS.delete(cle); throw new ErreurAPI(410, 'L’adresse e-mail du compte a changé : utilisez le lien du dernier e-mail reçu.'); }
   await env.CLIENTS.delete(cle);
-  if (compte.emailAVerifier) { delete compte.emailAVerifier; compte.emailVerifie = new Date().toISOString(); await ecrireCompte(env, compte); }
+  if (compte.emailAVerifier) { delete compte.emailAVerifier; compte.emailVerifie = new Date().toISOString(); await ecrireCompte(env, compte); ecrireStats(env, PAGE_SITE, [['etape', 'confirme']]); }
   const session = await signerSession(env, { s: compte.slug, v: compte.version || 1, e: Math.floor(Date.now() / 1000) + 30 * 86400 });
   return json({ ok: true, slug: compte.slug, jeton: session, adresse: 'https://' + compte.slug + '.' + DOMAINE + '/' });
 }
@@ -1767,7 +1931,17 @@ function aSupprimer(c, maintenant) {
   const fin = echeanceCompte(c);
   return !!fin && !actif(c) && Date.parse(fin) + JOURS_CONSERVATION * 86400000 < (maintenant || Date.now());
 }
+const JOURS_CHATEL = 35;                       // annuel : information entre 3 mois et 1 mois avant la reconduction (loi Chatel)
 function etapeDue(c, maintenant) {
+  if (aboActif(c)) {                            // abonnement Stripe : pas de rappel d'échéance, il est reconduit automatiquement
+    const a = c.abo;
+    if (!c.email || a.formule !== 'annuel' || a.resiliation || c.aboSuivant || !a.fin) return null;
+    if (a.statut === 'trialing' && a.depuis === 'essai') return null;
+    const restant = (Date.parse(a.fin) - maintenant) / 86400000;
+    const cle = a.fin.slice(0, 10) + ':chatel';
+    if (restant > JOURS_CHATEL || restant < 1 || (c.rappels || {})[cle]) return null;
+    return { etape: 'chatel', fin: a.fin, cle, jours: Math.ceil(restant) };
+  }
   const fin = echeanceCompte(c);
   if (!fin || !c.email || c.plan === 'gratuit' || c.plan === 'suspendu') return null;
   if (aSupprimer(c, maintenant)) return null;                    // conservation dépassée : plus d'e-mail, suppression manuelle
@@ -1801,7 +1975,7 @@ async function lancerRappels(env, o) {
       if (o.simuler || !conf) { prevus.push(ligne); continue; }
       if (envoyes.length >= ENVOIS_MAX) { prevus.push(ligne); continue; }
       try {
-        const m = mailRappel(c, due, (c.pages || []).length ? await prixGroupe(env, c) : null);
+        const m = due.etape === 'chatel' ? mailAbo(c, 'chatel', { fin: due.fin, jours: due.jours }) : mailRappel(c, due, (c.pages || []).length ? await prixGroupe(env, c) : null);
         await envoyerEmail(env, conf, c.email, m.sujet, m.html, m.texte);
         c.rappels = Object.assign({}, c.rappels, { [due.cle]: new Date().toISOString() });
         await ecrireCompte(env, c);
@@ -1815,17 +1989,44 @@ async function lancerRappels(env, o) {
 }
 
 /* Texte des rappels : français, anglais, russe (langue de l'éditeur du client) */
-function mailRappel(c, due, groupe) {
+function outilsMail(c) {
   const L = LANGUES_MAIL.includes(c.langue) ? c.langue : 'fr';
-  const site = c.slug + '.' + DOMAINE;
   const sep = L === 'ru' ? '.' : '/';
   const fmt = iso => { const d = new Date(iso); return String(d.getUTCDate()).padStart(2, '0') + sep + String(d.getUTCMonth() + 1).padStart(2, '0') + sep + d.getUTCFullYear(); };
-  const dFin = fmt(due.fin), dSuppr = fmt(new Date(Date.parse(due.fin) + JOURS_CONSERVATION * 86400000).toISOString());
-  const prix = groupe ? groupe.prix : PRIX_ANNUEL, ttc = Math.round(prix * (1 + TVA / 100));
-  const credit = c.plan === 'payant' ? (groupe ? groupe.deduction : Math.min(c.credit || 0, prix)) : 0;
-  const nbP = groupe ? groupe.pages + 1 : 1;         // page principale + pages rattachées (même échéance)
   const eur = v => L === 'en' ? '€' + (v / 100).toFixed(2) : (v / 100).toFixed(2).replace('.', ',') + ' €';
-  const lien = 'https://' + DOMAINE + '/app/' + c.slug + '/?abonnement=1' + (L !== 'fr' ? '&lang=' + L : '');
+  return { L, fmt, eur, site: c.slug + '.' + DOMAINE, lienAbo: 'https://' + DOMAINE + '/app/' + c.slug + '/?abonnement=1' + (L !== 'fr' ? '&lang=' + L : ''),
+    lienCgv: 'https://' + DOMAINE + '/cgv' + (L !== 'fr' ? '?lang=' + L : '') };
+}
+/* Mise en page commune des e-mails (HTML + texte brut) */
+function coquilleMail(c, o) {
+  const { site, lienCgv } = outilsMail(c);
+  const html = '<div style="font:16px/1.55 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#1b1a17;max-width:520px">' +
+    '<p style="font-weight:800;font-size:20px;margin:0 0 18px">qrbc<span style="color:#d9572b">.</span></p>' +
+    '<p>' + o.salut + '</p><p>' + o.corps + '</p>' +
+    (o.prix ? '<p style="color:#4a463f">' + esc(o.prix) + '</p>' : '') +
+    (o.bouton ? '<p style="margin:22px 0"><a href="' + o.lien + '" style="display:inline-block;background:#d9572b;color:#fff;text-decoration:none;padding:13px 20px;border-radius:10px;font-weight:700">' + esc(o.bouton) + '</a></p>' : '') +
+    (o.voirTxt ? '<p style="margin:0 0 22px">' + esc(o.voirTxt) + ' <a href="https://' + site + '/" style="color:#d9572b;font-weight:700">' + esc(site) + '</a></p>' : '') +
+    '<p style="color:#6a665d;font-size:13px;border-top:1px solid #e8e3d8;padding-top:14px">' + esc(o.pied) + '<br>' +
+    esc(VENDEUR.raison) + ' · qrbc.app · <a href="mailto:' + esc(VENDEUR.email) + '" style="color:#6a665d">' + esc(VENDEUR.email) + '</a> · <a href="' + lienCgv + '" style="color:#6a665d">' + esc(o.cgv) + '</a></p></div>';
+  const brut = x => x.replace(/<[^>]+>/g, '');
+  const texte = o.salut + '\n\n' + brut(o.corps) + (o.prix ? '\n\n' + o.prix : '') + (o.bouton ? '\n\n' + o.bouton + ' : ' + o.lien : '') +
+    (o.voirTxt ? '\n' + o.voir + ' : https://' + site + '/' : '') + '\n\n' + o.pied + '\n' + VENDEUR.raison + ' · qrbc.app · ' + VENDEUR.email;
+  return { sujet: o.sujet, html, texte };
+}
+/* Prix des formules dans la langue de l'e-mail (TTC), pages rattachées comprises */
+function prixFormules(L, eur, nbPages) {
+  const m = OFFRE.mensuel, a = OFFRE.annuel, n = nbPages || 0;
+  const pm = m.prix + n * m.page, pa = a.prix + n * a.page;
+  return {
+    fr: 'Au choix : ' + eur(pm) + ' TTC par mois, sans engagement, ou ' + eur(pa) + ' TTC par an (2 mois offerts)' + (n ? ', pour vos ' + (n + 1) + ' pages' : '') + '. Résiliable à tout moment, depuis votre espace.',
+    en: 'Your choice: ' + eur(pm) + ' incl. VAT per month, no commitment, or ' + eur(pa) + ' incl. VAT per year (2 months free)' + (n ? ', for your ' + (n + 1) + ' pages' : '') + '. Cancel anytime from your account.',
+    ru: 'На выбор: ' + eur(pm) + ' с НДС в месяц без обязательств или ' + eur(pa) + ' с НДС в год (2 месяца в подарок)' + (n ? ', за ' + (n + 1) + ' ' + plurielRu(n + 1, 'страницу', 'страницы', 'страниц') : '') + '. Отменить можно в любой момент в личном кабинете.'
+  }[L];
+}
+function mailRappel(c, due, groupe) {
+  const { L, fmt, eur, site, lienAbo } = outilsMail(c);
+  const dFin = fmt(due.fin), dSuppr = fmt(new Date(Date.parse(due.fin) + JOURS_CONSERVATION * 86400000).toISOString());
+  const nbP = groupe ? groupe.pages : (c.pages || []).length;
   const essai = c.plan === 'essai', avant = !['J0', 'J+30', 'J+80'].includes(due.etape);
   const T = {
     fr: {
@@ -1834,14 +2035,13 @@ function mailRappel(c, due, groupe) {
         : due.etape === 'J+80' ? 'Dernier rappel : votre page ' + site + ' sera supprimée le ' + dSuppr
         : due.etape === 'J+30' ? 'Votre page ' + site + ' vous attend' : 'Votre page ' + site + ' est en pause',
       corps: avant
-        ? (essai ? 'Votre essai gratuit de la page <b>' + site + '</b> se termine le <b>' + dFin + '</b>' + (due.jours > 1 ? ' (dans ' + due.jours + ' jours)' : '') + '. Pour qu’elle reste en ligne, avec votre QR code et vos cartes de visite, abonnez-vous dès maintenant.'
-                 : 'L’abonnement de votre page <b>' + site + '</b> arrive à échéance le <b>' + dFin + '</b>' + (due.jours > 1 ? ' (dans ' + due.jours + ' jours)' : '') + '. Il n’est pas renouvelé automatiquement : renouvelez-le pour que votre page et votre QR code restent actifs.')
-        : due.etape === 'J0' ? 'Votre page <b>' + site + '</b> est en pause depuis le ' + dFin + ' : elle n’est plus visible et votre QR code n’affiche plus vos coordonnées. Rien n’est perdu : un paiement la remet en ligne à l’identique.'
+        ? (essai ? 'Votre essai gratuit de la page <b>' + site + '</b> se termine le <b>' + dFin + '</b>' + (due.jours > 1 ? ' (dans ' + due.jours + ' jours)' : '') + '. Pour qu’elle reste en ligne, avec votre QR code et vos cartes de visite, choisissez votre formule d’abonnement. Vous ne payez rien avant la fin de l’essai.'
+                 : 'L’abonnement de votre page <b>' + site + '</b> arrive à échéance le <b>' + dFin + '</b>' + (due.jours > 1 ? ' (dans ' + due.jours + ' jours)' : '') + '. Pour que votre page et votre QR code restent actifs, choisissez votre nouvelle formule : le premier prélèvement aura lieu à la fin de votre période déjà payée.')
+        : due.etape === 'J0' ? 'Votre page <b>' + site + '</b> est en pause depuis le ' + dFin + ' : elle n’est plus visible et votre QR code n’affiche plus vos coordonnées. Rien n’est perdu : un abonnement la remet en ligne à l’identique.'
         : 'Votre page <b>' + site + '</b> est en pause depuis le ' + dFin + '. Nous gardons tout (textes, images, QR code) jusqu’au <b>' + dSuppr + '</b> ; après cette date, la page et ses données seront supprimées.',
-      prix: 'Abonnement' + (nbP > 1 ? ' de vos ' + nbP + ' pages' : '') + ' : ' + eur(prix) + ' HT par an (' + eur(ttc) + ' TTC).' + (credit ? ' Votre crédit IA de ' + eur(credit) + ' HT sera déduit : il ne reste que ' + eur(prix - credit) + ' HT à payer.' : ''),
-      bouton: avant ? (essai ? 'M’abonner' : 'Renouveler pour un an') : 'Réactiver ma page',
+      bouton: avant ? 'Choisir ma formule' : 'Réactiver ma page',
       voir: 'Voir ma page', voirTxt: 'Revoir votre page telle que vos clients la voient :',
-      pied: 'Pas de renouvellement automatique : vous ne payez que si vous le décidez. Une question ? Répondez simplement à cet e-mail.',
+      pied: 'Sans engagement avec la formule mensuelle : vous arrêtez quand vous voulez. Une question ? Répondez simplement à cet e-mail.',
       cgv: 'Conditions générales de vente'
     },
     en: {
@@ -1850,14 +2050,13 @@ function mailRappel(c, due, groupe) {
         : due.etape === 'J+80' ? 'Last reminder: your page ' + site + ' will be deleted on ' + dSuppr
         : due.etape === 'J+30' ? 'Your page ' + site + ' is waiting for you' : 'Your page ' + site + ' is paused',
       corps: avant
-        ? (essai ? 'The free trial of your page <b>' + site + '</b> ends on <b>' + dFin + '</b>' + (due.jours > 1 ? ' (in ' + due.jours + ' days)' : '') + '. To keep it online, with your QR code and business cards, subscribe now.'
-                 : 'The subscription for your page <b>' + site + '</b> expires on <b>' + dFin + '</b>' + (due.jours > 1 ? ' (in ' + due.jours + ' days)' : '') + '. It does not renew automatically: renew it to keep your page and QR code active.')
-        : due.etape === 'J0' ? 'Your page <b>' + site + '</b> has been paused since ' + dFin + ': it is no longer visible and your QR code no longer shows your details. Nothing is lost: a payment puts it back online exactly as it was.'
+        ? (essai ? 'The free trial of your page <b>' + site + '</b> ends on <b>' + dFin + '</b>' + (due.jours > 1 ? ' (in ' + due.jours + ' days)' : '') + '. To keep it online, with your QR code and business cards, choose your subscription plan. You pay nothing before the end of the trial.'
+                 : 'The subscription for your page <b>' + site + '</b> expires on <b>' + dFin + '</b>' + (due.jours > 1 ? ' (in ' + due.jours + ' days)' : '') + '. To keep your page and QR code active, choose your new plan: the first payment will be taken at the end of the period you have already paid for.')
+        : due.etape === 'J0' ? 'Your page <b>' + site + '</b> has been paused since ' + dFin + ': it is no longer visible and your QR code no longer shows your details. Nothing is lost: a subscription puts it back online exactly as it was.'
         : 'Your page <b>' + site + '</b> has been paused since ' + dFin + '. We keep everything (texts, images, QR code) until <b>' + dSuppr + '</b>; after that date, the page and its data will be deleted.',
-      prix: 'Subscription' + (nbP > 1 ? ' for your ' + nbP + ' pages' : '') + ': ' + eur(prix) + ' excl. VAT per year (' + eur(ttc) + ' incl. VAT).' + (credit ? ' Your AI credit of ' + eur(credit) + ' excl. VAT will be deducted: only ' + eur(prix - credit) + ' excl. VAT left to pay.' : ''),
-      bouton: avant ? (essai ? 'Subscribe' : 'Renew for one year') : 'Reactivate my page',
+      bouton: avant ? 'Choose my plan' : 'Reactivate my page',
       voir: 'View my page', voirTxt: 'See your page as your customers see it:',
-      pied: 'No automatic renewal: you only pay if you decide to. Any question? Just reply to this email.',
+      pied: 'No commitment with the monthly plan: stop whenever you like. Any question? Just reply to this email.',
       cgv: 'Terms of sale'
     },
     ru: {
@@ -1866,30 +2065,74 @@ function mailRappel(c, due, groupe) {
         : due.etape === 'J+80' ? 'Последнее напоминание: страница ' + site + ' будет удалена ' + dSuppr
         : due.etape === 'J+30' ? 'Ваша страница ' + site + ' ждёт вас' : 'Ваша страница ' + site + ' приостановлена',
       corps: avant
-        ? (essai ? 'Бесплатный пробный период вашей страницы <b>' + site + '</b> заканчивается <b>' + dFin + '</b>' + (due.jours > 1 ? ' (через ' + due.jours + ' ' + plurielRu(due.jours, 'день', 'дня', 'дней') + ')' : '') + '. Чтобы страница, QR-код и визитки продолжали работать, оформите подписку.'
-                 : 'Подписка на вашу страницу <b>' + site + '</b> заканчивается <b>' + dFin + '</b>' + (due.jours > 1 ? ' (через ' + due.jours + ' ' + plurielRu(due.jours, 'день', 'дня', 'дней') + ')' : '') + '. Она не продлевается автоматически: продлите её, чтобы страница и QR-код оставались активными.')
-        : due.etape === 'J0' ? 'Ваша страница <b>' + site + '</b> приостановлена с ' + dFin + ': она больше не видна, а QR-код не показывает ваши контакты. Ничего не потеряно: после оплаты страница вернётся в прежнем виде.'
+        ? (essai ? 'Бесплатный пробный период вашей страницы <b>' + site + '</b> заканчивается <b>' + dFin + '</b>' + (due.jours > 1 ? ' (через ' + due.jours + ' ' + plurielRu(due.jours, 'день', 'дня', 'дней') + ')' : '') + '. Чтобы страница, QR-код и визитки продолжали работать, выберите тариф подписки. До конца пробного периода вы ничего не платите.'
+                 : 'Подписка на вашу страницу <b>' + site + '</b> заканчивается <b>' + dFin + '</b>' + (due.jours > 1 ? ' (через ' + due.jours + ' ' + plurielRu(due.jours, 'день', 'дня', 'дней') + ')' : '') + '. Чтобы страница и QR-код оставались активными, выберите новый тариф: первое списание пройдёт после окончания уже оплаченного периода.')
+        : due.etape === 'J0' ? 'Ваша страница <b>' + site + '</b> приостановлена с ' + dFin + ': она больше не видна, а QR-код не показывает ваши контакты. Ничего не потеряно: после оформления подписки страница вернётся в прежнем виде.'
         : 'Ваша страница <b>' + site + '</b> приостановлена с ' + dFin + '. Мы храним всё (тексты, изображения, QR-код) до <b>' + dSuppr + '</b>; после этой даты страница и её данные будут удалены.',
-      prix: 'Подписка' + (nbP > 1 ? ' на ' + nbP + ' ' + plurielRu(nbP, 'страницу', 'страницы', 'страниц') : '') + ': ' + eur(prix) + ' без НДС в год (' + eur(ttc) + ' с НДС).' + (credit ? ' Ваш кредит ИИ ' + eur(credit) + ' без НДС будет вычтен: к оплате останется ' + eur(prix - credit) + ' без НДС.' : ''),
-      bouton: avant ? (essai ? 'Оформить подписку' : 'Продлить на год') : 'Восстановить страницу',
+      bouton: avant ? 'Выбрать тариф' : 'Восстановить страницу',
       voir: 'Открыть мою страницу', voirTxt: 'Посмотрите на свою страницу глазами клиентов:',
-      pied: 'Без автоматического продления: вы платите, только если сами решите. Есть вопросы? Просто ответьте на это письмо.',
+      pied: 'Месячный тариф — без обязательств: можно остановить в любой момент. Есть вопросы? Просто ответьте на это письмо.',
       cgv: 'Условия продажи'
     }
   }[L];
-  const lienCgv = 'https://' + DOMAINE + '/cgv' + (L !== 'fr' ? '?lang=' + L : '');
-  const html = '<div style="font:16px/1.55 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#1b1a17;max-width:520px">' +
-    '<p style="font-weight:800;font-size:20px;margin:0 0 18px">qrbc<span style="color:#d9572b">.</span></p>' +
-    '<p>' + T.salut + '</p><p>' + T.corps + '</p>' +
-    '<p style="color:#4a463f">' + esc(T.prix) + '</p>' +
-    '<p style="margin:22px 0"><a href="' + lien + '" style="display:inline-block;background:#d9572b;color:#fff;text-decoration:none;padding:13px 20px;border-radius:10px;font-weight:700">' + esc(T.bouton) + '</a></p>' +
-    (avant ? '<p style="margin:0 0 22px">' + esc(T.voirTxt) + ' <a href="https://' + site + '/" style="color:#d9572b;font-weight:700">' + esc(site) + '</a></p>' : '') +
-    '<p style="color:#6a665d;font-size:13px;border-top:1px solid #e8e3d8;padding-top:14px">' + esc(T.pied) + '<br>' +
-    esc(VENDEUR.raison) + ' · qrbc.app · <a href="mailto:' + esc(VENDEUR.email) + '" style="color:#6a665d">' + esc(VENDEUR.email) + '</a> · <a href="' + lienCgv + '" style="color:#6a665d">' + esc(T.cgv) + '</a></p></div>';
-  const brut = s => s.replace(/<[^>]+>/g, '');
-  const texte = T.salut + '\n\n' + brut(T.corps) + '\n\n' + T.prix + '\n\n' + T.bouton + ' : ' + lien +
-    (avant ? '\n' + T.voir + ' : https://' + site + '/' : '') + '\n\n' + T.pied + '\n' + VENDEUR.raison + ' · qrbc.app · ' + VENDEUR.email;
-  return { sujet: T.sujet, html, texte };
+  return coquilleMail(c, Object.assign({}, T, { prix: prixFormules(L, eur, nbP), lien: lienAbo, voirTxt: avant ? T.voirTxt : '' }));
+}
+/* E-mails des abonnements : reconduction annuelle (loi Chatel), confirmation de résiliation, échec de paiement */
+function mailAbo(c, genre, o) {
+  const { L, fmt, eur, site, lienAbo } = outilsMail(c);
+  const a = c.abo || {};
+  const dFin = a.fin ? fmt(a.fin) : '';
+  const montant = eur(a.montant || 0);
+  const annuel = a.formule !== 'mensuel';
+  const T = {
+    fr: {
+      salut: 'Bonjour,', cgv: 'Conditions générales de vente', voir: 'Voir ma page',
+      chatel: { sujet: 'Votre abonnement annuel qrbc sera reconduit le ' + dFin,
+        corps: 'Votre abonnement annuel à la page <b>' + site + '</b> sera reconduit automatiquement le <b>' + dFin + '</b>, pour un an, au prix de <b>' + montant + ' TTC</b>. ' +
+          'Si vous ne souhaitez pas le reconduire, vous pouvez le résilier à tout moment avant cette date, en un clic depuis votre espace (« Mon abonnement ») : votre page restera en ligne jusqu’au ' + dFin + '.',
+        bouton: 'Gérer mon abonnement', pied: 'Information adressée conformément à l’article L. 215-1 du Code de la consommation. Une question ? Répondez simplement à cet e-mail.' },
+      resiliation: { sujet: 'Résiliation de votre abonnement qrbc confirmée',
+        corps: 'Nous confirmons la résiliation de votre abonnement ' + (annuel ? 'annuel' : 'mensuel') + ' à la page <b>' + site + '</b>. Aucun prélèvement ne sera plus effectué. ' +
+          'Votre page reste en ligne jusqu’au <b>' + dFin + '</b>, puis elle sera mise en pause. Nous gardons vos textes, images et votre QR code 90 jours : vous pouvez vous réabonner à tout moment, ou reprendre votre abonnement d’ici là.',
+        bouton: 'Reprendre mon abonnement', pied: 'Vous avez changé d’avis ? Le bouton ci-dessus ouvre votre espace. Une question ? Répondez simplement à cet e-mail.' },
+      echec: { sujet: 'Paiement refusé pour votre abonnement qrbc',
+        corps: 'Le paiement de <b>' + eur(o.montant || 0) + ' TTC</b> pour votre page <b>' + site + '</b> a été refusé par votre banque (carte expirée ou plafond atteint, par exemple). ' +
+          'Votre page reste en ligne quelques jours : mettez à jour votre carte depuis votre espace (« Mon abonnement » → « Carte et factures »), nous réessaierons automatiquement.',
+        bouton: 'Mettre à jour ma carte', pied: 'Sans nouvelle carte, l’abonnement s’arrêtera et la page sera mise en pause. Une question ? Répondez simplement à cet e-mail.' }
+    },
+    en: {
+      salut: 'Hello,', cgv: 'Terms of sale', voir: 'View my page',
+      chatel: { sujet: 'Your qrbc annual subscription renews on ' + dFin,
+        corps: 'Your annual subscription for the page <b>' + site + '</b> will renew automatically on <b>' + dFin + '</b>, for one year, at <b>' + montant + ' incl. VAT</b>. ' +
+          'If you do not want it to renew, you can cancel at any time before that date, in one click from your account (“My subscription”): your page will stay online until ' + dFin + '.',
+        bouton: 'Manage my subscription', pied: 'Information sent under article L. 215-1 of the French Consumer Code. Any question? Just reply to this email.' },
+      resiliation: { sujet: 'Cancellation of your qrbc subscription confirmed',
+        corps: 'We confirm the cancellation of your ' + (annuel ? 'annual' : 'monthly') + ' subscription for the page <b>' + site + '</b>. No further payments will be taken. ' +
+          'Your page stays online until <b>' + dFin + '</b>, then it will be paused. We keep your texts, images and QR code for 90 days: you can subscribe again at any time, or resume your subscription before then.',
+        bouton: 'Resume my subscription', pied: 'Changed your mind? The button above opens your account. Any question? Just reply to this email.' },
+      echec: { sujet: 'Payment declined for your qrbc subscription',
+        corps: 'The payment of <b>' + eur(o.montant || 0) + ' incl. VAT</b> for your page <b>' + site + '</b> was declined by your bank (expired card or limit reached, for example). ' +
+          'Your page stays online for a few days: update your card from your account (“My subscription” → “Card and invoices”), we will retry automatically.',
+        bouton: 'Update my card', pied: 'Without a new card, the subscription will stop and the page will be paused. Any question? Just reply to this email.' }
+    },
+    ru: {
+      salut: 'Здравствуйте!', cgv: 'Условия продажи', voir: 'Открыть мою страницу',
+      chatel: { sujet: 'Годовая подписка qrbc продлится ' + dFin,
+        corps: 'Годовая подписка на страницу <b>' + site + '</b> автоматически продлится <b>' + dFin + '</b> ещё на год по цене <b>' + montant + ' с НДС</b>. ' +
+          'Если вы не хотите продлевать её, отмените подписку в любой момент до этой даты одним нажатием в личном кабинете («Моя подписка»): страница будет работать до ' + dFin + '.',
+        bouton: 'Управлять подпиской', pied: 'Уведомление в соответствии со статьёй L. 215-1 Кодекса прав потребителей Франции. Есть вопросы? Просто ответьте на это письмо.' },
+      resiliation: { sujet: 'Отмена подписки qrbc подтверждена',
+        corps: 'Подтверждаем отмену ' + (annuel ? 'годовой' : 'месячной') + ' подписки на страницу <b>' + site + '</b>. Списаний больше не будет. ' +
+          'Страница работает до <b>' + dFin + '</b>, затем будет приостановлена. Мы храним тексты, изображения и QR-код 90 дней: вы можете снова оформить подписку в любой момент или возобновить её до этой даты.',
+        bouton: 'Возобновить подписку', pied: 'Передумали? Кнопка выше открывает ваш кабинет. Есть вопросы? Просто ответьте на это письмо.' },
+      echec: { sujet: 'Платёж за подписку qrbc отклонён',
+        corps: 'Платёж <b>' + eur(o.montant || 0) + ' с НДС</b> за страницу <b>' + site + '</b> отклонён банком (например, истёк срок карты или превышен лимит). ' +
+          'Страница пока работает: обновите карту в личном кабинете («Моя подписка» → «Карта и счета»), мы повторим списание автоматически.',
+        bouton: 'Обновить карту', pied: 'Без новой карты подписка остановится, а страница будет приостановлена. Есть вопросы? Просто ответьте на это письмо.' }
+    }
+  }[L];
+  const g = T[genre];
+  return coquilleMail(c, { salut: T.salut, cgv: T.cgv, voir: T.voir, sujet: g.sujet, corps: g.corps, bouton: g.bouton, lien: lienAbo, pied: g.pied, voirTxt: '' });
 }
 function plurielRu(n, un, peu, beaucoup) { const a = n % 10, b = n % 100; return a === 1 && b !== 11 ? un : a >= 2 && a <= 4 && (b < 12 || b > 14) ? peu : beaucoup; }
 
@@ -1952,13 +2195,13 @@ async function connecterStripe(env, cle) {
   });
   const urlWebhook = 'https://' + DOMAINE + '/api/stripe/webhook';
   const wh = await stripe(env, st, 'POST', '/webhook_endpoints', {
-    url: urlWebhook, enabled_events: ['checkout.session.completed', 'checkout.session.async_payment_succeeded'],
-    description: 'qrbc : activation des abonnements et recharges'
+    url: urlWebhook, enabled_events: EVENEMENTS_STRIPE,
+    description: 'qrbc : abonnements, recharges et pages ajoutées'
   });
   const nom = nomCompteStripe(compteStripe);
   await env.CLIENTS.put('config:stripe', JSON.stringify({
     mode: st.mode, nomCompte: nom, fin: cle.slice(-4), le: new Date().toISOString(),
-    taxRate: taux.id, webhookId: wh.id, urlWebhook,
+    taxRate: taux.id, webhookId: wh.id, urlWebhook, evenementsV2: true,
     cle: await chiffrer(env, cle), whsec: await chiffrer(env, wh.secret)
   }));
 }
@@ -2014,8 +2257,15 @@ async function webhookStripe(request, env) {
   if (!ok) return json({ erreur: 'signature invalide' }, 400);
 
   const evt = JSON.parse(brut);
+  const o = (evt.data && evt.data.object) || {};
   if (evt.type === 'checkout.session.completed' || evt.type === 'checkout.session.async_payment_succeeded') {
-    await encaisserSession(env, evt.data.object);
+    await encaisserSession(env, o);
+  } else if (evt.type === 'invoice.paid' && o.subscription) {
+    await majAbonnement(env, typeof o.subscription === 'string' ? o.subscription : o.subscription.id, o);
+  } else if (evt.type === 'invoice.payment_failed' && o.subscription) {
+    await echecPaiement(env, o);
+  } else if (/^customer\.subscription\.(created|updated|deleted)$/.test(evt.type)) {
+    await majAbonnement(env, o.id, null, o);
   }
   try {
     const conf = JSON.parse(await env.CLIENTS.get('config:stripe'));
@@ -2041,7 +2291,7 @@ function nettoyerFacturation(d) {
 async function facturesDe(env, tit) {
   const l = [];
   for (const c of await membresGroupe(env, tit))
-    for (const p of (c.paiements || [])) if (p.ref && /^cs_(live|test)_/.test(p.ref)) l.push({ le: p.le, genre: p.genre, note: p.note || '', ref: p.ref, page: c.slug });
+    for (const p of (c.paiements || [])) if (p.ref && /^(cs_(live|test)_|in_)/.test(p.ref)) l.push({ le: p.le, genre: p.genre, note: p.note || '', ref: p.ref, page: c.slug });
   return l.sort((a, b) => String(b.le).localeCompare(String(a.le))).slice(0, 50);
 }
 /* Client Stripe de chaque compte, tenu à jour avec les infos de facturation (nom, adresse, n° TVA).
@@ -2052,7 +2302,9 @@ async function clientStripePour(env, st, tit) {
   if (!f.nom && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(tit.email || '')) return null;
   try {
     const ids = tit.clientStripe || {};
-    const donnees = { email: tit.email || undefined, preferred_locales: ['fr'], metadata: { page: tit.slug } };
+    const donnees = { email: tit.email || undefined, preferred_locales: ['fr'], metadata: { page: tit.slug },
+      // factures des abonnements (créées par Stripe) : mêmes mentions que les factures des paiements uniques
+      invoice_settings: { custom_fields: mentionsFacture().champs, footer: mentionsFacture().pied } };
     if (f.nom) {
       donnees.name = f.nom;
       donnees.address = { line1: f.adresse || undefined, postal_code: f.cp || undefined, city: f.ville || undefined, country: f.pays || 'FR' };
@@ -2091,6 +2343,7 @@ async function solderFacture(env, session) {
 }
 
 async function encaisserSession(env, session) {
+  if (session && session.mode === 'subscription') return encaisserSessionAbo(env, session);
   if (!session || session.payment_status !== 'paid') return 'non payé';
   await solderFacture(env, session);
   const md = session.metadata || {};
@@ -2122,6 +2375,267 @@ async function encaisserSession(env, session) {
   else return 'genre inconnu';
   await ecrireCompte(env, compte);
   return 'appliqué';
+}
+
+/* ===================== Abonnements Stripe (offre v2) =====================
+   Un abonnement Stripe par compte (porté par la page principale), reconduit automatiquement chaque mois ou chaque année :
+   une ligne « abonnement » + une ligne « page supplémentaire » (quantité = pages rattachées, versions traduites comprises).
+   L'état est recopié sur le compte (`abo`) à chaque événement Stripe ; `payeJusqua` = fin de la période payée + 1 jour. */
+const EVENEMENTS_STRIPE = ['checkout.session.completed', 'checkout.session.async_payment_succeeded', 'invoice.paid', 'invoice.payment_failed',
+  'customer.subscription.created', 'customer.subscription.updated', 'customer.subscription.deleted'];
+const GRACE_ABO = 86400000;                     // la page reste en ligne 1 jour après la fin de période (le paiement arrive en quelques minutes)
+const GRACE_IMPAYE = 7 * 86400000;              // carte refusée : Stripe relance, la page reste en ligne 7 jours
+const iso = t => t ? new Date(t * 1000).toISOString() : null;
+/* Réglages Stripe propres aux abonnements, par mode (test / réel) : taux de TVA incluse, produits, prix, portail client */
+async function confAbo(env, st) {
+  const cle = 'stripe-v2:' + st.mode;
+  let c = {};
+  try { c = JSON.parse(await env.CLIENTS.get(cle) || '{}'); } catch (e) { c = {}; }
+  let change = false;
+  if (!c.taxRateTTC) {
+    c.taxRateTTC = (await stripe(env, st, 'POST', '/tax_rates', { display_name: 'TVA', percentage: String(TVA), inclusive: 'true', country: 'FR', jurisdiction: 'FR', description: 'TVA France ' + TVA + ' % (incluse)' })).id;
+    change = true;
+  }
+  if (!c.evenements && st.webhookId) {           // connexion d'avant les abonnements : on ajoute les nouveaux événements au webhook
+    try { await stripe(env, st, 'POST', '/webhook_endpoints/' + st.webhookId, { enabled_events: EVENEMENTS_STRIPE }); c.evenements = true; change = true; }
+    catch (e) { console.error('webhook stripe', e.message); }
+  }
+  if (change) await env.CLIENTS.put(cle, JSON.stringify(c));
+  return c;
+}
+async function ecrireConfAbo(env, st, maj) {
+  const cle = 'stripe-v2:' + st.mode;
+  let c = {};
+  try { c = JSON.parse(await env.CLIENTS.get(cle) || '{}'); } catch (e) { c = {}; }
+  maj(c);
+  await env.CLIENTS.put(cle, JSON.stringify(c));
+  return c;
+}
+/* Prix Stripe récurrent (créé une fois par montant) : genre 'abo' ou 'page', formule 'mensuel' ou 'annuel', montant TTC */
+async function prixStripe(env, st, genre, formule, ttc) {
+  const cleP = genre + ':' + formule + ':' + ttc;
+  const c = await confAbo(env, st);
+  if (c.prix && c.prix[cleP]) return c.prix[cleP];
+  let produit = c.produits && c.produits[genre];
+  if (!produit) produit = (await stripe(env, st, 'POST', '/products', {
+    name: genre === 'abo' ? 'Abonnement qrbc' : 'Page supplémentaire ou version traduite qrbc', metadata: { qrbc: genre } })).id;
+  const prix = (await stripe(env, st, 'POST', '/prices', {
+    product: produit, currency: 'eur', unit_amount: String(ttc), tax_behavior: 'inclusive',
+    recurring: { interval: formule === 'mensuel' ? 'month' : 'year' },
+    nickname: (genre === 'abo' ? 'Abonnement ' : 'Page supplémentaire ') + formule, metadata: { qrbc: genre, formule } })).id;
+  await ecrireConfAbo(env, st, x => { x.produits = Object.assign({}, x.produits, { [genre]: produit }); x.prix = Object.assign({}, x.prix, { [cleP]: prix }); });
+  return prix;
+}
+/* Lignes de l'abonnement : la ligne « abonnement » et la ligne « pages » (repérées par les métadonnées du prix) */
+function lignesAbo(sub) {
+  const l = ((sub && sub.items) || {}).data || [];
+  const genre = it => (it.price && it.price.metadata && it.price.metadata.qrbc) || '';
+  return { abo: l.find(it => genre(it) === 'abo') || l.find(it => genre(it) !== 'page') || null, page: l.find(it => genre(it) === 'page') || null };
+}
+function formuleAbo(sub) {
+  const { abo } = lignesAbo(sub);
+  const iv = abo && abo.price && abo.price.recurring && abo.price.recurring.interval;
+  return iv === 'month' ? 'mensuel' : 'annuel';
+}
+function etatAbo(sub, mode, ancien) {
+  const { abo, page } = lignesAbo(sub);
+  const montant = ((sub.items || {}).data || []).reduce((t, it) => t + ((it.price && it.price.unit_amount) || 0) * (it.quantity || 1), 0);
+  return { id: sub.id, mode, statut: sub.status, formule: formuleAbo(sub), fin: iso(sub.current_period_end), debut: iso(sub.start_date),
+    resiliation: !!sub.cancel_at_period_end, client: typeof sub.customer === 'string' ? sub.customer : sub.customer && sub.customer.id,
+    montant, pages: page ? page.quantity || 0 : 0, ligneAbo: abo ? abo.id : null, lignePage: page ? page.id : null,
+    depuis: (sub.metadata && sub.metadata.depuis) || (ancien && ancien.depuis) || null };
+}
+/* Recopie l'état d'un abonnement Stripe sur le compte (tit modifié sur place ; l'appelant l'écrit) */
+function appliquerAbo(tit, sub, mode) {
+  const suivant = (tit.aboSuivant && tit.aboSuivant.id === sub.id) ||
+    (sub.metadata && sub.metadata.suivant === '1' && tit.abo && tit.abo.id !== sub.id && aboActif(tit));
+  if (suivant) { tit.aboSuivant = etatAbo(sub, mode, tit.aboSuivant); if (['canceled', 'incomplete_expired'].includes(sub.status)) delete tit.aboSuivant; return 'suivant'; }
+  const vivant = ['active', 'trialing', 'past_due'].includes(sub.status);
+  if (tit.abo && tit.abo.id !== sub.id) {
+    if (!vivant) return 'ignoré';                                   // ancien abonnement terminé : rien à faire
+    if (aboActif(tit)) console.error('deux abonnements actifs', tit.slug, tit.abo.id, sub.id);
+  }
+  if (sub.status === 'incomplete') return 'en attente';             // 1er paiement pas encore confirmé
+  const e = etatAbo(sub, mode, tit.abo && tit.abo.id === sub.id ? tit.abo : null);
+  tit.abo = e;
+  if (vivant) {
+    tit.plan = 'payant';
+    tit.formule = e.formule;
+    const fin = Date.parse(e.fin) + GRACE_ABO;
+    const actuel = Date.parse(tit.payeJusqua || 0) || 0;
+    // impayé : on garde le délai de grâce déjà accordé ; sinon fin de la période payée
+    tit.payeJusqua = new Date(sub.status === 'past_due' ? Math.max(fin, actuel) : fin).toISOString();
+    if (!tit.aboDepuis) tit.aboDepuis = new Date().toISOString();
+    if (tit.demande && tit.demande.genre === 'abonnement') tit.demande = null;
+  } else {
+    // résilié ou impayé définitif : la page passe en pause (cycle habituel : 90 jours de conservation)
+    tit.payeJusqua = new Date(Math.min(Date.now(), Date.parse(tit.payeJusqua || 0) || Date.now())).toISOString();
+  }
+  return 'appliqué';
+}
+/* Facture d'abonnement payée : notée une fois ; nouvelle période payée → créations IA remises à zéro */
+function enregistrerFactureAbo(tit, inv) {
+  if (!inv || !inv.id || (tit.refsPayees || []).includes(inv.id)) return false;
+  const ttc = inv.amount_paid || 0;
+  const taxe = inv.tax || (inv.total_tax_amounts || []).reduce((t, x) => t + (x.amount || 0), 0);
+  const raison = inv.billing_reason || '';
+  const formule = (tit.abo && tit.abo.formule) || '';
+  const nouvellePeriode = ttc > 0 && (raison === 'subscription_create' || raison === 'subscription_cycle' || tit.quotasAuPaiement);
+  journaliser(tit, 'abonnement', ttc - taxe, 'Stripe · ' + (ttc / 100).toFixed(2) + ' € TTC · ' + (formule === 'mensuel' ? 'mensuel' : 'annuel') +
+    (raison === 'subscription_update' ? ' · ajustement' : raison === 'subscription_cycle' ? ' · reconduction' : ''), inv.id);
+  if (nouvellePeriode) {
+    const ia = tit.ia || {};
+    tit.ia = Object.assign({ texte: 0, picto: 0, fond: 0, depuis: new Date().toISOString() }, ia.bonus ? { bonus: ia.bonus } : {}, ia.depense ? { depense: ia.depense } : {});
+    delete tit.quotasAuPaiement;
+  }
+  return true;
+}
+async function compteDeAbo(env, sub) {
+  const slug = (sub.metadata && sub.metadata.slug) || await env.CLIENTS.get('abo:' + sub.id);
+  return slug ? lireCompte(env, slug) : null;
+}
+/* Événement Stripe sur un abonnement (création, changement, résiliation, facture payée) */
+async function majAbonnement(env, idSub, facture, objet) {
+  const st = await lireStripe(env);
+  if (!st || !idSub) return 'non configuré';
+  // on relit toujours l'abonnement chez Stripe : état et période à jour, quel que soit l'ordre d'arrivée des événements
+  let sub;
+  try { sub = await stripe(env, st, 'GET', '/subscriptions/' + idSub); }
+  catch (e) { if (!objet) throw e; sub = objet; }
+  let suivantFrais = null;
+  { const t0 = await compteDeAbo(env, sub);   // relais annuel → mensuel : on relit l'abonnement suivant avant de toucher au compte
+    if (t0 && ['canceled', 'incomplete_expired'].includes(sub.status) && t0.abo && t0.abo.id === sub.id && t0.aboSuivant) {
+      try { suivantFrais = await stripe(env, st, 'GET', '/subscriptions/' + t0.aboSuivant.id); } catch (e) { console.error('relais mensuel', e.message); }
+    } }
+  // le compte est lu juste avant d'être écrit (plusieurs événements Stripe peuvent arriver en même temps)
+  let tit = await compteDeAbo(env, sub);
+  if (!tit) { console.error('abonnement sans compte', idSub); return 'compte introuvable'; }
+  if (tit.parent) tit = (await lireCompte(env, tit.parent)) || tit;
+  const etaitActif = aboActif(tit);
+  // fin de l'abonnement annuel alors que le mensuel est déjà prévu : le mensuel prend le relais, sans pause
+  if (['canceled', 'incomplete_expired'].includes(sub.status) && tit.abo && tit.abo.id === sub.id && tit.aboSuivant) {
+    const suivant = tit.aboSuivant;
+    delete tit.aboSuivant;
+    tit.abo = suivant;
+    if (suivantFrais && suivantFrais.id === suivant.id) appliquerAbo(tit, suivantFrais, st.mode);
+  } else appliquerAbo(tit, sub, st.mode);
+  if (facture && facture.status === 'paid' && (!tit.aboSuivant || tit.aboSuivant.id !== sub.id || facture.amount_paid > 0)) enregistrerFactureAbo(tit, facture);
+  await ecrireCompte(env, tit);
+  await env.CLIENTS.put('abo:' + sub.id, tit.slug);
+  if (!etaitActif && aboActif(tit)) ecrireStats(env, PAGE_SITE, [['etape', 'abonne']]);
+  await synchroniserPages(env, tit, false);
+  return 'appliqué';
+}
+/* Carte refusée au renouvellement : Stripe relance pendant ~2 semaines ; on prévient le client une fois par facture */
+async function echecPaiement(env, inv) {
+  const st = await lireStripe(env);
+  if (!st) return;
+  const idSub = typeof inv.subscription === 'string' ? inv.subscription : inv.subscription.id;
+  let sub = null;
+  try { sub = await stripe(env, st, 'GET', '/subscriptions/' + idSub); } catch (e) {}
+  let tit = sub ? await compteDeAbo(env, sub) : null;
+  if (!tit) { const sl = await env.CLIENTS.get('abo:' + idSub); tit = sl ? await lireCompte(env, sl) : null; }
+  if (!tit) return;
+  if (tit.parent) tit = (await lireCompte(env, tit.parent)) || tit;
+  if (sub) appliquerAbo(tit, sub, st.mode);
+  if (tit.abo && tit.abo.id === idSub) {
+    tit.payeJusqua = new Date(Math.max(Date.parse(tit.payeJusqua || 0) || 0, Date.now() + GRACE_IMPAYE)).toISOString();
+    tit.abo.impaye = new Date().toISOString();
+  }
+  const cle = 'echec:' + inv.id;
+  const prevenir = tit.email && !(tit.rappels || {})[cle] && (inv.amount_due || 0) > 0;
+  if (prevenir) tit.rappels = Object.assign({}, tit.rappels, { [cle]: new Date().toISOString() });   // noté avant l'envoi : un seul e-mail
+  await ecrireCompte(env, tit);
+  await synchroniserPages(env, tit, false);
+  if (prevenir) {
+    const conf = await lireEmail(env).catch(() => null);
+    if (conf) {
+      try { const m = mailAbo(tit, 'echec', { montant: inv.amount_due }); await envoyerEmail(env, conf, tit.email, m.sujet, m.html, m.texte); }
+      catch (e) { console.error('e-mail échec de paiement', e.message); }
+    }
+  }
+}
+/* Retour de Checkout (ou webhook) pour un abonnement : on recopie l'abonnement et sa 1re facture */
+async function encaisserSessionAbo(env, session) {
+  if (session.status !== 'complete' || !session.subscription) return 'non payé';
+  const idSub = typeof session.subscription === 'string' ? session.subscription : session.subscription.id;
+  const st = await lireStripe(env);
+  if (!st) return 'non configuré';
+  const sub = await stripe(env, st, 'GET', '/subscriptions/' + idSub);
+  let facture = null;
+  if (sub.latest_invoice) {
+    try { facture = typeof sub.latest_invoice === 'string' ? await stripe(env, st, 'GET', '/invoices/' + sub.latest_invoice) : sub.latest_invoice; } catch (e) {}
+  }
+  const avant = await compteDeAbo(env, sub);
+  const deja = avant && avant.abo && avant.abo.id === idSub && aboActif(avant);
+  const r = await majAbonnement(env, idSub, facture && facture.status === 'paid' ? facture : null, sub);
+  return r === 'appliqué' ? (deja ? 'déjà appliqué' : 'appliqué') : r;
+}
+/* Session Checkout d'abonnement (mode « subscription ») pour un compte titulaire */
+async function sessionAbonnement(env, st, tit, formule, retour) {
+  const c = await confAbo(env, st);
+  const nbPages = (tit.pages || []).length;
+  const lignes = [{ price: await prixStripe(env, st, 'abo', formule, OFFRE[formule].prix), quantity: 1 }];
+  if (nbPages) lignes.push({ price: await prixStripe(env, st, 'page', formule, OFFRE[formule].page), quantity: nbPages });
+  // pas de double paiement : l'essai en cours (ou l'ancien abonnement annuel déjà payé) va jusqu'au bout, le 1er prélèvement a lieu à sa fin
+  const finActuelle = tit.plan === 'essai' && actif(tit) ? Date.parse(tit.finEssai) : tit.plan === 'payant' && actif(tit) && tit.payeJusqua ? Date.parse(tit.payeJusqua) : 0;
+  const depuis = tit.plan === 'essai' ? 'essai' : 'payant';
+  const sd = { metadata: { slug: tit.slug, formule, depuis }, default_tax_rates: [c.taxRateTTC],
+    description: 'qrbc — ' + tit.slug + '.' + DOMAINE + (nbPages ? ' + ' + nbPages + (nbPages > 1 ? ' pages' : ' page') : '') };
+  if (finActuelle > Date.now() + 49 * 3600000) sd.trial_end = String(Math.floor(finActuelle / 1000));
+  const clientStripe = await clientStripePour(env, st, tit);
+  const session = await stripe(env, st, 'POST', '/checkout/sessions', {
+    mode: 'subscription',
+    client_reference_id: tit.slug,
+    customer: clientStripe || undefined,
+    customer_email: clientStripe ? undefined : (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(tit.email || '') ? tit.email : undefined),
+    line_items: lignes,
+    subscription_data: sd,
+    payment_method_collection: 'always',
+    metadata: { slug: tit.slug, genre: 'abonnement', formule },
+    managed_payments: { enabled: false },
+    success_url: retour + (retour.includes('?') ? '&' : '?') + 'paiement=ok&session_id={CHECKOUT_SESSION_ID}',
+    cancel_url: retour + (retour.includes('?') ? '&' : '?') + 'paiement=annule'
+  });
+  return session;
+}
+/* Portail client Stripe : changer de carte, télécharger les factures (la résiliation reste dans l'éditeur) */
+async function sessionPortail(env, st, client, retour) {
+  const c = await confAbo(env, st);
+  const ouvrir = conf => stripe(env, st, 'POST', '/billing_portal/sessions', { customer: client, return_url: retour, configuration: conf || undefined, locale: 'auto' });
+  try { return (await ouvrir(c.portail)).url; }
+  catch (e) {
+    if (c.portail && !/configuration/i.test(e.message)) throw e;
+    // pas encore de réglage du portail dans ce compte Stripe : on le crée (carte + factures, sans résiliation)
+    const conf = await stripe(env, st, 'POST', '/billing_portal/configurations', {
+      business_profile: { headline: 'qrbc — carte bancaire et factures', privacy_policy_url: 'https://' + DOMAINE + '/mentions-legales', terms_of_service_url: 'https://' + DOMAINE + '/cgv' },
+      features: { invoice_history: { enabled: 'true' }, payment_method_update: { enabled: 'true' }, customer_update: { enabled: 'false' },
+        subscription_cancel: { enabled: 'false' }, subscription_update: { enabled: 'false' } }
+    });
+    await ecrireConfAbo(env, st, x => { x.portail = conf.id; });
+    return (await ouvrir(conf.id)).url;
+  }
+}
+
+/* Ajoute (+1) ou retire (-1) une page sur l'abonnement. Ajout : prorata facturé tout de suite sur la carte enregistrée ;
+   si le paiement échoue, Stripe n'applique pas le changement. Retrait : sans remboursement (effet à la prochaine échéance). */
+async function changerPagesAbo(env, st, tit, delta) {
+  const c = await confAbo(env, st);
+  const sub = await stripe(env, st, 'GET', '/subscriptions/' + tit.abo.id);
+  const { page } = lignesAbo(sub);
+  const formule = formuleAbo(sub);
+  const qte = Math.max(0, ((page && page.quantity) || 0) + delta);
+  const items = {};
+  if (page && qte > 0) items[0] = { id: page.id, quantity: String(qte) };
+  else if (page) items[0] = { id: page.id, deleted: 'true' };
+  else if (qte > 0) items[0] = { price: await prixStripe(env, st, 'page', formule, OFFRE[formule].page), quantity: String(qte), tax_rates: [c.taxRateTTC] };
+  else return sub;
+  const maj = await stripe(env, st, 'POST', '/subscriptions/' + sub.id, delta > 0
+    ? { items, proration_behavior: 'always_invoice', payment_behavior: 'pending_if_incomplete' }
+    : { items, proration_behavior: 'none' });
+  if (maj.pending_update) throw new ErreurAPI(402, 'Le paiement a été refusé par votre banque : la page n’a pas été ajoutée. Vérifiez votre carte (« Carte et factures ») puis réessayez.', 'paiement_refuse');
+  appliquerAbo(tit, maj, st.mode);
+  return maj;
 }
 
 /* Retour après paiement : seulement vers nos propres adresses (pas de redirection ouverte) */
@@ -2159,7 +2673,12 @@ async function resumeAvecOffre(env, c) {
   }
   r.offre.enLigne = !!(await env.CLIENTS.get('config:stripe'));
   r.offre.prixPage = PRIX_PAGE; r.offre.prixTraduction = PRIX_TRADUCTION;
-  if (c.parent) r.renouvellement = null;                        // l'abonnement se règle depuis la page principale
+  if (c.parent) {                                                // l'abonnement se règle depuis la page principale
+    r.renouvellement = null;
+    const tit = await titulaireDe(env, c);
+    if (tit && tit !== c) { r.abo = resumeAbo(tit); r.formule = tit.formule || null; }
+  }
+  else if (c.abo) r.renouvellement = null;                      // abonnement Stripe : reconduit automatiquement
   else if ((c.pages || []).length) r.renouvellement = await prixGroupe(env, c);
   return r;
 }
@@ -2202,6 +2721,7 @@ async function synchroniserPages(env, tit, nouvelleAnnee) {
     const c = await lireCompte(env, s);
     if (!c || c.parent !== tit.slug) continue;
     c.plan = tit.plan; c.payeJusqua = tit.payeJusqua; c.finEssai = tit.finEssai;
+    if (tit.formule) c.formule = tit.formule; else delete c.formule;
     if (nouvelleAnnee) c.ia = { texte: 0, picto: 0, depuis: new Date().toISOString() };
     await ecrireCompte(env, c);
   }
@@ -2236,6 +2756,13 @@ async function appliquerAbonnementGroupe(env, tit, montantHT, deduction, source,
 /* Ajout d'une page : possible pour un compte offert (gratuit) ou abonné actif ; prix au prorata jusqu'à l'échéance commune */
 function offreAjout(tit) {
   if (tit.plan === 'gratuit') return { possible: true, gratuit: true, prix: 0 };
+  if (aboActif(tit)) {
+    if (tit.abo.statut === 'trialing' && tit.abo.depuis === 'essai')
+      return { possible: false, raison: 'Les pages supplémentaires et les traductions sont disponibles dès votre premier paiement, à la fin de l’essai.' };
+    if (tit.abo.resiliation) return { possible: false, raison: 'Votre abonnement est résilié : reprenez-le d’abord (« Mon abonnement ») pour ajouter une page.' };
+    const f = tit.abo.formule === 'mensuel' ? 'mensuel' : 'annuel';
+    return { possible: true, gratuit: false, ligne: true, formule: f, prixPeriode: OFFRE[f].page, echeance: tit.abo.fin, prix: OFFRE[f].page, ttc: true };
+  }
   if (tit.plan === 'payant' && actif(tit) && !tit.payeJusqua)          // abonné sans date de fin (compte réglé à la main)
     return { possible: true, gratuit: false, jours: 365, echeance: null, prixAnnuel: PRIX_PAGE, prix: PRIX_PAGE };
   if (tit.plan === 'payant' && actif(tit) && tit.payeJusqua) {
@@ -2245,7 +2772,7 @@ function offreAjout(tit) {
   }
   return { possible: false, raison: tit.plan === 'essai'
     ? 'Les pages supplémentaires et les traductions sont disponibles avec l’abonnement. Abonnez-vous d’abord à votre page principale.'
-    : 'Votre abonnement est inactif : renouvelez-le d’abord pour ajouter une page.' };
+    : 'Votre abonnement est inactif : abonnez-vous d’abord pour ajouter une page.' };
 }
 /* Vérifie une demande d'ajout et renvoie la page à créer : { type, cible, source?, langue?, langueSource? } */
 async function preparerAjout(env, tit, courant, d) {
@@ -2395,8 +2922,26 @@ function actif(c) {
   if (c.plan === 'payant') return !c.payeJusqua || Date.parse(c.payeJusqua) > Date.now();
   return false;
 }
+/* Abonnement Stripe en cours (actif, en période d'essai Stripe ou en impayé que Stripe relance) */
+function aboActif(c) { return !!(c && c.abo && ['active', 'trialing', 'past_due'].includes(c.abo.statut)); }
+/* Quotas IA du compte : selon le plan et, pour un abonné, la formule. Pendant l'essai Stripe qui prolonge
+   l'essai gratuit (abonnement souscrit avant la fin de l'essai), on garde les quotas d'essai jusqu'au 1er paiement. */
+function quotasDe(c) {
+  if (!c) return null;
+  if (c.plan === 'payant') {
+    if (c.abo && c.abo.statut === 'trialing' && c.abo.depuis === 'essai') return QUOTAS_IA.essai;
+    return c.formule === 'mensuel' ? QUOTAS_IA.mensuel : QUOTAS_IA.payant;
+  }
+  return QUOTAS_IA[c.plan] || null;
+}
+function resumeAbo(c) {
+  if (!c || !c.abo) return null;
+  const a = c.abo;
+  return { formule: a.formule, statut: a.statut, fin: a.fin, debut: a.debut, resiliation: !!a.resiliation, montant: a.montant || 0, pages: a.pages || 0,
+    depuis: a.depuis || null, actif: aboActif(c), suivant: c.aboSuivant ? { formule: c.aboSuivant.formule, debut: c.aboSuivant.fin } : null };
+}
 function resumeCompte(c) {
-  const q = QUOTAS_IA[c.plan];
+  const q = quotasDe(c);
   const ia = c.ia || {};
   return {
     slug: c.slug, email: c.email, emailAVerifier: !!c.emailAVerifier, noindex: !!c.noindex, plan: c.plan, actif: actif(c), finEssai: c.finEssai, payeJusqua: c.payeJusqua, cree: c.cree, note: c.note || '', promo: c.promo || null,
@@ -2409,8 +2954,12 @@ function resumeCompte(c) {
       prix: PRIX_IA,
       express: Object.assign({ prix: PRIX_EXPRESS, enCours: expressEnCours(c) ? c.express : null }, coutExpress(c))
     },
-    offre: { prixAnnuel: PRIX_ANNUEL, rechargeMin: RECHARGE_MIN, quotasPayant: QUOTAS_IA.payant, tva: TVA, renouvelerAvant: RENOUVELER_AVANT },
-    renouvellement: prixRenouvellement(c),
+    offre: { prixAnnuel: PRIX_ANNUEL, rechargeMin: RECHARGE_MIN, quotasPayant: QUOTAS_IA.payant, tva: TVA, renouvelerAvant: RENOUVELER_AVANT,
+      essaiJours: JOURS_ESSAI,
+      formules: { mensuel: { prix: OFFRE.mensuel.prix, page: OFFRE.mensuel.page, quotas: QUOTAS_IA.mensuel },
+                  annuel: { prix: OFFRE.annuel.prix, page: OFFRE.annuel.page, quotas: QUOTAS_IA.payant } } },
+    formule: c.formule || null, abo: resumeAbo(c),
+    renouvellement: c.abo ? null : prixRenouvellement(c),
     demande: c.demande || null,
     // comptes à plusieurs pages
     parent: c.parent || null, pages: c.pages || [], traduction: c.traduction || null, aTraduire: !!c.aTraduire,
@@ -2460,24 +3009,31 @@ function modeFacturation(c, type, express, page) {
     throw new ErreurAPI(402, 'Les essais de cette étape de la création express sont épuisés. Rien n’a été décompté : écrivez-nous si le problème continue.', 'express_epuise');
   }
   if (c.plan === 'gratuit') return 'illimite';
-  const q = QUOTAS_IA[c.plan];
+  const q = quotasDe(c);
   const utilises = (c.ia && c.ia[type]) || 0;
   const bonus = (c.ia && c.ia.bonus && c.ia.bonus[type]) || 0;
   if (q && utilises < (q[type] || 0) * facteurQuota(c) + bonus) return 'inclus';
   if (c.plan === 'payant' && (c.credit || 0) >= PRIX_IA[type]) return 'credit';
-  const n = q ? (q[type] || 0) * facteurQuota(c) : 0, np = QUOTAS_IA.payant[type] || 0;
+  const n = q ? (q[type] || 0) * facteurQuota(c) : 0, np = QUOTAS_IA.payant[type] || 0, nm = QUOTAS_IA.mensuel[type] || 0;
+  const mensuel = c.plan === 'payant' && c.formule === 'mensuel' && !(c.abo && c.abo.statut === 'trialing' && c.abo.depuis === 'essai');
   const nom = k => type === 'texte' ? (k > 1 ? 'rédactions IA' : 'rédaction IA')
     : type === 'fond' ? (k > 1 ? 'créations d’images de fond' : 'création d’images de fond')
     : (k > 1 ? 'créations de motifs IA' : 'création de motifs IA');
   const unite = euros(PRIX_IA[type]) + ' HT ' + (type === 'texte' ? 'la rédaction' : type === 'fond' ? 'la création (2 images)' : 'la création de motifs');
-  if (c.plan === 'essai') {
-    const offre = np > 0 ? 'Abonnez-vous dès maintenant pour en obtenir ' + np + ' par an (' + euros(PRIX_ANNUEL) + ' HT/an).'
-      : 'Abonnez-vous dès maintenant (' + euros(PRIX_ANNUEL) + ' HT/an), puis ' + unite + '.';
+  const enEssai = c.plan === 'essai' || (c.abo && c.abo.statut === 'trialing' && c.abo.depuis === 'essai');
+  if (enEssai) {
+    const offre = c.plan === 'essai'
+      ? 'Abonnez-vous dès maintenant : ' + (nm > 0 ? nm + ' par mois avec la formule mensuelle (' + euros(OFFRE.mensuel.prix) + ' TTC/mois)' : 'formule mensuelle à ' + euros(OFFRE.mensuel.prix) + ' TTC/mois') +
+        (np > 0 ? ', ' + np + ' par an avec la formule annuelle (' + euros(OFFRE.annuel.prix) + ' TTC/an).' : '.')
+      : 'Les quotas de votre formule s’appliqueront dès votre premier paiement. D’ici là : ' + unite + ' sur votre crédit IA.';
+    if (c.plan === 'payant' && (c.credit || 0) >= PRIX_IA[type]) return 'credit';
     throw new ErreurAPI(402, (n > 0 ? (n > 1 ? 'Vos ' + n + ' ' + nom(n) + ' d’essai sont utilisées. ' : 'Votre ' + nom(1) + ' d’essai est utilisée. ')
-      : 'La ' + nom(1) + ' n’est pas incluse dans l’essai. ') + offre, 'essai_epuise');
+      : 'La ' + nom(1) + ' n’est pas incluse dans l’essai. ') + offre, c.plan === 'essai' ? 'essai_epuise' : 'credit_insuffisant', { formule: c.formule || null });
   }
-  throw new ErreurAPI(402, (n > 0 ? (n > 1 ? 'Vos ' + n + ' ' + nom(n) + ' de l’année sont utilisées. ' : 'Votre ' + nom(1) + ' de l’année est utilisée. ')
-    : 'La ' + nom(1) + ' n’est pas incluse dans l’abonnement. ') + 'Rechargez votre crédit (' + euros(RECHARGE_MIN) + ' HT minimum, ' + unite + ').', 'credit_insuffisant');
+  const periode = mensuel ? 'du mois' : 'de l’année';
+  throw new ErreurAPI(402, (n > 0 ? (n > 1 ? 'Vos ' + n + ' ' + nom(n) + ' ' + periode + ' sont utilisées. ' : 'Votre ' + nom(1) + ' ' + periode + ' est utilisée. ')
+    : 'La ' + nom(1) + ' n’est pas incluse dans l’abonnement. ') + 'Rechargez votre crédit (' + euros(RECHARGE_MIN) + ' HT minimum, ' + unite + ')' +
+    (mensuel && np > 0 ? ', ou passez à la formule annuelle : ' + np + ' par an, tout de suite (' + euros(OFFRE.annuel.prix) + ' TTC/an).' : '.'), 'credit_insuffisant', { formule: c.formule || null });
 }
 function euros(c) { return ((c || 0) / 100).toFixed(2).replace('.', ',').replace(',00', '') + ' €'; }
 /* Décompte après une génération réussie : l'express sur la page, le reste sur la réserve (relue juste avant) */
@@ -2514,7 +3070,7 @@ function coutExpress(c) {
       if ((q[k] || 0) + (bonus[k] || 0) - (ia[k] || 0) < essai[k]) manque.push(k);
     }
     if (!essai.texte || manque.length) return { possible: false, mode: 'essai', essai, code: 'essai_epuise',
-      message: 'La création express utilise la moitié de vos créations IA d’essai, et il n’en reste plus assez. Abonnez-vous (' + euros(PRIX_ANNUEL) + ' HT/an) : la création express coûtera alors ' + euros(PRIX_EXPRESS) + ' HT.' };
+      message: 'La création express utilise la moitié de vos créations IA d’essai, et il n’en reste plus assez. Abonnez-vous (' + euros(OFFRE.mensuel.prix) + ' TTC/mois ou ' + euros(OFFRE.annuel.prix) + ' TTC/an) : la création express coûtera alors ' + euros(PRIX_EXPRESS) + ' HT.' };
     return { possible: true, mode: 'essai', essai };
   }
   const ok = (c.credit || 0) >= PRIX_EXPRESS;
@@ -2689,6 +3245,16 @@ function compterVisiteSite(request, env, url, page) {
   ecrireStats(env, PAGE_SITE, [['visite', ''], ['source', source], ['page', page], ['pays', /^[A-Z]{2}$/.test(pays) ? pays : 'XX'],
     ['langue', l === 'en' || l === 'ru' ? l : 'fr']]);
 }
+/* Étapes d'inscription vues depuis le formulaire (arrivée, début de saisie du nom, nom disponible) : un compteur par jour */
+const ETAPES_PAGE = new Set(['form', 'saisie', 'dispo']);
+async function compterEtape(request, env, url) {
+  const e = url.searchParams.get('e') || '';
+  if (ETAPES_PAGE.has(e) && visiteurHumain(request)) {
+    await limiter(env, 'etape:' + ip(request) + ':' + new Date().toISOString().slice(0, 13), 60, 7200, 'Trop de requêtes.').catch(() => {});
+    ecrireStats(env, PAGE_SITE, [['etape', e]]);
+  }
+  return new Response(null, { status: 204 });
+}
 async function compterClic(request, env, slug) {
   if (env.STATS && visiteurHumain(request) && /^[a-z0-9-]+$/.test(slug)) {
     let d = {};
@@ -2704,7 +3270,7 @@ function marquerProprietaire() {
 }
 async function lireStats(env, page, jours) {
   const debut = jourParis(new Date(Date.now() - (jours - 1) * 86400000));
-  const res = { actif: !!env.STATS, jours, debut, fin: jourParis(), parJour: {}, source: {}, pays: {}, langue: {}, clic: {}, page: {}, inscription: {}, visites: 0, clics: 0, inscriptions: 0 };
+  const res = { actif: !!env.STATS, jours, debut, fin: jourParis(), parJour: {}, source: {}, pays: {}, langue: {}, clic: {}, page: {}, inscription: {}, etape: {}, visites: 0, clics: 0, inscriptions: 0 };
   if (!(await tablesStats(env))) return res;
   const { results } = await env.STATS.prepare('SELECT jour, type, cle, SUM(n) AS n FROM stats WHERE page = ? AND jour >= ? GROUP BY jour, type, cle')
     .bind(page, debut).all();
@@ -2800,9 +3366,9 @@ async function planGlobal(env, frais) {
    et Google lisent le titre et la description sans exécuter le JavaScript */
 const META_ACCUEIL = {
   en: { lang: 'en', locale: 'en_GB', titre: "QR Business Card in your customers’ language | qrbc",
-        desc: "QR business card and mobile page for your business. Edit it anytime, translate it with a single QR code. 14 days free, then €18 excl. VAT/year." },
+        desc: "QR business card and mobile page for your business. Edit it anytime, translate it with a single QR code. 1 month free, then €1.99 a month, no commitment." },
   ru: { lang: 'ru', locale: 'ru_RU', titre: "Визитка с QR-кодом на любом языке | qrbc – QR Business Card",
-        desc: "Визитка с QR-кодом и мобильная страница для вашего дела. Меняйте её в любой момент, переводите — QR-код один. 14 дней бесплатно, затем 18 € без НДС в год." }
+        desc: "Визитка с QR-кодом и мобильная страница для вашего дела. Меняйте её в любой момент, переводите — QR-код один. 1 месяц бесплатно, затем 1,99 € в месяц без обязательств." }
 };
 /* Dictionnaire de l'interface (i18n.js : 'français': ['English', 'Русский']) lu une fois par instance du Worker,
    pour envoyer l'accueil déjà traduit aux moteurs de recherche (sans attendre le JavaScript) */

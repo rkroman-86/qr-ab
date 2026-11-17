@@ -133,7 +133,12 @@
           <option value="">Tous les clients</option>
           <option value="demande">Demandes de paiement</option>
           <option value="essai">Essais</option>
-          <option value="payant">Abonnés</option>
+          <option value="payant">Abonnés (toutes formules)</option>
+          <option value="mensuel">Abonnés mensuels</option>
+          <option value="annuel">Abonnés annuels</option>
+          <option value="ancien">Anciens abonnés (paiement annuel unique)</option>
+          <option value="resilie">Résiliation programmée</option>
+          <option value="impaye">Paiement refusé</option>
           <option value="gratuit">Offerts</option>
           <option value="inactif">Inactifs</option>
           <option value="supprimer">À supprimer (+ de 90 jours)</option>
@@ -196,7 +201,7 @@
     <div class="boite" id="b-rappels">
       <h2>Rappels automatiques</h2>
       <p class="infos" style="margin-top:0">Chaque jour à 8 h–9 h (heure de Paris), un e-mail part aux clients concernés, dans la langue de leur éditeur, avec le bouton de paiement et le lien vers leur page :
-        essai J-7 et J-1 · abonnement J-30, J-7 et J-1 · jour de la mise en pause · J+30 · J+80 (suppression annoncée). À J+90, le compte apparaît « à supprimer » dans l’onglet Clients : la suppression reste manuelle.</p>
+        essai J-7 et J-1 · abonnés annuels : rappel de reconduction (loi Chatel) à J-35 · échec de paiement : e-mail immédiat · anciens abonnés (paiement unique) J-30, J-7 et J-1 · jour de la mise en pause · J+30 · J+80 (suppression annoncée). À J+90, le compte apparaît « à supprimer » dans l’onglet Clients : la suppression reste manuelle.</p>
       <div id="rappels-etat" class="infos">…</div>
       <div class="actions">
         <button type="button" id="rappels-voir">Voir les envois du jour</button>
@@ -247,28 +252,35 @@
     <form class="boite" id="f-tarifs">
       <h2>Tarifs et quotas IA</h2>
       <div class="g2">
-        <label><span>Abonnement annuel (€ HT)</span><input type="text" inputmode="decimal" id="t-prixAnnuel"></label>
-        <span></span>
+        <label><span>Abonnement mensuel (€ TTC par mois)</span><input type="text" inputmode="decimal" id="t-aboMensuel"></label>
+        <label><span>Abonnement annuel (€ TTC par an)</span><input type="text" inputmode="decimal" id="t-aboAnnuel"></label>
+        <label><span>Page supplémentaire ou version traduite, mensuel (€ TTC par mois)</span><input type="text" inputmode="decimal" id="t-pageMensuel"></label>
+        <label><span>Page supplémentaire ou version traduite, annuel (€ TTC par an)</span><input type="text" inputmode="decimal" id="t-pageAnnuel"></label>
         <label><span>Prix d’une rédaction de textes (€ HT)</span><input type="text" inputmode="decimal" id="t-prixTexte"></label>
         <label><span>Prix d’une création de pictos (€ HT)</span><input type="text" inputmode="decimal" id="t-prixPicto"></label>
         <label><span>Prix d’une création de 2 images IA, fond ou pancarte (€ HT)</span><input type="text" inputmode="decimal" id="t-prixFond"></label>
         <label><span>Prix d’une création express pour un abonné (€ HT)</span><input type="text" inputmode="decimal" id="t-prixExpress"></label>
         <span></span>
-        <label><span>Page supplémentaire ou version traduite (€ HT par an, au prorata la 1re fois)</span><input type="text" inputmode="decimal" id="t-prixPage"></label>
+        <label><span>Anciens abonnés : abonnement annuel (€ HT, paiement unique)</span><input type="text" inputmode="decimal" id="t-prixAnnuel"></label>
+        <label><span>Anciens abonnés : page supplémentaire (€ HT par an)</span><input type="text" inputmode="decimal" id="t-prixPage"></label>
         <label><span>Nouvelle traduction d’une page (€ HT ; la 1re est offerte)</span><input type="text" inputmode="decimal" id="t-prixTraduction"></label>
-        <label><span>Essai 14 jours : rédactions offertes</span><input type="number" min="0" step="1" id="t-essaiTexte"></label>
-        <label><span>Essai 14 jours : créations de pictos offertes</span><input type="number" min="0" step="1" id="t-essaiPicto"></label>
-        <label><span>Essai 14 jours : créations d’images IA offertes (fond ou pancarte)</span><input type="number" min="0" step="1" id="t-essaiFond"></label>
+        <label><span>Essai (1 mois) : rédactions offertes</span><input type="number" min="0" step="1" id="t-essaiTexte"></label>
+        <label><span>Essai (1 mois) : créations de pictos offertes</span><input type="number" min="0" step="1" id="t-essaiPicto"></label>
+        <label><span>Essai (1 mois) : créations d’images IA offertes (fond ou pancarte)</span><input type="number" min="0" step="1" id="t-essaiFond"></label>
         <span></span>
-        <label><span>Abonnement : rédactions incluses par an</span><input type="number" min="0" step="1" id="t-payantTexte"></label>
-        <label><span>Abonnement : créations de pictos incluses par an</span><input type="number" min="0" step="1" id="t-payantPicto"></label>
-        <label><span>Abonnement : créations d’images IA incluses par an (fond ou pancarte)</span><input type="number" min="0" step="1" id="t-payantFond"></label>
+        <label><span>Mensuel : rédactions incluses par mois</span><input type="number" min="0" step="1" id="t-mensuelTexte"></label>
+        <label><span>Mensuel : créations de pictos incluses par mois</span><input type="number" min="0" step="1" id="t-mensuelPicto"></label>
+        <label><span>Mensuel : créations d’images IA incluses par mois (fond ou pancarte)</span><input type="number" min="0" step="1" id="t-mensuelFond"></label>
+        <span></span>
+        <label><span>Annuel : rédactions incluses par an</span><input type="number" min="0" step="1" id="t-payantTexte"></label>
+        <label><span>Annuel : créations de pictos incluses par an</span><input type="number" min="0" step="1" id="t-payantPicto"></label>
+        <label><span>Annuel : créations d’images IA incluses par an (fond ou pancarte)</span><input type="number" min="0" step="1" id="t-payantFond"></label>
       </div>
       <div class="infos" id="t-apercu"></div>
       <button class="prim">Enregistrer les tarifs</button>
       <button type="button" id="t-defaut">Valeurs d’origine</button>
       <div class="msg" id="m-tarifs"></div>
-      <p class="infos">Appliqué partout (appli, offres, messages, paiements) dans la minute. Les abonnements en cours gardent ce qui a déjà été payé ; les quotas restants suivent les nouvelles valeurs.</p>
+      <p class="infos">Appliqué partout (appli, offres, messages, paiements) dans la minute. Un nouveau prix d’abonnement ne vaut que pour les nouveaux abonnements : les abonnements en cours gardent leur prix (à changer client par client dans Stripe, après information du client). Les quotas restants suivent les nouvelles valeurs. Pensez aussi aux CGV et à l’accueil, où les prix sont écrits.</p>
     </form>
 
     <div class="boite" id="b-email">
@@ -294,7 +306,7 @@
         <label><span>Nom de l’activité</span><input type="text" id="c-titre" placeholder="Chauffeur Privé Paris"></label>
         <label><span>E-mail du client</span><input type="email" id="c-email"></label>
         <label><span>Mot de passe de l’éditeur (10 car. min.)</span><input type="text" id="c-mdp" autocomplete="off" required></label>
-        <label><span>Formule</span><select id="c-plan"><option value="gratuit">Gratuit (offert, sans limite)</option><option value="essai">Essai 14 jours</option><option value="payant">Payant</option></select></label>
+        <label><span>Formule</span><select id="c-plan"><option value="gratuit">Gratuit (offert, sans limite)</option><option value="essai">Essai (1 mois)</option><option value="payant">Payant</option></select></label>
         <label><span>Note interne</span><input type="text" id="c-note" placeholder="client test, vidéo démo…"></label>
       </div>
       <label><span>Importer une page GitHub existante (facultatif)</span><input type="url" id="c-import" placeholder="https://rkroman-86.github.io/qr-ab/"></label>
@@ -392,25 +404,30 @@
   });
 
   /* ---------- Tarifs et quotas ---------- */
-  const CHAMPS_TARIFS = ['prixAnnuel', 'prixTexte', 'prixPicto', 'prixFond', 'prixExpress', 'prixPage', 'prixTraduction', 'essaiTexte', 'essaiPicto', 'essaiFond', 'payantTexte', 'payantPicto', 'payantFond'];
+  const CHAMPS_TARIFS = ['aboMensuel', 'aboAnnuel', 'pageMensuel', 'pageAnnuel', 'prixAnnuel', 'prixTexte', 'prixPicto', 'prixFond', 'prixExpress', 'prixPage', 'prixTraduction', 'essaiTexte', 'essaiPicto', 'essaiFond', 'mensuelTexte', 'mensuelPicto', 'mensuelFond', 'payantTexte', 'payantPicto', 'payantFond'];
+  const EST_PRIX = k => /^(prix|abo|page)/.test(k);
   const versChamps = t => ({
     prixAnnuel: t.prixAnnuel / 100, prixTexte: t.prixTexte / 100, prixPicto: t.prixPicto / 100, prixFond: t.prixFond / 100, prixExpress: t.prixExpress / 100,
     prixPage: (t.prixPage != null ? t.prixPage : 900) / 100, prixTraduction: (t.prixTraduction != null ? t.prixTraduction : 150) / 100,
+    aboMensuel: t.aboMensuel / 100, aboAnnuel: t.aboAnnuel / 100, pageMensuel: t.pageMensuel / 100, pageAnnuel: t.pageAnnuel / 100,
+    mensuelTexte: t.mensuel.texte, mensuelPicto: t.mensuel.picto, mensuelFond: t.mensuel.fond,
     essaiTexte: t.essai.texte, essaiPicto: t.essai.picto, essaiFond: t.essai.fond,
     payantTexte: t.payant.texte, payantPicto: t.payant.picto, payantFond: t.payant.fond
   });
   let tarifsDefaut = null;
   function remplirTarifs(t) {
     const v = versChamps(t);
-    CHAMPS_TARIFS.forEach(k => { $('#t-' + k).value = k.startsWith('prix') ? v[k].toFixed(2).replace('.', ',') : String(v[k]); });
+    CHAMPS_TARIFS.forEach(k => { $('#t-' + k).value = EST_PRIX(k) ? v[k].toFixed(2).replace('.', ',') : String(v[k]); });
     apercuTarifs();
   }
   function apercuTarifs() {
     const n = k => Number(String($('#t-' + k).value).replace(',', '.'));
     const e = x => isFinite(x) ? x.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }) : '?';
-    $('#t-apercu').textContent = 'Le client voit : ' + e(n('prixAnnuel')) + ' HT/an (' + e(n('prixAnnuel') * 1.2) + ' TTC, soit ' + e(n('prixAnnuel') / 12) + ' HT/mois) · essai : ' +
-      n('essaiTexte') + ' rédaction(s) + ' + n('essaiPicto') + ' picto(s) + ' + n('essaiFond') + ' fond(s) · abonnement : ' + n('payantTexte') + ' + ' + n('payantPicto') + ' + ' + n('payantFond') +
-      ' par an · au-delà ' + e(n('prixTexte')) + ' / ' + e(n('prixPicto')) + ' / ' + e(n('prixFond')) + ' HT · création express ' + e(n('prixExpress')) + ' HT (essai : moitié des créations offertes) · page supplémentaire ' + e(n('prixPage')) + ' HT/an · nouvelle traduction ' + e(n('prixTraduction')) + ' HT';
+    $('#t-apercu').textContent = 'Le client voit : ' + e(n('aboMensuel')) + ' TTC/mois sans engagement, ou ' + e(n('aboAnnuel')) + ' TTC/an (au lieu de ' + e(n('aboMensuel') * 12) + ') · page supplémentaire ' +
+      e(n('pageMensuel')) + '/mois ou ' + e(n('pageAnnuel')) + '/an · essai : ' +
+      n('essaiTexte') + ' rédaction(s) + ' + n('essaiPicto') + ' picto(s) + ' + n('essaiFond') + ' image(s) · mensuel : ' + n('mensuelTexte') + ' + ' + n('mensuelPicto') + ' + ' + n('mensuelFond') +
+      ' par mois · annuel : ' + n('payantTexte') + ' + ' + n('payantPicto') + ' + ' + n('payantFond') +
+      ' par an · au-delà ' + e(n('prixTexte')) + ' / ' + e(n('prixPicto')) + ' / ' + e(n('prixFond')) + ' HT · création express ' + e(n('prixExpress')) + ' HT (essai : moitié des créations offertes) · nouvelle traduction ' + e(n('prixTraduction')) + ' HT';
   }
   CHAMPS_TARIFS.forEach(k => $('#t-' + k).addEventListener('input', apercuTarifs));
   async function chargerTarifs() { const r = await api('tarifs'); tarifsDefaut = r.defaut; remplirTarifs(r.tarifs); }
@@ -472,8 +489,14 @@
     const n = p => comptes.filter(c => c.plan === p).length;
     const demandes = comptes.filter(c => c.demande).length;
     const credits = comptes.reduce((t, c) => t + ((c.ia && c.ia.credit) || 0), 0);
+    // abonnements Stripe en cours (pages principales) : formules et revenu mensuel récurrent (TTC), hors résiliations programmées
+    const abos = comptes.filter(c => !c.parent && c.abo && c.abo.actif);
+    const nbF = f => abos.filter(c => c.abo.formule === f).length;
+    const mrr = abos.filter(c => !c.abo.resiliation && c.abo.statut !== 'trialing').reduce((t, c) => t + (c.abo.formule === 'mensuel' ? c.abo.montant : Math.round(c.abo.montant / 12)), 0);
     $('#stats').innerHTML = '<span>Total <b>' + comptes.length + '</b></span><span>Offerts <b>' + n('gratuit') + '</b></span><span>Essais <b>' + n('essai') +
       '</b></span><span>Abonnés <b>' + n('payant') + '</b></span><span>Inactifs <b>' + comptes.filter(c => !c.actif).length + '</b></span>' +
+      '<span>Mensuels <b>' + nbF('mensuel') + '</b></span><span>Annuels <b>' + nbF('annuel') + '</b></span>' +
+      '<span>Revenu mensuel récurrent <b>' + euros(mrr) + ' TTC</b></span>' +
       '<span>Crédits IA en cours <b>' + euros(credits) + '</b></span>' +
       (stats30 && stats30.actif ? '<span>Visites 30 j <b>' + stats30.visites + '</b></span><span>Clics 30 j <b>' + stats30.clics + '</b></span>' : '');
     const nb = $('#nb-demandes'); nb.textContent = demandes; nb.classList.toggle('cache', !demandes);
@@ -489,6 +512,11 @@
       if (f === 'inactif' && c.actif) return false;
       if (f === 'supprimer' && !c.aSupprimer) return false;
       if (['essai', 'payant', 'gratuit'].includes(f) && c.plan !== f) return false;
+      const ab = c.abo && c.abo.actif ? c.abo : null;
+      if ((f === 'mensuel' || f === 'annuel') && !(ab && ab.formule === f && !c.parent)) return false;
+      if (f === 'ancien' && !(c.plan === 'payant' && !c.abo && !c.parent)) return false;
+      if (f === 'resilie' && !(ab && ab.resiliation && !c.parent)) return false;
+      if (f === 'impaye' && !(ab && ab.statut === 'past_due' && !c.parent)) return false;
       if (!q) return true;
       const tit = c.parent ? parSlug[c.parent] : null;      // page rattachée : on cherche aussi par l'e-mail du compte
       return [c.slug, c.titre, c.email, tit && tit.email, c.parent, c.note, c.promo && 'code:' + c.promo.code].some(x => String(x || '').toLowerCase().includes(q));
@@ -644,6 +672,24 @@
     return el('div', { class: 'boite' }, [el('h3', { text: 'Visites par jour' }), el('div', { class: 'st-graph' }, [svg]),
       el('div', { class: 'st-axe' }, [el('span', { text: jourCourt(jrs[0]) }), el('span', { text: jourCourt(jrs[Math.floor(jrs.length / 2)]) }), el('span', { text: jourCourt(jrs[jrs.length - 1]) })]), info]);
   }
+  /* Étapes d'inscription : où les visiteurs s'arrêtent (compteurs anonymes, depuis le 17/11/2026) */
+  function entonnoir(e) {
+    const ETAPES = [['form', 'Arrivée sur le formulaire'], ['saisie', 'Début de saisie du nom'], ['dispo', 'Nom disponible trouvé'], ['envoi', 'Formulaire envoyé'],
+      ['confirme', 'E-mail confirmé'], ['publie', 'Première page enregistrée'], ['abonne', 'Abonnement souscrit']];
+    const b = el('div', { class: 'boite' }, [el('h3', { text: 'Étapes d’inscription' })]);
+    const max = Math.max(1, ...ETAPES.map(([k]) => e[k] || 0));
+    const z = el('div', { class: 'st-liste' });
+    let avant = null;
+    ETAPES.forEach(([k, nom]) => {
+      const n = e[k] || 0;
+      const taux = avant ? ' (' + Math.round(n / avant * 100) + ' %)' : '';
+      z.append(el('div', { class: 'st-ligne' }, [el('span', { class: 'nom', text: nom, title: nom }),
+        el('span', {}, [el('div', { class: 'barre-st', style: 'width:' + Math.max(1, Math.round(n / max * 100)) + '%' })]), el('span', { class: 'n', text: nombre(n) + taux })]));
+      avant = n || null;
+    });
+    b.append(z, el('p', { class: 'infos', text: 'Entre parenthèses : part des visiteurs de l’étape précédente. Compteurs anonymes (sans cookie), relevés depuis le 17 novembre 2026.' }));
+    return b;
+  }
   async function chargerStatsSite() {
     const z = $('#stats-site'); z.innerHTML = '';
     z.append(el('h2', { text: 'Statistiques de qrbc.app', style: 'margin:0 0 10px;font-size:1.15rem' }),
@@ -664,6 +710,7 @@
       listeSite('Page d’arrivée', s.page, k => PAGES_SITE[k] || k),
       listeSite('Pays', s.pays, pays),
       listeSite('Langue choisie', s.langue, k => ({ fr: 'Français', en: 'Anglais', ru: 'Russe' })[k] || k),
+      entonnoir(s.etape || {}),
       listeSite('Inscriptions par code promo ou provenance', s.inscription, k => !k ? 'Sans code' : k === 'via:outil-qr' ? 'Sans code, venu du générateur de QR' : k.indexOf('via:') === 0 ? 'Sans code, venu de ' + k.slice(4) : k),
       el('p', { class: 'infos', text: 'Visiteurs de qrbc.app (accueil, générateur de QR code, appli, pages légales), sans cookie ni donnée personnelle, hors robots et hors tes propres visites. Une visite = une arrivée sur le site ; la navigation d’une page à l’autre n’est pas recomptée. Compté depuis le 14 novembre 2026. Les visites des pages clients restent dans l’onglet Clients.' }));
   }
@@ -701,6 +748,9 @@
     const site = c.adresse || ('https://' + c.slug + '.qrbc.app/');
     let etat = { gratuit: 'offert', essai: 'essai', payant: 'abonné', suspendu: 'suspendu' }[c.plan] || c.plan;
     if (c.plan === 'essai' && c.actif) etat = 'essai · ' + jours(c.finEssai) + ' j';
+    const ab = c.abo && c.abo.actif ? c.abo : null;
+    if (c.plan === 'payant' && ab) etat = (ab.formule === 'mensuel' ? 'mensuel' : 'annuel') + (ab.statut === 'trialing' ? ' · période gratuite' : ab.statut === 'past_due' ? ' · impayé' : ab.resiliation ? ' · résilié' : '');
+    else if (c.plan === 'payant' && !c.parent) etat = c.abo ? 'abonnement terminé' : 'ancien abonné';
     const d = el('article', { class: 'carte' + (c.demande ? ' demande-attente' : '') + (c.parent ? ' rattachee' : '') });
 
     // En-tête
@@ -713,15 +763,25 @@
     const dl = el('dl', { class: 'donnees' });
     const ligneDonnee = (k, v) => { dl.append(el('dt', { text: k }), el('dd', { text: v })); };
     if (c.parent) ligneDonnee('Compte', (c.traduction ? 'Version ' + c.traduction.langue.toUpperCase() + ' de ' + c.traduction.source + ' · ' : 'Page ') + 'rattachée à ' + c.parent + ' (mot de passe, e-mail et échéance de la page principale)');
-    if (c.pages && c.pages.length) ligneDonnee('Pages rattachées', c.pages.join(', ') + ' · renouvellement groupé ' + euros(c.renouvellement.prix) + ' HT/an');
+    if (c.pages && c.pages.length) ligneDonnee('Pages rattachées', c.pages.join(', ') + (c.renouvellement ? ' · renouvellement groupé ' + euros(c.renouvellement.prix) + ' HT/an' : ' · lignes « page » de l’abonnement'));
     if (!c.parent) ligneDonnee('E-mail', (c.email || '—') + (c.emailAVerifier ? ' · ⚠️ non confirmé (page pas encore en ligne)' : ''));
     ligneDonnee('Créé le', date(c.cree));
     if (c.plan === 'essai') ligneDonnee('Fin d’essai', date(c.finEssai));
-    if (c.plan === 'payant') ligneDonnee('Payé jusqu’au', date(c.payeJusqua));
+    if (!c.parent) {
+      const STATUTS = { active: 'actif', trialing: 'période gratuite (1er prélèvement à venir)', past_due: 'paiement refusé (Stripe relance)', canceled: 'résilié', unpaid: 'impayé', incomplete: 'paiement en attente' };
+      const engagement = c.plan === 'gratuit' ? 'offert, sans abonnement' : c.plan === 'essai' ? 'essai gratuit, sans engagement' : c.abo ? (c.abo.formule === 'mensuel' ? 'mensuel · engagement 1 mois' : 'annuel · engagement 1 an') : c.plan === 'payant' ? 'ancien abonnement (paiement annuel unique, sans reconduction)' : '—';
+      ligneDonnee('Formule', engagement);
+      if (c.abo) {
+        ligneDonnee('Abonnement Stripe', (STATUTS[c.abo.statut] || c.abo.statut) + (c.abo.resiliation && c.abo.statut !== 'canceled' ? ' · résiliation programmée' : '') + ' · ' + euros(c.abo.montant) + ' TTC/' + (c.abo.formule === 'mensuel' ? 'mois' : 'an') + (c.abo.pages ? ' (' + (c.abo.pages + 1) + ' pages)' : ''));
+        ligneDonnee('Période', 'depuis le ' + date(c.abo.debut) + ' · ' + (c.abo.statut === 'canceled' ? 'terminé' : c.abo.resiliation ? 'fin le ' : 'prochaine échéance le ') + (c.abo.statut === 'canceled' ? '' : date(c.abo.fin)));
+        if (c.abo.suivant) ligneDonnee('Changement prévu', 'formule mensuelle à partir du ' + date(c.abo.suivant.debut));
+      }
+    }
+    if (c.plan === 'payant' && !c.abo) ligneDonnee('Payé jusqu’au', date(c.payeJusqua));
     if (c.depenseIA) ligneDonnee('IA payée', euros(c.depenseIA));
-    const ETAPES = { 'J-30': 'J-30', 'J-7': 'J-7', 'J-1': 'J-1', 'J0': 'mise en pause', 'J+30': 'J+30', 'J+80': 'J+80 (suppression annoncée)' };
+    const ETAPES = { 'J-30': 'J-30', 'J-7': 'J-7', 'J-1': 'J-1', 'J0': 'mise en pause', 'J+30': 'J+30', 'J+80': 'J+80 (suppression annoncée)', chatel: 'reconduction annuelle (Chatel)' };
     const rap = Object.entries(c.rappels || {}).sort((a, b) => String(a[1]).localeCompare(String(b[1])));
-    ligneDonnee('Rappels e-mail', rap.length ? rap.slice(-4).map(([k, le]) => ETAPES[k.split(':')[1]] + ' le ' + date(le)).join(' · ') + ' (' + ({ fr: 'FR', en: 'EN', ru: 'RU' }[c.langue] || 'FR') + ')' : '—');
+    ligneDonnee('Rappels e-mail', rap.length ? rap.slice(-4).map(([k, le]) => (k.startsWith('echec:') ? 'paiement refusé' : ETAPES[k.split(':')[1]] || k) + ' le ' + date(le)).join(' · ') + ' (' + ({ fr: 'FR', en: 'EN', ru: 'RU' }[c.langue] || 'FR') + ')' : '—');
     if (c.aSupprimer) ligneDonnee('Conservation', 'dépassée depuis le ' + date(c.finConservation) + ' : à supprimer');
     ligneDonnee('Code promo', c.promo ? c.promo.code + (c.promo.manuel ? ' (rattaché à la main le ' + date(c.promo.le) + ')' : ' · +' + c.promo.jours + ' j à l’inscription') : '—');
     if (c.note) ligneDonnee('Note', c.note);
@@ -768,7 +828,7 @@
     const rattachee = !!c.parent;               // page rattachée : tout se règle sur la page principale
     if (c.plan !== 'gratuit' && !rattachee) bouton('Passer en offert', () => api('modifier', { nom: c.slug, plan: 'gratuit' }));
     if (c.plan === 'essai' && !rattachee) bouton('+14 j d’essai', () => api('modifier', { nom: c.slug, prolongerEssai: 14 }));
-    if (c.plan !== 'gratuit' && !rattachee) bouton((c.plan === 'payant' ? 'Renouveler' : 'Abonner') + ' 1 an (' + euros(c.renouvellement.aPayer) + ' HT)', () => {
+    if (c.plan !== 'gratuit' && !rattachee && c.renouvellement && !(c.abo && c.abo.actif)) bouton((c.plan === 'payant' ? 'Renouveler' : 'Abonner') + ' 1 an à la main (' + euros(c.renouvellement.aPayer) + ' HT)', () => {
       const r = c.renouvellement;
       const txt = 'Paiement reçu hors Stripe pour ' + c.slug + ' ?\n\nAbonnement' + (r.pages ? ' (' + (r.pages + 1) + ' pages)' : '') + ' : ' + euros(r.prix) + ' HT' +
         (r.deduction ? '\nCrédit non consommé déduit : −' + euros(r.deduction) : '') + '\nÀ encaisser : ' + euros(r.aPayer) + ' HT\n\nLes quotas IA repartent à zéro (' + c.offre.quotasPayant.texte + ' textes, ' + c.offre.quotasPayant.picto + ' pictos).';

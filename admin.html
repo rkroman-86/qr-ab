@@ -546,6 +546,12 @@
     if (c.plan === 'essai' && c.actif) { const n = jours(c.finEssai); txt = 'Essai gratuit : ' + n + (n > 1 ? ' jours' : ' jour'); if (n <= 3) classe += ' abo-alerte'; }
     else if (!c.actif) { txt = c.plan === 'essai' ? 'Essai terminé' : 'Abonnement inactif'; classe += ' abo-alerte'; }
     else if (c.plan === 'gratuit') txt = 'Compte offert';
+    else if (c.plan === 'payant' && c.abo && c.abo.actif) {
+      const a = c.abo;
+      if (a.statut === 'past_due') { txt = 'Paiement refusé : mettez à jour votre carte'; classe += ' abo-alerte'; }
+      else if (a.resiliation) txt = 'Abonnement résilié · en ligne jusqu’au ' + new Date(a.fin).toLocaleDateString();
+      else txt = a.formule === 'mensuel' ? 'Abonné · formule mensuelle' : 'Abonné · formule annuelle';
+    }
     else if (c.plan === 'payant') txt = 'Abonné' + (c.payeJusqua ? ' · ' + new Date(c.payeJusqua).toLocaleDateString('fr-FR') : '');
     b.textContent = txt;
     b.className = txt ? classe : 'abo cache';
@@ -591,8 +597,8 @@
     const c = compteCF || {};
     const ligneC = (lib, val) => el('div', { class: 'compteur' }, [el('span', { text: lib }), el('b', { 'data-no-i18n': '', text: val })]);
     const solde = el('div', { class: 'cpt-section' }, [el('h3', { text: 'Mon solde' })]);
-    const fin = c.plan === 'essai' ? c.finEssai : c.plan === 'payant' ? c.payeJusqua : null;
-    const etats = { gratuit: 'Compte offert', essai: c.actif ? 'Essai gratuit' : 'Essai terminé', payant: c.actif ? 'Abonnement actif' : 'Abonnement expiré', suspendu: 'Compte suspendu' };
+    const fin = c.plan === 'essai' ? c.finEssai : c.plan === 'payant' ? (c.abo && c.abo.actif ? c.abo.fin : c.payeJusqua) : null;
+    const etats = { gratuit: 'Compte offert', essai: c.actif ? 'Essai gratuit' : 'Essai terminé', payant: c.actif ? (c.abo && c.abo.actif ? (c.abo.formule === 'mensuel' ? 'Formule mensuelle' : 'Formule annuelle') : 'Abonnement actif') : 'Abonnement expiré', suspendu: 'Compte suspendu' };
     solde.appendChild(el('div', { class: 'compteur' }, [el('span', { text: etats[c.plan] || 'Abonnement' }),
       el('b', { 'data-no-i18n': '', text: fin ? new Date(fin).toLocaleDateString() : '—' })]));
     if (c.ia && c.ia.commune) solde.appendChild(el('p', { class: 'cpt-aide', style: 'margin:6px 0 0', text: 'Commun à toutes les pages du compte.' }));
@@ -607,7 +613,7 @@
       });
       if (c.plan === 'payant') solde.appendChild(el('p', { class: 'cpt-aide', style: 'margin-top:8px', text: 'Entre parenthèses : créations possibles en plus avec votre crédit.' }));
     }
-    solde.appendChild(el('button', { type: 'button', class: 'btn btn-mini', style: 'margin-top:10px', text: c.plan === 'payant' && c.actif ? 'Recharger mon crédit' : 'Mon abonnement', onclick: () => { fermer(); ouvrirAbonnement(); } }));
+    solde.appendChild(el('button', { type: 'button', class: 'btn btn-mini', style: 'margin-top:10px', text: 'Mon abonnement', onclick: () => { fermer(); ouvrirAbonnement(); } }));
 
     // 2. Facturation
     const champ = (etiq, attrs) => { const i = el('input', Object.assign({ type: 'text' }, attrs)); return { i, bloc: el('label', { class: 'opt' }, [el('span', { class: 'etiq', text: etiq }), i]) }; };
@@ -731,6 +737,7 @@
           return;
         }
         if (j.paye && j.etat === 'échec') { ouvrirAbonnement(null, t('Paiement reçu, mais la page n’a pas pu être créée (nom pris entre-temps). Nous vous remboursons : écrivez-nous à support@qrbc.app.')); return; }
+        if (j.paye && j.abonnement) { ouvrirAbonnement(null, null, '✓ Abonnement enregistré, merci ! Vous pouvez le gérer ou le résilier à tout moment depuis cet écran.'); return; }
         if (j.paye) { ouvrirAbonnement(null, null, '✓ Paiement reçu, merci ! Votre compte est à jour.'); return; }
       } catch (e) { ouvrirAbonnement(null, e.message); return; }
       await new Promise(ok => setTimeout(ok, 2000));
@@ -754,10 +761,10 @@
     if (r.illimite) return { t: 'IA illimitée (compte offert)' };
     const nom = type === 'texte' ? ['rédaction', 'rédactions'] : type === 'fond' ? ['création d’images', 'créations d’images'] : ['création de motifs', 'créations de motifs'];
     if (!c.actif) return { t: c.plan === 'essai' ? 'Essai terminé.' : 'Abonnement inactif.', vide: true, lien: c.plan === 'essai' ? 'S’abonner' : 'Renouveler' };
-    if (r.inclus > 0) return { t: (c.plan === 'essai' ? 'Essai : ' : 'Cette année : ') + r.inclus + ' ' + (r.inclus > 1 ? nom[1] : nom[0]) + ' sur ' + r.total + ' restante' + (r.inclus > 1 ? 's' : '') };
+    if (r.inclus > 0) return { t: (c.plan === 'essai' || (c.abo && c.abo.statut === 'trialing' && c.abo.depuis === 'essai') ? 'Essai : ' : c.formule === 'mensuel' ? 'Ce mois-ci : ' : 'Cette année : ') + r.inclus + ' ' + (r.inclus > 1 ? nom[1] : nom[0]) + ' sur ' + r.total + ' restante' + (r.inclus > 1 ? 's' : '') };
     if (r.parCredit > 0) return { t: 'Quota utilisé · ' + euros(r.prix) + ' par ' + nom[0] + ' sur votre crédit (' + euros(r.credit) + ')' };
     if (c.plan === 'essai') return { t: 'Vos ' + nom[1] + ' d’essai sont utilisées.', vide: true, lien: 'S’abonner' };
-    return { t: 'Quota de l’année utilisé.', vide: true, lien: 'Recharger' };
+    return { t: c.formule === 'mensuel' ? 'Quota du mois utilisé.' : 'Quota de l’année utilisé.', vide: true, lien: 'Recharger' };
   }
   function quotaIA(type) {
     const n = el('div', { class: 'quota-ia' });
@@ -773,7 +780,8 @@
   }
   function majQuotas() { document.querySelectorAll('.quota-ia').forEach(remplirQuota); }
 
-  /* Fenêtre « Mon abonnement » : compteurs, offre d'abonnement, recharge */
+  /* Fenêtre « Mon abonnement » : formule en cours (résilier, reprendre, changer, carte et factures),
+     choix d'une formule (mensuelle ou annuelle, sans engagement pour la mensuelle), compteurs IA, recharge du crédit */
   function ouvrirAbonnement(code, message, succes) {
     const c = compteCF;
     if (!c) return;
@@ -783,79 +791,148 @@
     fond.appendChild(fen);
     fond.addEventListener('click', e => { if (e.target === fond) fond.remove(); });
     const fermer = el('button', { type: 'button', class: 'btn btn-plein fermer', text: 'Fermer', onclick: () => fond.remove() });
-    const prixAn = euros(c.offre.prixAnnuel);
-    const titres = { gratuit: 'Compte offert', essai: c.actif ? 'Essai gratuit' : 'Essai terminé', payant: c.actif ? 'Abonnement actif' : 'Abonnement expiré', suspendu: 'Compte suspendu' };
+    const a = c.abo && c.abo.actif ? c.abo : null;          // abonnement Stripe en cours (celui du compte, aussi depuis une page rattachée)
+    const date = d => new Date(d).toLocaleDateString();
+    const F = c.offre.formules || { mensuel: { prix: 0, page: 0, quotas: {} }, annuel: { prix: 0, page: 0, quotas: {} } };
+    const titres = { gratuit: 'Compte offert', essai: c.actif ? 'Essai gratuit' : 'Essai terminé', payant: a ? 'Mon abonnement' : c.actif ? 'Abonnement actif' : 'Abonnement terminé', suspendu: 'Compte suspendu' };
     fen.append(el('h2', { text: titres[c.plan] || 'Mon abonnement' }));
-    const date = d => new Date(d).toLocaleDateString('fr-FR');
-    fen.append(el('p', { class: 'sous', text:
-      c.plan === 'essai' ? (c.actif ? 'Jusqu’au ' + date(c.finEssai) + '. Votre page reste en ligne pendant tout l’essai.' : 'Votre page est en pause. Abonnez-vous pour la remettre en ligne.') :
-      c.plan === 'payant' ? (c.payeJusqua ? (c.actif ? 'Jusqu’au ' : 'Terminé le ') + date(c.payeJusqua) + '.' : '') :
-      c.plan === 'gratuit' ? 'Toutes les fonctions sont incluses.' : '' }));
+    const sous = c.plan === 'essai' ? (c.actif ? 'Jusqu’au ' + date(c.finEssai) + '. Votre page reste en ligne pendant tout l’essai.' : 'Votre page est en pause. Choisissez une formule pour la remettre en ligne.')
+      : c.plan === 'payant' && !a ? (c.payeJusqua ? (c.actif ? 'Payé jusqu’au ' : 'Terminé le ') + date(c.payeJusqua) + '.' : '')
+      : c.plan === 'gratuit' ? 'Toutes les fonctions sont incluses.' : '';
+    if (sous) fen.append(el('p', { class: 'sous', text: sous }));
     if (c.parent) fen.append(el('div', { class: 'attente', style: 'margin:0 0 14px', text: t('Cette page est rattachée à ') + c.parent + '.qrbc.app. ' +
-      t('Son abonnement est compris dans celui de votre page principale (une seule échéance) : le renouvellement se fait depuis la page principale.') }));
+      t('Son abonnement est compris dans celui de votre page principale (une seule échéance).') }));
     if (message) fen.append(el('div', { class: 'alerte-abo', text: message }));
     if (succes) fen.append(el('div', { class: 'alerte-abo', style: 'border-color:var(--ok)', text: succes }));
 
+    // Appel au serveur avec retour d'état (le bouton reste bloqué pendant l'attente)
+    async function action(route, corps, bouton) {
+      const texte = bouton.textContent;
+      bouton.disabled = true; bouton.textContent = t('Un instant…');
+      try {
+        const j = await (await appelAPI(route, jetonCF, { method: 'POST', body: JSON.stringify(Object.assign({ retour: location.origin + location.pathname }, corps || {})) })).json();
+        if (j.url) { location.href = j.url; return null; }
+        if (j.compte) afficherAbonnement(j.compte);
+        return j;
+      } catch (e) { bouton.disabled = false; bouton.textContent = texte; alert(e.message); return null; }
+    }
+
+    // 1. Formule en cours
+    if (a) {
+      const ligne = (lib, val) => el('div', { class: 'compteur' }, [el('span', { text: lib }), el('b', { 'data-no-i18n': '', text: val })]);
+      const mensuel = a.formule === 'mensuel';
+      const bloc = el('div', { class: 'offre', style: 'margin-top:4px' });
+      bloc.append(el('b', { text: mensuel ? 'Formule mensuelle, sans engagement' : 'Formule annuelle' }));
+      bloc.append(ligne(mensuel ? 'Prix par mois' : 'Prix par an', euros(a.montant) + ' ' + t('TTC') + (a.pages ? ' (' + (a.pages + 1) + ' ' + t('pages') + ')' : '')));
+      if (a.statut === 'trialing') bloc.append(ligne('Premier prélèvement', date(a.fin)));
+      else if (a.resiliation) bloc.append(ligne('En ligne jusqu’au', date(a.fin)));
+      else bloc.append(ligne(mensuel ? 'Prochain prélèvement' : 'Reconduction le', date(a.fin)));
+      if (a.statut === 'past_due') bloc.append(el('div', { class: 'alerte-abo', style: 'margin-top:10px', text: 'Le dernier paiement a été refusé par votre banque. Mettez à jour votre carte : nous réessaierons automatiquement.' }));
+      if (a.resiliation) bloc.append(el('div', { class: 'attente', text: 'Abonnement résilié : aucun autre prélèvement. Votre page reste en ligne jusqu’au ' + date(a.fin) + ', puis elle sera mise en pause.' }));
+      if (a.suivant) bloc.append(el('div', { class: 'attente', text: 'Passage à la formule mensuelle (' + euros(F.mensuel.prix) + ' TTC/mois) le ' + date(a.suivant.debut) + '.' }));
+      const btns = el('div', { style: 'display:flex;flex-direction:column;gap:8px;margin-top:12px' });
+      if (a.resiliation && !a.suivant) {
+        const b = el('button', { type: 'button', class: 'btn btn-prim btn-plein', text: 'Reprendre mon abonnement' });
+        b.addEventListener('click', async () => { if (await action('abonnement/reprendre', {}, b)) ouvrirAbonnement(null, null, '✓ Abonnement repris : il continue normalement.'); });
+        btns.append(b);
+      } else if (mensuel) {
+        const b = el('button', { type: 'button', class: 'btn btn-prim btn-plein', text: 'Passer à l’annuel (2 mois offerts)' });
+        b.addEventListener('click', async () => {
+          if (!confirm(t('Passer à la formule annuelle à ') + euros(F.annuel.prix) + ' ' + t('TTC par an') + (a.pages ? ' ' + t('(+ pages)') : '') + ' ?\n\n' +
+            t('Le mois en cours est déduit, le reste est prélevé aujourd’hui. Vos créations IA passent tout de suite aux quotas annuels.'))) return;
+          if (await action('abonnement/formule', { formule: 'annuel' }, b)) ouvrirAbonnement(null, null, '✓ Vous êtes passé à la formule annuelle.');
+        });
+        btns.append(b);
+      } else if (a.suivant) {
+        const b = el('button', { type: 'button', class: 'btn btn-plein', text: 'Rester en formule annuelle' });
+        b.addEventListener('click', async () => { if (await action('abonnement/formule', { formule: 'annuel' }, b)) ouvrirAbonnement(null, null, '✓ Vous restez en formule annuelle.'); });
+        btns.append(b);
+      } else if (!a.resiliation) {
+        const b = el('button', { type: 'button', class: 'btn btn-plein', text: a.statut === 'trialing' ? 'Passer à la formule mensuelle' : 'Passer au mensuel à l’échéance' });
+        b.addEventListener('click', async () => {
+          if (!confirm(a.statut === 'trialing' ? t('Passer à la formule mensuelle (') + euros(F.mensuel.prix) + ' ' + t('TTC par mois) ?')
+            : t('Votre formule annuelle va jusqu’au ') + date(a.fin) + '. ' + t('Ensuite, formule mensuelle à ') + euros(F.mensuel.prix) + ' ' + t('TTC par mois, sans engagement. Continuer ?'))) return;
+          if (await action('abonnement/formule', { formule: 'mensuel' }, b)) ouvrirAbonnement(null, null, '✓ C’est noté.');
+        });
+        btns.append(b);
+      }
+      const carte = el('button', { type: 'button', class: 'btn btn-plein', text: 'Carte bancaire et factures' });
+      carte.addEventListener('click', () => action('abonnement/portail', {}, carte));
+      btns.append(carte);
+      if (!a.resiliation || a.suivant) {
+        const res = el('button', { type: 'button', class: 'btn btn-plein', style: 'color:var(--err)', text: 'Résilier mon abonnement' });
+        res.addEventListener('click', () => {
+          // écran de confirmation (résiliation en ligne, sans contacter le support)
+          fen.textContent = '';
+          const ok = el('button', { type: 'button', class: 'btn btn-prim btn-plein', style: 'background:var(--err);border-color:var(--err)', text: 'Confirmer la résiliation' });
+          ok.addEventListener('click', async () => { if (await action('abonnement/resilier', {}, ok)) ouvrirAbonnement(null, null, '✓ Résiliation enregistrée. Un e-mail de confirmation vous a été envoyé.'); });
+          fen.append(el('h2', { text: 'Résilier mon abonnement' }),
+            el('p', { class: 'sous', text: 'Votre page reste en ligne jusqu’au ' + date(a.fin) + ', puis elle sera mise en pause. Aucun autre prélèvement ne sera effectué.' }),
+            el('p', { class: 'aide', text: 'Vos textes, images et votre QR code sont gardés 90 jours : vous pourrez reprendre votre abonnement d’ici l’échéance, ou vous réabonner plus tard.' }),
+            ok, el('button', { type: 'button', class: 'btn btn-plein fermer', text: 'Garder mon abonnement', onclick: () => ouvrirAbonnement() }));
+        });
+        btns.append(res);
+      }
+      bloc.append(btns);
+      fen.append(bloc);
+    }
+
+    // 2. Compteurs IA
     if (c.ia && !c.ia.illimite) {
       const ligne = (lib, val) => el('div', { class: 'compteur' }, [el('span', { text: lib }), el('b', { text: val })]);
       const rt = resteIA('texte'), rp = resteIA('picto'), rf = c.ia.fond ? resteIA('fond') : null;
+      const per = c.plan === 'payant' && !(a && a.statut === 'trialing' && a.depuis === 'essai') ? ' ' + t(c.formule === 'mensuel' ? '(ce mois-ci)' : '(cette année)') : '';
       fen.append(
-        ligne('Rédactions IA restantes', rt.inclus + ' / ' + rt.total),
-        ligne('Créations de motifs restantes', rp.inclus + ' / ' + rp.total));
-      if (rf) fen.append(ligne('Créations d’images de fond restantes', rf.inclus + ' / ' + rf.total));
+        ligne(t('Rédactions IA restantes') + per, rt.inclus + ' / ' + rt.total),
+        ligne(t('Créations de motifs restantes') + per, rp.inclus + ' / ' + rp.total));
+      if (rf) fen.append(ligne(t('Créations d’images restantes') + per, rf.inclus + ' / ' + rf.total));
       if (c.plan === 'payant') fen.append(ligne('Crédit IA', euros(c.ia.credit)));
     }
 
-    const attente = c.demande ? el('div', { class: 'attente', text: '⏳ Demande ' + (c.demande.genre === 'recharge' ? 'de recharge de ' : 'd’abonnement : ') + euros(c.demande.montant) +
-      ' HT envoyée le ' + date(c.demande.le) + '. Le paiement en ligne arrive très bientôt : nous vous contactons' + (c.email ? ' à ' + c.email : '') + ' pour le règlement.' }) : null;
-
-    const ttc = ht => euros(Math.round(ht * (100 + c.offre.tva) / 100));
-    // Paiement en ligne si Stripe est branché, sinon simple demande (encaissement manuel)
-    async function demander(corps, bouton) {
-      bouton.disabled = true;
-      const texte = bouton.textContent;
-      try {
-        if (c.offre.enLigne) {
-          if (modifie && !confirm(t('Des modifications ne sont pas enregistrées. Continuer vers le paiement ?'))) { bouton.disabled = false; return; }
-          bouton.textContent = 'Ouverture du paiement sécurisé…';
-          corps.retour = location.origin + location.pathname;
-          const r = await appelAPI('paiement', jetonCF, { method: 'POST', body: JSON.stringify(corps) });
-          const j = await r.json();
-          if (j.url) { modifie = false; location.href = j.url; return; }
-          if (j.applique) { afficherAbonnement(j.compte); ouvrirAbonnement(null, null, '✓ Abonnement renouvelé grâce à votre crédit.'); return; }
-        }
-        const r = await appelAPI('demande', jetonCF, { method: 'POST', body: JSON.stringify(corps) });
-        afficherAbonnement((await r.json()).compte);
-        ouvrirAbonnement();
-      } catch (e) { bouton.disabled = false; bouton.textContent = texte; alert(e.message); }
-    }
-
+    // 3. Choisir une formule
     const finProche = c.plan === 'payant' && c.actif && c.payeJusqua && (Date.parse(c.payeJusqua) - Date.now()) < c.offre.renouvelerAvant * 86400000;
-    const abonnable = !c.parent && (c.plan === 'essai' || (c.plan === 'payant' && !c.actif) || finProche);
+    const abonnable = !c.parent && !a && c.plan !== 'gratuit' && c.plan !== 'suspendu' && (c.plan === 'essai' || !c.actif || finProche);
     if (abonnable) {
-      const q = c.offre.quotasPayant;
-      const ren0 = c.renouvellement, ren = c.renouvellement;
-      const libBtn = ren0 && ren0.aPayer <= 0 ? 'Renouveler avec mon crédit' : (finProche ? 'Renouveler pour un an' : c.plan === 'essai' && c.actif ? 'S’abonner sans attendre la fin de l’essai' : 'S’abonner');
-      const btn = el('button', { type: 'button', class: 'btn btn-prim btn-plein', text: libBtn });
-      btn.addEventListener('click', () => demander({ genre: 'abonnement' }, btn));
-      const groupeP = ren && ren.pages ? ren : null;      // compte à plusieurs pages : abonnement + pages rattachées
-      fen.append(el('div', { class: 'offre' }, [
-        el('div', { class: 'prix', text: (groupeP ? euros(groupeP.prix) : prixAn) + ' HT / an' }),
-        groupeP ? el('div', { class: 'aide', text: t('Votre page principale') + ' ' + prixAn + ' + ' + groupeP.pages + ' × ' + euros(groupeP.prixPage) + ' ' + t('(pages rattachées), une seule échéance.') + ' ' + ttc(groupeP.prix) + ' TTC.' })
-          : el('div', { class: 'aide', text: ttc(c.offre.prixAnnuel) + ' TTC (TVA ' + c.offre.tva + ' %). Soit ' + euros(Math.round(c.offre.prixAnnuel / 12)) + ' HT par mois, le prix d’un café.' }),
-        el('ul', {}, [
-          el('li', { text: 'Votre page, votre QR code et vos cartes de visite' }),
-          ...((q.texte || q.picto || q.fond) ? [el('li', { text: [q.texte ? q.texte + (q.texte > 1 ? ' rédactions IA' : ' rédaction IA') : '', q.picto ? q.picto + (q.picto > 1 ? ' créations de motifs' : ' création de motifs') : '', q.fond ? q.fond + (q.fond > 1 ? ' créations d’images de fond' : ' création d’images de fond') : ''].filter(Boolean).join(', ').replace(/, ([^,]*)$/, ' et $1') + ' incluses par an' })] : []),
-          el('li', { text: ((q.texte || q.picto || q.fond) ? 'Au-delà : ' : 'IA à la demande : ') + euros(c.ia.prix.texte) + ' HT la rédaction, ' + euros(c.ia.prix.picto) + ' HT la création de motifs' + (c.ia.prix.fond != null ? ', ' + euros(c.ia.prix.fond) + ' HT la création d’images de fond (2 images)' : '') })
+      const nbPages = (c.pages || []).length;
+      const finGratuite = c.plan === 'essai' && c.actif ? c.finEssai : c.plan === 'payant' && c.actif ? c.payeJusqua : null;
+      const differe = finGratuite && Date.parse(finGratuite) - Date.now() > 49 * 3600000;
+      fen.append(el('h3', { style: 'margin:18px 0 4px', text: 'Choisissez votre formule' }));
+      if (differe) fen.append(el('p', { class: 'aide', style: 'margin:0 0 6px', text: c.plan === 'essai'
+        ? 'Vous ne payez rien aujourd’hui : premier prélèvement le ' + date(finGratuite) + ', à la fin de votre essai.'
+        : 'Premier prélèvement le ' + date(finGratuite) + ', à la fin de votre période déjà payée.' }));
+      const quotas = (q, per) => [q.texte ? q.texte + ' ' + (q.texte > 1 ? t('rédactions IA') : t('rédaction IA')) : '', q.picto ? q.picto + ' ' + (q.picto > 1 ? t('créations de motifs') : t('création de motifs')) : '',
+        q.fond ? q.fond + ' ' + (q.fond > 1 ? t('créations d’images') : t('création d’images')) : ''].filter(Boolean).join(', ') + ' ' + per;
+      const carteFormule = (f, titre, prix, points) => {
+        const b = el('button', { type: 'button', class: 'btn btn-prim btn-plein', text: f === 'mensuel' ? 'Choisir la formule mensuelle' : 'Choisir la formule annuelle' });
+        b.addEventListener('click', () => demander({ genre: 'abonnement', formule: f }, b));
+        return el('div', { class: 'offre' }, [
+          el('b', { text: titre }),
+          el('div', { class: 'prix', 'data-no-i18n': '', text: prix }),
+          el('ul', {}, points.filter(Boolean).map(x => el('li', { text: x }))),
+          b]);
+      };
+      fen.append(
+        carteFormule('mensuel', 'Mensuel', euros(F.mensuel.prix + nbPages * F.mensuel.page) + ' ' + t('TTC / mois'), [
+          t('Sans engagement : résiliable à tout moment, en un clic'),
+          t('Votre page, votre QR code et vos cartes de visite'),
+          quotas(F.mensuel.quotas, t('par mois')),
+          nbPages ? t('Dont vos pages rattachées : ') + nbPages + ' × ' + euros(F.mensuel.page) : ''
         ]),
-        ...(ren && ren.deduction ? [el('div', { class: 'aide', style: 'margin-bottom:10px', text: 'Crédit déduit : −' + euros(ren.deduction) + ' HT → à payer ' + euros(ren.aPayer) + ' HT (' + ttc(ren.aPayer) + ' TTC)' })] : []),
-        c.demande && c.demande.genre === 'abonnement' && !c.offre.enLigne ? attente : btn,
-        ...(c.offre.enLigne ? [el('div', { class: 'aide', style: 'margin-top:8px;text-align:center', text: '🔒 Paiement sécurisé par Stripe : carte, Apple Pay, Google Pay. Facture envoyée par e-mail.' })] : []),
+        carteFormule('annuel', 'Annuel · 2 mois offerts', euros(F.annuel.prix + nbPages * F.annuel.page) + ' ' + t('TTC / an'), [
+          t('Soit ') + euros(Math.round((F.annuel.prix + nbPages * F.annuel.page) / 12)) + ' ' + t('par mois'),
+          t('Résiliable à tout moment : effet à la fin de l’année payée'),
+          quotas(F.annuel.quotas, t('par an')),
+          nbPages ? t('Dont vos pages rattachées : ') + nbPages + ' × ' + euros(F.annuel.page) : ''
+        ]),
+        el('div', { class: 'aide', style: 'margin-top:10px;text-align:center', text: c.offre.enLigne
+          ? '🔒 ' + t('Paiement sécurisé par Stripe : carte, Apple Pay, Google Pay. Reconduction automatique, résiliation en un clic depuis cet écran. Factures par e-mail.')
+          : t('Le paiement en ligne arrive très bientôt.') }),
         el('div', { class: 'aide', style: 'margin-top:6px;text-align:center' }, [
           el('a', { href: 'https://qrbc.app/cgv', target: '_blank', rel: 'noopener', text: 'Conditions générales de vente' }), document.createTextNode(' · '),
-          el('a', { href: 'https://qrbc.app/mentions-legales', target: '_blank', rel: 'noopener', text: 'Mentions légales et confidentialité' })])
-      ]));
+          el('a', { href: 'https://qrbc.app/mentions-legales', target: '_blank', rel: 'noopener', text: 'Mentions légales et confidentialité' })]));
     }
+
+    // 4. Recharge du crédit IA (abonnés)
     if (c.plan === 'payant' && c.actif) {
       const montant = el('input', { type: 'number', min: c.offre.rechargeMin / 100, step: 1, value: c.offre.rechargeMin / 100, inputmode: 'decimal' });
       const btn = el('button', { type: 'button', class: 'btn btn-prim', text: 'Recharger' });
@@ -864,14 +941,28 @@
         if (!(v >= c.offre.rechargeMin / 100)) { alert(euros(c.offre.rechargeMin) + ' HT minimum.'); return; }
         demander({ genre: 'recharge', montant: v }, btn);
       });
-      const ren = c.renouvellement;
+      const ttc = ht => euros(Math.round(ht * (100 + c.offre.tva) / 100));
       fen.append(el('div', { class: 'offre' }, [
         el('b', { text: 'Recharger le crédit IA (montant HT)' }),
-        el('div', { class: 'aide', style: 'margin-top:4px', text: euros(c.ia.prix.texte) + ' HT la rédaction, ' + euros(c.ia.prix.picto) + ' HT la création de motifs. ' +
-          'Le crédit non utilisé est déduit de votre prochain renouvellement' + (ren && ren.deduction ? ' (prochain paiement : ' + euros(ren.aPayer) + ' HT au lieu de ' + prixAn + ').' : '.') }),
-        c.demande && c.demande.genre === 'recharge' && !c.offre.enLigne ? attente : el('div', { class: 'ligne-recharge' }, [montant, el('span', { style: 'align-self:center', text: '€ HT' }), btn]),
+        el('div', { class: 'aide', style: 'margin-top:4px', text: t('Au-delà des créations incluses : ') + euros(c.ia.prix.texte) + ' ' + t('HT la rédaction') + ', ' + euros(c.ia.prix.picto) + ' ' + t('HT la création de motifs') +
+          (c.ia.prix.fond != null ? ', ' + euros(c.ia.prix.fond) + ' ' + t('HT la création d’images') : '') + '.' }),
+        el('div', { class: 'ligne-recharge' }, [montant, el('span', { style: 'align-self:center', text: '€ HT' }), btn]),
         el('div', { class: 'aide', style: 'margin-top:6px', text: 'TVA ' + c.offre.tva + ' % ajoutée au paiement (' + euros(c.offre.rechargeMin) + ' HT = ' + ttc(c.offre.rechargeMin) + ' TTC).' })
       ]));
+    }
+
+    // Paiement en ligne (Stripe Checkout)
+    async function demander(corps, bouton) {
+      if (!c.offre.enLigne) { alert(t('Le paiement en ligne arrive très bientôt. Écrivez-nous à support@qrbc.app.')); return; }
+      if (modifie && !confirm(t('Des modifications ne sont pas enregistrées. Continuer vers le paiement ?'))) return;
+      const texte = bouton.textContent;
+      bouton.disabled = true; bouton.textContent = t('Ouverture du paiement sécurisé…');
+      try {
+        corps.retour = location.origin + location.pathname;
+        const j = await (await appelAPI('paiement', jetonCF, { method: 'POST', body: JSON.stringify(corps) })).json();
+        if (j.url) { modifie = false; location.href = j.url; return; }
+        if (j.compte) { afficherAbonnement(j.compte); ouvrirAbonnement(); }
+      } catch (e) { bouton.disabled = false; bouton.textContent = texte; alert(e.message); }
     }
     fen.append(fermer);
     document.body.appendChild(fond);
@@ -1574,11 +1665,14 @@
 
     const prix = el('div', { class: 'cout', style: 'padding:12px;border-radius:12px;background:var(--bg);border:1px solid var(--prim);font-size:.92rem;margin:0 0 14px' });
     if (g.ajout.gratuit) prix.textContent = '🎁 ' + t('Offert avec votre compte.');
+    else if (g.ajout.ligne) prix.append(el('b', { 'data-no-i18n': '', text: '+ ' + euros(g.ajout.prixPeriode) + ' ' + t(g.ajout.formule === 'mensuel' ? 'TTC par mois' : 'TTC par an') }), el('br'),
+      document.createTextNode(t('Ajouté à votre abonnement (moitié prix), crédits IA d’un abonnement inclus. Aujourd’hui, seul le prorata jusqu’au ') + date(g.ajout.echeance) + ' ' + t('est prélevé sur votre carte enregistrée.')));
     else prix.append(el('b', { text: euros(g.ajout.prix) + ' ' + t('HT') + ' (' + ttc(g.ajout.prix) + ' ' + t('TTC') + ') ' + t('aujourd’hui') }), el('br'),
       document.createTextNode((g.ajout.echeance ? t('Prix réduit au prorata jusqu’à votre échéance commune du ') + date(g.ajout.echeance) + '. ' : '') +
         t('Ensuite ') + euros(g.prixPage) + ' ' + t('HT') + ' ' + t('par an (moitié prix), renouvelée avec votre abonnement. Crédits IA d’un abonnement inclus.')));
     const msg = el('div', { class: 'msg' });
-    const go = el('button', { type: 'button', class: 'btn btn-prim', text: g.ajout.gratuit ? t('Créer') : t('Payer et créer') });
+    const libGo = g.ajout.gratuit ? t('Créer') : g.ajout.ligne ? t('Ajouter à mon abonnement') : t('Payer et créer');
+    const go = el('button', { type: 'button', class: 'btn btn-prim', text: libGo });
     go.addEventListener('click', async () => {
       msg.className = 'msg'; msg.textContent = '';
       const corps = type === 'page' ? { type, nom: nom.value.trim() } : { type, langue: selLangue.value, langueSource: c.langueSite || selSource.value };
@@ -1587,7 +1681,7 @@
       if (modifie && !confirm(t('Des modifications ne sont pas enregistrées. Continuer quand même ?'))) return;
       go.disabled = true; go.textContent = t('Un instant…');
       try {
-        if (g.ajout.gratuit) {
+        if (g.ajout.gratuit || g.ajout.ligne) {
           const j = await (await appelAPI('pages/ajouter', jetonCF, { method: 'POST', body: JSON.stringify(corps) })).json();
           ouvrirPage(j.cree, j.jeton);
           return;
@@ -1597,12 +1691,12 @@
         if (j.url) { modifie = false; location.href = j.url; return; }
       } catch (e) {
         msg.className = 'msg err'; msg.textContent = e.message;
-        go.disabled = false; go.textContent = g.ajout.gratuit ? t('Créer') : t('Payer et créer');
+        go.disabled = false; go.textContent = libGo;
       }
     });
     fen.append(choix, zonePage, zoneTrad, prix, msg,
       el('div', { class: 'boutons' }, [el('button', { type: 'button', class: 'btn', text: t('Annuler'), onclick: fermer }), go]));
-    if (!g.ajout.gratuit) fen.append(el('div', { class: 'aide', style: 'margin-top:8px;text-align:center', text: '🔒 ' + t('Paiement sécurisé par Stripe. Facture envoyée par e-mail.') }));
+    if (!g.ajout.gratuit) fen.append(el('div', { class: 'aide', style: 'margin-top:8px;text-align:center', text: '🔒 ' + t(g.ajout.ligne ? 'Paiement sécurisé par Stripe. Résiliable avec votre abonnement.' : 'Paiement sécurisé par Stripe. Facture envoyée par e-mail.') }));
     majZones();
   }
 

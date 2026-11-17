@@ -142,7 +142,7 @@
   <section class="carte" aria-label="Créer ma page">
     <div class="carte-in">
       <h1>Votre page en 5 minutes</h1>
-      <p class="sous">14 jours gratuits, sans carte bancaire.</p>
+      <p class="sous">1 mois gratuit, sans carte bancaire.</p>
       <ul class="points">
         <li>Une page mobile à votre nom, avec QR code</li>
         <li>Cartes de visite prêtes à imprimer</li>
@@ -371,7 +371,17 @@
   /* ---------- Inscription dans l'appli ---------- */
   const inNom = $('#in-nom'), dispo = $('#in-dispo');
   let minuterie = null;
+  // Étapes d'inscription (compteurs anonymes, sans cookie) : arrivée sur le formulaire, début de saisie, nom disponible
+  const etape = e => {
+    try { if (sessionStorage.getItem('qrbc-etape-' + e)) return; sessionStorage.setItem('qrbc-etape-' + e, '1'); } catch (x) {}
+    try { fetch('/api/etape?e=' + e, { method: 'POST', keepalive: true }).catch(() => {}); } catch (x) {}
+  };
+  if ('IntersectionObserver' in window) {
+    const vu = new IntersectionObserver(l => { if (l.some(x => x.isIntersecting)) { etape('form'); vu.disconnect(); } }, { threshold: 0.6 });
+    vu.observe(inNom);
+  }
   inNom.addEventListener('input', () => {
+    etape('saisie');
     const v = nettoyer(inNom.value);
     if (v !== inNom.value) inNom.value = v;
     dispo.className = 'dispo'; dispo.textContent = v ? v + '.qrbc.app' : '';
@@ -381,6 +391,7 @@
       try {
         const j = await (await fetch('/api/disponible?nom=' + encodeURIComponent(v))).json();
         if (inNom.value !== v) return;
+        if (j.disponible) etape('dispo');
         dispo.className = 'dispo ' + (j.disponible ? 'ok' : 'ko');
         dispo.textContent = j.disponible ? '✓ ' + v + '.qrbc.app est disponible' : (j.raison || 'Ce nom est déjà pris.');
       } catch (e) {}

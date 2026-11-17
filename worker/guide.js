@@ -98,15 +98,21 @@ qrbc.app (QR-BC, édité par KPS) permet de créer en quelques minutes, depuis u
 ## Plusieurs pages et traductions (« Mes pages »)
 - Le bandeau « Mes pages » / « Une autre activité ou une autre langue ? » permet d'ajouter une nouvelle page (autre activité : nouveau nom, nouvelle adresse, nouveau QR code) ou une version traduite de la page (14 langues, même adresse et même QR code, le visiteur la voit dans la langue de son téléphone, avec un choix de langue en haut à droite).
 - Tout reste sur le même compte : un seul mot de passe, une seule échéance, images partagées, et une réserve IA commune (créations incluses et crédit IA utilisables sur n'importe quelle page ; chaque page ajoutée apporte les créations d'un abonnement). On passe d'une page à l'autre sans retaper le mot de passe.
-- Prix (tarifs actuels) : par an et par page ou langue, payé au prorata jusqu'à l'échéance commune, avec les crédits IA d'un abonnement. Réservé aux abonnés (pas pendant l'essai). La première traduction est offerte ; « Retraduire depuis la page d'origine » est payant (tarifs actuels ; après avoir modifié la page d'origine). La version traduite peut aussi être corrigée à la main.
+- Prix (tarifs actuels) : moitié prix de l'abonnement, par mois ou par an selon la formule ; la page s'ajoute comme une ligne de l'abonnement (« Ajouter à mon abonnement ») et seul le prorata jusqu'à la prochaine échéance est prélevé tout de suite sur la carte enregistrée ; crédits IA d'un abonnement inclus. Réservé aux abonnés (pas pendant l'essai, ni pendant la période gratuite qui suit un abonnement souscrit avant la fin de l'essai). Une page supprimée sort de l'abonnement à l'échéance suivante. La première traduction est offerte ; « Retraduire depuis la page d'origine » est payant (tarifs actuels ; après avoir modifié la page d'origine). La version traduite peut aussi être corrigée à la main.
 
 ## Essai, abonnement et crédits IA
-- Essai gratuit de 14 jours sans carte bancaire. Abonnement annuel (prix dans les tarifs actuels), sans renouvellement automatique : un e-mail prévient avant l'échéance (J-30, J-7, J-1) avec un bouton de paiement.
-- Sans paiement à l'échéance, la page est mise en pause (données gardées 90 jours). Payer la remet en ligne.
-- Quotas IA inclus pendant l'essai et chaque année d'abonnement : voir les tarifs actuels. Une création d'images = 2 images (fond ou pancarte).
-- Au-delà : crédit prépayé, « Recharger le crédit IA » (montant minimum et prix unitaires dans les tarifs actuels). Le crédit non utilisé est déduit du renouvellement.
+- Essai gratuit d'un mois (30 jours) sans carte bancaire, pour tout le monde ; un code promo peut ajouter des jours. Rappels par e-mail 7 jours et 1 jour avant la fin de l'essai.
+- Deux formules d'abonnement (prix dans les tarifs actuels), choisies dans « Mon abonnement » (bandeau en haut de l'éditeur) :
+  - mensuelle : prélevée chaque mois, sans engagement, résiliable à tout moment (effet à la fin du mois payé) ;
+  - annuelle : prélevée chaque année, « 2 mois offerts » par rapport au mensuel, engagement d'un an, résiliable à tout moment avec effet à la fin de l'année payée (pas de remboursement au prorata). Un e-mail prévient entre 35 et 30 jours avant chaque reconduction.
+- S'abonner avant la fin de l'essai ne fait rien perdre : le premier prélèvement a lieu à la fin de l'essai. Les anciens abonnés (paiement annuel unique) choisissent une formule avant leur échéance ; le premier prélèvement a lieu à la fin de leur période déjà payée.
+- Reconduction automatique par carte (Stripe). Dans « Mon abonnement » : formule, prochain prélèvement, « Carte bancaire et factures » (changer de carte, télécharger les factures), « Passer à l'annuel » (tout de suite, le mois en cours est déduit, quotas annuels immédiats), « Passer au mensuel à l'échéance », « Résilier mon abonnement » (écran de confirmation puis e-mail de confirmation ; la page reste en ligne jusqu'à la fin de la période payée), « Reprendre mon abonnement » tant que la période n'est pas finie.
+- Carte refusée : un e-mail prévient, Stripe réessaie automatiquement ; mettre à jour la carte dans « Carte bancaire et factures ». La page reste en ligne quelques jours.
+- Abonnement terminé (résilié ou impayé) : la page est mise en pause, données gardées 90 jours ; se réabonner la remet en ligne à l'identique.
+- Quotas IA inclus : pendant l'essai ; par mois avec la formule mensuelle ; par an avec la formule annuelle (voir les tarifs actuels). Ils repartent à zéro à chaque prélèvement. Une création d'images = 2 images (fond ou pancarte). Quota mensuel épuisé : recharger le crédit IA ou passer à l'annuel.
+- Au-delà : crédit prépayé, « Recharger le crédit IA » (montant minimum et prix unitaires dans les tarifs actuels). Le crédit reste utilisable tant que le compte est actif.
 - Chaque génération IA consomme le quota ou le crédit même si le résultat ne plaît pas (voir CGV). Les questions à l'assistant « ❓ » sont gratuites (50 par jour).
-- Paiement par carte via Stripe ; facture envoyée par e-mail. Garantie satisfait ou remboursé 14 jours.
+- Paiement par carte via Stripe ; factures envoyées par e-mail et téléchargeables dans « Mon compte ». Garantie satisfait ou remboursé 14 jours, et droit de rétractation de 14 jours pour les particuliers.
 
 ## Compte et connexion
 - Connexion avec le nom de la page (ou de n'importe quelle page du compte) et le mot de passe. « Mot de passe oublié ? » envoie un lien de réinitialisation à l'adresse e-mail du compte.
