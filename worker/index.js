@@ -2485,7 +2485,8 @@ function enregistrerFactureAbo(tit, inv) {
     (raison === 'subscription_update' ? ' · ajustement' : raison === 'subscription_cycle' ? ' · reconduction' : ''), inv.id);
   if (nouvellePeriode) {
     const ia = tit.ia || {};
-    tit.ia = Object.assign({ texte: 0, picto: 0, fond: 0, depuis: new Date().toISOString() }, ia.bonus ? { bonus: ia.bonus } : {}, ia.depense ? { depense: ia.depense } : {});
+    // nouvelle période payée : compteurs à zéro ; l'ajustement « IA restantes » fait dans /gestion ne valait que pour la période précédente
+    tit.ia = Object.assign({ texte: 0, picto: 0, fond: 0, depuis: new Date().toISOString() }, ia.depense ? { depense: ia.depense } : {});
     delete tit.quotasAuPaiement;
   }
   return true;
