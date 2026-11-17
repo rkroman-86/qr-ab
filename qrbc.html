@@ -111,6 +111,7 @@
   .video-promo[hidden]{display:none}
   .video-promo video{width:100%;height:100%;object-fit:cover;display:block}
   .video-promo button{position:absolute;top:6px;right:6px;width:28px;height:28px;border-radius:50%;border:0;background:rgba(0,0,0,.55);color:#fff;font-size:16px;line-height:28px;cursor:pointer;padding:0}
+  .cta-haut{margin:18px 0 6px}
 </style>
 </head>
 <body>
@@ -133,6 +134,7 @@
     <section>
       <h1>Votre page pro en 5 minutes, <em>pour 1,99 €/mois.</em> Sans engagement.</h1>
       <p class="chapeau">Une page mobile à votre nom, que vos clients ouvrent d’un scan : réserver, appeler, écrire sur WhatsApp, laisser un avis Google. Vous la créez et la modifiez vous-même, entièrement depuis votre smartphone, sans ordinateur.</p>
+      <p class="cta-haut"><a class="cta" href="#inscription">Essayer 1 mois gratuitement</a></p>
       <p class="sigle-txt">qrbc, c’est « QR Business Card » : la carte de visite qui ne se périme jamais.</p>
       <ul class="points">
         <li><div class="num">1</div><div><b>Choisissez votre adresse</b><span>Par exemple nom-du-site.qrbc.app</span></div></li>
@@ -335,7 +337,7 @@
   let depuis = '';
   try { depuis = (new URLSearchParams(location.search).get('depuis') || localStorage.getItem('qrbc-depuis') || '').toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 25);
     if (depuis) localStorage.setItem('qrbc-depuis', depuis); } catch (e) {}
-  if (new URLSearchParams(location.search).has('promo')) { const f = $('#inscription'); if (f) setTimeout(() => f.scrollIntoView({ block: 'start' }), 300); }
+  /* Lien d'apporteur (?promo=) : pas de défilement automatique, le visiteur voit d'abord l'accroche et le prix ; le code reste prérempli dans le formulaire */
   $('#inscription').addEventListener('submit', async e => {
     e.preventDefault();
     const msg = $('#msg'), btn = $('#btn');
@@ -400,7 +402,7 @@
     var l = langue();
     if (l === actuelle) return;
     actuelle = l;
-    v.src = '/videos/qrbc-' + l + '.mp4';
+    v.src = '/videos/qrbc-' + l + '.mp4?v=2';
     var p = v.play(); if (p && p.catch) p.catch(function () {});
   }
   // au-dessus du bandeau « installer sur iPhone » s'il est affiché

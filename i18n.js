@@ -248,6 +248,7 @@
     "Votre page pro en 5 minutes,": ["Your business page in 5 minutes,", "Ваша бизнес-страница за 5 минут"],
     "pour 1,99 €/mois.": ["for €1.99/month.", "за 1,99 € в месяц."],
     "Sans engagement.": ["No commitment.", "Без обязательств."],
+    "Essayer 1 mois gratuitement": ["Try it free for 1 month", "Попробовать 1 месяц бесплатно"],
     "Pour qui ?": ["Who is it for?", "Для кого?"],
     "Pour tous ceux qui reçoivent des clients et veulent être joints, réservés ou recommandés d’un simple scan.": ["For anyone who welcomes customers and wants to be contacted, booked or recommended with a simple scan.", "Для всех, кто принимает клиентов и хочет, чтобы с ним связывались, записывались и рекомендовали его одним сканированием."],
     "Chauffeurs VTC et taxis": ["Private drivers and taxis", "Водители такси и VTC"],
