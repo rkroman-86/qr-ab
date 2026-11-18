@@ -122,7 +122,7 @@ const RESERVES = new Set(['www', 'api', 'admin', 'app', 'mail', 'smtp', 'gestion
   'demo', 'dev', 'staging', 'test', 'ns1', 'ns2', 'ftp', 'webmail', 'contact']);
 const FICHIERS_STATIQUES = new Set(['/admin.html', '/commun.js', '/i18n.js', '/qrcode.js']);
 // Appli installable (PWA) servie depuis qrbc.app
-const FICHIERS_PWA = new Set(['/manifest.webmanifest', '/sw.js', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/apple-touch-icon.png', '/favicon.png']);
+const FICHIERS_PWA = new Set(['/og-qrbc.jpg', '/og-qrbc-en.jpg', '/og-qrbc-ru.jpg', '/manifest.webmanifest', '/sw.js', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/apple-touch-icon.png', '/favicon.png']);
 const FICHIERS_SITE = new Set(['config.json', 'index.html', 'accueil.html', 'sitemap.xml']);
 const TAILLE_MAX = { 'config.json': 512 * 1024, html: 768 * 1024, image: 3 * 1024 * 1024 };
 
@@ -3366,10 +3366,10 @@ async function planGlobal(env, frais) {
 /* Page d'accueil dans la langue du lien (?lang=en|ru) : les robots d'aperçu (WhatsApp, Facebook…)
    et Google lisent le titre et la description sans exécuter le JavaScript */
 const META_ACCUEIL = {
-  en: { lang: 'en', locale: 'en_GB', titre: "QR Business Card in your customers’ language | qrbc",
-        desc: "QR business card and mobile page for your business. Edit it anytime, translate it with a single QR code. 1 month free, then €1.99 a month, no commitment." },
-  ru: { lang: 'ru', locale: 'ru_RU', titre: "Визитка с QR-кодом на любом языке | qrbc – QR Business Card",
-        desc: "Визитка с QR-кодом и мобильная страница для вашего дела. Меняйте её в любой момент, переводите — QR-код один. 1 месяц бесплатно, затем 1,99 € в месяц без обязательств." }
+  en: { lang: 'en', locale: 'en_GB', titre: "Your business page in 5 minutes, €1.99/month, no commitment | qrbc",
+        desc: "Create your business page from your smartphone: call, WhatsApp, Google reviews, QR code and business cards. 1-month free trial, no card needed." },
+  ru: { lang: 'ru', locale: 'ru_RU', titre: "Бизнес-страница за 5 минут, 1,99 € в месяц без обязательств | qrbc",
+        desc: "Создайте страницу для своего бизнеса со смартфона: звонок, WhatsApp, отзывы Google, QR-код и визитки. 1 месяц бесплатно, без карты." },
 };
 /* Dictionnaire de l'interface (i18n.js : 'français': ['English', 'Русский']) lu une fois par instance du Worker,
    pour envoyer l'accueil déjà traduit aux moteurs de recherche (sans attendre le JavaScript) */
@@ -3404,6 +3404,7 @@ async function pageSiteTraduite(env, request, url, fichier, metas, chemin) {
   const trad = x => { const v = dico.get(String(x).trim()); return v && v[i] ? v[i] : x; };
   // JSON-LD : traduit avant le passage dans HTMLRewriter (le texte d'un <script> arrive en morceaux)
   let html = await r.text();
+  html = html.replace(/\/og-qrbc\.jpg/g, '/og-qrbc-' + m.lang + '.jpg');   // image d'aperçu des liens dans la langue de la page
   html = html.replace(/(<script type="application\/ld\+json">)([\s\S]*?)(<\/script>)/g, (tout, a, corps, b) => {
     try {
       const parcourir = o => typeof o === 'string' ? trad(o) : Array.isArray(o) ? o.map(parcourir)
