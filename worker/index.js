@@ -2369,8 +2369,10 @@ async function cloudprinter(cle, chemin, corps) {
   try { j = JSON.parse(brut); } catch (e) {}
   if (r.status === 401 || r.status === 403) throw new ErreurAPI(400, 'Clé API Cloudprinter refusée.');
   if (!r.ok) {
-    const m = (j && (j.error || j.message || (j.errors && JSON.stringify(j.errors)))) || brut.slice(0, 200) || ('HTTP ' + r.status);
-    throw new ErreurAPI(502, 'Cloudprinter (' + chemin + ') : ' + m);
+    // message lisible même quand Cloudprinter renvoie un objet ({ error: { … } }, { errors: [ … ] }…)
+    const enTexte = v => v == null ? '' : typeof v === 'string' ? v : JSON.stringify(v);
+    const m = (j && enTexte(j.error || j.message || j.errors || j.info || j)) || brut || ('HTTP ' + r.status);
+    throw new ErreurAPI(502, 'Cloudprinter (' + chemin + ', HTTP ' + r.status + ') : ' + String(m).slice(0, 600));
   }
   return j;
 }
