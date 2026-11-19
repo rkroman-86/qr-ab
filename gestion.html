@@ -788,8 +788,10 @@
               return el('button', { type: 'button', class: (o.service + (o.option ? ' — ' + o.option : '')) === l.transporteur ? 'choisie' : '',
                 text: nomO + ' ' + enEuros(o.prix) + ' €', title: 'Utiliser ' + mot + ' pour ' + l.quantite + ' cartes (' + (NOMS_PAYS[l.pays] || l.pays) + ')',
                 onclick: () => {
-                  impTransporteurs[l.pays] = parQte(impTransporteurs[l.pays]); impTransporteurs[l.pays][l.quantite] = mot; impTableLivraison();
-                  m.className = 'msg ok'; m.textContent = '✓ ' + mot + ' choisi pour ' + l.quantite + ' cartes (' + (NOMS_PAYS[l.pays] || l.pays) + '). Recalculez pour voir la marge, puis Enregistrer l’impression.';
+                  impTransporteurs[l.pays] = parQte(impTransporteurs[l.pays]); impTransporteurs[l.pays][l.quantite] = mot;
+                  impLivraison[l.pays] = parQte(impLivraison[l.pays]); impLivraison[l.pays][l.quantite] = Math.round(o.prix * 1.2);   // coût de livraison HT → TTC
+                  impTableLivraison(); impApercu();
+                  m.className = 'msg ok'; m.textContent = '✓ ' + mot + ' choisi pour ' + l.quantite + ' cartes (' + (NOMS_PAYS[l.pays] || l.pays) + '), livraison ' + enEuros(Math.round(o.prix * 1.2)) + ' € TTC (coût réel). Ajustez si besoin, recalculez pour voir la marge, puis Enregistrer l’impression.';
                 } });
             })) : null]),
           el('td', { class: 'n', text: enEuros(l.prixProduit) + ' + ' + enEuros(l.prixLivraison) + ' = ' + enEuros(prixClient) + ' €' }),
