@@ -25,7 +25,7 @@
     'Verso': ['Back', 'Оборот'],
     'Imprimer aussi un verso': ['Also print a back side', 'Печатать и оборотную сторону'],
     'Quantité': ['Quantity', 'Количество'],
-    '85 × 55 mm, papier mat 300 g, impression couleur, livraison suivie.': ['85 × 55 mm, 300 gsm matte paper, colour print, tracked delivery.', '85 × 55 мм, матовая бумага 300 г/м², цветная печать, доставка с отслеживанием.'],
+    '85 × 55 mm, papier mat 300 g, impression couleur, livraison suivie en général sous 1 à 2 semaines.': ['85 × 55 mm, 300 gsm matte paper, colour print, tracked delivery usually within 1 to 2 weeks.', '85 × 55 мм, матовая бумага 300 г/м², цветная печать, доставка с отслеживанием обычно за 1–2 недели.'],
     'Continuer': ['Continue', 'Продолжить'],
     'Société (facultatif)': ['Company (optional)', 'Компания (необязательно)'],
     'Complément d’adresse (facultatif)': ['Address line 2 (optional)', 'Дополнение к адресу (необязательно)'],
