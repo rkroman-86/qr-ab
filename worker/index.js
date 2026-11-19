@@ -2329,28 +2329,45 @@ const FRAIS_STRIPE = { pct: 1.5, fixe: 25 };      // carte européenne : 1,5 % +
 const IMPRESSION_DEFAUT = {
   actif: false, imprimeur: 'cloudprinter',
   produits: { recto: '', rectoVerso: '' }, options: { recto: [], rectoVerso: [] },
-  transporteur: 'Colissimo', quantites: [50, 100, 250],
-  prix: { recto: { 50: 1000, 100: 1200, 250: 2200 }, rectoVerso: { 50: 1200, 100: 1500, 250: 2500 } },
-  livraison: { FR: 490 }, margeMin: 100
+  transporteur: 'Colissimo', quantites: [50, 100, 250, 500, 1000],
+  // 500 et 1000 : prix proposés le 19/11, à vérifier avec le simulateur (le colis change de transporteur)
+  prix: { recto: { 50: 1000, 100: 1200, 250: 2200, 500: 3500, 1000: 5500 }, rectoVerso: { 50: 1200, 100: 1500, 250: 2500, 500: 4000, 1000: 6500 } },
+  livraison: { FR: { 50: 490, 100: 490, 250: 490, 500: 990, 1000: 1290 } }, margeMin: 100
 };
+/* Livraison et transporteur sont réglés par pays ET par quantité (le poids du colis change le transporteur).
+   Anciens réglages (un seul montant / un seul mot par pays) : appliqués à toutes les quantités. */
+function parQuantite(v, quantites) {
+  if (v != null && typeof v === 'object') return Object.assign({}, v);
+  const o = {};
+  if (v != null && v !== '') for (const q of quantites) o[q] = v;
+  return o;
+}
+function parPaysQuantite(m, quantites) {
+  const o = {};
+  for (const [p, v] of Object.entries(m || {})) o[p] = parQuantite(v, quantites);
+  return o;
+}
 async function lireImpression(env) {
   let t = {};
   try { t = JSON.parse(await env.CLIENTS.get('config:impression') || '{}'); } catch (e) {}
   const D = IMPRESSION_DEFAUT;
-  return {
+  const c = {
     actif: !!t.actif, imprimeur: t.imprimeur || D.imprimeur,
     produits: Object.assign({}, D.produits, t.produits), options: Object.assign({}, D.options, t.options),
     transporteur: t.transporteur != null ? t.transporteur : D.transporteur,
-    transporteurs: t.transporteurs && typeof t.transporteurs === 'object' ? t.transporteurs : {},
     quantites: Array.isArray(t.quantites) && t.quantites.length ? t.quantites : D.quantites,
-    prix: t.prix || D.prix, livraison: t.livraison || D.livraison,
+    prix: t.prix || D.prix,
     margeMin: t.margeMin != null ? t.margeMin : D.margeMin,
     cle: t.cle || null, fin: t.fin || '', le: t.le || null, majLe: t.majLe || null
   };
+  c.livraison = parPaysQuantite(t.livraison || D.livraison, c.quantites);
+  c.transporteurs = parPaysQuantite(t.transporteurs && typeof t.transporteurs === 'object' ? t.transporteurs : {}, c.quantites);
+  return c;
 }
+const prixLivraisonDe = (conf, pays, q) => { const v = (conf.livraison[pays] || {})[q]; return v == null ? null : v; };
 // transporteur préféré pour un pays : celui du pays s'il est indiqué, sinon le réglage général
-function transporteurPays(conf, pays) {
-  const t = (conf.transporteurs || {})[pays];
+function transporteurPays(conf, pays, quantite) {
+  const t = ((conf.transporteurs || {})[pays] || {})[quantite];
   return String(t != null && String(t).trim() ? t : (conf.transporteur || '')).trim();
 }
 async function etatImpression(env) {
@@ -2403,7 +2420,7 @@ async function devisImprimeur(cle, conf, face, quantite, pays) {
     offres.push({ hash: o.quote, service: o.service || '', option: o.shipping_option || '', niveau: o.shipping_level || '', prix: Math.round(Number(o.price || 0) * 100) });
   if (!offres.length) throw new ErreurAPI(502, 'Cloudprinter ne propose aucune livraison vers ' + pays + '.');
   offres.sort((a, b) => a.prix - b.prix);
-  const filtre = transporteurPays(conf, pays).toLowerCase();
+  const filtre = transporteurPays(conf, pays, quantite).toLowerCase();
   const pref = filtre ? offres.find(o => (o.service + ' ' + o.option).toLowerCase().includes(filtre)) : null;
   return { produit, livraison: pref || offres[0], transporteurTrouve: !filtre || !!pref, offres, expire: q.expire_date || null };
 }
@@ -2411,15 +2428,46 @@ async function devisImprimeur(cle, conf, face, quantite, pays) {
 function margeCommande(prixTTC, coutHT) {
   return HT(prixTTC) - coutHT - Math.round(prixTTC * FRAIS_STRIPE.pct / 100 + FRAIS_STRIPE.fixe);
 }
+/* Livraison (prix TTC) et transporteur par pays et par quantité, depuis le formulaire de /gestion.
+   strict = enregistrement : chaque pays doit avoir un prix pour chaque quantité. */
+function lireLivraisons(d, quantites, cent, strict) {
+  const livraison = {}, transporteurs = {};
+  for (const [p, v] of Object.entries(d.livraison || {})) {
+    const pays = String(p).toUpperCase();
+    if (!PAYS_LIVRAISON.includes(pays)) throw new ErreurAPI(400, 'Pays de livraison non pris en charge : ' + pays + '.');
+    const src = parQuantite(v, quantites);
+    livraison[pays] = {};
+    for (const q of quantites) {
+      const x = src[q];
+      if (x === undefined || x === null || String(x).trim() === '') {
+        if (strict) throw new ErreurAPI(400, 'Prix de livraison manquant : ' + pays + ', ' + q + ' cartes.');
+        continue;
+      }
+      livraison[pays][q] = cent(x, 'Livraison ' + pays + ' ' + q + ' cartes');
+    }
+  }
+  for (const [p, v] of Object.entries(d.transporteurs || {})) {
+    const pays = String(p).toUpperCase();
+    if (!livraison[pays]) continue;
+    const src = parQuantite(v, quantites), o = {};
+    for (const q of quantites) { const t = String(src[q] || '').trim().slice(0, 60); if (t) o[q] = t; }
+    if (Object.keys(o).length) transporteurs[pays] = o;
+  }
+  return { livraison, transporteurs };
+}
+function lireQuantites(v) {
+  return [...new Set((Array.isArray(v) ? v : String(v || '').split(/[\s,;]+/))
+    .map(Number).filter(n => Number.isInteger(n) && n > 0 && n <= 10000))].sort((a, b) => a - b).slice(0, 8);
+}
+function centimes(v, nom) {
+  const n = Math.round(Number(String(v).replace(',', '.')) * 100);
+  if (!Number.isFinite(n) || n < 0 || n > 100000) throw new ErreurAPI(400, nom + ' : montant entre 0 et 1 000 €.');
+  return n;
+}
 async function enregistrerReglagesImpression(env, d) {
   const conf = await lireImpression(env);
-  const cent = (v, nom) => {
-    const n = Math.round(Number(String(v).replace(',', '.')) * 100);
-    if (!Number.isFinite(n) || n < 0 || n > 100000) throw new ErreurAPI(400, nom + ' : montant entre 0 et 1 000 €.');
-    return n;
-  };
-  const quantites = [...new Set((Array.isArray(d.quantites) ? d.quantites : String(d.quantites || '').split(/[\s,;]+/))
-    .map(Number).filter(n => Number.isInteger(n) && n > 0 && n <= 10000))].sort((a, b) => a - b).slice(0, 8);
+  const cent = centimes;
+  const quantites = lireQuantites(d.quantites);
   if (!quantites.length) throw new ErreurAPI(400, 'Indiquez au moins une quantité (ex. 50, 100, 250).');
   const prix = {};
   for (const f of FACES) {
@@ -2430,17 +2478,7 @@ async function enregistrerReglagesImpression(env, d) {
       prix[f][q] = cent(v, q + ' cartes ' + (f === 'recto' ? 'recto' : 'recto/verso'));
     }
   }
-  const livraison = {};
-  for (const [p, v] of Object.entries(d.livraison || {})) {
-    const pays = String(p).toUpperCase();
-    if (!PAYS_LIVRAISON.includes(pays)) throw new ErreurAPI(400, 'Pays de livraison non pris en charge : ' + pays + '.');
-    livraison[pays] = cent(v, 'Livraison ' + pays);
-  }
-  const transporteurs = {};
-  for (const [pays, v] of Object.entries(d.transporteurs || {})) {
-    const t = String(v || '').trim().slice(0, 60);
-    if (t && livraison[String(pays).toUpperCase()] != null) transporteurs[String(pays).toUpperCase()] = t;
-  }
+  const { livraison, transporteurs } = lireLivraisons(d, quantites, cent, true);
   if (!Object.keys(livraison).length) throw new ErreurAPI(400, 'Ajoutez au moins un pays de livraison.');
   const refOk = s => String(s || '').trim().slice(0, 120);
   const opts = v => (Array.isArray(v) ? v : String(v || '').split(/[\s,;]+/)).map(refOk).filter(Boolean).slice(0, 12);
@@ -2498,16 +2536,25 @@ async function gestionImpression(env, action, d, methode) {
   if (action === 'impression-devis') {                         // simulateur : coût réel et marge pour chaque combinaison
     const conf = await lireImpression(env);
     const cle = await cleImprimeur(env);
+    // le simulateur calcule avec le formulaire en cours (même non enregistré) quand il est envoyé
+    if (d.quantites) { const qs = lireQuantites(d.quantites); if (qs.length) conf.quantites = qs; }
+    if (d.prix && typeof d.prix === 'object') {
+      for (const f of FACES) { conf.prix[f] = {}; for (const q of conf.quantites) { const v = d.prix[f] && d.prix[f][q]; if (v != null && String(v).trim() !== '') { try { conf.prix[f][q] = centimes(v, 'Prix'); } catch (e) {} } } }
+    }
+    if (d.livraison) Object.assign(conf, lireLivraisons(d, conf.quantites, (v, n) => { try { return centimes(v, n); } catch (e) { return null; } }, false));
+    if (d.transporteur != null) conf.transporteur = String(d.transporteur).trim().slice(0, 60);
+    if (d.produits && d.produits.recto) conf.produits = { recto: String(d.produits.recto).trim(), rectoVerso: String(d.produits.rectoVerso || '').trim() };
+    if (d.options) conf.options = { recto: String(d.options.recto || '').split(/[\s,;]+/).filter(Boolean), rectoVerso: String(d.options.rectoVerso || '').split(/[\s,;]+/).filter(Boolean) };
     const paysListe = (Array.isArray(d.pays) && d.pays.length ? d.pays : ['FR']).map(p => String(p).toUpperCase()).filter(p => PAYS_LIVRAISON.includes(p)).slice(0, 6);
     const lignes = [];
     for (const pays of paysListe) for (const face of FACES) for (const q of conf.quantites) {
       const prixProduit = (conf.prix[face] || {})[q];
-      const prixLivraison = conf.livraison[pays];
-      const l = { pays, face, quantite: q, prixProduit, prixLivraison, filtre: transporteurPays(conf, pays) };
+      const prixLivraison = prixLivraisonDe(conf, pays, q);
+      const l = { pays, face, quantite: q, prixProduit, prixLivraison, filtre: transporteurPays(conf, pays, q) };
       try {
         const dv = await devisImprimeur(cle, conf, face, q, pays);
         Object.assign(l, { coutProduit: dv.produit, coutLivraison: dv.livraison.prix, transporteur: (dv.livraison.service + (dv.livraison.option ? ' — ' + dv.livraison.option : '')).trim(),
-          transporteurTrouve: dv.transporteurTrouve, autres: dv.offres.slice(0, 4).map(o => o.service + ' ' + (o.prix / 100).toFixed(2) + ' €') });
+          transporteurTrouve: dv.transporteurTrouve, offres: dv.offres.slice(0, 5).map(o => ({ service: o.service, prix: o.prix })) });
         if (prixProduit != null && prixLivraison != null) l.marge = margeCommande(prixProduit + prixLivraison, dv.produit + dv.livraison.prix);
       } catch (e) { l.erreur = e.message; }
       lignes.push(l);
@@ -2576,7 +2623,7 @@ async function commanderCartes(env, request, compte, slug) {
   const adresse = adresseLivraison(tit);
   if (!adresse) throw new ErreurAPI(400, 'Complétez l’adresse de livraison (nom, prénom, adresse).', 'adresse');
   if (!adresse.phone) throw new ErreurAPI(400, 'Indiquez un numéro de téléphone pour le transporteur.', 'adresse');
-  const prixLivraison = conf.livraison[adresse.country];
+  const prixLivraison = prixLivraisonDe(conf, adresse.country, quantite);
   if (prixLivraison == null) throw new ErreurAPI(400, 'La livraison n’est pas encore proposée vers ce pays.', 'pays');
   const pdf = base64VersOctets(String(dd.pdf || ''));
   if (pdf.length < 1000 || pdf.length > PDF_MAX || String.fromCharCode(pdf[0], pdf[1], pdf[2], pdf[3]) !== '%PDF') throw new ErreurAPI(400, 'Fichier d’impression invalide.');

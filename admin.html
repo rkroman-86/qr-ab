@@ -311,8 +311,8 @@
     .cmd-modele img{width:100%;aspect-ratio:2008/1300;object-fit:contain;border-radius:6px;display:block}
     .cmd-modele b{font-size:.78rem}
     .cmd-modele.actif{border-color:var(--prim);background:color-mix(in srgb,var(--prim) 8%,var(--bg))}
-    .cmd-qte{display:flex;gap:8px}
-    .cmd-qte .btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 4px}
+    .cmd-qte{display:grid;grid-template-columns:repeat(auto-fit,minmax(58px,1fr));gap:6px}
+    .cmd-qte .btn{min-width:0;display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 4px}
     .cmd-qte small{font-size:.75rem;opacity:.85}
     .cmd-prix{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;padding:12px 0;margin:8px 0;border-top:1px solid var(--ligne);border-bottom:1px solid var(--ligne);font-size:.9rem}
     .cmd-prix b{font-size:1.15rem}
@@ -3234,7 +3234,9 @@
     const paysLivraison = () => L.separee ? L.pays : (F.pays || 'FR');
     const prix = () => {
       const produit = offre.prix[S.avecVerso ? 'rectoVerso' : 'recto'][S.quantite];
-      const livraison = offre.livraison[paysLivraison()];
+      const lp = offre.livraison[paysLivraison()];          // { quantité → prix } : le transporteur change avec le poids
+      const lv = lp != null && typeof lp === 'object' ? lp[S.quantite] : lp;
+      const livraison = lv == null ? null : lv;
       return { produit, livraison, total: livraison == null ? null : produit + livraison };
     };
     const barrePrix = el('div', { class: 'cmd-prix', 'data-no-i18n': '' });

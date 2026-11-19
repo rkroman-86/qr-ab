@@ -118,6 +118,10 @@
   .imp-table .neg{color:var(--err);font-weight:700} .imp-table .pos{color:var(--ok);font-weight:600}
   .imp-table small{color:var(--doux);white-space:normal}
   .imp-ajout-pays{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+  .imp-pays-tete{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:10px 0 2px}
+  .imp-offres{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;white-space:normal}
+  .imp-offres button{min-height:0;padding:3px 8px;font-size:.75rem;border-radius:999px}
+  .imp-offres button.choisie{border-color:var(--ok);color:var(--ok);font-weight:700}
   .imp-ajout-pays select{flex:0 1 220px}
   .imp-catalogue{display:grid;grid-template-columns:minmax(0,1fr);gap:6px;margin:8px 0}
   .imp-produit{border:1px solid var(--ligne);border-radius:10px;padding:8px 10px;font-size:.88rem;min-width:0;overflow-wrap:anywhere;word-break:break-word}
@@ -302,10 +306,11 @@
         <div id="imp-catalogue" class="imp-catalogue"></div>
 
         <h3>Prix du produit (€ TTC, sans la livraison)</h3>
-        <label><span>Quantités proposées (séparées par des virgules)</span><input type="text" id="imp-quantites" inputmode="numeric" placeholder="50, 100, 250"></label>
+        <label><span>Quantités proposées (séparées par des virgules)</span><input type="text" id="imp-quantites" inputmode="numeric" placeholder="50, 100, 250, 500, 1000"></label>
         <div id="imp-prix" class="imp-table"></div>
 
-        <h3>Prix de la livraison (€ TTC, par pays)</h3>
+        <h3>Prix de la livraison (€ TTC, par pays et par quantité)</h3>
+        <p class="infos">Le colis change de poids avec la quantité, donc parfois de transporteur. Transporteur vide = réglage général ci-dessus (s’il n’est pas proposé : le moins cher). Le simulateur montre les offres : touchez-en une pour la choisir.</p>
         <div id="imp-livraison" class="imp-table"></div>
         <div class="imp-ajout-pays">
           <select id="imp-pays-ajout"></select>
@@ -564,8 +569,20 @@
   const enEuros = c => (c / 100).toFixed(2).replace('.', ',');
   const versCent = v => Math.round(Number(String(v).replace(',', '.')) * 100);
   let imp = null;                                   // état renvoyé par le serveur
-  let impTransporteurs = {};                        // pays → transporteur préféré (vide = réglage général)
-  let impLivraison = {};                            // pays → centimes (édition en cours)
+  let impTransporteurs = {};                        // pays → { quantité → transporteur préféré } (vide = réglage général)
+  let impLivraison = {};                            // pays → { quantité → centimes } (édition en cours)
+  // anciens réglages : un montant / un mot par pays → le même pour toutes les quantités
+  function parQte(v) { if (v != null && typeof v === 'object') return Object.assign({}, v); const o = {}; if (v != null && v !== '') impQuantites().forEach(q => { o[q] = v; }); return o; }
+  // complète les quantités manquantes d'un pays : prix proposé (France) sinon celui de la quantité inférieure
+  function impCompleterPays(p) {
+    const l = impLivraison[p] = parQte(impLivraison[p]);
+    const def = (imp && imp.defaut && imp.defaut.livraison && imp.defaut.livraison.FR) || {};
+    let prec = null;
+    impQuantites().forEach(q => {
+      if (l[q] == null || !isFinite(l[q])) l[q] = p === 'FR' && def[q] != null ? def[q] : (prec != null ? prec : (def[q] != null ? def[q] : 490));
+      prec = l[q];
+    });
+  }
   function impQuantites() {
     const l = $('#imp-quantites').value.split(/[\s,;]+/).map(Number).filter(n => Number.isInteger(n) && n > 0);
     return Array.from(new Set(l)).sort((a, b) => a - b);
@@ -580,7 +597,8 @@
     const qs = impQuantites();
     const tab = el('table', {}, [el('tr', {}, [el('th', { text: 'Quantité' })].concat(FACES_IMP.map(f => el('th', { text: f[1] }))))]);
     qs.forEach(q => tab.append(el('tr', {}, [el('td', { text: q + ' cartes' })].concat(FACES_IMP.map(f => {
-      const v = prix[f[0]] && prix[f[0]][q];
+      let v = prix[f[0]] && prix[f[0]][q];
+      if ((v == null || v === '') && imp && imp.defaut) v = (imp.defaut.prix[f[0]] || {})[q];   // nouvelle quantité : prix proposé
       const i = el('input', { type: 'text', inputmode: 'decimal', 'data-face': f[0], 'data-q': String(q) });
       i.value = v == null ? '' : (typeof v === 'number' ? enEuros(v) : v);
       i.addEventListener('input', impApercu);
@@ -590,18 +608,24 @@
   }
   function impTableLivraison() {
     const z = $('#imp-livraison'); z.textContent = '';
-    const tab = el('table', {}, [el('tr', {}, [el('th', { text: 'Pays' }), el('th', { text: 'Prix TTC' }), el('th', { text: 'Transporteur' }), el('th', { text: '' })])]);
+    const qs = impQuantites(), general = $('#imp-transporteur').value || 'le moins cher';
     Object.keys(impLivraison).forEach(p => {
-      const i = el('input', { type: 'text', inputmode: 'decimal' });
-      i.value = enEuros(impLivraison[p]);
-      i.addEventListener('input', () => { impLivraison[p] = versCent(i.value); impApercu(); });
-      const t = el('input', { type: 'text', placeholder: $('#imp-transporteur').value || 'général' });
-      t.value = impTransporteurs[p] || '';
-      t.addEventListener('input', () => { impTransporteurs[p] = t.value; });
-      tab.append(el('tr', {}, [el('td', { text: (NOMS_PAYS[p] || p) + ' (' + p + ')' }), el('td', {}, [i]), el('td', {}, [t]),
-        el('td', {}, [el('button', { type: 'button', class: 'danger', text: 'Retirer', onclick: () => { delete impLivraison[p]; delete impTransporteurs[p]; impTableLivraison(); impListesPays(); impApercu(); } })])]));
+      impCompleterPays(p);
+      const tr = impTransporteurs[p] = parQte(impTransporteurs[p]);
+      z.append(el('div', { class: 'imp-pays-tete' }, [el('b', { text: (NOMS_PAYS[p] || p) + ' (' + p + ')' }),
+        el('button', { type: 'button', class: 'danger', text: 'Retirer', onclick: () => { delete impLivraison[p]; delete impTransporteurs[p]; impTableLivraison(); impListesPays(); impApercu(); } })]));
+      const tab = el('table', {}, [el('tr', {}, [el('th', { text: 'Quantité' }), el('th', { text: 'Livraison TTC' }), el('th', { text: 'Transporteur' })])]);
+      qs.forEach(q => {
+        const i = el('input', { type: 'text', inputmode: 'decimal' });
+        i.value = enEuros(impLivraison[p][q]);
+        i.addEventListener('input', () => { impLivraison[p][q] = versCent(i.value); impApercu(); });
+        const t = el('input', { type: 'text', placeholder: general, spellcheck: 'false' });
+        t.value = tr[q] || '';
+        t.addEventListener('input', () => { tr[q] = t.value; });
+        tab.append(el('tr', {}, [el('td', { text: q + ' cartes' }), el('td', {}, [i]), el('td', {}, [t])]));
+      });
+      z.append(tab);
     });
-    z.append(tab);
   }
   function impListesPays() {
     const ajout = $('#imp-pays-ajout'), sim = $('#imp-sim-pays');
@@ -611,15 +635,26 @@
     $('#imp-pays-btn').disabled = !ajout.options.length;
   }
   function impApercu() {
-    const prix = impLirePrix(), fr = impLivraison.FR != null ? impLivraison.FR : impLivraison[Object.keys(impLivraison)[0]];
-    const pays = impLivraison.FR != null ? 'France' : (NOMS_PAYS[Object.keys(impLivraison)[0]] || '');
-    if (fr == null) { $('#imp-apercu').textContent = ''; return; }
+    const cle = impLivraison.FR != null ? 'FR' : Object.keys(impLivraison)[0];
+    const prix = impLirePrix(), liv = cle ? (impLivraison[cle] || {}) : null;
+    const pays = NOMS_PAYS[cle] || cle || '';
+    if (!liv) { $('#imp-apercu').textContent = ''; return; }
     const parts = [];
     FACES_IMP.forEach(f => impQuantites().forEach(q => {
-      const v = prix[f[0]][q], c = versCent(v);
-      if (String(v || '').trim() && isFinite(c)) parts.push(q + ' ' + f[1].toLowerCase() + ' : ' + enEuros(c) + ' + ' + enEuros(fr) + ' = ' + enEuros(c + fr) + ' €');
+      const v = prix[f[0]][q], c = versCent(v), fr = liv[q];
+      if (String(v || '').trim() && isFinite(c) && fr != null && isFinite(fr)) parts.push(q + ' ' + f[1].toLowerCase() + ' : ' + enEuros(c) + ' + ' + enEuros(fr) + ' = ' + enEuros(c + fr) + ' €');
     }));
     $('#imp-apercu').textContent = 'Le client voit (livraison ' + pays + ') : ' + parts.join(' · ');
+  }
+  function impCorps() {                            // formulaire → réglages (enregistrement et simulateur)
+    const livraison = {}, qs = impQuantites();
+    Object.keys(impLivraison).forEach(p => { livraison[p] = {}; qs.forEach(q => { const c = (impLivraison[p] || {})[q]; livraison[p][q] = c == null || !isFinite(c) ? '' : enEuros(c); }); });
+    return {
+      actif: $('#imp-actif').checked, imprimeur: $('#imp-imprimeur').value, transporteur: $('#imp-transporteur').value,
+      produits: { recto: $('#imp-ref-recto').value, rectoVerso: $('#imp-ref-rectoVerso').value },
+      options: { recto: $('#imp-opt-recto').value, rectoVerso: $('#imp-opt-rectoVerso').value },
+      quantites: qs, prix: impLirePrix(), livraison, transporteurs: impTransporteurs, margeMin: $('#imp-margeMin').value
+    };
   }
   function impEtat(e) {                             // badge et boutons de la clé seulement (ne touche pas aux champs en cours de saisie)
     imp = e;
@@ -637,23 +672,24 @@
     FACES_IMP.forEach(f => { $('#imp-ref-' + f[0]).value = (e.produits && e.produits[f[0]]) || ''; $('#imp-opt-' + f[0]).value = ((e.options && e.options[f[0]]) || []).join(', '); });
     $('#imp-quantites').value = (e.quantites || []).join(', ');
     $('#imp-margeMin').value = enEuros(e.margeMin || 0);
-    impLivraison = Object.assign({}, e.livraison || {});
-    impTransporteurs = Object.assign({}, e.transporteurs || {});
+    impLivraison = JSON.parse(JSON.stringify(e.livraison || {}));
+    impTransporteurs = JSON.parse(JSON.stringify(e.transporteurs || {}));
     impTablePrix(e.prix || {});
     impTableLivraison(); impListesPays(); impApercu();
   }
   async function chargerImpression() { impRemplir(await api('impression')); }
-  $('#imp-quantites').addEventListener('change', () => { impTablePrix(impLirePrix()); impApercu(); });
+  $('#imp-quantites').addEventListener('change', () => { impTablePrix(impLirePrix()); impTableLivraison(); impApercu(); });
+  $('#imp-transporteur').addEventListener('change', impTableLivraison);
   $('#imp-pays-btn').addEventListener('click', () => {
     const p = $('#imp-pays-ajout').value; if (!p) return;
-    impLivraison[p] = impLivraison.FR != null ? impLivraison.FR : 490;
+    impLivraison[p] = Object.assign({}, impLivraison.FR || {});
     impTableLivraison(); impListesPays(); impApercu();
   });
   $('#imp-defaut').addEventListener('click', () => {
     if (!imp) return;
     const d = imp.defaut;
     $('#imp-quantites').value = d.quantites.join(', ');
-    impLivraison = Object.assign({}, d.livraison);
+    impLivraison = JSON.parse(JSON.stringify(d.livraison)); impTransporteurs = {};
     impTablePrix(d.prix); impTableLivraison(); impListesPays(); impApercu();
     $('#m-imp').className = 'msg'; $('#m-imp').textContent = 'Prix d’origine remis : cliquez sur Enregistrer pour les appliquer.';
   });
@@ -674,13 +710,7 @@
   $('#f-imp').addEventListener('submit', async e => {
     e.preventDefault();
     const m = $('#m-imp'); m.className = 'msg'; m.textContent = 'Enregistrement…';
-    const livraison = {}; Object.keys(impLivraison).forEach(p => { livraison[p] = enEuros(impLivraison[p]); });
-    const corps = {
-      actif: $('#imp-actif').checked, imprimeur: $('#imp-imprimeur').value, transporteur: $('#imp-transporteur').value,
-      produits: { recto: $('#imp-ref-recto').value, rectoVerso: $('#imp-ref-rectoVerso').value },
-      options: { recto: $('#imp-opt-recto').value, rectoVerso: $('#imp-opt-rectoVerso').value },
-      quantites: impQuantites(), prix: impLirePrix(), livraison, transporteurs: impTransporteurs, margeMin: $('#imp-margeMin').value
-    };
+    const corps = impCorps();
     try { impRemplir(await api('impression', corps)); m.className = 'msg ok'; m.textContent = '✓ Réglages d’impression enregistrés.'; }
     catch (err) { m.className = 'msg err'; m.textContent = err.message; }
   });
@@ -740,8 +770,8 @@
     if (!pays) return;
     m.className = 'msg'; m.textContent = 'Devis en cours auprès de l’imprimeur…'; z.textContent = '';
     try {
-      const r = await api('impression-devis', { pays: [pays] });
-      m.textContent = '';
+      const r = await api('impression-devis', Object.assign(impCorps(), { pays: [pays] }));
+      m.className = 'msg'; m.textContent = 'Calcul avec le formulaire en cours. Touchez une offre pour la choisir pour cette quantité, puis Enregistrer.';
       const tab = el('table', {}, [el('tr', {}, ['Cartes', 'Coût produit HT', 'Coût livraison HT', 'Transporteur', 'Prix client TTC', 'Marge'].map(t => el('th', { text: t })))]);
       r.lignes.forEach(l => {
         const nom = l.quantite + ' ' + (l.face === 'recto' ? 'recto' : 'recto/verso');
@@ -752,7 +782,12 @@
           el('td', { class: 'n', text: enEuros(l.coutProduit) + ' €' }),
           el('td', { class: 'n', text: enEuros(l.coutLivraison) + ' €' }),
           el('td', {}, [el('span', { text: l.transporteur }), l.transporteurTrouve ? null : el('small', { class: 'neg', text: ' (« ' + (l.filtre || r.transporteur) + ' » non proposé : offre la moins chère)' }),
-            l.autres && l.autres.length ? el('div', {}, [el('small', { style: 'color:#777', text: 'Offres : ' + l.autres.join(' · ') })]) : null]),
+            l.offres && l.offres.length ? el('div', { class: 'imp-offres' }, l.offres.map(o => el('button', { type: 'button', class: o.service === l.transporteur.split(' — ')[0] ? 'choisie' : '',
+              text: o.service + ' ' + enEuros(o.prix) + ' €', title: 'Utiliser ' + o.service + ' pour ' + l.quantite + ' cartes (' + (NOMS_PAYS[l.pays] || l.pays) + ')',
+              onclick: () => {
+                impTransporteurs[l.pays] = parQte(impTransporteurs[l.pays]); impTransporteurs[l.pays][l.quantite] = o.service; impTableLivraison();
+                m.className = 'msg ok'; m.textContent = '✓ ' + o.service + ' choisi pour ' + l.quantite + ' cartes (' + (NOMS_PAYS[l.pays] || l.pays) + '). Recalculez pour voir la marge, puis Enregistrer l’impression.';
+              } }))) : null]),
           el('td', { class: 'n', text: enEuros(l.prixProduit) + ' + ' + enEuros(l.prixLivraison) + ' = ' + enEuros(prixClient) + ' €' }),
           el('td', { class: 'n ' + (l.marge < r.margeMin ? 'neg' : 'pos'), text: l.marge == null ? '—' : enEuros(l.marge) + ' €' })
         ]));
