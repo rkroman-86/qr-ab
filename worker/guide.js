@@ -117,7 +117,8 @@ qrbc.app (QR-BC, édité par KPS) permet de créer en quelques minutes, depuis u
 
 ## Compte et connexion
 - Connexion avec le nom de la page (ou de n'importe quelle page du compte) et le mot de passe. « Mot de passe oublié ? » envoie un lien de réinitialisation à l'adresse e-mail du compte.
-- L'adresse e-mail doit être confirmée par le lien reçu à l'inscription (vérifier les indésirables ; le lien peut être renvoyé).
+- Inscription en deux temps : sur l'accueil ou l'appli, le client indique son activité et son e-mail, puis reçoit un lien « Créer ma page » (valable 7 jours ; vérifier les indésirables ; « Renvoyer le lien » et « Corriger l'adresse » sur l'écran d'attente). Le lien ouvre « Finalisez votre page » : l'adresse de la page est proposée automatiquement d'après l'activité (modifiable, disponibilité vérifiée en direct), le nom de l'activité est prérempli, un seul champ mot de passe (bouton 👁 pour l'afficher). « Créer ma page » crée le compte, lance l'essai gratuit d'un mois et ouvre l'éditeur. Lien expiré : la page propose d'en recevoir un nouveau. Lien déjà utilisé : se connecter avec son mot de passe.
+- Comptes créés avant le 19/11/2026 : l'adresse e-mail doit être confirmée par le lien reçu à l'inscription (le lien peut être renvoyé depuis l'écran de connexion).
 - Le nom de la page (l'adresse nom.qrbc.app) ne se change pas ; pour un autre nom, ajouter une nouvelle page.
 - Support humain : support@qrbc.app.
 

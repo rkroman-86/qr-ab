@@ -53,6 +53,7 @@ const TVA = 20;                                 // %, ajoutée aux montants HT a
 const RENOUVELER_AVANT = 30;                    // jours avant l'échéance où le renouvellement est proposé
 const STRIPE_API = 'https://api.stripe.com/v1';
 const RESEND_API = 'https://api.resend.com';
+const TURNSTILE_API = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
 const DUREE_LIEN_MDP = 3600;                    // secondes de validité d'un lien « mot de passe oublié »
 let QUOTAS_IA = { essai: TARIFS_DEFAUT.essai, payant: TARIFS_DEFAUT.payant, mensuel: TARIFS_DEFAUT.mensuel };   // payant = formule annuelle
 let OFFRE = { mensuel: { prix: TARIFS_DEFAUT.aboMensuel, page: TARIFS_DEFAUT.pageMensuel }, annuel: { prix: TARIFS_DEFAUT.aboAnnuel, page: TARIFS_DEFAUT.pageAnnuel } };   // TTC
@@ -120,7 +121,7 @@ const ITERATIONS = 100000;                    // maximum accepté par PBKDF2 dan
 const RESERVES = new Set(['www', 'api', 'admin', 'app', 'mail', 'smtp', 'gestion', 'static', 'cdn', 'qrbc',
   'support', 'aide', 'help', 'blog', 'docs', 'status', 'billing', 'paiement', 'compte', 'login', 'inscription',
   'demo', 'dev', 'staging', 'test', 'ns1', 'ns2', 'ftp', 'webmail', 'contact']);
-const FICHIERS_STATIQUES = new Set(['/admin.html', '/commun.js', '/i18n.js', '/qrcode.js']);
+const FICHIERS_STATIQUES = new Set(['/admin.html', '/commun.js', '/i18n.js', '/qrcode.js', '/inscription.js']);
 // Appli installable (PWA) servie depuis qrbc.app
 const FICHIERS_PWA = new Set(['/og-qrbc.jpg', '/og-qrbc-en.jpg', '/og-qrbc-ru.jpg', '/manifest.webmanifest', '/sw.js', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/apple-touch-icon.png', '/favicon.png']);
 const FICHIERS_SITE = new Set(['config.json', 'index.html', 'accueil.html', 'sitemap.xml']);
@@ -173,7 +174,13 @@ class ErreurAPI extends Error {
 async function racine(request, env, url) {
   const p = url.pathname;
   if (p === '/api/moi') return marquerProprietaire();
-  if (p === '/api/inscription' && request.method === 'POST') return inscription(request, env);
+  if (p === '/api/inscription' && request.method === 'POST') return inscription(request, env);       // ancien formulaire (pages restées en cache)
+  // Inscription en deux temps : lien par e-mail (activité + e-mail), puis page « Finalisez votre page »
+  if (p === '/api/inscription/config' && request.method === 'GET') return json({ turnstile: ((await confTurnstile(env)) || {}).site || null });
+  if (p === '/api/inscription/lien' && request.method === 'POST') return inscriptionLien(request, env);
+  if (p === '/api/inscription/renvoyer' && request.method === 'POST') return inscriptionRenvoyer(request, env);
+  if (p === '/api/inscription/relancer' && request.method === 'POST') return inscriptionRelancer(request, env);
+  if (p === '/api/inscription/finaliser' && request.method === 'POST') return inscriptionFinaliser(request, env);
   if (p === '/api/promo' && request.method === 'GET') return verifierPromo(request, env);
   if (p === '/api/stripe/webhook' && request.method === 'POST') return webhookStripe(request, env);
   if (p.startsWith('/api/gestion/')) return gestion(request, env, p.slice('/api/gestion/'.length));
@@ -523,7 +530,7 @@ async function apiClient(request, env, slug, route) {
       if (chemin === 'index.html' && !compte.publie && !compte.parent) {   // 1re page enregistrée (étapes d'inscription)
         compte.publie = new Date().toISOString();
         await ecrireCompte(env, compte);
-        if (compte.plan === 'essai') ecrireStats(env, PAGE_SITE, [['etape', 'publie']]);
+        if (compte.plan === 'essai' && compte.entonnoir && !compte.noindex) ecrireStats(env, PAGE_SITE, [['etape', 'publie']]);
       }
     }
     return json({ sha: 'kv' });
@@ -1303,6 +1310,219 @@ async function inscription(request, env) {
   return json({ ok: true, adresse: 'https://' + slug + '.' + DOMAINE + '/', editeur: '/app/' + slug + '/', verifier: !!conf, envoye, compte: resumeCompte(compte) });
 }
 
+/* ===================== Inscription en deux temps =====================
+   Étape 1 (accueil ou appli) : activité + e-mail + CGV → inscription en attente (KV, 7 jours, aucun nom réservé)
+   et lien envoyé par e-mail. Étape 2 (page ouverte par le lien, ce qui confirme l'adresse) : adresse de la page
+   proposée d'après l'activité, nom, mot de passe → compte créé, essai commencé, éditeur ouvert.
+   KV : inscription:<empreinte du jeton> (données), inscription-email:<e-mail> (jeton en cours, pour renvoyer le même lien),
+   inscription-trace:<empreinte> (40 jours : lien expiré → nouveau lien sans tout ressaisir), inscription-fait:<empreinte> (lien déjà utilisé). */
+const DUREE_INSCRIPTION = 7 * 86400;
+const MOTS_VIDES = new Set(['a', 'au', 'aux', 'de', 'des', 'du', 'd', 'l', 'la', 'le', 'les', 'et', 'en', 'sur', 'pour', 'par', 'chez', 'un', 'une',
+  'the', 'of', 'in', 'at', 'and', 'for', 'to', 'on', 'v', 'na', 'i', 'dlya', 'po', 'k', 's']);
+const TRANSLIT = { а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'e', ж: 'zh', з: 'z', и: 'i', й: 'y', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p',
+  р: 'r', с: 's', т: 't', у: 'u', ф: 'f', х: 'kh', ц: 'ts', ч: 'ch', ш: 'sh', щ: 'shch', ъ: '', ы: 'y', ь: '', э: 'e', ю: 'yu', я: 'ya',
+  і: 'i', ї: 'yi', є: 'ye', ґ: 'g' };
+/* « Plombier à Nice » → plombier-nice ; « Сантехник в Ницце » → santekhnik-nitstse (accents retirés, petits mots enlevés, 26 caractères au plus) */
+function baseSlug(texte) {
+  const s = String(texte || '').toLowerCase().replace(/[а-яёіїєґ]/g, c => TRANSLIT[c] ?? '')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+  const mots = s.split(' ').filter(m => m && !MOTS_VIDES.has(m));
+  let r = '';
+  for (const m of mots) { const n = r ? r + '-' + m : m; if (n.length > 26) break; r = n; }
+  if (!r && mots[0]) r = mots[0].slice(0, 26).replace(/-+$/, '');
+  return r;
+}
+async function nomLibre(env, slug) {
+  return !erreurSlug(slug) && !(await env.CLIENTS.get('compte:' + slug)) && !(await env.CLIENTS.get('reserve:' + slug));
+}
+/* Première adresse libre : base, base-2, base-3… (chaîne vide si l'activité ne donne rien d'utilisable) */
+async function proposerSlug(env, base) {
+  base = String(base || '').slice(0, 26).replace(/-+$/, '');
+  if (base.length < 3) return '';
+  for (let i = 1; i <= 30; i++) {
+    const s = i === 1 ? base : base + '-' + i;
+    if (await nomLibre(env, s)) return s;
+  }
+  return '';
+}
+
+/* Cloudflare Turnstile (anti-robots, invisible) : réglé dans /gestion ; sans réglage, pas de vérification */
+async function confTurnstile(env) {
+  const t = await env.CLIENTS.get('config:turnstile');
+  if (!t) return null;
+  try { const c = JSON.parse(t); return { site: c.site, secret: await dechiffrer(env, c.secret), fin: c.fin, le: c.le }; } catch (e) { return null; }
+}
+async function verifierTurnstile(env, request, jeton) {
+  const c = await confTurnstile(env);
+  if (!c || !c.secret) return;
+  if (!jeton) throw new ErreurAPI(403, 'Vérification anti-robots manquante. Rechargez la page et réessayez.', 'robot');
+  let j = null;
+  try {
+    const fd = new FormData();
+    fd.append('secret', c.secret); fd.append('response', String(jeton).slice(0, 2048)); fd.append('remoteip', ip(request));
+    const r = await fetch(env.TURNSTILE_API || TURNSTILE_API, { method: 'POST', body: fd });
+    j = await r.json();
+  } catch (e) { console.error('turnstile injoignable', e.message); return; }   // Cloudflare injoignable : on ne bloque pas les vrais visiteurs
+  if (!j || !j.success) throw new ErreurAPI(403, 'Vérification anti-robots échouée. Rechargez la page et réessayez.', 'robot', { erreurs: (j && j['error-codes']) || [] });
+}
+
+function emailValide(email) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length <= 200; }
+async function exigerEmailLibre(env, email) {
+  const existants = [];
+  for (const s of (await slugsParEmail(env, email)).slice(0, 10)) if (await env.CLIENTS.get('compte:' + s)) existants.push(s);
+  if (existants.length) throw new ErreurAPI(409, 'Un compte existe déjà avec cette adresse e-mail : connectez-vous avec votre mot de passe.', 'email_existe', { pages: existants });
+}
+/* Enregistre (ou prolonge) l'inscription en attente d'une adresse : même lien si une demande est déjà en cours */
+async function enregistrerAttente(env, data) {
+  const cleEmail = 'inscription-email:' + data.email;
+  let jeton = await env.CLIENTS.get(cleEmail), ancien = null;
+  if (jeton) { const t = await env.CLIENTS.get('inscription:' + await empreinte(jeton)); if (t) { try { ancien = JSON.parse(t); } catch (e) {} } }
+  const nouvelle = !ancien;
+  if (nouvelle) jeton = b64url(crypto.getRandomValues(new Uint8Array(32)));
+  const h = await empreinte(jeton);
+  const exp = Math.floor(Date.now() / 1000) + DUREE_INSCRIPTION;
+  const d = Object.assign({}, ancien || {}, data, { cree: (ancien && ancien.cree) || new Date().toISOString(), exp });
+  await env.CLIENTS.put('inscription:' + h, JSON.stringify(d), { expiration: exp });
+  await env.CLIENTS.put(cleEmail, jeton, { expiration: exp });
+  await env.CLIENTS.put('inscription-trace:' + h, JSON.stringify({ activite: d.activite, email: d.email, promo: d.promo, depuis: d.depuis, langue: d.langue }), { expirationTtl: 40 * 86400 });
+  return { jeton, nouvelle, data: d };
+}
+async function envoyerLienInscription(env, conf, jeton, d) {
+  const L = LANGUES_MAIL.includes(d.langue) ? d.langue : 'fr';
+  const url = 'https://' + DOMAINE + '/app?finaliser=' + jeton + (L !== 'fr' ? '&lang=' + L : '');
+  const act = esc(d.activite || '');
+  const T = {
+    fr: { sujet: 'Finalisez votre page qrbc', bonjour: 'Bonjour,', corps: 'Merci ! Il ne reste qu’une étape pour créer votre page' + (act ? ' « <b>' + act + '</b> »' : '') + ' : choisissez son adresse (nous vous en proposons une) et votre mot de passe.',
+      bouton: 'Créer ma page', fin: 'Ce lien est valable 7 jours. Votre essai gratuit commence quand vous créez votre page. Si vous n’êtes pas à l’origine de cette demande, ignorez simplement cet e-mail.' },
+    en: { sujet: 'Finish your qrbc page', bonjour: 'Hello,', corps: 'Thank you! Just one step left to create your page' + (act ? ' “<b>' + act + '</b>”' : '') + ': choose its address (we suggest one) and your password.',
+      bouton: 'Create my page', fin: 'This link is valid for 7 days. Your free trial starts when you create your page. If you did not request this, simply ignore this email.' },
+    ru: { sujet: 'Завершите создание страницы qrbc', bonjour: 'Здравствуйте!', corps: 'Спасибо! Остался один шаг, чтобы создать вашу страницу' + (act ? ' «<b>' + act + '</b>»' : '') + ': выберите её адрес (мы предложим вариант) и пароль.',
+      bouton: 'Создать страницу', fin: 'Ссылка действительна 7 дней. Бесплатный пробный период начнётся, когда вы создадите страницу. Если вы ничего не запрашивали, просто проигнорируйте это письмо.' }
+  }[L];
+  const html = '<div style="font:16px/1.5 system-ui,sans-serif;color:#1b1a17;max-width:480px">' +
+    '<p>' + T.bonjour + '</p><p>' + T.corps + '</p>' +
+    '<p style="margin:24px 0"><a href="' + url + '" style="display:inline-block;background:#d9572b;color:#fff;text-decoration:none;padding:14px 22px;border-radius:12px;font-weight:700;font-size:17px">' + T.bouton + '</a></p>' +
+    '<p style="color:#6a665d;font-size:14px">' + T.fin + '</p></div>';
+  const brut = T.bonjour + '\n\n' + T.corps.replace(/<[^>]+>/g, '') + '\n\n' + T.bouton + ' : ' + url + '\n\n' + T.fin;
+  await envoyerEmail(env, conf, d.email, T.sujet, html, brut);
+}
+/* Envoi du lien ; sans service d'e-mail configuré (banc d'essai), le lien est rendu directement */
+async function envoyerOuDirect(env, jeton, d) {
+  const conf = await lireEmail(env);
+  if (!conf) return { envoye: false, direct: '/app?finaliser=' + jeton };
+  try { await envoyerLienInscription(env, conf, jeton, d); return { envoye: true }; }
+  catch (e) { console.error('e-mail d’inscription', e.message); throw new ErreurAPI(502, 'L’e-mail n’a pas pu partir. Vérifiez l’adresse et réessayez dans un instant.'); }
+}
+function langueMail(l) { return LANGUES_MAIL.includes(l) ? l : 'fr'; }
+
+/* Étape 1 : « Recevoir mon lien » */
+async function inscriptionLien(request, env) {
+  await limiter(env, 'insc:' + ip(request) + ':' + new Date().toISOString().slice(0, 10), 10, 86400 * 2, 'Trop de demandes depuis cette connexion aujourd’hui.');
+  const d = await corpsJSON(request);
+  const activite = String(d.activite || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+  const email = String(d.email || '').trim().toLowerCase();
+  if (activite.length < 2) throw new ErreurAPI(400, 'Décrivez votre activité en quelques mots.', 'activite');
+  if (!emailValide(email)) throw new ErreurAPI(400, 'Adresse e-mail invalide.', 'email');
+  if (d.cgu !== true) throw new ErreurAPI(400, 'Merci d’accepter les conditions d’utilisation.', 'cgu');
+  await verifierTurnstile(env, request, d.turnstile);
+  let promo = null;
+  if (String(d.promo || '').trim()) {
+    const x = (await lirePromos(env)).find(p => p.code === normCode(d.promo) && p.actif);
+    if (!x) throw new ErreurAPI(400, 'Code promo inconnu ou expiré. Corrigez-le ou laissez le champ vide.', 'promo');
+    promo = { code: x.code, jours: x.jours };
+  }
+  await exigerEmailLibre(env, email);
+  await limiter(env, 'insc-mail:' + email + ':' + new Date().toISOString().slice(0, 13), 3, 7200, 'Trop d’envois vers cette adresse. Réessayez dans une heure.');
+  const depuis = String(d.depuis || '').toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 25);
+  const r = await enregistrerAttente(env, { activite, email, promo, depuis, langue: langueMail(d.langue), humain: visiteurHumain(request) });
+  const envoi = await envoyerOuDirect(env, r.jeton, r.data);
+  if (r.nouvelle && visiteurHumain(request)) ecrireStats(env, PAGE_SITE, [['etape', 'lien']]);
+  return json(Object.assign({ ok: true, email }, envoi));
+}
+/* « Renvoyer le lien » (écran « Vérifiez votre boîte mail ») : même lien, validité repartie pour 7 jours */
+async function inscriptionRenvoyer(request, env) {
+  await limiter(env, 'insc-r:' + ip(request) + ':' + new Date().toISOString().slice(0, 13), 10, 7200, 'Trop d’essais. Réessayez dans une heure.');
+  const d = await corpsJSON(request);
+  const email = String(d.email || '').trim().toLowerCase();
+  if (!emailValide(email)) throw new ErreurAPI(400, 'Adresse e-mail invalide.', 'email');
+  await exigerEmailLibre(env, email);
+  const jeton = await env.CLIENTS.get('inscription-email:' + email);
+  const t = jeton && await env.CLIENTS.get('inscription:' + await empreinte(jeton));
+  if (!t) throw new ErreurAPI(410, 'Aucune demande en cours pour cette adresse : recommencez l’inscription.', 'aucune');
+  await limiter(env, 'insc-mail:' + email + ':' + new Date().toISOString().slice(0, 13), 3, 7200, 'Trop d’envois vers cette adresse. Réessayez dans une heure.');
+  const r = await enregistrerAttente(env, { email });
+  return json(Object.assign({ ok: true, email }, await envoyerOuDirect(env, r.jeton, r.data)));
+}
+/* Lien expiré : un nouveau lien à l'adresse indiquée, avec l'activité et le code promo de la première demande */
+async function inscriptionRelancer(request, env) {
+  await limiter(env, 'insc-r:' + ip(request) + ':' + new Date().toISOString().slice(0, 13), 10, 7200, 'Trop d’essais. Réessayez dans une heure.');
+  const d = await corpsJSON(request);
+  const jeton = String(d.jeton || '');
+  if (!/^[A-Za-z0-9_-]{30,60}$/.test(jeton)) throw new ErreurAPI(400, 'Lien invalide.');
+  const trace = await env.CLIENTS.get('inscription-trace:' + await empreinte(jeton));
+  if (!trace) throw new ErreurAPI(410, 'Ce lien est trop ancien : recommencez l’inscription depuis l’accueil.', 'recommencer');
+  const email = String(d.email || '').trim().toLowerCase();
+  if (!emailValide(email)) throw new ErreurAPI(400, 'Adresse e-mail invalide.', 'email');
+  await exigerEmailLibre(env, email);
+  await limiter(env, 'insc-mail:' + email + ':' + new Date().toISOString().slice(0, 13), 3, 7200, 'Trop d’envois vers cette adresse. Réessayez dans une heure.');
+  const tr = JSON.parse(trace);
+  const r = await enregistrerAttente(env, { activite: tr.activite || '', email, promo: tr.promo || null, depuis: tr.depuis || '', langue: langueMail(d.langue || tr.langue) });
+  return json(Object.assign({ ok: true, email }, await envoyerOuDirect(env, r.jeton, r.data)));
+}
+/* Étape 2 : page « Finalisez votre page » (verifier: true = affichage), puis « Créer ma page » */
+async function inscriptionFinaliser(request, env) {
+  await limiter(env, 'insc-f:' + ip(request) + ':' + new Date().toISOString().slice(0, 13), 40, 7200, 'Trop d’essais. Réessayez dans une heure.');
+  const d = await corpsJSON(request);
+  const jeton = String(d.jeton || '');
+  if (!/^[A-Za-z0-9_-]{30,60}$/.test(jeton)) throw new ErreurAPI(400, 'Lien invalide.');
+  const h = await empreinte(jeton);
+  const t = await env.CLIENTS.get('inscription:' + h);
+  if (!t) {
+    const fait = await env.CLIENTS.get('inscription-fait:' + h);
+    if (fait) throw new ErreurAPI(410, 'Votre page est déjà créée : connectez-vous avec votre mot de passe.', 'deja_utilise', { slug: fait });
+    const trace = await env.CLIENTS.get('inscription-trace:' + h);
+    let email = '';
+    try { email = trace ? JSON.parse(trace).email || '' : ''; } catch (e) {}
+    throw new ErreurAPI(410, 'Ce lien a expiré.', 'expire', { email, relance: !!trace });
+  }
+  const data = JSON.parse(t);
+  try { await exigerEmailLibre(env, data.email); }
+  catch (e) { if (e.code === 'email_existe') throw new ErreurAPI(410, 'Votre page est déjà créée : connectez-vous avec votre mot de passe.', 'deja_utilise', { slug: (e.extra.pages || [])[0] || '' }); throw e; }
+  const essaiJours = JOURS_ESSAI + ((data.promo && data.promo.jours) || 0);
+  if (d.verifier) {
+    if (!data.confirme) {                                  // le clic sur le lien prouve l'adresse e-mail
+      data.confirme = new Date().toISOString();
+      await env.CLIENTS.put('inscription:' + h, JSON.stringify(data), data.exp ? { expiration: data.exp } : { expirationTtl: DUREE_INSCRIPTION });
+      if (data.humain !== false && visiteurHumain(request)) ecrireStats(env, PAGE_SITE, [['etape', 'confirme']]);
+    }
+    return json({ ok: true, email: data.email, activite: data.activite || '', nom: await proposerSlug(env, baseSlug(data.activite)),
+      essaiJours, promo: data.promo ? data.promo.code : null });
+  }
+  const slug = String(d.nom || '').trim().toLowerCase();
+  const err = erreurSlug(slug);
+  if (err) throw new ErreurAPI(400, err, 'nom_invalide');
+  verifierForceMdp(d.mdp);
+  const titre = String(d.titre || '').replace(/\s+/g, ' ').trim().slice(0, 80) || String(data.activite || '').slice(0, 80);
+  const nomPris = async () => new ErreurAPI(409, 'Cette adresse vient d’être prise. Nous vous en proposons une autre.', 'nom_pris', { nom: await proposerSlug(env, slug.slice(0, 26)) });
+  if (!(await nomLibre(env, slug))) throw await nomPris();
+  const maintenant = new Date().toISOString();
+  const humain = data.humain !== false && visiteurHumain(request);
+  let compte;
+  try {
+    compte = await creerCompte(env, { slug, email: data.email, mdp: String(d.mdp), plan: 'essai', titre, langue: langueMail(data.langue),
+      joursBonus: data.promo ? data.promo.jours : 0, promo: data.promo ? { code: data.promo.code, jours: data.promo.jours, le: maintenant } : null,
+      champs: Object.assign({ emailVerifie: data.confirme || maintenant, activite: data.activite || '' }, humain ? { entonnoir: true } : {}) });
+  } catch (e) { if (e.status === 409) throw await nomPris(); throw e; }
+  await env.CLIENTS.delete('inscription:' + h);
+  if ((await env.CLIENTS.get('inscription-email:' + data.email)) === jeton) await env.CLIENTS.delete('inscription-email:' + data.email);
+  await env.CLIENTS.put('inscription-fait:' + h, slug, { expirationTtl: 60 * 86400 });
+  const stats = [['inscription', data.promo ? String(data.promo.code).slice(0, 30) : data.depuis ? 'via:' + data.depuis : '']];
+  if (humain) stats.push(['etape', 'cree']);
+  ecrireStats(env, PAGE_SITE, stats);
+  const session = await signerSession(env, { s: slug, v: compte.version || 1, e: Math.floor(Date.now() / 1000) + 30 * 86400 });
+  return json({ ok: true, slug, jeton: session, adresse: 'https://' + slug + '.' + DOMAINE + '/' });
+}
+
 /* Design de départ d'une nouvelle page : choisi d'après le nom de l'activité (mots-clés FR/EN/RU), sinon au hasard,
    pour que les nouveaux sites ne se ressemblent pas tous. Couleurs reprises de THEMES (commun.js). */
 const THEMES_INIT = {
@@ -1347,7 +1567,7 @@ async function creerCompte(env, o) {
     langue: o.langue || 'fr',
     finEssai: o.plan === 'essai' ? new Date(maintenant + (JOURS_ESSAI + (o.joursBonus || 0)) * 86400000).toISOString() : null,
     payeJusqua: null, note: o.note || ''
-  }, o.promo ? { promo: o.promo } : {}, o.emailAVerifier ? { emailAVerifier: true } : {}, await hacherMdp(o.mdp));
+  }, o.promo ? { promo: o.promo } : {}, o.emailAVerifier ? { emailAVerifier: true } : {}, o.champs || {}, await hacherMdp(o.mdp));
   await ecrireCompte(env, compte);
   await indexerEmail(env, compte.email, o.slug, true);
   if (!(await env.CLIENTS.get('site:' + o.slug + ':config.json'))) {
@@ -1466,6 +1686,18 @@ async function gestion(request, env, action) {
     await env.CLIENTS.put('config:tarifs', JSON.stringify(t));
     await chargerTarifs(env);
     return json({ tarifs: await lireTarifs(env), defaut: TARIFS_DEFAUT });
+  }
+
+  /* Anti-robots du formulaire d'inscription (Cloudflare Turnstile) : clé du site (publique) + clé secrète (rangée chiffrée) */
+  if (action === 'turnstile') {
+    const etat = async () => { const c = await confTurnstile(env); return c ? { configure: true, site: c.site, fin: c.fin, le: c.le } : { configure: false }; };
+    if (request.method === 'GET') return json(await etat());
+    if (d.supprimer) { await env.CLIENTS.delete('config:turnstile'); return json(await etat()); }
+    const site = String(d.site || '').trim(), secret = String(d.secret || '').trim();
+    if (!/^[0-9A-Za-z_-]{10,100}$/.test(site)) throw new ErreurAPI(400, 'Clé du site invalide (Cloudflare → Turnstile → votre widget → Site Key).');
+    if (!/^[0-9A-Za-z_-]{10,200}$/.test(secret)) throw new ErreurAPI(400, 'Clé secrète invalide (Cloudflare → Turnstile → votre widget → Secret Key).');
+    await env.CLIENTS.put('config:turnstile', JSON.stringify({ site, secret: await chiffrer(env, secret), fin: secret.slice(-4), le: new Date().toISOString() }));
+    return json(await etat());
   }
 
   if (action === 'email') {
@@ -3014,9 +3246,12 @@ async function majAbonnement(env, idSub, facture, objet) {
     if (suivantFrais && suivantFrais.id === suivant.id) appliquerAbo(tit, suivantFrais, st.mode);
   } else appliquerAbo(tit, sub, st.mode);
   if (facture && facture.status === 'paid' && (!tit.aboSuivant || tit.aboSuivant.id !== sub.id || facture.amount_paid > 0)) enregistrerFactureAbo(tit, facture);
+  // étapes d'inscription : seulement le premier abonnement d'un compte venu par le formulaire (pas les renouvellements, changements ni tests)
+  const premierAbo = !etaitActif && aboActif(tit) && tit.entonnoir && !tit.abonneCompte && !tit.noindex && st.mode !== 'test';
+  if (premierAbo) tit.abonneCompte = new Date().toISOString();
   await ecrireCompte(env, tit);
   await env.CLIENTS.put('abo:' + sub.id, tit.slug);
-  if (!etaitActif && aboActif(tit)) ecrireStats(env, PAGE_SITE, [['etape', 'abonne']]);
+  if (premierAbo) ecrireStats(env, PAGE_SITE, [['etape', 'abonne']]);
   await synchroniserPages(env, tit, false);
   return 'appliqué';
 }
@@ -3739,8 +3974,9 @@ function compterVisiteSite(request, env, url, page) {
   ecrireStats(env, PAGE_SITE, [['visite', ''], ['source', source], ['page', page], ['pays', /^[A-Z]{2}$/.test(pays) ? pays : 'XX'],
     ['langue', l === 'en' || l === 'ru' ? l : 'fr']]);
 }
-/* Étapes d'inscription vues depuis le formulaire (arrivée, début de saisie du nom, nom disponible) : un compteur par jour */
-const ETAPES_PAGE = new Set(['form', 'saisie', 'dispo']);
+/* Étapes d'inscription vues depuis le formulaire (arrivée, début de saisie de l'activité) : un compteur par jour.
+   Les suivantes sont comptées par le serveur : lien, confirme, cree, publie, abonne. */
+const ETAPES_PAGE = new Set(['form', 'saisie']);
 async function compterEtape(request, env, url) {
   const e = url.searchParams.get('e') || '';
   if (ETAPES_PAGE.has(e) && visiteurHumain(request)) {

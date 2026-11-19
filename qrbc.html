@@ -31,6 +31,7 @@
   :root{--bg:#f6f4ef;--panneau:#fff;--ligne:#e3dfd6;--txt:#1b1a17;--doux:#6a665d;--prim:#1b1a17;--prim-txt:#f6f4ef;--accent:#d9572b;--ok:#1a7f37;--err:#cf222e}
   @media (prefers-color-scheme: dark){:root{--bg:#121110;--panneau:#1c1b19;--ligne:#2e2c29;--txt:#f1eee8;--doux:#a19c92;--prim:#f1eee8;--prim-txt:#121110;--accent:#ef7a4f}}
   *{box-sizing:border-box}
+  [hidden]{display:none !important}
   html,body{margin:0}
   body{font:16px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--txt)}
   .page{max-width:1040px;margin:0 auto;padding:20px 16px 48px}
@@ -51,7 +52,7 @@
   .points b{display:block}
   .points span{color:var(--doux);font-size:.95rem}
   .num{width:28px;height:28px;border-radius:50%;background:var(--panneau);border:1px solid var(--ligne);display:grid;place-items:center;font-weight:700;font-size:.85rem}
-  form{background:var(--panneau);border:1px solid var(--ligne);border-radius:18px;padding:24px 20px}
+  form,#attente{background:var(--panneau);border:1px solid var(--ligne);border-radius:18px;padding:24px 20px}
   form h2{margin:0 0 4px;font-size:1.25rem}
   form .sous{margin:0 0 18px;color:var(--doux);font-size:.92rem}
   label{display:block;margin-bottom:14px}
@@ -114,7 +115,25 @@
   .video-promo[hidden]{display:none}
   .video-promo video{width:100%;height:100%;object-fit:cover;display:block}
   .video-promo button{position:absolute;top:6px;right:6px;width:28px;height:28px;border-radius:50%;border:0;background:rgba(0,0,0,.55);color:#fff;font-size:16px;line-height:28px;cursor:pointer;padding:0}
-  .cta-haut{margin:18px 0 6px}
+  /* Bouton du haut : juste sous l'accroche, visible sans défiler ; pleine largeur sur mobile */
+  .cta-haut{margin:24px 0}
+  @media (max-width:859px){.cta-haut .cta{display:block;width:100%;text-align:center}}
+  /* Formulaire d'inscription (étape 1) */
+  .promo-ligne{font-size:.88rem;color:var(--ok);margin:-4px 0 14px}
+  .lien{width:auto;min-height:0;padding:6px 0;border:0;background:none;color:var(--doux);font:inherit;font-size:.88rem;text-decoration:underline;cursor:pointer}
+  .lien-promo{display:block;margin:-6px 0 12px}
+  .note{font-size:.85rem;color:var(--doux);margin:10px 0 0;text-align:center}
+  .robot:empty{display:none}
+  .robot{margin:0 0 12px}
+  .msg.ok{color:var(--ok)}
+  .attente-mail{text-align:center}
+  .attente-mail .grand{font-size:3rem;line-height:1;margin:4px 0 8px}
+  .attente-mail h2{margin:0 0 10px}
+  .attente-mail p{margin:0 0 10px}
+  .attente-mail .sous{color:var(--doux);font-size:.92rem}
+  .attente-mail .actions{display:flex;flex-direction:column;align-items:center;gap:2px;margin-top:6px}
+  /* Vidéo flottante masquée quand elle recouvrirait le formulaire */
+  .video-promo.masquee{opacity:0 !important;visibility:hidden;pointer-events:none}
 </style>
 </head>
 <body>
@@ -136,11 +155,11 @@
   <div class="grille">
     <section>
       <h1>Votre page pro en 5 minutes, <em>pour 1,99 €/mois.</em> Sans engagement.</h1>
-      <p class="chapeau">Une page mobile à votre nom, que vos clients ouvrent d’un scan : réserver, appeler, écrire sur WhatsApp, laisser un avis Google. Vous la créez et la modifiez vous-même, entièrement depuis votre smartphone, sans ordinateur.</p>
       <p class="cta-haut"><a class="cta" href="#inscription">Essayer 1 mois gratuitement</a></p>
+      <p class="chapeau">Une page mobile à votre nom, que vos clients ouvrent d’un scan : réserver, appeler, écrire sur WhatsApp, laisser un avis Google. Vous la créez et la modifiez vous-même, entièrement depuis votre smartphone, sans ordinateur.</p>
       <p class="sigle-txt">qrbc, c’est « QR Business Card » : la carte de visite qui ne se périme jamais.</p>
       <ul class="points">
-        <li><div class="num">1</div><div><b>Choisissez votre adresse</b><span>Par exemple nom-du-site.qrbc.app</span></div></li>
+        <li><div class="num">1</div><div><b>Décrivez votre activité</b><span>Vous recevez un lien par e-mail, l’adresse de votre page est proposée automatiquement</span></div></li>
         <li><div class="num">2</div><div><b>Personnalisez votre page</b><span>Boutons, couleurs, logo, photos, textes rédigés avec l’aide de l’IA</span></div></li>
         <li><div class="num">3</div><div><b>Imprimez vos cartes</b><span>QR code et modèles de cartes de visite prêts à l’impression</span></div></li>
       </ul>
@@ -150,33 +169,24 @@
       </div>
     </section>
 
+    <div id="bloc-inscription">
     <form id="inscription" novalidate>
-      <div id="etape-form">
-        <h2>Votre page en 5 minutes</h2>
-        <p class="sous" id="essai-sous">1 mois gratuit sans carte bancaire, puis 1,99 € TTC/mois sans engagement, ou 19,99 € TTC/an.</p>
-        <label><span>Adresse de votre page</span>
-          <div class="adresse"><input type="text" id="nom" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="30" placeholder="nom-du-site" required><div class="suffixe">.qrbc.app</div></div>
-          <div class="dispo" id="dispo"></div>
-        </label>
-        <label><span>Nom de votre activité</span><input type="text" id="titre" maxlength="80" placeholder="Ex. Chauffeur Privé Paris"></label>
-        <label><span>E-mail</span><input type="email" id="email" autocomplete="email" required></label>
-        <label><span>Mot de passe (10 caractères minimum)</span><input type="password" id="mdp" autocomplete="new-password" minlength="10" required></label>
-        <label><span>Confirmez le mot de passe</span><input type="password" id="mdp2" autocomplete="new-password" minlength="10" required></label>
-        <div class="dispo" id="accord" style="margin:-8px 0 14px"></div>
-        <label><span>Code promo (facultatif)</span><input type="text" id="promo" autocapitalize="none" autocomplete="off" spellcheck="false" maxlength="30">
-          <div class="dispo" id="promo-etat"></div></label>
-        <label class="case"><input type="checkbox" id="cgu"> <span>J’accepte les conditions d’utilisation du service.</span> <a href="/cgv" target="_blank" rel="noopener">Lire les CGV</a></label>
-        <button id="btn">Créer ma page</button>
-        <div class="msg" id="msg"></div>
-      </div>
-      <div id="etape-ok" class="bravo" hidden>
-        <h2>Votre page est prête 🎉</h2>
-        <p class="sous" id="ok-normal">Adresse : <code id="adr"></code><br>Connectez-vous avec votre mot de passe pour la personnaliser.</p>
-        <p class="sous" id="ok-mail" hidden></p>
-        <a id="lien-admin" href="#">Personnaliser ma page</a>
-        <p class="sous" id="conseil-install" style="margin-top:16px" hidden>Astuce : installez l’appli qrbc pour retrouver votre page en un geste.</p>
-      </div>
+      <h2>Votre page en 5 minutes</h2>
+      <p class="sous" id="essai-sous">1 mois gratuit sans carte bancaire, puis 1,99 € TTC/mois sans engagement, ou 19,99 € TTC/an.</p>
+      <label><span>Votre activité</span><input type="text" id="activite" maxlength="80" autocomplete="organization" placeholder="Ex. Plombier à Nice" required></label>
+      <label><span>Votre e-mail</span><input type="email" id="email" autocomplete="email" inputmode="email" required></label>
+      <p class="promo-ligne" id="promo-ligne" hidden></p>
+      <button type="button" class="lien lien-promo" id="promo-lien">J’ai un code promo</button>
+      <label hidden><span>Code promo</span><input type="text" id="promo" autocapitalize="none" autocomplete="off" spellcheck="false" maxlength="30">
+        <div class="dispo" id="promo-etat"></div></label>
+      <label class="case"><input type="checkbox" id="cgu"> <span>J’accepte les conditions d’utilisation du service.</span> <a href="/cgv" target="_blank" rel="noopener">Lire les CGV</a></label>
+      <div class="robot" id="robot"></div>
+      <button id="btn">Recevoir mon lien</button>
+      <div class="msg" id="msg"></div>
+      <p class="note">Vous recevez un lien pour choisir l’adresse de votre page et votre mot de passe.</p>
     </form>
+    <div class="attente-mail" id="attente" hidden></div>
+    </div>
   </div>
 
   <div class="infos">
@@ -230,6 +240,7 @@
   </footer>
 </div>
 <script src="/i18n.js"></script>
+<script src="/inscription.js?v=1"></script>
 <script>
   // titre de l'onglet dans la langue choisie
   (function () { const fr = document.title; const maj = () => { if (window.t) document.title = window.t(fr); }; maj(); document.addEventListener('change', e => { if (e.target.classList && e.target.classList.contains('choix-langue')) setTimeout(maj, 0); }); })();
@@ -237,46 +248,6 @@
 <script>
 (function () {
   const $ = s => document.querySelector(s);
-  const nom = $('#nom'), dispo = $('#dispo');
-  let minuterie = null, libre = false;
-  // Étapes d'inscription (compteurs anonymes, sans cookie) : arrivée sur le formulaire, début de saisie, nom disponible
-  const etape = e => {
-    try { if (sessionStorage.getItem('qrbc-etape-' + e)) return; sessionStorage.setItem('qrbc-etape-' + e, '1'); } catch (x) {}
-    try { fetch('/api/etape?e=' + e, { method: 'POST', keepalive: true }).catch(() => {}); } catch (x) {}
-  };
-  if ('IntersectionObserver' in window) {
-    const vu = new IntersectionObserver(l => { if (l.some(x => x.isIntersecting)) { etape('form'); vu.disconnect(); } }, { threshold: 0.6 });
-    vu.observe(nom);
-  }
-
-  nom.addEventListener('input', () => {
-    etape('saisie');
-    const v = nom.value.toLowerCase().replace(/[^a-z0-9-]/g, '');
-    if (v !== nom.value) nom.value = v;
-    libre = false; dispo.className = 'dispo'; dispo.textContent = '';
-    clearTimeout(minuterie);
-    if (v.length < 3) return;
-    minuterie = setTimeout(async () => {
-      try {
-        const r = await fetch('/api/disponible?nom=' + encodeURIComponent(v));
-        const j = await r.json();
-        if (nom.value !== v) return;
-        libre = !!j.disponible;
-        if (libre) etape('dispo');
-        dispo.className = 'dispo ' + (libre ? 'ok' : 'ko');
-        dispo.textContent = libre ? '✓ ' + v + '.qrbc.app est disponible' : (j.raison || 'Ce nom est déjà pris.');
-      } catch (e) {}
-    }, 350);
-  });
-
-  const majAccord = () => {
-    const a = $('#mdp').value, b = $('#mdp2').value, z = $('#accord');
-    if (!b) { z.className = 'dispo'; z.textContent = ''; return; }
-    z.className = 'dispo ' + (a === b ? 'ok' : 'ko');
-    z.textContent = a === b ? '✓ Les deux mots de passe sont identiques' : 'Les deux mots de passe ne sont pas identiques';
-  };
-  $('#mdp').addEventListener('input', majAccord); $('#mdp2').addEventListener('input', majAccord);
-
   /* ---------- Installation de l'appli ---------- */
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
   const dejaInstallee = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
@@ -314,76 +285,21 @@
     };
     z.textContent = t[l] || t.fr;
   }
-  /* Code promo : prérempli par un lien d'apporteur (?promo=CODE), vérifié en direct */
-  function champPromo(input, zone) {
-    let code = '';
-    try { code = new URLSearchParams(location.search).get('promo') || localStorage.getItem('qrbc-promo') || ''; } catch (e) {}
-    if (code) { input.value = code.trim().toLowerCase(); try { localStorage.setItem('qrbc-promo', input.value); } catch (e) {} }
-    let minu;
-    const verifier = async () => {
-      const v = input.value.trim().toLowerCase();
-      zone.className = 'dispo'; zone.textContent = '';
-      if (!v) return;
-      try {
-        const j = await (await fetch('/api/promo?code=' + encodeURIComponent(v))).json();
-        zone.className = 'dispo ' + (j.valide ? 'ok' : 'ko');
-        zone.textContent = j.valide ? '✓ ' + j.essai + ' jours + ' + j.jours + ' jours offerts' : (j.erreur || 'Code inconnu ou expiré');
-        majEssai(j.valide ? (j.essai || 30) + (j.jours || 0) : 30);
-      } catch (e) {}
-    };
-    input.addEventListener('input', () => { input.value = input.value.toLowerCase().replace(/\s/g, ''); clearTimeout(minu); minu = setTimeout(verifier, 400); });
-    if (input.value) verifier();
-    return { valeur: () => input.value.trim().toLowerCase(), oublier: () => { try { localStorage.removeItem('qrbc-promo'); } catch (e) {} } };
-  }
-  const promo = champPromo($('#promo'), $('#promo-etat'));
-  /* Provenance sans code promo (?depuis=outil-qr : générateur de QR code), gardée jusqu'à l'inscription */
-  let depuis = '';
-  try { depuis = (new URLSearchParams(location.search).get('depuis') || localStorage.getItem('qrbc-depuis') || '').toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 25);
-    if (depuis) localStorage.setItem('qrbc-depuis', depuis); } catch (e) {}
-  /* Lien d'apporteur (?promo=) : pas de défilement automatique, le visiteur voit d'abord l'accroche et le prix ; le code reste prérempli dans le formulaire */
-  $('#inscription').addEventListener('submit', async e => {
-    e.preventDefault();
-    const msg = $('#msg'), btn = $('#btn');
-    msg.className = 'msg'; msg.textContent = '';
-    if ($('#mdp').value.length < 10) { msg.className = 'msg err'; msg.textContent = 'Mot de passe : 10 caractères minimum.'; return; }
-    if ($('#mdp').value !== $('#mdp2').value) { msg.className = 'msg err'; msg.textContent = 'Les deux mots de passe ne sont pas identiques.'; $('#mdp2').focus(); return; }
-    if (!$('#cgu').checked) { msg.className = 'msg err'; msg.textContent = 'Merci d’accepter les conditions d’utilisation.'; return; }
-    btn.disabled = true; msg.textContent = 'Création de votre page…';
-    try {
-      const r = await fetch('/api/inscription', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ nom: nom.value, titre: $('#titre').value, email: $('#email').value, mdp: $('#mdp').value, cgu: true, promo: promo.valeur(), depuis: depuis, langue: document.documentElement.lang })
-      });
-      const j = await r.json();
-      if (r.status === 409 && j.code === 'email_existe') {             // déjà inscrit : on propose de se connecter
-        msg.className = 'msg err'; msg.textContent = j.erreur + ' ';
-        const a = document.createElement('a');
-        a.href = '/app/' + ((j.pages && j.pages[0]) || '') + '/'; a.textContent = t('Se connecter →');
-        a.setAttribute('data-lien-langue', '');
-        msg.appendChild(a);
-        btn.disabled = false; return;
-      }
-      if (!r.ok) throw new Error(j.erreur || 'Erreur');
-      promo.oublier();
-      try { localStorage.removeItem('qrbc-depuis'); } catch (x) {}
-      const slug = nom.value;
-      $('#adr').textContent = j.adresse.replace('https://', '').replace(/\/$/, '');
-      $('#lien-admin').href = j.editeur;
-      try {
-        const l = (JSON.parse(localStorage.getItem('qrbc-pages')) || []).filter(x => x !== slug);
-        l.unshift(slug); localStorage.setItem('qrbc-pages', JSON.stringify(l.slice(0, 10)));
-      } catch (x) {}
-      $('#conseil-install').hidden = !installable();
-      if (j.verifier) {                                   // l'éditeur s'ouvre par le lien reçu par e-mail
-        $('#ok-normal').hidden = true; $('#ok-mail').hidden = false; $('#lien-admin').style.display = 'none';
-        $('#ok-mail').textContent = '✉️ ' + t('Nous avons envoyé un lien de confirmation à ') + $('#email').value.trim() + '. ' +
-          t('Cliquez sur le lien dans cet e-mail pour ouvrir votre page et commencer. Pensez à regarder dans les indésirables.');
-        $('#etape-ok h2').textContent = t('Votre page est créée 🎉');
-      }
-      $('#etape-form').hidden = true; $('#etape-ok').hidden = false;
-    } catch (err) {
-      msg.className = 'msg err'; msg.textContent = err.message;
-      btn.disabled = false;
+  /* Étape 1 de l'inscription : activité + e-mail, lien envoyé par e-mail (inscription.js) */
+  window.qrbcInscription({
+    form: $('#inscription'), activite: $('#activite'), email: $('#email'), cgu: $('#cgu'), bouton: $('#btn'), msg: $('#msg'),
+    promoLigne: $('#promo-ligne'), promoLien: $('#promo-lien'), promoChamp: $('#promo'), promoEtat: $('#promo-etat'),
+    robot: $('#robot'), attente: $('#attente'), onPromo: majEssai,
+    onExiste: j => {                                           // déjà inscrit : on propose de se connecter
+      const msg = $('#msg');
+      msg.className = 'msg err'; msg.textContent = j.erreur + ' ';
+      const a = document.createElement('a');
+      a.href = '/app/' + ((j.pages && j.pages[0]) || '') + '/'; a.textContent = t('Se connecter →');
+      a.setAttribute('data-lien-langue', '');
+      msg.appendChild(a);
+      const b = document.createElement('a');
+      b.href = '/app?choisir#oubli'; b.textContent = t('Mot de passe oublié ?'); b.style.marginLeft = '10px';
+      msg.appendChild(b);
     }
   });
 })();
@@ -425,14 +341,27 @@
     if (e.target.id === 'video-promo-fermer' || !boite.classList.contains('mini')) return;
     boite.classList.remove('mini'); agrandieA = window.scrollY || 0;
   });
-  v.addEventListener('loadeddata', function () { placer(); majTaille(); boite.hidden = false; });
+  v.addEventListener('loadeddata', function () { placer(); majTaille(); boite.hidden = false; majMasque(); });
   v.addEventListener('error', function () { boite.hidden = true; });
   document.getElementById('video-promo-fermer').addEventListener('click', function (e) {
     e.stopPropagation();
     boite.hidden = true; v.pause(); v.removeAttribute('src'); v.load();
   });
-  window.addEventListener('scroll', majTaille, { passive: true });
-  window.addEventListener('resize', placer);
+  /* Elle ne doit jamais cacher le formulaire : masquée dès qu'elle le recouvre ou qu'un champ prend le focus */
+  var bloc = document.getElementById('bloc-inscription'), focusForm = false;
+  function majMasque() {
+    if (!bloc) return;
+    var a = bloc.getBoundingClientRect(), b = boite.getBoundingClientRect();
+    var recouvre = !boite.hidden && a.bottom > b.top && a.top < b.bottom && a.right > b.left && a.left < b.right;
+    boite.classList.toggle('masquee', recouvre || focusForm);
+  }
+  if (bloc) {
+    bloc.addEventListener('focusin', function () { focusForm = true; majMasque(); });
+    bloc.addEventListener('focusout', function () { setTimeout(function () { focusForm = bloc.contains(document.activeElement); majMasque(); }, 50); });
+  }
+  window.addEventListener('scroll', function () { majTaille(); majMasque(); }, { passive: true });
+  window.addEventListener('resize', function () { placer(); majMasque(); });
+  boite.addEventListener('transitionend', majMasque);
   new MutationObserver(charger).observe(document.documentElement, { attributes: true, attributeFilter: ['lang'] });
   charger();
 })();

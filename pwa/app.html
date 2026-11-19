@@ -79,7 +79,21 @@
   .accord.ok{color:var(--ok)} .accord.ko{color:var(--err)}
   /* Écran « nouveau mot de passe » (lien reçu par e-mail) */
   body.reinit header .onglets, body.reinit .rail, body.reinit .points-nav{display:none}
-  #ecran-reinit,#ecran-verif{flex:1;overflow-y:auto;padding:18px 20px calc(24px + env(safe-area-inset-bottom))}
+  #ecran-reinit,#ecran-verif,#ecran-fin{flex:1;overflow-y:auto;padding:18px 20px calc(24px + env(safe-area-inset-bottom))}
+  .promo-ligne{font-size:.88rem;color:var(--ok);margin:-4px 0 14px}
+  .lien-promo{margin:-6px 0 12px;padding:4px 0}
+  .robot:empty{display:none}
+  .robot{margin:0 0 12px}
+  .note{font-size:.85rem;color:var(--doux);margin:10px 0 0;text-align:center}
+  .msg.ok{color:var(--ok)}
+  .attente-mail h2{margin:0 0 10px;font-size:1.3rem}
+  .attente-mail p{margin:0 0 10px}
+  .aide{font-size:.82rem;color:var(--doux);margin:6px 0 0}
+  .mdp{display:flex;border:1px solid var(--ligne);border-radius:12px;background:var(--panneau);overflow:hidden}
+  .mdp:focus-within{border-color:var(--accent)}
+  .mdp input{border:0 !important;border-radius:0;background:transparent;flex:1;min-width:0}
+  .mdp button{flex:none;width:52px;border:0;background:none;color:var(--doux);font-size:1.25rem;cursor:pointer}
+  .mdp button[aria-pressed="true"]{color:var(--txt)}
   .attente-mail{text-align:center;padding:8px 0}
   .attente-mail .grand{font-size:3rem;line-height:1;margin:6px 0 10px}
   .attente-mail .actions{display:flex;flex-direction:column;gap:8px;margin-top:16px}
@@ -148,22 +162,20 @@
         <li>Cartes de visite prêtes à imprimer</li>
         <li>Textes et logo avec l’aide de l’IA</li>
       </ul>
-      <form id="f-in" autocomplete="on">
-        <label><span>Adresse de votre page</span>
-          <div class="adresse"><input type="text" id="in-nom" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="30" placeholder="nom-du-site" required><em>.qrbc.app</em></div>
-          <div class="dispo" id="in-dispo"></div>
-        </label>
-        <label><span>Nom de votre activité</span><input type="text" id="in-titre" maxlength="80" placeholder="Ex. Chauffeur Privé Paris"></label>
-        <label><span>E-mail</span><input type="email" id="in-email" autocomplete="email" required></label>
-        <label><span>Mot de passe (10 caractères minimum)</span><input type="password" id="in-mdp" autocomplete="new-password" minlength="10" required></label>
-        <label><span>Confirmez le mot de passe</span><input type="password" id="in-mdp2" autocomplete="new-password" minlength="10" required></label>
-        <div class="accord" id="in-accord"></div>
-        <label><span>Code promo (facultatif)</span><input type="text" id="in-promo" autocapitalize="none" autocomplete="off" spellcheck="false" maxlength="30">
+      <form id="f-in" autocomplete="on" novalidate>
+        <label><span>Votre activité</span><input type="text" id="in-activite" maxlength="80" autocomplete="organization" placeholder="Ex. Plombier à Nice" required></label>
+        <label><span>Votre e-mail</span><input type="email" id="in-email" autocomplete="email" inputmode="email" required></label>
+        <p class="promo-ligne" id="in-promo-ligne" hidden></p>
+        <button type="button" class="lien lien-promo" id="in-promo-lien">J’ai un code promo</button>
+        <label hidden><span>Code promo</span><input type="text" id="in-promo" autocapitalize="none" autocomplete="off" spellcheck="false" maxlength="30">
           <div class="dispo" id="in-promo-etat"></div></label>
         <label class="case"><input type="checkbox" id="in-cgu"> <span>J’accepte les conditions d’utilisation du service. <a href="/cgv" target="_blank" rel="noopener">Lire les CGV</a></span></label>
-        <button class="prim" id="in-btn">Créer ma page</button>
+        <div class="robot" id="in-robot"></div>
+        <button class="prim" id="in-btn">Recevoir mon lien</button>
         <div class="msg" id="in-msg"></div>
+        <p class="note">Vous recevez un lien pour choisir l’adresse de votre page et votre mot de passe.</p>
       </form>
+      <div class="attente-mail" id="in-attente" hidden></div>
 
       <div class="bascule">Déjà une page ? <button type="button" data-aller="0">← Se connecter</button></div>
       <p class="liens"><a href="/cgv" target="_blank" rel="noopener">Conditions générales de vente</a> · <a href="/mentions-legales" target="_blank" rel="noopener">Mentions légales et confidentialité</a></p>
@@ -176,6 +188,33 @@
     <h1 id="ve-titre">Confirmation de votre adresse</h1>
     <p class="sous" id="ve-sous">Vérification du lien…</p>
     <button type="button" class="prim" id="ve-btn" hidden>Aller à la connexion</button>
+  </div>
+</main>
+
+<main id="ecran-fin" hidden>
+  <div class="carte-in">
+    <h1 id="fin-titre">Finalisez votre page</h1>
+    <p class="sous" id="fin-sous">Vérification du lien…</p>
+    <form id="f-fin" autocomplete="on" novalidate hidden>
+      <label><span>Adresse de votre page</span>
+        <div class="adresse"><input type="text" id="fin-nom" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="30" placeholder="nom-du-site" required><em>.qrbc.app</em></div>
+        <div class="dispo" id="fin-dispo"></div>
+        <p class="aide">C’est l’adresse de votre QR code : choisissez-la bien, elle ne pourra plus changer une fois vos cartes imprimées.</p>
+      </label>
+      <label><span>Nom de votre activité</span><input type="text" id="fin-titre-page" maxlength="80" autocomplete="organization"></label>
+      <label><span>Mot de passe (10 caractères minimum)</span>
+        <div class="mdp"><input type="password" id="fin-mdp" name="password" autocomplete="new-password" minlength="10" required><button type="button" id="fin-voir" aria-label="Afficher le mot de passe" aria-pressed="false">👁</button></div>
+      </label>
+      <button class="prim" id="fin-btn">Créer ma page</button>
+      <div class="msg" id="fin-msg"></div>
+      <p class="note" id="fin-essai"></p>
+    </form>
+    <form id="f-fin-expire" novalidate hidden>
+      <label><span>Votre e-mail</span><input type="email" id="fin-exp-email" autocomplete="email" inputmode="email" required></label>
+      <button class="prim" id="fin-exp-btn">Recevoir un nouveau lien</button>
+      <div class="msg" id="fin-exp-msg"></div>
+    </form>
+    <button type="button" class="prim" id="fin-autre" hidden>Aller à l’accueil</button>
   </div>
 </main>
 
@@ -200,6 +239,7 @@
 </nav>
 
 <script src="/i18n.js"></script>
+<script src="/inscription.js?v=1"></script>
 <script>
 (function () {
   const $ = s => document.querySelector(s);
@@ -214,7 +254,7 @@
   /* Une seule page connue : on l'ouvre directement, sauf demande explicite */
   const params = new URLSearchParams(location.search);
   const connues = lire();
-  if (connues.length === 1 && !params.has('choisir') && !params.has('reinit') && !params.has('verif') && !params.has('promo') && !location.hash) { location.replace('/app/' + connues[0] + '/'); return; }
+  if (connues.length === 1 && !params.has('choisir') && !params.has('reinit') && !params.has('verif') && !params.has('finaliser') && !params.has('promo') && !location.hash) { location.replace('/app/' + connues[0] + '/'); return; }
 
   /* ---------- Pancartes : glisser ou boutons ---------- */
   let courante = 0;
@@ -309,7 +349,6 @@
     if (a.value !== b.value) return 'Les deux mots de passe ne sont pas identiques.';
     return null;
   }
-  suivreAccord($('#in-mdp'), $('#in-mdp2'), $('#in-accord'), $('#in-msg'));
 
   /* ---------- Mot de passe oublié ---------- */
   function montrerOubli(oui) {
@@ -368,89 +407,18 @@
     });
   }
 
-  /* ---------- Inscription dans l'appli ---------- */
-  const inNom = $('#in-nom'), dispo = $('#in-dispo');
-  let minuterie = null;
-  // Étapes d'inscription (compteurs anonymes, sans cookie) : arrivée sur le formulaire, début de saisie, nom disponible
-  const etape = e => {
-    try { if (sessionStorage.getItem('qrbc-etape-' + e)) return; sessionStorage.setItem('qrbc-etape-' + e, '1'); } catch (x) {}
-    try { fetch('/api/etape?e=' + e, { method: 'POST', keepalive: true }).catch(() => {}); } catch (x) {}
-  };
-  if ('IntersectionObserver' in window) {
-    const vu = new IntersectionObserver(l => { if (l.some(x => x.isIntersecting)) { etape('form'); vu.disconnect(); } }, { threshold: 0.6 });
-    vu.observe(inNom);
-  }
-  inNom.addEventListener('input', () => {
-    etape('saisie');
-    const v = nettoyer(inNom.value);
-    if (v !== inNom.value) inNom.value = v;
-    dispo.className = 'dispo'; dispo.textContent = v ? v + '.qrbc.app' : '';
-    clearTimeout(minuterie);
-    if (v.length < 3) return;
-    minuterie = setTimeout(async () => {
-      try {
-        const j = await (await fetch('/api/disponible?nom=' + encodeURIComponent(v))).json();
-        if (inNom.value !== v) return;
-        if (j.disponible) etape('dispo');
-        dispo.className = 'dispo ' + (j.disponible ? 'ok' : 'ko');
-        dispo.textContent = j.disponible ? '✓ ' + v + '.qrbc.app est disponible' : (j.raison || 'Ce nom est déjà pris.');
-      } catch (e) {}
-    }, 350);
-  });
-
-  /* Code promo : prérempli par un lien d'apporteur (?promo=CODE), vérifié en direct */
-  function champPromo(input, zone) {
-    let code = '';
-    try { code = new URLSearchParams(location.search).get('promo') || localStorage.getItem('qrbc-promo') || ''; } catch (e) {}
-    if (code) { input.value = code.trim().toLowerCase(); try { localStorage.setItem('qrbc-promo', input.value); } catch (e) {} }
-    let minu;
-    const verifier = async () => {
-      const v = input.value.trim().toLowerCase();
-      zone.className = 'dispo'; zone.textContent = '';
-      if (!v) return;
-      try {
-        const j = await (await fetch('/api/promo?code=' + encodeURIComponent(v))).json();
-        zone.className = 'dispo ' + (j.valide ? 'ok' : 'ko');
-        zone.textContent = j.valide ? '✓ ' + j.essai + ' jours + ' + j.jours + ' jours offerts' : (j.erreur || 'Code inconnu ou expiré');
-      } catch (e) {}
-    };
-    input.addEventListener('input', () => { input.value = input.value.toLowerCase().replace(/\s/g, ''); clearTimeout(minu); minu = setTimeout(verifier, 400); });
-    if (input.value) verifier();
-    return { valeur: () => input.value.trim().toLowerCase(), oublier: () => { try { localStorage.removeItem('qrbc-promo'); } catch (e) {} } };
-  }
-  const promo = champPromo($('#in-promo'), $('#in-promo-etat'));
-  $('#f-in').addEventListener('submit', async e => {
-    e.preventDefault();
-    const msg = $('#in-msg'), btn = $('#in-btn');
-    msg.textContent = '';
-    const errMdp = verifierAccord($('#in-mdp'), $('#in-mdp2'));
-    if (errMdp) { msg.textContent = errMdp; $('#in-mdp2').focus(); return; }
-    if (!$('#in-cgu').checked) { msg.textContent = 'Merci d’accepter les conditions d’utilisation.'; return; }
-    const slug = inNom.value.trim(), mdp = $('#in-mdp').value;
-    btn.disabled = true; btn.textContent = 'Création de votre page…';
-    try {
-      const r = await fetch('/api/inscription', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ nom: slug, titre: $('#in-titre').value, email: $('#in-email').value, mdp, cgu: true, promo: promo.valeur(), langue: document.documentElement.lang })
-      });
-      const j = await r.json().catch(() => ({}));
-      if (r.status === 409 && j.code === 'email_existe') {           // déjà inscrit : on l'emmène à la connexion
-        btn.disabled = false; btn.textContent = 'Créer ma page';
-        cxNom.value = (j.pages && j.pages[0]) || '';
-        $('#cx-mdp').value = '';
-        aller(0);
-        const m2 = $('#cx-msg'); m2.textContent = j.erreur;
-        setTimeout(() => $('#cx-mdp').focus(), 400);
-        return;
-      }
-      if (!r.ok) throw new Error(j.erreur || 'Erreur');
-      promo.oublier();
-      memoriser(slug);
-      if (!j.verifier) { await connecter(slug, mdp); return; }      // pas de service d'e-mail : accès direct
-      attenteMail(slug, mdp, $('#in-email').value.trim(), j.envoye);
-    } catch (err) {
-      msg.textContent = err.message === 'Failed to fetch' ? 'Pas de connexion internet.' : err.message;
-      btn.disabled = false; btn.textContent = 'Créer ma page';
+  /* ---------- Inscription dans l'appli : étape 1 (activité + e-mail, lien par e-mail) ---------- */
+  window.qrbcInscription({
+    form: $('#f-in'), activite: $('#in-activite'), email: $('#in-email'), cgu: $('#in-cgu'), bouton: $('#in-btn'), msg: $('#in-msg'),
+    promoLigne: $('#in-promo-ligne'), promoLien: $('#in-promo-lien'), promoChamp: $('#in-promo'), promoEtat: $('#in-promo-etat'),
+    robot: $('#in-robot'), attente: $('#in-attente'),
+    cacher: Array.prototype.slice.call(document.querySelectorAll('#f-in ~ .bascule, .carte-in > .points')),
+    onExiste: j => {                                           // déjà inscrit : on l'emmène à la connexion
+      cxNom.value = (j.pages && j.pages[0]) || '';
+      $('#cx-mdp').value = '';
+      aller(0);
+      $('#cx-msg').textContent = j.erreur;
+      setTimeout(() => $('#cx-mdp').focus(), 400);
     }
   });
 
@@ -471,35 +439,125 @@
     };
     return b;
   }
-  function attenteMail(slug, mdp, email, envoye) {
-    const carte = $('#f-in').parentNode;
-    $('#f-in').hidden = true;
-    carte.querySelectorAll('.points, .bascule').forEach(n => n.hidden = true);
-    carte.querySelector('h1').textContent = t('Vérifiez vos e-mails');
-    carte.querySelector('.sous').textContent = '';
-    const box = document.createElement('div');
-    box.className = 'attente-mail';
-    box.innerHTML = '<div class="grand">✉️</div><p class="t1"></p><p class="sous t2"></p><div class="msg ok t3"></div><div class="actions"></div>';
-    box.querySelector('.t1').textContent = envoye
-      ? t('Nous avons envoyé un lien de confirmation à ') + email + '.'
-      : t('L’e-mail de confirmation n’a pas pu partir. Vérifiez l’adresse et renvoyez-le.');
-    box.querySelector('.t2').textContent = t('Cliquez sur le lien dans cet e-mail pour ouvrir votre page et commencer. Pensez à regarder dans les indésirables.');
-    const zone = box.querySelector('.t3'), actions = box.querySelector('.actions');
-    actions.appendChild(boutonRenvoi(slug, mdp, zone));
-    const corriger = document.createElement('button');
-    corriger.type = 'button'; corriger.className = 'lien'; corriger.textContent = t('Corriger mon adresse e-mail');
-    corriger.onclick = () => {
-      const v = prompt(t('Votre adresse e-mail :'), email);
-      if (!v || !v.trim() || v.trim() === email) return;
-      email = v.trim();
-      box.querySelector('.t1').textContent = t('Nous avons envoyé un lien de confirmation à ') + email + '.';
-      boutonRenvoi(slug, mdp, zone, email).click();
-    };
-    actions.appendChild(corriger);
-    carte.insertBefore(box, $('#f-in'));
+  /* ---------- Étape 2 : lien « Créer ma page » reçu par e-mail : ?finaliser=… ---------- */
+  const jetonFin = params.get('finaliser');
+  if (jetonFin) {
+    document.body.classList.add('reinit');
+    $('#ecran-fin').hidden = false;
+    history.replaceState(null, '', '/app' + (params.get('lang') ? '?lang=' + params.get('lang') : ''));   // le jeton ne reste pas dans l'historique
+    const finNom = $('#fin-nom'), finDispo = $('#fin-dispo'), finMsg = $('#fin-msg');
+    const appel = (url, corps) => fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(corps) })
+      .then(r => r.json().catch(() => ({})).then(j => ({ r, j })));
+    function lienExpire(j) {
+      $('#fin-titre').textContent = t('Ce lien a expiré');
+      if (j.relance === false) {
+        $('#fin-sous').textContent = t('Recommencez votre inscription depuis l’accueil : cela prend une minute.');
+        const b = $('#fin-autre'); b.hidden = false; b.onclick = () => { location.href = '/#inscription'; };
+        return;
+      }
+      $('#fin-sous').textContent = t('Indiquez votre e-mail : nous vous envoyons un nouveau lien.');
+      $('#f-fin-expire').hidden = false;
+      $('#fin-exp-email').value = j.email || '';
+    }
+    $('#f-fin-expire').addEventListener('submit', async e => {
+      e.preventDefault();
+      const m = $('#fin-exp-msg'), b = $('#fin-exp-btn');
+      m.className = 'msg'; m.textContent = ''; b.disabled = true;
+      try {
+        const { r, j } = await appel('/api/inscription/relancer', { jeton: jetonFin, email: $('#fin-exp-email').value.trim(), langue: document.documentElement.lang });
+        if (!r.ok) {
+          if (j.code === 'email_existe') { location.href = '/app/' + ((j.pages && j.pages[0]) || '') + '/'; return; }
+          throw new Error(j.erreur || 'Erreur');
+        }
+        if (j.direct) { location.href = j.direct; return; }
+        m.className = 'msg ok'; m.textContent = '✓ ' + t('Nouveau lien envoyé.') + ' ' + t('Regardez votre boîte mail (et les indésirables).');
+      } catch (er) { m.className = 'msg err'; m.textContent = er.message === 'Failed to fetch' ? 'Pas de connexion internet.' : er.message; }
+      b.disabled = false;
+    });
+    // Disponibilité de l'adresse en direct
+    let minuFin = null, libreFin = false;
+    function verifierNom() {
+      const v = nettoyer(finNom.value);
+      if (v !== finNom.value) finNom.value = v;
+      libreFin = false; finDispo.className = 'dispo'; finDispo.textContent = v ? v + '.qrbc.app' : '';
+      clearTimeout(minuFin);
+      if (v.length < 3) return;
+      minuFin = setTimeout(async () => {
+        try {
+          const j = await (await fetch('/api/disponible?nom=' + encodeURIComponent(v))).json();
+          if (finNom.value !== v) return;
+          libreFin = !!j.disponible;
+          finDispo.className = 'dispo ' + (libreFin ? 'ok' : 'ko');
+          finDispo.textContent = libreFin ? '✓ ' + v + '.qrbc.app est disponible' : (j.raison || 'Ce nom est déjà pris.');
+        } catch (er) {}
+      }, 350);
+    }
+    finNom.addEventListener('input', verifierNom);
+    $('#fin-voir').addEventListener('click', () => {
+      const m = $('#fin-mdp'), voir = m.type === 'password';
+      m.type = voir ? 'text' : 'password';
+      $('#fin-voir').setAttribute('aria-pressed', String(voir));
+      $('#fin-voir').setAttribute('aria-label', voir ? t('Masquer le mot de passe') : t('Afficher le mot de passe'));
+      m.focus();
+    });
+    appel('/api/inscription/finaliser', { jeton: jetonFin, verifier: true }).then(({ r, j }) => {
+      if (!r.ok) {
+        if (j.code === 'deja_utilise') {                      // compte déjà créé avec ce lien : connexion
+          if (j.slug) memoriser(j.slug);
+          $('#fin-titre').textContent = t('Votre page est déjà créée');
+          $('#fin-sous').textContent = t('Connectez-vous avec votre mot de passe.');
+          const b = $('#fin-autre'); b.hidden = false; b.textContent = t('Se connecter');
+          b.onclick = () => { location.href = j.slug ? '/app/' + j.slug + '/' : '/app?choisir#connexion'; };
+          return;
+        }
+        if (j.code === 'expire') return lienExpire(j);
+        $('#fin-sous').textContent = j.erreur || 'Lien invalide.';
+        const b = $('#fin-autre'); b.hidden = false; b.onclick = () => { location.href = '/#inscription'; };
+        return;
+      }
+      $('#fin-sous').textContent = '';
+      const ok = document.createElement('span'); ok.textContent = '✓ ' + t('E-mail confirmé :') + ' ';
+      const em = document.createElement('b'); em.textContent = j.email; em.setAttribute('data-no-i18n', '');
+      $('#fin-sous').append(ok, em);
+      finNom.value = j.nom || '';
+      $('#fin-titre-page').value = j.activite || '';
+      $('#fin-essai').textContent = j.essaiJours === 30 ? t('Votre essai gratuit d’un mois commence dès que vous créez votre page.')
+        : t('Votre essai gratuit de ' + j.essaiJours + ' jours commence dès que vous créez votre page.');
+      $('#f-fin').hidden = false;
+      verifierNom();
+      (j.nom ? $('#fin-mdp') : finNom).focus();
+    }).catch(() => { $('#fin-sous').textContent = 'Pas de connexion internet.'; });
+
+    $('#f-fin').addEventListener('submit', async e => {
+      e.preventDefault();
+      finMsg.className = 'msg'; finMsg.textContent = '';
+      const nom = nettoyer(finNom.value), mdp = $('#fin-mdp').value;
+      if (nom.length < 3) { finMsg.textContent = t('Choisissez l’adresse de votre page (3 caractères minimum).'); finNom.focus(); return; }
+      if (mdp.length < 10) { finMsg.textContent = 'Mot de passe : 10 caractères minimum.'; $('#fin-mdp').focus(); return; }
+      const btn = $('#fin-btn'); btn.disabled = true; btn.textContent = t('Création de votre page…');
+      try {
+        const { r, j } = await appel('/api/inscription/finaliser', { jeton: jetonFin, nom, titre: $('#fin-titre-page').value, mdp });
+        if (!r.ok) {
+          if (j.code === 'nom_pris') {                        // pris entre-temps : nouvelle proposition, le reste est gardé
+            if (j.nom) finNom.value = j.nom;
+            verifierNom();
+            throw new Error(j.erreur);
+          }
+          if (j.code === 'deja_utilise') { if (j.slug) memoriser(j.slug); location.href = j.slug ? '/app/' + j.slug + '/' : '/app?choisir#connexion'; return; }
+          if (j.code === 'expire') { $('#f-fin').hidden = true; return lienExpire(j); }
+          throw new Error(j.erreur || 'Erreur');
+        }
+        try { localStorage.setItem('qp-jeton:' + j.slug, j.jeton); sessionStorage.setItem('qp-jeton:' + j.slug, j.jeton); } catch (x) {}
+        memoriser(j.slug);
+        location.href = '/app/' + j.slug + '/';
+      } catch (er) {
+        finMsg.textContent = er.message === 'Failed to fetch' ? 'Pas de connexion internet.' : er.message;
+        btn.disabled = false; btn.textContent = t('Créer ma page');
+      }
+    });
   }
 
-  /* ---------- Lien de confirmation reçu par e-mail : ?verif=… ---------- */
+  /* ---------- Lien de confirmation reçu par e-mail (ancien parcours) : ?verif=… ---------- */
   const jetonVerif = params.get('verif');
   if (jetonVerif) {
     document.body.classList.add('reinit');

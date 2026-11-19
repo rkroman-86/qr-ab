@@ -386,6 +386,19 @@
       <p class="infos">Sert à envoyer les liens « mot de passe oublié ». Le domaine qrbc.app doit être ajouté et vérifié dans Resend. La clé est rangée chiffrée.</p>
     </div>
 
+    <div class="boite" id="b-turnstile">
+      <h2>Anti-robots du formulaire d’inscription (Cloudflare Turnstile)</h2>
+      <div id="ts-etat" class="infos">…</div>
+      <form id="f-ts">
+        <label><span>Clé du site (Site Key)</span><input type="text" id="ts-site" autocomplete="off" spellcheck="false" placeholder="0x4AAAA…"></label>
+        <label><span>Clé secrète (Secret Key)</span><input type="password" id="ts-secret" autocomplete="off" spellcheck="false" placeholder="0x4AAAA…"></label>
+        <button class="prim" id="ts-btn">Enregistrer</button>
+        <button type="button" id="ts-off" class="danger cache">Désactiver</button>
+      </form>
+      <div class="msg" id="m-ts"></div>
+      <p class="infos">Cloudflare → Turnstile → Add widget : nom « qrbc », domaine qrbc.app, mode « Invisible ». Copiez ici les deux clés. Sans clés, le formulaire fonctionne sans vérification anti-robots. La clé secrète est rangée chiffrée.</p>
+    </div>
+
     </section>
 
     <form class="boite cache" id="f-creer">
@@ -557,6 +570,28 @@
     const m = $('#m-email'); m.className = 'msg'; m.textContent = 'Envoi…';
     try { await api('email', { test: a }); m.className = 'msg ok'; m.textContent = '✓ E-mail envoyé à ' + a + '.'; }
     catch (err) { m.className = 'msg err'; m.textContent = err.message; }
+  });
+  async function chargerTurnstile(etat) {
+    const e = etat || await api('turnstile');
+    const z = $('#ts-etat');
+    if (!e.configure) {
+      z.innerHTML = '<span class="badge b-inactif">non configuré</span> Formulaire d’inscription sans vérification anti-robots.';
+      $('#ts-off').classList.add('cache'); $('#ts-btn').textContent = 'Enregistrer'; return;
+    }
+    z.innerHTML = '<span class="badge b-payant">actif</span> Clé du site <b></b> · clé secrète …' + e.fin;
+    z.querySelector('b').textContent = e.site;
+    $('#ts-site').value = e.site;
+    $('#ts-off').classList.remove('cache'); $('#ts-btn').textContent = 'Remplacer les clés';
+  }
+  $('#f-ts').addEventListener('submit', async e => {
+    e.preventDefault();
+    const m = $('#m-ts'); m.className = 'msg'; m.textContent = 'Enregistrement…';
+    try { await chargerTurnstile(await api('turnstile', { site: $('#ts-site').value.trim(), secret: $('#ts-secret').value.trim() })); $('#ts-secret').value = ''; m.className = 'msg ok'; m.textContent = '✓ Anti-robots actif sur le formulaire d’inscription.'; }
+    catch (err) { m.className = 'msg err'; m.textContent = err.message; }
+  });
+  $('#ts-off').addEventListener('click', async () => {
+    if (!confirm('Désactiver la vérification anti-robots du formulaire ?')) return;
+    try { await chargerTurnstile(await api('turnstile', { supprimer: true })); } catch (err) { $('#m-ts').textContent = err.message; }
   });
   $('#email-off').addEventListener('click', async () => {
     if (!confirm('Déconnecter le service d’e-mails ?')) return;
@@ -844,6 +879,7 @@
     chargerStripe().catch(() => {});
     chargerIA().catch(() => {});
     chargerEmail().catch(() => {});
+    chargerTurnstile().catch(() => {});
     chargerPromos().catch(() => {});
     if (!tarifsDefaut) chargerTarifs().catch(() => {});
     if (!imp) chargerImpression().catch(() => {});
@@ -1039,8 +1075,8 @@
   }
   /* Étapes d'inscription : où les visiteurs s'arrêtent (compteurs anonymes, depuis le 17/11/2026) */
   function entonnoir(e) {
-    const ETAPES = [['form', 'Arrivée sur le formulaire'], ['saisie', 'Début de saisie du nom'], ['dispo', 'Nom disponible trouvé'], ['envoi', 'Formulaire envoyé'],
-      ['confirme', 'E-mail confirmé'], ['publie', 'Première page enregistrée'], ['abonne', 'Abonnement souscrit']];
+    const ETAPES = [['form', 'Arrivée sur le formulaire'], ['saisie', 'Début de saisie (activité)'], ['lien', 'Lien demandé'],
+      ['confirme', 'E-mail confirmé (lien cliqué)'], ['cree', 'Page créée'], ['publie', 'Première page enregistrée'], ['abonne', 'Abonnement souscrit']];
     const b = el('div', { class: 'boite' }, [el('h3', { text: 'Étapes d’inscription' })]);
     const max = Math.max(1, ...ETAPES.map(([k]) => e[k] || 0));
     const z = el('div', { class: 'st-liste' });
@@ -1052,7 +1088,7 @@
         el('span', {}, [el('div', { class: 'barre-st', style: 'width:' + Math.max(1, Math.round(n / max * 100)) + '%' })]), el('span', { class: 'n', text: nombre(n) + taux })]));
       avant = n || null;
     });
-    b.append(z, el('p', { class: 'infos', text: 'Entre parenthèses : part des visiteurs de l’étape précédente. Compteurs anonymes (sans cookie), relevés depuis le 17 novembre 2026.' }));
+    b.append(z, el('p', { class: 'infos', text: 'Entre parenthèses : part des visiteurs de l’étape précédente. Compteurs anonymes (sans cookie), hors tes propres visites, comptes créés depuis /gestion et pages exclues des moteurs. « Abonnement souscrit » = premier abonnement d’un compte (pas les renouvellements). Inscription en deux temps depuis le 19 novembre 2026.' }));
     return b;
   }
   async function chargerStatsSite() {
