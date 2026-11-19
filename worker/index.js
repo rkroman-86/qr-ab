@@ -2671,7 +2671,9 @@ async function envoyerCommande(env, cmd, forcer) {
     cmd.imprimeur = { commande: (r && r.order) || '', le: new Date().toISOString() };
     cmd.statut = 'envoyee'; noter(cmd, 'Envoyée à Cloudprinter' + (cmd.imprimeur.commande ? ' (n° ' + cmd.imprimeur.commande + ')' : '') + ', marge ' + (marge / 100).toFixed(2) + ' €.');
     await ecrireCommande(env, cmd);
-    await confirmerClient(env, cmd);
+    // la commande est passée : un souci d'e-mail ne doit surtout pas la faire repasser en « erreur » (risque de double impression)
+    try { await confirmerClient(env, cmd); } catch (e) { console.error('confirmation cartes', e.message); }
+    await prevenir('Nouvelle commande de cartes', 'Commande payée et envoyée à Cloudprinter. Coût imprimeur ' + (cout / 100).toFixed(2).replace('.', ',') + ' € HT (' + dv.livraison.service + '), marge estimée ' + (marge / 100).toFixed(2).replace('.', ',') + ' €.');
   } catch (e) {
     cmd.statut = 'erreur'; cmd.essais = (cmd.essais || 0) + 1; noter(cmd, 'Erreur : ' + e.message);
     await ecrireCommande(env, cmd);
