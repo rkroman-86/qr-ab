@@ -714,7 +714,8 @@
       const r = await api('impression-produits', {});
       z.textContent = '';
       if (!r.produits.length) z.append(el('p', { class: 'infos', text: 'Aucun produit « carte de visite » trouvé (' + r.total + ' produits au catalogue).' }));
-      r.produits.forEach(p => z.append(impProduitCarte(p)));
+      z.append(el('p', { class: 'infos', text: 'Pour les cartes 85 × 55 mm paysage : recto = businesscard_ss_int_bc_fc, recto/verso = businesscard_ds_int_bc_fc (« Int. L »). Les autres formats (US, portrait, carré, 70 × 30) ne correspondent pas aux modèles de l’éditeur.' }));
+      r.produits.forEach(p => { const c = impProduitCarte(p); if (!/_int_/.test(p.reference)) c.style.opacity = '.55'; z.append(c); });
     } catch (err) { z.textContent = err.message; }
   });
   $('#imp-sim-btn').addEventListener('click', async () => {

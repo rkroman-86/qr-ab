@@ -2472,7 +2472,9 @@ async function gestionImpression(env, action, d, methode) {
     const l = await cloudprinter(cle, '/products', {});
     const tous = (Array.isArray(l) ? l : (l && l.products) || []).map(p => ({ reference: p.reference, nom: p.name || '', note: p.note || '', categorie: p.category || '', aPartirDe: p.from_price || '' }));
     const re = /business|card|visite/i;
-    return { produits: tous.filter(p => re.test(p.reference + ' ' + p.nom + ' ' + p.categorie)), total: tous.length };
+    // format européen 85 × 55 (« int ») d'abord, paysage avant portrait
+    const rang = p => (/_int_/.test(p.reference) ? 0 : 10) + (/_p_|_s_/.test(p.reference) || /\bP\b|\bS\d|Square|Portrait/.test(p.nom) ? 1 : 0);
+    return { produits: tous.filter(p => re.test(p.reference + ' ' + p.nom + ' ' + p.categorie)).sort((a, b) => rang(a) - rang(b)), total: tous.length };
   }
   if (action === 'impression-devis') {                         // simulateur : coût réel et marge pour chaque combinaison
     const conf = await lireImpression(env);
