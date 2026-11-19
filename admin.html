@@ -301,6 +301,31 @@
     .qr-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
     .carte-zone{display:flex;flex-direction:column;gap:10px;margin-top:12px}
     .carte-apercu{width:100%;border-radius:12px;box-shadow:0 6px 24px rgba(0,0,0,.2)}
+    /* Commande de cartes imprimées */
+    .cmd-apercu{display:block;margin:0 auto 4px;max-width:420px;cursor:pointer}
+    .cmd-flip{animation:cmdFlip .35s ease}
+    @keyframes cmdFlip{0%{transform:perspective(800px) rotateY(90deg)}100%{transform:perspective(800px) rotateY(0)}}
+    .cmd-legende{text-align:center;margin:0 0 12px}
+    .cmd-rangee{display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;padding:2px 2px 10px;-webkit-overflow-scrolling:touch}
+    .cmd-modele{flex:0 0 46%;max-width:200px;scroll-snap-align:center;border:2px solid var(--ligne);border-radius:12px;padding:6px;background:var(--bg);color:var(--txt);display:flex;flex-direction:column;gap:4px;cursor:pointer}
+    .cmd-modele img{width:100%;aspect-ratio:2008/1300;object-fit:contain;border-radius:6px;display:block}
+    .cmd-modele b{font-size:.78rem}
+    .cmd-modele.actif{border-color:var(--prim);background:color-mix(in srgb,var(--prim) 8%,var(--bg))}
+    .cmd-qte{display:flex;gap:8px}
+    .cmd-qte .btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 4px}
+    .cmd-qte small{font-size:.75rem;opacity:.85}
+    .cmd-prix{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;padding:12px 0;margin:8px 0;border-top:1px solid var(--ligne);border-bottom:1px solid var(--ligne);font-size:.9rem}
+    .cmd-prix b{font-size:1.15rem}
+    .cmd-titre{font-size:1rem;margin:16px 0 4px}
+    .cmd-titre:first-child{margin-top:0}
+    .cmd-bat{display:flex;gap:10px;margin:8px 0 12px}
+    .cmd-bat figure{flex:1;margin:0}
+    .cmd-bat img{width:100%;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.18)}
+    .cmd-bat figcaption{font-size:.78rem;color:var(--doux);text-align:center;margin-top:4px}
+    .cmd-ok{align-items:flex-start;color:var(--txt)}
+    .modale-corps .compteur{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid var(--ligne);font-size:.92rem}
+    .modale-corps .compteur b{white-space:nowrap;font-variant-numeric:tabular-nums}
+    .cmd-ok input{margin-top:3px;flex:0 0 auto}
     .modeles-carte{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
     .modele-carte{border:2px solid var(--ligne);border-radius:12px;padding:6px;background:var(--bg);cursor:pointer;color:var(--txt);display:flex;flex-direction:column;gap:6px}
     .modele-carte img{width:100%;aspect-ratio:2008/1300;object-fit:contain;border-radius:6px;display:block;background:color-mix(in srgb,var(--txt) 6%,transparent)}
@@ -644,7 +669,7 @@
     });
 
     // 3. Factures
-    const GENRES = { abonnement: 'Abonnement', recharge: 'Recharge de crédit IA', page: 'Page ou langue ajoutée' };
+    const GENRES = { abonnement: 'Abonnement', recharge: 'Recharge de crédit IA', page: 'Page ou langue ajoutée', cartes: 'Cartes de visite imprimées' };
     const liste = el('div');
     if (!p.factures.length) liste.appendChild(el('p', { class: 'cpt-aide', text: 'Aucune facture pour l’instant.' }));
     p.factures.forEach(x => {
@@ -730,6 +755,7 @@
         const r = await appelAPI('paiement/verifier?session=' + encodeURIComponent(id), jetonCF);
         const j = await r.json();
         afficherAbonnement(j.compte);
+        if (j.paye && j.cartes) { messageCommande(t('✓ Paiement reçu, merci ! Vos cartes partent à l’impression. Un e-mail de confirmation vous a été envoyé ; la facture est dans « Mon compte ».')); return; }
         if (j.paye && j.nouvellePage) {                    // page ou langue ajoutée : on l'ouvre
           const f = fenetrePages();
           f.fen.append(el('h2', { text: '✓ ' + t('Paiement reçu, merci !') }), el('p', { class: 'sous', text: t('Ouverture de votre nouvelle page…') }));
@@ -3094,13 +3120,284 @@
       btnCarte.disabled = false; btnCarte.textContent = 'Actualiser les modèles';
     });
 
+    // Commande de cartes imprimées : bouton visible seulement si la vente est ouverte (réglage dans /gestion)
+    const btnCommande = el('button', { type: 'button', class: 'btn btn-prim btn-plein cache', style: 'margin-top:12px', text: '🛒 Commander mes cartes imprimées', onclick: () => ouvrirCommandeCartes(choisi) });
+    const aideCommande = el('div', { class: 'aide cache', style: 'margin:4px 0 0', text: 'Imprimées sur papier mat 300 g et livrées chez vous, sans fichier à préparer.' });
+    if (CF && jetonCF) appelAPI('cartes/offre', jetonCF).then(r => r.json()).then(o => { if (o.actif) { btnCommande.classList.remove('cache'); aideCommande.classList.remove('cache'); } }).catch(() => {});
+
     return section('partage', 'QR code et carte de visite', false, [
       el('div', { class: 'qr-bloc' }, [apercuQR, lien, el('div', { class: 'qr-actions' }, [btnQR, btnCopier])]),
       el('div', { style: 'height:16px' }),
       el('span', { class: 'etiq', text: 'Carte de visite' }),
       el('div', { class: 'aide', style: 'margin:0 0 10px', text: 'Créée à partir de la page telle qu’elle est affichée : fond, logo, nom, coordonnées des boutons et QR code.' }),
-      btnCarte, grilleModeles, zoneCarte
+      btnCarte, grilleModeles, zoneCarte, btnCommande, aideCommande
     ]);
+  }
+
+
+  /* =============== Commande de cartes imprimées (Cloudprinter, depuis le 19/11/2026) ===============
+     Écran : recto (glisser), verso (interrupteur + glisser), quantité, prix produit + livraison ;
+     puis adresses (préremplies, mémorisées) ; puis vérification (BAT) et paiement Stripe.
+     Le fichier d'impression (PDF 91 × 61 mm = 85 × 55 + 3 mm de fond perdu, 1 ou 2 pages) est fabriqué ici. */
+  const FOND_PERDU = 71;                            // 3 mm à 600 dpi
+  function versPaysage(cv) {                        // cartes verticales : tournées pour le format paysage de l'imprimeur
+    if (cv.width >= cv.height) return cv;
+    const r = document.createElement('canvas'); r.width = cv.height; r.height = cv.width;
+    const c = r.getContext('2d'); c.translate(r.width, 0); c.rotate(Math.PI / 2); c.drawImage(cv, 0, 0);
+    return r;
+  }
+  function avecFondPerdu(cv) {                      // bords prolongés de 3 mm (étirement du dernier pixel de chaque bord)
+    const s = versPaysage(cv), b = FOND_PERDU, W = s.width, H = s.height;
+    const r = document.createElement('canvas'); r.width = W + 2 * b; r.height = H + 2 * b;
+    const c = r.getContext('2d');
+    c.drawImage(s, 0, 0, W, 1, b, 0, W, b); c.drawImage(s, 0, H - 1, W, 1, b, H + b, W, b);
+    c.drawImage(s, 0, 0, 1, H, 0, b, b, H); c.drawImage(s, W - 1, 0, 1, H, W + b, b, b, H);
+    c.drawImage(s, 0, 0, 1, 1, 0, 0, b, b); c.drawImage(s, W - 1, 0, 1, 1, W + b, 0, b, b);
+    c.drawImage(s, 0, H - 1, 1, 1, 0, H + b, b, b); c.drawImage(s, W - 1, H - 1, 1, 1, W + b, H + b, b, b);
+    c.drawImage(s, b, b);
+    return r;
+  }
+  async function jpegOctets(cv) {
+    const blob = await new Promise(ok => cv.toBlob(ok, 'image/jpeg', 0.93));
+    return new Uint8Array(await blob.arrayBuffer());
+  }
+  /* PDF minimal : une page par face, image JPEG pleine page, boîtes de coupe (TrimBox) et de fond perdu (BleedBox) */
+  async function pdfCartes(canvases) {
+    const mm = v => (v * 72 / 25.4).toFixed(3);
+    const W = mm(91), H = mm(61), T = mm(3), TW = mm(88), TH = mm(58);
+    const enc = new TextEncoder(), parts = [], offs = [];
+    let taille = 0;
+    const ajouter = x => { const o = typeof x === 'string' ? enc.encode(x) : x; parts.push(o); taille += o.length; };
+    const objet = (n, corps) => { offs[n] = taille; ajouter(n + ' 0 obj\n'); corps.forEach(ajouter); ajouter('\nendobj\n'); };
+    ajouter('%PDF-1.4\n%\xE2\xE3\xCF\xD3\n');
+    const n = canvases.length, kids = [];
+    for (let i = 0; i < n; i++) kids.push((3 + i * 3) + ' 0 R');
+    objet(1, ['<< /Type /Catalog /Pages 2 0 R >>']);
+    objet(2, ['<< /Type /Pages /Kids [' + kids.join(' ') + '] /Count ' + n + ' >>']);
+    for (let i = 0; i < n; i++) {
+      const cv = avecFondPerdu(canvases[i]);
+      const img = await jpegOctets(cv);
+      const p = 3 + i * 3, im = p + 1, ct = p + 2;
+      objet(p, ['<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ' + W + ' ' + H + '] /BleedBox [0 0 ' + W + ' ' + H + '] /TrimBox [' + T + ' ' + T + ' ' + TW + ' ' + TH + '] /Resources << /XObject << /Im' + i + ' ' + im + ' 0 R >> >> /Contents ' + ct + ' 0 R >>']);
+      objet(im, ['<< /Type /XObject /Subtype /Image /Width ' + cv.width + ' /Height ' + cv.height + ' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ' + img.length + ' >>\nstream\n', img, '\nendstream']);
+      const flux = 'q ' + W + ' 0 0 ' + H + ' 0 0 cm /Im' + i + ' Do Q';
+      objet(ct, ['<< /Length ' + flux.length + ' >>\nstream\n' + flux + '\nendstream']);
+    }
+    const xref = taille, total = 3 + n * 3;
+    let x = 'xref\n0 ' + total + '\n0000000000 65535 f \n';
+    for (let i = 1; i < total; i++) x += String(offs[i]).padStart(10, '0') + ' 00000 n \n';
+    ajouter(x + 'trailer\n<< /Size ' + total + ' /Root 1 0 R >>\nstartxref\n' + xref + '\n%%EOF\n');
+    const out = new Uint8Array(taille); let o = 0;
+    parts.forEach(pt => { out.set(pt, o); o += pt.length; });
+    return out;
+  }
+  function octetsEnB64(u8) {
+    let s = '';
+    for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
+    return btoa(s);
+  }
+  const prixTxt = c => (c / 100).toLocaleString(undefined, { style: 'currency', currency: 'EUR' });
+
+  async function ouvrirCommandeCartes(modeleInitial) {
+    const fond = el('div', { class: 'modale-fond' });
+    const boite = el('div', { class: 'modale', role: 'dialog', 'aria-modal': 'true' });
+    const fermer = () => { fond.remove(); document.body.style.overflow = ''; document.removeEventListener('keydown', esc); };
+    const esc = e => { if (e.key === 'Escape') fermer(); };
+    document.addEventListener('keydown', esc);
+    fond.addEventListener('click', e => { if (e.target === fond) fermer(); });
+    const corps = el('div', { class: 'modale-corps' }, [el('p', { class: 'cpt-aide', text: 'Préparation de vos cartes…' })]);
+    boite.append(el('div', { class: 'modale-tete' }, [el('b', { text: '🛒 Commander mes cartes imprimées' }), el('button', { type: 'button', class: 'btn btn-mini', text: '✕', 'aria-label': 'Fermer', onclick: fermer })]), corps);
+    fond.appendChild(boite); document.body.appendChild(fond); document.body.style.overflow = 'hidden';
+
+    let offre, donnees;
+    const cartes = {}, minis = {};
+    try {
+      offre = await (await appelAPI('cartes/offre', jetonCF)).json();
+      if (!offre.actif) throw new Error(t('La commande de cartes imprimées n’est pas encore ouverte.'));
+      donnees = await preparerCarte();
+      for (const k of Object.keys(MODELES_CARTE)) {
+        cartes[k] = await genererCarte(k, donnees);
+        const p = versPaysage(cartes[k]), mini = document.createElement('canvas');
+        const ech = Math.min(420 / p.width, 272 / p.height);
+        mini.width = Math.round(p.width * ech); mini.height = Math.round(p.height * ech);
+        mini.getContext('2d').drawImage(p, 0, 0, mini.width, mini.height);
+        minis[k] = mini.toDataURL('image/jpeg', 0.8);
+      }
+    } catch (e) { corps.textContent = ''; corps.appendChild(el('p', { class: 'msg err', text: e.message })); return; }
+
+    const VERSOS = ['verso', 'versoCouleur'];
+    const ordreRecto = Object.keys(MODELES_CARTE).filter(k => VERSOS.indexOf(k) < 0).concat(VERSOS);
+    const ordreVerso = VERSOS.concat(Object.keys(MODELES_CARTE).filter(k => VERSOS.indexOf(k) < 0));
+    const S = { recto: MODELES_CARTE[modeleInitial] && VERSOS.indexOf(modeleInitial) < 0 ? modeleInitial : ordreRecto[0], verso: 'verso', avecVerso: false,
+      quantite: offre.quantites.indexOf(100) >= 0 ? 100 : offre.quantites[0], vue: 'recto' };
+    const adr = offre.adresses || {}, F = Object.assign({ pays: 'FR' }, adr.facturation || {}), L = Object.assign({ separee: false, pays: Object.keys(offre.livraison)[0] || 'FR' }, adr.livraison || {});
+    const paysLivraison = () => L.separee ? L.pays : (F.pays || 'FR');
+    const prix = () => {
+      const produit = offre.prix[S.avecVerso ? 'rectoVerso' : 'recto'][S.quantite];
+      const livraison = offre.livraison[paysLivraison()];
+      return { produit, livraison, total: livraison == null ? null : produit + livraison };
+    };
+    const barrePrix = el('div', { class: 'cmd-prix', 'data-no-i18n': '' });
+    function majPrix() {
+      const p = prix();
+      barrePrix.textContent = '';
+      barrePrix.append(el('span', { text: t('Cartes') + ' ' + prixTxt(p.produit) + ' + ' + t('livraison') + ' ' + (p.livraison == null ? '—' : prixTxt(p.livraison)) }),
+        el('b', { text: p.total == null ? t('Livraison indisponible vers ce pays') : prixTxt(p.total) + ' ' + t('TTC') }));
+    }
+
+    // ---- Étape 1 : modèles et quantité ----
+    function rangee(ordre, cle) {
+      const r = el('div', { class: 'cmd-rangee' });
+      ordre.forEach(k => {
+        const b = el('button', { type: 'button', class: 'cmd-modele' + (S[cle] === k ? ' actif' : ''), 'data-k': k }, [el('img', { src: minis[k], alt: '' }), el('b', { text: MODELES_CARTE[k] })]);
+        b.addEventListener('click', () => { S[cle] = k; S.vue = cle; r.querySelectorAll('.cmd-modele').forEach(x => x.classList.toggle('actif', x === b)); majApercu(); });
+        r.appendChild(b);
+      });
+      requestAnimationFrame(() => { const a = r.querySelector('.actif'); if (a) r.scrollLeft = a.offsetLeft - (r.clientWidth - a.offsetWidth) / 2; });
+      return r;
+    }
+    const apercu = el('img', { class: 'carte-apercu cmd-apercu', alt: '' });
+    const legende = el('div', { class: 'cpt-aide cmd-legende' });
+    function majApercu() {
+      if (!S.avecVerso) S.vue = 'recto';
+      apercu.src = minis[S.vue === 'verso' ? S.verso : S.recto];
+      legende.textContent = S.avecVerso ? (S.vue === 'verso' ? t('Verso — touchez la carte pour voir le recto') : t('Recto — touchez la carte pour voir le verso')) : t('Recto');
+    }
+    apercu.addEventListener('click', () => { if (!S.avecVerso) return; S.vue = S.vue === 'verso' ? 'recto' : 'verso'; apercu.classList.remove('cmd-flip'); void apercu.offsetWidth; apercu.classList.add('cmd-flip'); majApercu(); });
+
+    function etape1() {
+      corps.textContent = '';
+      const rangVerso = rangee(ordreVerso, 'verso');
+      rangVerso.classList.toggle('cache', !S.avecVerso);
+      const interrupteur = el('input', { type: 'checkbox' }); interrupteur.checked = S.avecVerso;
+      interrupteur.addEventListener('change', () => { S.avecVerso = interrupteur.checked; S.vue = S.avecVerso ? 'verso' : 'recto'; rangVerso.classList.toggle('cache', !S.avecVerso); majApercu(); majPrix(); majQuantites(); });
+      const qte = el('div', { class: 'cmd-qte' });
+      function majQuantites() {
+        qte.textContent = '';
+        offre.quantites.forEach(q => {
+          const b = el('button', { type: 'button', class: 'btn' + (q === S.quantite ? ' btn-prim' : ''), 'data-no-i18n': '' }, [el('b', { text: String(q) }), el('small', { text: prixTxt(offre.prix[S.avecVerso ? 'rectoVerso' : 'recto'][q]) })]);
+          b.addEventListener('click', () => { S.quantite = q; majQuantites(); majPrix(); });
+          qte.appendChild(b);
+        });
+      }
+      majQuantites(); majApercu(); majPrix();
+      corps.append(
+        apercu, legende,
+        el('span', { class: 'etiq', text: 'Recto' }), rangee(ordreRecto, 'recto'),
+        el('label', { class: 'bascule' }, [el('span', { text: 'Imprimer aussi un verso' }), interrupteur]), rangVerso,
+        el('span', { class: 'etiq', style: 'margin-top:12px', text: 'Quantité' }), qte,
+        el('p', { class: 'cpt-aide', text: '85 × 55 mm, papier mat 300 g, impression couleur, livraison suivie.' }),
+        barrePrix,
+        el('button', { type: 'button', class: 'btn btn-prim btn-plein', text: 'Continuer', onclick: etape2 })
+      );
+    }
+
+    // ---- Étape 2 : adresses (préremplies depuis « Mon compte » et la commande précédente) ----
+    function champ(etiq, obj, k, attrs) {
+      const i = el('input', Object.assign({ type: 'text' }, attrs || {}));
+      i.value = obj[k] || '';
+      i.addEventListener('input', () => { obj[k] = i.value; });
+      return el('label', { class: 'opt' }, [el('span', { class: 'etiq', text: etiq }), i]);
+    }
+    function selectPays(obj, liste, surChange) {
+      const s = el('select', { 'data-no-i18n': '' }, liste.map(c => el('option', { value: c, text: nomPays(c) })));
+      if (liste.indexOf(obj.pays) < 0) obj.pays = liste[0];
+      s.value = obj.pays;
+      s.addEventListener('change', () => { obj.pays = s.value; if (surChange) surChange(); });
+      return s;
+    }
+    function etape2() {
+      corps.textContent = '';
+      const msg = el('div', { class: 'msg' });
+      const zoneSep = el('div');
+      const caseSep = el('input', { type: 'checkbox' }); caseSep.checked = !!L.separee;
+      const paysLiv = Object.keys(offre.livraison);
+      function remplirSep() {
+        zoneSep.textContent = '';
+        if (!L.separee) return;
+        zoneSep.append(champ('Société (facultatif)', L, 'societe', { maxLength: 100, autocomplete: 'shipping organization' }),
+          champ('Adresse', L, 'adresse', { maxLength: 150, autocomplete: 'shipping address-line1' }),
+          champ('Complément d’adresse (facultatif)', L, 'complement', { maxLength: 100, autocomplete: 'shipping address-line2' }),
+          el('div', { class: 'cpt-deux' }, [champ('Code postal', L, 'cp', { maxLength: 20, autocomplete: 'shipping postal-code' }), champ('Ville', L, 'ville', { maxLength: 80, autocomplete: 'shipping address-level2' })]),
+          el('label', { class: 'opt' }, [el('span', { class: 'etiq', text: 'Pays' }), selectPays(L, paysLiv, majPrix)]));
+      }
+      caseSep.addEventListener('change', () => { L.separee = caseSep.checked; remplirSep(); majPrix(); });
+      remplirSep(); majPrix();
+      const suivant = el('button', { type: 'button', class: 'btn btn-prim btn-plein', text: 'Continuer' });
+      suivant.addEventListener('click', async () => {
+        msg.className = 'msg'; msg.textContent = '';
+        const manque = [];
+        if (!String(F.nom || '').trim() || !String(F.adresse || '').trim() || !String(F.cp || '').trim() || !String(F.ville || '').trim()) manque.push(t('adresse de facturation'));
+        if (!String(L.prenom || '').trim() || !String(L.nom || '').trim() || !String(L.tel || '').trim()) manque.push(t('prénom, nom et téléphone du destinataire'));
+        if (L.separee && (!String(L.adresse || '').trim() || !String(L.cp || '').trim() || !String(L.ville || '').trim())) manque.push(t('adresse de livraison'));
+        if (manque.length) { msg.className = 'msg err'; msg.textContent = t('À compléter :') + ' ' + manque.join(', '); return; }
+        if (prix().total == null) { msg.className = 'msg err'; msg.textContent = t('La livraison n’est pas encore proposée vers ce pays.'); return; }
+        suivant.disabled = true; msg.textContent = t('Enregistrement…');
+        try {
+          const r = await (await appelAPI('cartes/adresses', jetonCF, { method: 'POST', body: JSON.stringify({ facturation: F, livraison: L }) })).json();
+          Object.assign(F, r.adresses.facturation || {}); Object.assign(L, r.adresses.livraison || {});
+          etape3();
+        } catch (e) { msg.className = 'msg err'; msg.textContent = e.message; suivant.disabled = false; }
+      });
+      corps.append(
+        el('h3', { class: 'cmd-titre', text: 'Facturation' }),
+        el('p', { class: 'cpt-aide', text: 'Reprise de « Mon compte » : la modifier ici la met à jour aussi.' }),
+        champ('Nom de l’entreprise (ou votre nom)', F, 'nom', { maxLength: 100, autocomplete: 'organization' }),
+        champ('Adresse', F, 'adresse', { maxLength: 150, autocomplete: 'street-address' }),
+        el('div', { class: 'cpt-deux' }, [champ('Code postal', F, 'cp', { maxLength: 20, autocomplete: 'postal-code' }), champ('Ville', F, 'ville', { maxLength: 80, autocomplete: 'address-level2' })]),
+        el('label', { class: 'opt' }, [el('span', { class: 'etiq', text: 'Pays' }), selectPays(F, PAYS_FACT, majPrix)]),
+        champ('N° de TVA intracommunautaire (facultatif)', F, 'tva', { maxLength: 20, placeholder: 'FR12345678901', autocapitalize: 'characters', spellcheck: false }),
+        el('h3', { class: 'cmd-titre', text: 'Livraison' }),
+        el('div', { class: 'cpt-deux' }, [champ('Prénom du destinataire', L, 'prenom', { maxLength: 60, autocomplete: 'given-name' }), champ('Nom', L, 'nom', { maxLength: 60, autocomplete: 'family-name' })]),
+        champ('Téléphone (pour le transporteur)', L, 'tel', { type: 'tel', maxLength: 30, autocomplete: 'tel' }),
+        el('label', { class: 'case' }, [caseSep, el('span', { text: 'Livrer à une autre adresse que celle de facturation' })]),
+        zoneSep, barrePrix, msg,
+        el('div', { class: 'cpt-deux' }, [el('button', { type: 'button', class: 'btn', text: '← Retour', onclick: etape1 }), suivant])
+      );
+    }
+
+    // ---- Étape 3 : vérification (BAT) et paiement ----
+    function etape3() {
+      corps.textContent = '';
+      const p = prix();
+      const ok = el('input', { type: 'checkbox' });
+      const msg = el('div', { class: 'msg' });
+      const payer = el('button', { type: 'button', class: 'btn btn-prim btn-plein', 'data-no-i18n': '', text: t('Payer') + ' ' + prixTxt(p.total) });
+      payer.disabled = true;
+      ok.addEventListener('change', () => { payer.disabled = !ok.checked; });
+      const dest = L.separee ? [L.societe, L.adresse, L.complement, (L.cp || '') + ' ' + (L.ville || ''), nomPays(L.pays)] : [F.nom, F.adresse, (F.cp || '') + ' ' + (F.ville || ''), nomPays(F.pays || 'FR')];
+      payer.addEventListener('click', async () => {
+        payer.disabled = true; msg.className = 'msg'; msg.textContent = t('Préparation du fichier d’impression…');
+        try {
+          const faces = [cartes[S.recto]].concat(S.avecVerso ? [cartes[S.verso]] : []);
+          const pdf = await pdfCartes(faces);
+          msg.textContent = t('Ouverture du paiement sécurisé…');
+          const r = await (await appelAPI('cartes/commander', jetonCF, { method: 'POST', body: JSON.stringify({ recto: S.recto, verso: S.avecVerso ? S.verso : '', quantite: S.quantite, pdf: octetsEnB64(pdf), retour: location.origin + location.pathname }) })).json();
+          location.href = r.url;
+        } catch (e) { msg.className = 'msg err'; msg.textContent = e.message; payer.disabled = false; }
+      });
+      const vues = el('div', { class: 'cmd-bat' }, [el('figure', {}, [el('img', { src: minis[S.recto], alt: '' }), el('figcaption', { text: 'Recto' })])]);
+      if (S.avecVerso) vues.append(el('figure', {}, [el('img', { src: minis[S.verso], alt: '' }), el('figcaption', { text: 'Verso' })]));
+      corps.append(
+        el('h3', { class: 'cmd-titre', text: 'Vérifiez vos cartes' }), vues,
+        el('div', { class: 'compteur', 'data-no-i18n': '' }, [el('span', { text: S.quantite + ' ' + t(S.avecVerso ? 'cartes recto/verso' : 'cartes recto') }), el('b', { text: prixTxt(p.produit) })]),
+        el('div', { class: 'compteur', 'data-no-i18n': '' }, [el('span', { text: t('Livraison') + ' · ' + [L.prenom, L.nom].join(' ') + ', ' + dest.filter(x => String(x || '').trim()).join(', ') }), el('b', { text: prixTxt(p.livraison) })]),
+        el('div', { class: 'compteur', 'data-no-i18n': '' }, [el('span', { text: t('Total TTC') }), el('b', { text: prixTxt(p.total) })]),
+        el('label', { class: 'case cmd-ok' }, [ok, el('span', { text: 'J’ai vérifié mes cartes (textes, téléphone, QR code) : elles seront imprimées telles quelles. Produit personnalisé : pas de droit de rétractation.' })]),
+        msg,
+        el('div', { class: 'cpt-deux' }, [el('button', { type: 'button', class: 'btn', text: '← Retour', onclick: etape2 }), payer])
+      );
+    }
+    etape1();
+  }
+  function messageCommande(texte) {
+    const fond = el('div', { class: 'modale-fond' });
+    const fermer = () => fond.remove();
+    fond.addEventListener('click', e => { if (e.target === fond) fermer(); });
+    fond.append(el('div', { class: 'modale', role: 'dialog', 'aria-modal': 'true' }, [
+      el('div', { class: 'modale-tete' }, [el('b', { text: '🛒 Cartes imprimées' }), el('button', { type: 'button', class: 'btn btn-mini', text: '✕', 'aria-label': 'Fermer', onclick: fermer })]),
+      el('div', { class: 'modale-corps' }, [el('p', { text: texte }), el('button', { type: 'button', class: 'btn btn-prim btn-plein', text: 'Fermer', onclick: fermer })])]));
+    document.body.appendChild(fond);
   }
 
   function miniature(k) {

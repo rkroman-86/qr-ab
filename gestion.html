@@ -123,6 +123,7 @@
   .imp-produit{border:1px solid var(--ligne);border-radius:10px;padding:8px 10px;font-size:.88rem}
   .imp-produit code{font-size:.82rem;overflow-wrap:anywhere}
   .imp-produit .actions{margin-top:6px}
+  .imp-produit .infos{white-space:pre-line}
 </style>
 </head>
 <body>
@@ -317,6 +318,10 @@
         <div class="msg" id="m-imp"></div>
       </form>
 
+      <h3>Commandes de cartes</h3>
+      <div class="actions"><button type="button" id="cmd-charger">Afficher les commandes</button></div>
+      <div class="msg" id="m-cmd"></div>
+      <div id="cmd-liste" class="imp-catalogue"></div>
       <h3>Simulateur : coût réel chez l’imprimeur</h3>
       <p class="infos" style="margin-top:0">Demande un devis à l’imprimeur pour chaque quantité et chaque face (rien n’est commandé), puis compare avec vos prix. Enregistrez d’abord vos réglages.</p>
       <div class="imp-ajout-pays"><select id="imp-sim-pays"></select><button type="button" id="imp-sim-btn" class="prim">Calculer</button></div>
@@ -732,6 +737,38 @@
       });
       z.append(tab);
     } catch (err) { m.className = 'msg err'; m.textContent = err.message; }
+  });
+
+  /* ---------- Commandes de cartes ---------- */
+  const STATUTS_CMD = { attente_paiement: ['en attente de paiement', 'b-essai'], payee: ['payée, en cours d’envoi', 'b-essai'], envoyee: ['chez l’imprimeur', 'b-payant'], manuel: ['à commander à la main', 'b-inactif'],
+    bloquee_marge: ['bloquée : marge trop faible', 'b-inactif'], erreur: ['erreur d’envoi', 'b-inactif'], expediee: ['expédiée', 'b-payant'], annulee: ['annulée', 'b-inactif'], remboursee: ['remboursée', 'b-inactif'] };
+  function afficherCommandes(liste) {
+    const z = $('#cmd-liste'); z.textContent = '';
+    if (!liste.length) { z.append(el('p', { class: 'infos', text: 'Aucune commande pour l’instant.' })); return; }
+    liste.forEach(c => {
+      const st = STATUTS_CMD[c.statut] || [c.statut, ''];
+      const a = c.adresse || {};
+      const ops = el('div', { class: 'actions' }, [el('a', { href: c.pdf, target: '_blank', rel: 'noopener', text: 'Fichier PDF' })]);
+      const op = (lib, code, conf) => ops.append(el('button', { type: 'button', text: lib, onclick: async () => {
+        if (conf && !confirm(conf)) return;
+        try { afficherCommandes((await api('commandes', { id: c.id, op: code })).commandes); } catch (err) { $('#m-cmd').className = 'msg err'; $('#m-cmd').textContent = err.message; }
+      } }));
+      if (['erreur', 'bloquee_marge', 'payee', 'manuel'].indexOf(c.statut) >= 0) op('Envoyer à l’imprimeur', 'renvoyer', c.statut === 'bloquee_marge' ? 'Envoyer malgré la marge trop faible ?' : null);
+      if (c.statut === 'envoyee' || c.statut === 'manuel') op('Marquer expédiée', 'expediee');
+      if (c.statut !== 'remboursee' && c.statut !== 'attente_paiement') op('Marquer remboursée', 'remboursee', 'Pensez à rembourser aussi dans Stripe. Continuer ?');
+      z.append(el('div', { class: 'imp-produit' }, [
+        el('div', { class: 'ligne1' }, [el('b', { text: c.quantite + ' cartes ' + (c.face === 'rectoVerso' ? 'recto/verso' : 'recto') }), el('span', { class: 'badge ' + st[1], text: st[0] }),
+          el('span', { text: euros(c.total) + ' TTC' }), el('small', { class: 'infos', text: new Date(c.cree).toLocaleString('fr-FR') + ' · ' + c.titulaire + ' · ' + c.id })]),
+        el('div', { class: 'infos', text: 'Livraison : ' + [a.firstname + ' ' + a.lastname, a.company, a.street1, a.street2, a.zip + ' ' + a.city, a.country, a.phone].filter(x => String(x || '').trim()).join(', ') }),
+        c.cout ? el('div', { class: 'infos', text: 'Coût imprimeur ' + euros(c.cout.produit + c.cout.livraison) + ' HT (' + c.cout.transporteur + ') · marge ' + euros(c.cout.marge) + (c.imprimeur && c.imprimeur.commande ? ' · n° Cloudprinter ' + c.imprimeur.commande : '') }) : null,
+        (c.journal || []).length ? el('div', { class: 'infos', text: c.journal.slice(-3).map(j => new Date(j.le).toLocaleString('fr-FR') + ' — ' + j.texte).join('\n') }) : null,
+        ops]));
+    });
+  }
+  $('#cmd-charger').addEventListener('click', async () => {
+    const m = $('#m-cmd'); m.className = 'msg'; m.textContent = 'Chargement…';
+    try { afficherCommandes((await api('commandes')).commandes); m.textContent = ''; $('#cmd-charger').textContent = 'Actualiser'; }
+    catch (err) { m.className = 'msg err'; m.textContent = err.message; }
   });
 
   let tousComptes = [];

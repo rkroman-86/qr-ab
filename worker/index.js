@@ -177,6 +177,13 @@ async function racine(request, env, url) {
   if (p === '/api/promo' && request.method === 'GET') return verifierPromo(request, env);
   if (p === '/api/stripe/webhook' && request.method === 'POST') return webhookStripe(request, env);
   if (p.startsWith('/api/gestion/')) return gestion(request, env, p.slice('/api/gestion/'.length));
+  // Fichier d'impression d'une commande de cartes (lu par l'imprimeur ; adresse impossible à deviner)
+  const mPdf = p.match(/^\/impression\/([A-Za-z0-9_-]{30,40})\.pdf$/);
+  if (mPdf && (request.method === 'GET' || request.method === 'HEAD')) {
+    const f = await env.CLIENTS.get('impfichier:' + mPdf[1], 'arrayBuffer');
+    if (!f) return texte('Fichier introuvable', 404);
+    return new Response(request.method === 'HEAD' ? null : f, { headers: { 'content-type': 'application/pdf', 'content-length': String(f.byteLength), 'cache-control': 'private, no-store', 'x-robots-tag': 'noindex' } });
+  }
   if (p === '/api/mdp-oublie' && request.method === 'POST') return mdpOublie(request, env);
   if (p === '/api/mdp-reinit' && request.method === 'POST') return mdpReinit(request, env);
   if (p === '/api/verifier-email' && request.method === 'POST') return verifierEmail(request, env);
@@ -546,6 +553,7 @@ async function apiClient(request, env, slug, route) {
   }
   /* Commande de cartes imprimées : offre (prix produit + livraison) et adresses mémorisées */
   if (route === 'cartes/offre' && m === 'GET') return json(await offreCartes(env, await titulaireDe(env, compte)));
+  if (route === 'cartes/commander' && m === 'POST') return json(await commanderCartes(env, request, compte, slug));
   if (route === 'cartes/adresses' && m === 'POST') {
     const tit = await titulaireDe(env, compte);
     const dd = await corpsJSON(request);
@@ -766,7 +774,7 @@ async function apiClient(request, env, slug, route) {
     const frais = await lireCompte(env, slug);
     const nouvelle = session.metadata.genre === 'page' && (etat === 'appliqué' || etat === 'déjà appliqué') ? session.metadata.cible : null;
     const paye = session.mode === 'subscription' ? (etat === 'appliqué' || etat === 'déjà appliqué') : session.payment_status === 'paid';
-    return json({ paye, etat, abonnement: session.mode === 'subscription', nouvellePage: nouvelle, compte: await resumeAvecOffre(env, frais) });
+    return json({ paye, etat, cartes: (session.metadata || {}).genre === 'cartes' ? session.metadata.commande : null, abonnement: session.mode === 'subscription', nouvellePage: nouvelle, compte: await resumeAvecOffre(env, frais) });
   }
 
   /* ---------- Mon abonnement (offre v2) ---------- */
@@ -1494,6 +1502,7 @@ async function gestion(request, env, action) {
     return json(await etatAnthropic(env));
   }
 
+  if (action === 'commandes') return json(await gestionCommandes(env, d, request.method));
   if (action.startsWith('impression')) {
     const r = await gestionImpression(env, action, d, request.method);
     if (r) return json(r);
@@ -2510,6 +2519,193 @@ async function offreCartes(env, tit) {
     pret: !!adresseLivraison(tit)
   };
 }
+/* ---------- Commandes de cartes ----------
+   KV : commande:<id> → { id, titulaire, page, cree, statut, face, recto, verso, quantite, prixProduit, prixLivraison, total, pays, adresse, fichier, ... }
+        impfichier:<jeton> → PDF prêt à imprimer (servi à l'imprimeur sur qrbc.app/impression/<jeton>.pdf, adresse impossible à deviner)
+        commandes:index → identifiants des commandes, les plus récentes à la fin
+   Statuts : attente_paiement → payee → envoyee (chez l'imprimeur) | manuel (à passer à la main) | bloquee_marge | erreur ; puis expediee (à la main) */
+const PDF_MAX = 15 * 1024 * 1024;
+const DUREE_FICHIER = 120 * 86400;                 // secondes : le PDF reste disponible 4 mois (réimpression, réclamation)
+async function lireCommande(env, id) {
+  try { const t = await env.CLIENTS.get('commande:' + id); return t ? JSON.parse(t) : null; } catch (e) { return null; }
+}
+async function ecrireCommande(env, c) { await env.CLIENTS.put('commande:' + c.id, JSON.stringify(c)); }
+async function indexerCommande(env, id) {
+  let l = [];
+  try { l = JSON.parse(await env.CLIENTS.get('commandes:index') || '[]'); } catch (e) {}
+  l.push(id);
+  await env.CLIENTS.put('commandes:index', JSON.stringify(l.slice(-1000)));
+}
+const NOM_FACE = f => f === 'rectoVerso' ? 'recto/verso' : 'recto';
+async function commanderCartes(env, request, compte, slug) {
+  const conf = await lireImpression(env);
+  if (!conf.actif) throw new ErreurAPI(503, 'La commande de cartes imprimées n’est pas encore ouverte.');
+  const tit = await titulaireDe(env, compte);
+  const dd = await corpsJSON(request);
+  const quantite = Number(dd.quantite);
+  if (!conf.quantites.includes(quantite)) throw new ErreurAPI(400, 'Quantité non proposée.');
+  const face = dd.verso ? 'rectoVerso' : 'recto';
+  const prixProduit = (conf.prix[face] || {})[quantite];
+  if (!(prixProduit > 0)) throw new ErreurAPI(400, 'Prix introuvable pour cette quantité.');
+  const f = tit.facturation || {};
+  if (!f.nom || !f.adresse || !f.cp || !f.ville) throw new ErreurAPI(400, 'Complétez l’adresse de facturation.', 'adresse');
+  const adresse = adresseLivraison(tit);
+  if (!adresse) throw new ErreurAPI(400, 'Complétez l’adresse de livraison (nom, prénom, adresse).', 'adresse');
+  if (!adresse.phone) throw new ErreurAPI(400, 'Indiquez un numéro de téléphone pour le transporteur.', 'adresse');
+  const prixLivraison = conf.livraison[adresse.country];
+  if (prixLivraison == null) throw new ErreurAPI(400, 'La livraison n’est pas encore proposée vers ce pays.', 'pays');
+  const pdf = base64VersOctets(String(dd.pdf || ''));
+  if (pdf.length < 1000 || pdf.length > PDF_MAX || String.fromCharCode(pdf[0], pdf[1], pdf[2], pdf[3]) !== '%PDF') throw new ErreurAPI(400, 'Fichier d’impression invalide.');
+  const st = await lireStripe(env);
+  if (!st) throw new ErreurAPI(503, 'Le paiement en ligne n’est pas encore ouvert.');
+  await limiter(env, 'cartes:' + tit.slug, 20, 3600, 'Trop de tentatives de commande. Réessayez dans une heure.');
+
+  const id = 'c' + Date.now().toString(36) + b64url(crypto.getRandomValues(new Uint8Array(4))).toLowerCase().replace(/[^a-z0-9]/g, '');
+  const jeton = b64url(crypto.getRandomValues(new Uint8Array(24)));
+  await env.CLIENTS.put('impfichier:' + jeton, pdf, { expirationTtl: DUREE_FICHIER, metadata: { commande: id } });
+  const ligne = (s, n) => String(s || '').slice(0, n);
+  const cmd = { id, titulaire: tit.slug, page: compte.slug, email: tit.email || '', langue: tit.langue || compte.langue || 'fr', cree: new Date().toISOString(), statut: 'attente_paiement',
+    face, recto: ligne(dd.recto, 40), verso: dd.verso ? ligne(dd.verso, 40) : '', quantite, prixProduit, prixLivraison, total: prixProduit + prixLivraison,
+    pays: adresse.country, adresse, facturation: f, fichier: jeton, journal: [] };
+  await ecrireCommande(env, cmd);
+  await indexerCommande(env, id);
+
+  const ca = await confAbo(env, st);                           // taux de TVA « incluse » (prix TTC)
+  const clientStripe = await clientStripePour(env, st, tit);
+  const libelle = quantite + ' cartes de visite ' + NOM_FACE(face) + ' — 85 × 55 mm, papier 300 g';
+  const retour = retourSur(dd.retour, slug);
+  const session = await stripe(env, st, 'POST', '/checkout/sessions', {
+    mode: 'payment',
+    client_reference_id: slug,
+    customer: clientStripe || undefined,
+    customer_email: clientStripe ? undefined : (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(tit.email || '') ? tit.email : undefined),
+    line_items: [
+      { quantity: 1, tax_rates: [ca.taxRateTTC], price_data: { currency: 'eur', unit_amount: prixProduit, product_data: { name: libelle } } },
+      { quantity: 1, tax_rates: [ca.taxRateTTC], price_data: { currency: 'eur', unit_amount: prixLivraison, product_data: { name: 'Livraison (' + adresse.country + ')' } } }
+    ],
+    metadata: { slug, titulaire: tit.slug, genre: 'cartes', commande: id, montant: String(HT(cmd.total)) },
+    payment_intent_data: { metadata: { slug, genre: 'cartes', commande: id }, description: libelle },
+    invoice_creation: { enabled: true, invoice_data: { description: libelle + ' · commande ' + id, custom_fields: mentionsFacture().champs, footer: mentionsFacture().pied } },
+    managed_payments: { enabled: false },
+    success_url: retour + (retour.includes('?') ? '&' : '?') + 'paiement=ok&session_id={CHECKOUT_SESSION_ID}',
+    cancel_url: retour + (retour.includes('?') ? '&' : '?') + 'paiement=annule'
+  });
+  cmd.session = session.id;
+  await ecrireCommande(env, cmd);
+  return { url: session.url, commande: id };
+}
+/* Paiement reçu (webhook ou retour du client) : une seule fois, puis envoi à l'imprimeur */
+async function encaisserCommandeCartes(env, session) {
+  const md = session.metadata || {};
+  const cmd = await lireCommande(env, md.commande);
+  if (!cmd) return 'commande introuvable';
+  const tit = await lireCompte(env, md.titulaire || cmd.titulaire);
+  if (!tit) return 'compte introuvable';
+  if ((tit.refsPayees || []).includes(session.id) || cmd.statut !== 'attente_paiement') return 'déjà appliqué';
+  journaliser(tit, 'cartes', HT(cmd.total), 'Stripe · ' + (session.amount_total / 100).toFixed(2) + ' € TTC · ' + cmd.quantite + ' cartes ' + NOM_FACE(cmd.face) + ' · ' + cmd.id, session.id);
+  await ecrireCompte(env, tit);
+  cmd.statut = 'payee'; cmd.payeLe = new Date().toISOString(); cmd.session = session.id;
+  await ecrireCommande(env, cmd);
+  const travail = envoyerCommande(env, cmd).catch(e => console.error('cartes', cmd.id, e.message));
+  if (TACHES) TACHES.waitUntil(travail); else await travail;
+  return 'appliqué';
+}
+function noter(cmd, texte) { cmd.journal = (cmd.journal || []).concat([{ le: new Date().toISOString(), texte: String(texte).slice(0, 400) }]).slice(-30); }
+async function md5Hex(octets) {
+  try { return [...new Uint8Array(await crypto.subtle.digest('MD5', octets))].map(b => b.toString(16).padStart(2, '0')).join(''); }
+  catch (e) { return null; }                                 // MD5 existe dans les Workers ; facultatif pour l'imprimeur
+}
+/* Envoi à l'imprimeur, avec garde-fou de marge ; en cas de souci, Roman est prévenu par e-mail */
+async function envoyerCommande(env, cmd, forcer) {
+  const conf = await lireImpression(env);
+  const urlPdf = 'https://' + DOMAINE + '/impression/' + cmd.fichier + '.pdf';
+  const prevenir = async (sujet, detail) => {
+    try {
+      const ce = await lireEmail(env);
+      if (ce) await envoyerEmail(env, ce, VENDEUR.email, '[QR-BC] ' + sujet + ' — commande ' + cmd.id,
+        '<p>' + esc(detail) + '</p><p>' + esc(cmd.quantite + ' cartes ' + NOM_FACE(cmd.face) + ' · ' + (cmd.total / 100).toFixed(2) + ' € TTC · ' + cmd.titulaire + '.' + DOMAINE) + '</p>' +
+        '<p>Livraison : ' + esc([cmd.adresse.firstname + ' ' + cmd.adresse.lastname, cmd.adresse.company, cmd.adresse.street1, cmd.adresse.street2, cmd.adresse.zip + ' ' + cmd.adresse.city, cmd.adresse.country, cmd.adresse.phone].filter(Boolean).join(', ')) + '</p>' +
+        '<p><a href="' + urlPdf + '">Fichier d’impression (PDF)</a> · <a href="https://' + DOMAINE + '/gestion">Gestion</a></p>', detail + '\n' + urlPdf);
+    } catch (e) { console.error('e-mail commande', e.message); }
+  };
+  if (conf.imprimeur === 'manuel') {
+    cmd.statut = 'manuel'; noter(cmd, 'À commander à la main (imprimeur manuel).');
+    await ecrireCommande(env, cmd);
+    await prevenir('Nouvelle commande de cartes à passer', 'Commande payée : à passer à la main chez l’imprimeur.');
+    await confirmerClient(env, cmd);
+    return cmd;
+  }
+  try {
+    const cle = await cleImprimeur(env);
+    const dv = await devisImprimeur(cle, conf, cmd.face, cmd.quantite, cmd.pays);
+    const cout = dv.produit + dv.livraison.prix;
+    const marge = margeCommande(cmd.total, cout);
+    cmd.cout = { produit: dv.produit, livraison: dv.livraison.prix, transporteur: dv.livraison.service, marge };
+    if (marge < conf.margeMin && !forcer) {
+      cmd.statut = 'bloquee_marge'; noter(cmd, 'Bloquée : marge ' + (marge / 100).toFixed(2) + ' € < minimum ' + (conf.margeMin / 100).toFixed(2) + ' €.');
+      await ecrireCommande(env, cmd);
+      await prevenir('Commande bloquée (marge trop faible)', 'Le coût réel chez l’imprimeur (' + (cout / 100).toFixed(2) + ' € HT) laisse une marge de ' + (marge / 100).toFixed(2) + ' €. Envoyez-la quand même depuis /gestion, ou remboursez le client.');
+      return cmd;
+    }
+    const fichier = await env.CLIENTS.get('impfichier:' + cmd.fichier, 'arrayBuffer');
+    if (!fichier) throw new Error('Fichier d’impression introuvable (expiré ?).');
+    const fic = { type: 'product', url: urlPdf };
+    const somme = await md5Hex(fichier);
+    if (somme) fic.md5sum = somme;
+    const item = { reference: 'cartes', product: conf.produits[cmd.face], count: String(cmd.quantite), quote: dv.livraison.hash, title: cmd.quantite + ' cartes ' + NOM_FACE(cmd.face), files: [fic] };
+    const opts = (conf.options[cmd.face] || []).filter(Boolean);
+    if (opts.length) item.options = opts.map(o => ({ type: o }));
+    const r = await cloudprinter(cle, '/orders/add', { reference: cmd.id + (cmd.essais ? '-' + cmd.essais : ''), email: VENDEUR.email, addresses: [cmd.adresse], items: [item] });
+    cmd.imprimeur = { commande: (r && r.order) || '', le: new Date().toISOString() };
+    cmd.statut = 'envoyee'; noter(cmd, 'Envoyée à Cloudprinter' + (cmd.imprimeur.commande ? ' (n° ' + cmd.imprimeur.commande + ')' : '') + ', marge ' + (marge / 100).toFixed(2) + ' €.');
+    await ecrireCommande(env, cmd);
+    await confirmerClient(env, cmd);
+  } catch (e) {
+    cmd.statut = 'erreur'; cmd.essais = (cmd.essais || 0) + 1; noter(cmd, 'Erreur : ' + e.message);
+    await ecrireCommande(env, cmd);
+    await prevenir('Commande de cartes en erreur', 'L’envoi à l’imprimeur a échoué : ' + e.message + '. Relancez-la depuis /gestion.');
+  }
+  return cmd;
+}
+async function confirmerClient(env, cmd) {
+  if (cmd.confirme || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cmd.email || '')) return;
+  const ce = await lireEmail(env);
+  if (!ce) return;
+  const T = {
+    fr: ['Votre commande de cartes de visite', 'Bonjour,', 'Merci pour votre commande ! Vos ' + cmd.quantite + ' cartes de visite (' + NOM_FACE(cmd.face) + ') partent à l’impression. Elles seront livrées à l’adresse indiquée, en général sous une semaine.', 'Référence de commande', 'Votre facture est disponible dans « Mon compte ».'],
+    en: ['Your business card order', 'Hello,', 'Thank you for your order! Your ' + cmd.quantite + ' business cards (' + (cmd.face === 'rectoVerso' ? 'double-sided' : 'single-sided') + ') are going to print. They will be delivered to the address you gave, usually within a week.', 'Order reference', 'Your invoice is available in “My account”.'],
+    ru: ['Ваш заказ визиток', 'Здравствуйте!', 'Спасибо за заказ! Ваши визитки (' + cmd.quantite + ' шт., ' + (cmd.face === 'rectoVerso' ? 'двусторонние' : 'односторонние') + ') отправлены в печать. Обычно доставка по указанному адресу занимает до недели.', 'Номер заказа', 'Счёт доступен в разделе «Мой аккаунт».']
+  }[cmd.langue] || null;
+  const t = T || ['Votre commande de cartes de visite', 'Bonjour,', 'Merci pour votre commande ! Vos cartes partent à l’impression.', 'Référence de commande', 'Votre facture est disponible dans « Mon compte ».'];
+  try {
+    await envoyerEmail(env, ce, cmd.email, t[0] + ' — QR-BC', '<p>' + t[1] + '</p><p>' + esc(t[2]) + '</p><p>' + t[3] + ' : <b>' + esc(cmd.id) + '</b></p><p>' + esc(t[4]) + '</p>', t[1] + '\n\n' + t[2] + '\n\n' + t[3] + ' : ' + cmd.id + '\n' + t[4]);
+    cmd.confirme = new Date().toISOString();
+    await ecrireCommande(env, cmd);
+  } catch (e) { console.error('confirmation cartes', e.message); }
+}
+async function gestionCommandes(env, d, methode) {
+  if (methode === 'POST' && d.id) {
+    const cmd = await lireCommande(env, String(d.id));
+    if (!cmd) throw new ErreurAPI(404, 'Commande introuvable.');
+    if (d.op === 'renvoyer') {
+      if (!['erreur', 'bloquee_marge', 'payee', 'manuel'].includes(cmd.statut)) throw new ErreurAPI(400, 'Cette commande a déjà été envoyée.');
+      await envoyerCommande(env, cmd, true);
+    } else if (['expediee', 'envoyee', 'annulee', 'remboursee'].includes(d.op)) {
+      cmd.statut = d.op; noter(cmd, 'Statut changé à la main : ' + d.op);
+      await ecrireCommande(env, cmd);
+    } else throw new ErreurAPI(400, 'Opération inconnue.');
+  }
+  let ids = [];
+  try { ids = JSON.parse(await env.CLIENTS.get('commandes:index') || '[]'); } catch (e) {}
+  const liste = [];
+  for (const id of ids.slice(-100).reverse()) {
+    const c = await lireCommande(env, id);
+    if (!c) continue;
+    if (c.statut === 'attente_paiement' && Date.now() - Date.parse(c.cree) > 86400000 && !d.tout) continue;   // paniers abandonnés
+    liste.push(Object.assign({}, c, { pdf: 'https://' + DOMAINE + '/impression/' + c.fichier + '.pdf' }));
+  }
+  return { commandes: liste };
+}
 /* Paiements Stripe du compte entier (page principale et pages rattachées), les plus récents d'abord */
 async function facturesDe(env, tit) {
   const l = [];
@@ -2570,6 +2766,7 @@ async function encaisserSession(env, session) {
   if (!session || session.payment_status !== 'paid') return 'non payé';
   await solderFacture(env, session);
   const md = session.metadata || {};
+  if (md.genre === 'cartes') return encaisserCommandeCartes(env, session);
   let compte = await lireCompte(env, md.genre === 'page' ? md.titulaire : md.slug);
   if (!compte) return 'compte introuvable';
   if (md.genre === 'recharge' && compte.parent) {                // le crédit va dans la réserve commune du compte
