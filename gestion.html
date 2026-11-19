@@ -295,6 +295,7 @@
         </div>
         <div class="actions">
           <button type="button" id="imp-produits">Voir les produits « cartes de visite »</button>
+          <button type="button" id="imp-produits-fermer" class="cache">Réduire le catalogue</button>
         </div>
         <div id="imp-catalogue" class="imp-catalogue"></div>
 
@@ -709,7 +710,7 @@
       ]), opts]);
   }
   $('#imp-produits').addEventListener('click', async () => {
-    const z = $('#imp-catalogue'); z.textContent = 'Chargement du catalogue…';
+    const z = $('#imp-catalogue'); z.textContent = 'Chargement du catalogue…'; z.classList.remove('cache'); $('#imp-produits-fermer').classList.remove('cache');
     try {
       const r = await api('impression-produits', {});
       z.textContent = '';
@@ -717,6 +718,15 @@
       z.append(el('p', { class: 'infos', text: 'Pour les cartes 85 × 55 mm paysage : recto = businesscard_ss_int_bc_fc, recto/verso = businesscard_ds_int_bc_fc (« Int. L »). Les autres formats (US, portrait, carré, 70 × 30) ne correspondent pas aux modèles de l’éditeur.' }));
       r.produits.forEach(p => { const c = impProduitCarte(p); if (!/_int_/.test(p.reference)) c.style.opacity = '.55'; z.append(c); });
     } catch (err) { z.textContent = err.message; }
+  });
+  $('#imp-produits-fermer').addEventListener('click', () => {
+    $('#imp-catalogue').textContent = ''; $('#imp-produits-fermer').classList.add('cache');
+    $('#imp-produits').scrollIntoView({ block: 'center' });
+  });
+  // un produit choisi (→ Recto / → Recto/verso) referme le catalogue
+  $('#imp-catalogue').addEventListener('click', e => {
+    const b = e.target.closest('button');
+    if (b && /^→/.test(b.textContent)) setTimeout(() => $('#imp-produits-fermer').click(), 150);
   });
   $('#imp-sim-btn').addEventListener('click', async () => {
     const m = $('#m-imp-sim'), z = $('#imp-sim'), pays = $('#imp-sim-pays').value;
