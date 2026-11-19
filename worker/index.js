@@ -2341,11 +2341,17 @@ async function lireImpression(env) {
     actif: !!t.actif, imprimeur: t.imprimeur || D.imprimeur,
     produits: Object.assign({}, D.produits, t.produits), options: Object.assign({}, D.options, t.options),
     transporteur: t.transporteur != null ? t.transporteur : D.transporteur,
+    transporteurs: t.transporteurs && typeof t.transporteurs === 'object' ? t.transporteurs : {},
     quantites: Array.isArray(t.quantites) && t.quantites.length ? t.quantites : D.quantites,
     prix: t.prix || D.prix, livraison: t.livraison || D.livraison,
     margeMin: t.margeMin != null ? t.margeMin : D.margeMin,
     cle: t.cle || null, fin: t.fin || '', le: t.le || null, majLe: t.majLe || null
   };
+}
+// transporteur préféré pour un pays : celui du pays s'il est indiqué, sinon le réglage général
+function transporteurPays(conf, pays) {
+  const t = (conf.transporteurs || {})[pays];
+  return String(t != null && String(t).trim() ? t : (conf.transporteur || '')).trim();
 }
 async function etatImpression(env) {
   const c = await lireImpression(env);
@@ -2397,7 +2403,7 @@ async function devisImprimeur(cle, conf, face, quantite, pays) {
     offres.push({ hash: o.quote, service: o.service || '', option: o.shipping_option || '', niveau: o.shipping_level || '', prix: Math.round(Number(o.price || 0) * 100) });
   if (!offres.length) throw new ErreurAPI(502, 'Cloudprinter ne propose aucune livraison vers ' + pays + '.');
   offres.sort((a, b) => a.prix - b.prix);
-  const filtre = String(conf.transporteur || '').trim().toLowerCase();
+  const filtre = transporteurPays(conf, pays).toLowerCase();
   const pref = filtre ? offres.find(o => (o.service + ' ' + o.option).toLowerCase().includes(filtre)) : null;
   return { produit, livraison: pref || offres[0], transporteurTrouve: !filtre || !!pref, offres, expire: q.expire_date || null };
 }
@@ -2430,6 +2436,11 @@ async function enregistrerReglagesImpression(env, d) {
     if (!PAYS_LIVRAISON.includes(pays)) throw new ErreurAPI(400, 'Pays de livraison non pris en charge : ' + pays + '.');
     livraison[pays] = cent(v, 'Livraison ' + pays);
   }
+  const transporteurs = {};
+  for (const [pays, v] of Object.entries(d.transporteurs || {})) {
+    const t = String(v || '').trim().slice(0, 60);
+    if (t && livraison[String(pays).toUpperCase()] != null) transporteurs[String(pays).toUpperCase()] = t;
+  }
   if (!Object.keys(livraison).length) throw new ErreurAPI(400, 'Ajoutez au moins un pays de livraison.');
   const refOk = s => String(s || '').trim().slice(0, 120);
   const opts = v => (Array.isArray(v) ? v : String(v || '').split(/[\s,;]+/)).map(refOk).filter(Boolean).slice(0, 12);
@@ -2439,6 +2450,7 @@ async function enregistrerReglagesImpression(env, d) {
     produits: { recto: refOk(d.produits && d.produits.recto), rectoVerso: refOk(d.produits && d.produits.rectoVerso) },
     options: { recto: opts(d.options && d.options.recto), rectoVerso: opts(d.options && d.options.rectoVerso) },
     transporteur: String(d.transporteur || '').trim().slice(0, 60),
+    transporteurs,
     quantites, prix, livraison,
     margeMin: cent(d.margeMin == null ? 1 : d.margeMin, 'Marge minimale'),
     majLe: new Date().toISOString()
@@ -2491,7 +2503,7 @@ async function gestionImpression(env, action, d, methode) {
     for (const pays of paysListe) for (const face of FACES) for (const q of conf.quantites) {
       const prixProduit = (conf.prix[face] || {})[q];
       const prixLivraison = conf.livraison[pays];
-      const l = { pays, face, quantite: q, prixProduit, prixLivraison };
+      const l = { pays, face, quantite: q, prixProduit, prixLivraison, filtre: transporteurPays(conf, pays) };
       try {
         const dv = await devisImprimeur(cle, conf, face, q, pays);
         Object.assign(l, { coutProduit: dv.produit, coutLivraison: dv.livraison.prix, transporteur: (dv.livraison.service + (dv.livraison.option ? ' — ' + dv.livraison.option : '')).trim(),

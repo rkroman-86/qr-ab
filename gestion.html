@@ -564,6 +564,7 @@
   const enEuros = c => (c / 100).toFixed(2).replace('.', ',');
   const versCent = v => Math.round(Number(String(v).replace(',', '.')) * 100);
   let imp = null;                                   // état renvoyé par le serveur
+  let impTransporteurs = {};                        // pays → transporteur préféré (vide = réglage général)
   let impLivraison = {};                            // pays → centimes (édition en cours)
   function impQuantites() {
     const l = $('#imp-quantites').value.split(/[\s,;]+/).map(Number).filter(n => Number.isInteger(n) && n > 0);
@@ -589,13 +590,16 @@
   }
   function impTableLivraison() {
     const z = $('#imp-livraison'); z.textContent = '';
-    const tab = el('table', {}, [el('tr', {}, [el('th', { text: 'Pays' }), el('th', { text: 'Prix TTC' }), el('th', { text: '' })])]);
+    const tab = el('table', {}, [el('tr', {}, [el('th', { text: 'Pays' }), el('th', { text: 'Prix TTC' }), el('th', { text: 'Transporteur' }), el('th', { text: '' })])]);
     Object.keys(impLivraison).forEach(p => {
       const i = el('input', { type: 'text', inputmode: 'decimal' });
       i.value = enEuros(impLivraison[p]);
       i.addEventListener('input', () => { impLivraison[p] = versCent(i.value); impApercu(); });
-      tab.append(el('tr', {}, [el('td', { text: (NOMS_PAYS[p] || p) + ' (' + p + ')' }), el('td', {}, [i]),
-        el('td', {}, [el('button', { type: 'button', class: 'danger', text: 'Retirer', onclick: () => { delete impLivraison[p]; impTableLivraison(); impListesPays(); impApercu(); } })])]));
+      const t = el('input', { type: 'text', placeholder: $('#imp-transporteur').value || 'général' });
+      t.value = impTransporteurs[p] || '';
+      t.addEventListener('input', () => { impTransporteurs[p] = t.value; });
+      tab.append(el('tr', {}, [el('td', { text: (NOMS_PAYS[p] || p) + ' (' + p + ')' }), el('td', {}, [i]), el('td', {}, [t]),
+        el('td', {}, [el('button', { type: 'button', class: 'danger', text: 'Retirer', onclick: () => { delete impLivraison[p]; delete impTransporteurs[p]; impTableLivraison(); impListesPays(); impApercu(); } })])]));
     });
     z.append(tab);
   }
@@ -634,6 +638,7 @@
     $('#imp-quantites').value = (e.quantites || []).join(', ');
     $('#imp-margeMin').value = enEuros(e.margeMin || 0);
     impLivraison = Object.assign({}, e.livraison || {});
+    impTransporteurs = Object.assign({}, e.transporteurs || {});
     impTablePrix(e.prix || {});
     impTableLivraison(); impListesPays(); impApercu();
   }
@@ -674,7 +679,7 @@
       actif: $('#imp-actif').checked, imprimeur: $('#imp-imprimeur').value, transporteur: $('#imp-transporteur').value,
       produits: { recto: $('#imp-ref-recto').value, rectoVerso: $('#imp-ref-rectoVerso').value },
       options: { recto: $('#imp-opt-recto').value, rectoVerso: $('#imp-opt-rectoVerso').value },
-      quantites: impQuantites(), prix: impLirePrix(), livraison, margeMin: $('#imp-margeMin').value
+      quantites: impQuantites(), prix: impLirePrix(), livraison, transporteurs: impTransporteurs, margeMin: $('#imp-margeMin').value
     };
     try { impRemplir(await api('impression', corps)); m.className = 'msg ok'; m.textContent = '✓ Réglages d’impression enregistrés.'; }
     catch (err) { m.className = 'msg err'; m.textContent = err.message; }
@@ -746,7 +751,8 @@
           el('td', { text: nom }),
           el('td', { class: 'n', text: enEuros(l.coutProduit) + ' €' }),
           el('td', { class: 'n', text: enEuros(l.coutLivraison) + ' €' }),
-          el('td', {}, [el('span', { text: l.transporteur }), l.transporteurTrouve ? null : el('small', { class: 'neg', text: ' (« ' + r.transporteur + ' » non proposé : offre la moins chère)' })]),
+          el('td', {}, [el('span', { text: l.transporteur }), l.transporteurTrouve ? null : el('small', { class: 'neg', text: ' (« ' + (l.filtre || r.transporteur) + ' » non proposé : offre la moins chère)' }),
+            l.autres && l.autres.length ? el('div', {}, [el('small', { style: 'color:#777', text: 'Offres : ' + l.autres.join(' · ') })]) : null]),
           el('td', { class: 'n', text: enEuros(l.prixProduit) + ' + ' + enEuros(l.prixLivraison) + ' = ' + enEuros(prixClient) + ' €' }),
           el('td', { class: 'n ' + (l.marge < r.margeMin ? 'neg' : 'pos'), text: l.marge == null ? '—' : enEuros(l.marge) + ' €' })
         ]));
