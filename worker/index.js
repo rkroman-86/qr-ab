@@ -2383,7 +2383,8 @@ async function devisImprimeur(cle, conf, face, quantite, pays) {
   if (!ref) throw new ErreurAPI(400, 'Référence produit manquante (' + (face === 'recto' ? 'recto' : 'recto/verso') + ').');
   const item = { reference: 'q' + quantite, product: ref, count: String(quantite) };
   const opts = (conf.options[face] || []).filter(Boolean);
-  if (opts.length) item.options = opts.map(o => ({ type: o }));
+  // Cloudprinter exige « count » pour chaque option : nombre de pages imprimées avec cette option (1 = recto, 2 = recto/verso)
+  if (opts.length) item.options = opts.map(o => ({ type: o, count: face === 'rectoVerso' ? '2' : '1' }));
   const q = await cloudprinter(cle, '/orders/quote', { country: pays, items: [item] });
   const st = q.subtotals || {};
   const produit = Math.round((Number(st.items || 0) + Number(st.fee || 0) + Number(st.app_fee || 0)) * 100) || Math.round(Number(q.price || 0) * 100);
@@ -2658,7 +2659,7 @@ async function envoyerCommande(env, cmd, forcer) {
     if (somme) fic.md5sum = somme;
     const item = { reference: 'cartes', product: conf.produits[cmd.face], count: String(cmd.quantite), quote: dv.livraison.hash, title: cmd.quantite + ' cartes ' + NOM_FACE(cmd.face), files: [fic] };
     const opts = (conf.options[cmd.face] || []).filter(Boolean);
-    if (opts.length) item.options = opts.map(o => ({ type: o }));
+    if (opts.length) item.options = opts.map(o => ({ type: o, count: cmd.face === 'rectoVerso' ? '2' : '1' }));
     const r = await cloudprinter(cle, '/orders/add', { reference: cmd.id + (cmd.essais ? '-' + cmd.essais : ''), email: VENDEUR.email, addresses: [cmd.adresse], items: [item] });
     cmd.imprimeur = { commande: (r && r.order) || '', le: new Date().toISOString() };
     cmd.statut = 'envoyee'; noter(cmd, 'Envoyée à Cloudprinter' + (cmd.imprimeur.commande ? ' (n° ' + cmd.imprimeur.commande + ')' : '') + ', marge ' + (marge / 100).toFixed(2) + ' €.');
