@@ -424,7 +424,7 @@
     var l = langue();
     if (l === actuelle) return;
     actuelle = l;
-    v.src = '/videos/qrbc-' + l + '.mp4';
+    v.src = '/videos/qrbc-' + l + '.mp4?v=3';
     var p = v.play(); if (p && p.catch) p.catch(function () {});
   }
   var agrandieA = null;            // position de défilement où le visiteur a rouvert la vignette
