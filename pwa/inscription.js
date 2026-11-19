@@ -67,11 +67,27 @@
   }
 
   /* ---------- Code promo et provenance ---------- */
+  /* Code d'un lien d'apporteur : gardé 30 jours sur l'appareil (le visiteur peut revenir plus tard sans le lien).
+     ?promo= vide l'oublie. Ancien format (texte seul) : daté d'aujourd'hui. */
+  const DUREE_PROMO = 30 * 86400000;
+  function oublierPromo() { ecrireLS('qrbc-promo', ''); }
   function lirePromo() {
     let code = '';
-    try { code = new URLSearchParams(location.search).get('promo') || lireLS('qrbc-promo'); } catch (e) {}
-    code = String(code || '').trim().toLowerCase().replace(/\s/g, '');
-    if (code) ecrireLS('qrbc-promo', code);
+    try {
+      const p = new URLSearchParams(location.search);
+      if (p.has('promo')) {
+        code = String(p.get('promo') || '').trim().toLowerCase().replace(/\s/g, '');
+        if (code) ecrireLS('qrbc-promo', JSON.stringify({ c: code, t: Date.now() })); else oublierPromo();
+        return code;
+      }
+      const brut = lireLS('qrbc-promo');
+      if (!brut) return '';
+      let o = null;
+      try { o = JSON.parse(brut); } catch (e) {}
+      if (!o || typeof o !== 'object') { o = { c: brut, t: Date.now() }; ecrireLS('qrbc-promo', JSON.stringify(o)); }
+      if (!o.c || !(Date.now() - (o.t || 0) < DUREE_PROMO)) { oublierPromo(); return ''; }
+      code = String(o.c).trim().toLowerCase().replace(/\s/g, '');
+    } catch (e) {}
     return code;
   }
   function lireDepuis() {
@@ -99,7 +115,16 @@
         promoValide = !!j.valide;
         const ligne = '✓ ' + j.essai + ' jours + ' + j.jours + ' jours offerts';
         if (depuisLien && j.valide) {
-          o.promoLigne.textContent = ligne; o.promoLigne.hidden = false;
+          o.promoLigne.textContent = ligne + ' ';
+          const x = document.createElement('button');
+          x.type = 'button'; x.className = 'lien'; x.textContent = 'Retirer';
+          x.onclick = () => {                                   // le visiteur ne veut pas de ce code : on l'oublie
+            oublierPromo(); promo = ''; promoValide = false;
+            o.promoLigne.hidden = true; o.promoChamp.value = '';
+            if (o.promoLien) o.promoLien.hidden = false;
+            if (o.onPromo) o.onPromo(30);
+          };
+          o.promoLigne.appendChild(x); o.promoLigne.hidden = false;
           o.promoLien.hidden = true; o.promoChamp.parentNode.hidden = true;
         } else if (o.promoEtat) {
           o.promoEtat.className = 'dispo ' + (j.valide ? 'ok' : 'ko');
@@ -194,7 +219,7 @@
         robot.renouveler();
         if (r.status === 409 && j.code === 'email_existe') { o.msg.textContent = ''; if (o.onExiste) o.onExiste(j); else erreur(j.erreur); return; }
         if (!r.ok) throw new Error(j.erreur || 'Erreur');
-        ecrireLS('qrbc-promo', ''); ecrireLS('qrbc-depuis', '');
+        oublierPromo(); ecrireLS('qrbc-depuis', '');
         if (j.direct) { location.href = j.direct; return; }          // pas de service d'e-mail (banc d'essai)
         o.msg.textContent = '';
         attente(email);
