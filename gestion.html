@@ -614,13 +614,16 @@
     }));
     $('#imp-apercu').textContent = 'Le client voit (livraison ' + pays + ') : ' + parts.join(' · ');
   }
-  function impRemplir(e) {
+  function impEtat(e) {                             // badge et boutons de la clé seulement (ne touche pas aux champs en cours de saisie)
     imp = e;
     const z = $('#imp-etat');
     z.innerHTML = (e.connecte ? '<span class="badge b-payant">clé enregistrée</span> clé …' + e.fin + ' · le ' + date(e.le) : '<span class="badge b-inactif">aucune clé</span> Le simulateur et les commandes automatiques sont indisponibles.') +
       ' · vente <b>' + (e.actif ? 'ouverte' : 'fermée') + '</b>' + (e.majLe ? ' · réglages du ' + date(e.majLe) : '');
     $('#imp-cle-btn').textContent = e.connecte ? 'Remplacer la clé' : 'Enregistrer la clé';
     $('#imp-cle-off').classList.toggle('cache', !e.connecte);
+  }
+  function impRemplir(e) {
+    impEtat(e);
     $('#imp-actif').checked = !!e.actif;
     $('#imp-imprimeur').value = e.imprimeur || 'cloudprinter';
     $('#imp-transporteur').value = e.transporteur || '';
@@ -651,13 +654,13 @@
     const m = $('#m-imp-cle'), cle = $('#imp-cle').value.trim();
     if (!cle) return;
     m.className = 'msg'; m.textContent = 'Vérification auprès de l’imprimeur…';
-    try { impRemplir(await api('impression', { cle })); $('#imp-cle').value = ''; m.className = 'msg ok'; m.textContent = '✓ Clé vérifiée et enregistrée.'; }
+    try { impEtat(await api('impression', { cle })); $('#imp-cle').value = ''; m.className = 'msg ok'; m.textContent = '✓ Clé vérifiée et enregistrée.'; }
     catch (err) { m.className = 'msg err'; m.textContent = err.message; }
   });
   $('#imp-cle-off').addEventListener('click', async () => {
     if (!confirm('Retirer la clé de l’imprimeur ? La vente des cartes sera fermée.')) return;
     const m = $('#m-imp-cle');
-    try { impRemplir(await api('impression', { deconnecter: true })); m.className = 'msg'; m.textContent = 'Clé retirée.'; }
+    try { const e = await api('impression', { deconnecter: true }); impEtat(e); $('#imp-actif').checked = false; m.className = 'msg'; m.textContent = 'Clé retirée.'; }
     catch (err) { m.className = 'msg err'; m.textContent = err.message; }
   });
   $('#f-imp').addEventListener('submit', async e => {
