@@ -2381,7 +2381,8 @@ async function cloudprinter(cle, chemin, corps) {
 async function devisImprimeur(cle, conf, face, quantite, pays) {
   const ref = conf.produits[face];
   if (!ref) throw new ErreurAPI(400, 'Référence produit manquante (' + (face === 'recto' ? 'recto' : 'recto/verso') + ').');
-  const item = { reference: 'q' + quantite, product: ref, count: String(quantite) };
+  // même référence d'article que dans /orders/add : Cloudprinter rattache le devis (hash) à l'article par cette référence
+  const item = { reference: 'cartes', product: ref, count: String(quantite) };
   const opts = (conf.options[face] || []).filter(Boolean);
   // Cloudprinter exige « count » pour chaque option : nombre de pages imprimées avec cette option (1 = recto, 2 = recto/verso)
   if (opts.length) item.options = opts.map(o => ({ type: o, count: face === 'rectoVerso' ? '2' : '1' }));
