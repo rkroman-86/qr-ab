@@ -119,8 +119,10 @@
   .imp-table small{color:var(--doux);white-space:normal}
   .imp-ajout-pays{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
   .imp-ajout-pays select{flex:0 1 220px}
-  .imp-catalogue{display:grid;gap:6px;margin:8px 0}
-  .imp-produit{border:1px solid var(--ligne);border-radius:10px;padding:8px 10px;font-size:.88rem}
+  .imp-catalogue{display:grid;grid-template-columns:minmax(0,1fr);gap:6px;margin:8px 0}
+  .imp-produit{border:1px solid var(--ligne);border-radius:10px;padding:8px 10px;font-size:.88rem;min-width:0;overflow-wrap:anywhere;word-break:break-word}
+  .imp-produit .ligne1{flex-wrap:wrap;align-items:center}
+  .imp-produit .ligne1 small{flex-basis:100%}
   .imp-produit code{font-size:.82rem;overflow-wrap:anywhere}
   .imp-produit .actions{margin-top:6px}
   .imp-produit .infos{white-space:pre-line}
@@ -320,7 +322,7 @@
       </form>
 
       <h3>Commandes de cartes</h3>
-      <div class="actions"><button type="button" id="cmd-charger">Afficher les commandes</button></div>
+      <div class="actions"><button type="button" id="cmd-charger">Afficher les commandes</button><button type="button" id="cmd-fermer" class="cache">Réduire</button></div>
       <div class="msg" id="m-cmd"></div>
       <div id="cmd-liste" class="imp-catalogue"></div>
       <h3>Simulateur : coût réel chez l’imprimeur</h3>
@@ -779,9 +781,13 @@
         ops]));
     });
   }
+  $('#cmd-fermer').addEventListener('click', () => {
+    $('#cmd-liste').textContent = ''; $('#m-cmd').textContent = '';
+    $('#cmd-fermer').classList.add('cache'); $('#cmd-charger').textContent = 'Afficher les commandes';
+  });
   $('#cmd-charger').addEventListener('click', async () => {
     const m = $('#m-cmd'); m.className = 'msg'; m.textContent = 'Chargement…';
-    try { afficherCommandes((await api('commandes')).commandes); m.textContent = ''; $('#cmd-charger').textContent = 'Actualiser'; }
+    try { afficherCommandes((await api('commandes')).commandes); m.textContent = ''; $('#cmd-charger').textContent = 'Actualiser'; $('#cmd-fermer').classList.remove('cache'); }
     catch (err) { m.className = 'msg err'; m.textContent = err.message; }
   });
 
