@@ -2515,6 +2515,9 @@ function adresseLivraison(tit) {
   const src = l.separee ? l : { societe: f.nom, adresse: f.adresse, complement: '', cp: f.cp, ville: f.ville, pays: f.pays };
   const a = { type: 'delivery', firstname: l.prenom || '', lastname: l.nom || '', company: src.societe || '', street1: src.adresse || '', street2: src.complement || '',
     zip: src.cp || '', city: src.ville || '', country: src.pays || 'FR', email: tit.email || '', phone: l.tel || '' };
+  // facturation au nom de la personne (pas d'entreprise) : pas de « société » en double sur l'étiquette
+  const simple = t => String(t || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  if (simple(a.company) === simple(a.firstname + ' ' + a.lastname) || simple(a.company) === simple(a.lastname + ' ' + a.firstname)) a.company = '';
   return a.firstname && a.lastname && a.street1 && a.zip && a.city ? a : null;
 }
 async function offreCartes(env, tit) {
