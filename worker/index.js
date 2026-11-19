@@ -2554,7 +2554,7 @@ async function gestionImpression(env, action, d, methode) {
       try {
         const dv = await devisImprimeur(cle, conf, face, q, pays);
         Object.assign(l, { coutProduit: dv.produit, coutLivraison: dv.livraison.prix, transporteur: (dv.livraison.service + (dv.livraison.option ? ' — ' + dv.livraison.option : '')).trim(),
-          transporteurTrouve: dv.transporteurTrouve, offres: dv.offres.slice(0, 5).map(o => ({ service: o.service, prix: o.prix })) });
+          transporteurTrouve: dv.transporteurTrouve, offres: dv.offres.slice(0, 6).map(o => ({ service: o.service, option: o.option, prix: o.prix })) });
         if (prixProduit != null && prixLivraison != null) l.marge = margeCommande(prixProduit + prixLivraison, dv.produit + dv.livraison.prix);
       } catch (e) { l.erreur = e.message; }
       lignes.push(l);
