@@ -2376,6 +2376,9 @@ async function cloudprinter(cle, chemin, corps) {
   }
   return j;
 }
+/* « count » d'une option Cloudprinter : papier = nombre de pages imprimées (2 en recto/verso) ;
+   finition, coins… = 1 (comme sur la commande test du 19/11 : 2 × papier, 1 × sans pelliculage, 1 × coins droits) */
+function compteOption(o, face) { return /^paper_/.test(o) && face === 'rectoVerso' ? '2' : '1'; }
 /* Coût réel chez l'imprimeur (HT, centimes) pour une face, une quantité et un pays :
    produit = articles + frais ; livraison = l'offre du transporteur préféré (sinon la moins chère) */
 async function devisImprimeur(cle, conf, face, quantite, pays) {
@@ -2385,7 +2388,7 @@ async function devisImprimeur(cle, conf, face, quantite, pays) {
   const item = { reference: 'cartes', product: ref, count: String(quantite) };
   const opts = (conf.options[face] || []).filter(Boolean);
   // Cloudprinter exige « count » pour chaque option : nombre de pages imprimées avec cette option (1 = recto, 2 = recto/verso)
-  if (opts.length) item.options = opts.map(o => ({ type: o, count: face === 'rectoVerso' ? '2' : '1' }));
+  if (opts.length) item.options = opts.map(o => ({ type: o, count: compteOption(o, face) }));
   const q = await cloudprinter(cle, '/orders/quote', { country: pays, items: [item] });
   const st = q.subtotals || {};
   const produit = Math.round((Number(st.items || 0) + Number(st.fee || 0) + Number(st.app_fee || 0)) * 100) || Math.round(Number(q.price || 0) * 100);
@@ -2663,7 +2666,7 @@ async function envoyerCommande(env, cmd, forcer) {
     if (somme) fic.md5sum = somme;
     const item = { reference: 'cartes', product: conf.produits[cmd.face], count: String(cmd.quantite), quote: dv.livraison.hash, title: cmd.quantite + ' cartes ' + NOM_FACE(cmd.face), files: [fic] };
     const opts = (conf.options[cmd.face] || []).filter(Boolean);
-    if (opts.length) item.options = opts.map(o => ({ type: o, count: cmd.face === 'rectoVerso' ? '2' : '1' }));
+    if (opts.length) item.options = opts.map(o => ({ type: o, count: compteOption(o, cmd.face) }));
     const r = await cloudprinter(cle, '/orders/add', { reference: cmd.id + (cmd.essais ? '-' + cmd.essais : ''), email: VENDEUR.email, addresses: [cmd.adresse], items: [item] });
     cmd.imprimeur = { commande: (r && r.order) || '', le: new Date().toISOString() };
     cmd.statut = 'envoyee'; noter(cmd, 'Envoyée à Cloudprinter' + (cmd.imprimeur.commande ? ' (n° ' + cmd.imprimeur.commande + ')' : '') + ', marge ' + (marge / 100).toFixed(2) + ' €.');
