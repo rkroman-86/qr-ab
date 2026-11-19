@@ -544,6 +544,16 @@ async function apiClient(request, env, slug, route) {
     await ecrireCompte(env, tit);
     return json({ ok: true, facturation: tit.facturation });
   }
+  /* Commande de cartes imprimées : offre (prix produit + livraison) et adresses mémorisées */
+  if (route === 'cartes/offre' && m === 'GET') return json(await offreCartes(env, await titulaireDe(env, compte)));
+  if (route === 'cartes/adresses' && m === 'POST') {
+    const tit = await titulaireDe(env, compte);
+    const dd = await corpsJSON(request);
+    if (dd.facturation) tit.facturation = nettoyerFacturation(Object.assign({}, tit.facturation || {}, dd.facturation));   // = « Mon compte »
+    if (dd.livraison) tit.livraisonCartes = nettoyerLivraison(dd.livraison);
+    await ecrireCompte(env, tit);
+    return json(await offreCartes(env, tit));
+  }
   if (route === 'facture' && m === 'GET') {
     const tit = await titulaireDe(env, compte);
     const ref = new URL(request.url).searchParams.get('ref') || '';
@@ -1484,6 +1494,11 @@ async function gestion(request, env, action) {
     return json(await etatAnthropic(env));
   }
 
+  if (action.startsWith('impression')) {
+    const r = await gestionImpression(env, action, d, request.method);
+    if (r) return json(r);
+  }
+
   if (action === 'stripe') {
     if (request.method === 'GET') return json(await etatStripe(env));
     if (d.deconnecter) { await deconnecterStripe(env); return json(await etatStripe(env)); }
@@ -2286,6 +2301,214 @@ function nettoyerFacturation(d) {
   if (f.tva && !/^[A-Z]{2}[A-Z0-9]{2,13}$/.test(f.tva)) throw new ErreurAPI(400, 'Numéro de TVA invalide (exemple : FR12345678901).');
   if (!f.nom && (f.adresse || f.ville || f.tva)) throw new ErreurAPI(400, 'Indiquez le nom de l’entreprise (ou votre nom).');
   return f.nom ? f : null;
+}
+/* ===================== Impression des cartes de visite (19/11/2026) =====================
+   Le client commande ses cartes depuis l'éditeur ; la commande part chez l'imprimeur par API.
+   Réglages dans /gestion → Réglages → Impression, rangés dans KV (config:impression) :
+     imprimeur, clé API (chiffrée), références produit et options par face, transporteur préféré,
+     quantités, prix du PRODUIT (TTC, par quantité et par face) et prix de la LIVRAISON (TTC, par pays),
+     réglables séparément ; marge minimale par commande (garde-fou).
+   Adresses du client (portées par la page principale) :
+     facturation      → la même que « Mon compte » (tit.facturation), modifiable à la commande
+     livraisonCartes  → { prenom, nom, tel, separee, societe, adresse, complement, cp, ville, pays }
+                        (separee = false : livraison à l'adresse de facturation) */
+const CLOUDPRINTER_API = 'https://api.cloudprinter.com/cloudcore/1.0';
+const FACES = ['recto', 'rectoVerso'];
+const PAYS_LIVRAISON = ['FR', 'MC', 'BE', 'LU', 'DE', 'ES', 'IT', 'PT', 'NL', 'AT', 'IE', 'PL', 'RO', 'BG', 'GR', 'CZ', 'SK', 'HU', 'SI', 'HR', 'DK', 'SE', 'FI', 'EE', 'LV', 'LT', 'CY', 'MT'];
+const FRAIS_STRIPE = { pct: 1.5, fixe: 25 };      // carte européenne : 1,5 % + 0,25 € (estimation pour le calcul de marge)
+// Prix TTC en centimes. Produit + livraison France = grille validée le 19/11 (14,90 / 16,90 / 26,90 et 16,90 / 19,90 / 29,90)
+const IMPRESSION_DEFAUT = {
+  actif: false, imprimeur: 'cloudprinter',
+  produits: { recto: '', rectoVerso: '' }, options: { recto: [], rectoVerso: [] },
+  transporteur: 'Colissimo', quantites: [50, 100, 250],
+  prix: { recto: { 50: 1000, 100: 1200, 250: 2200 }, rectoVerso: { 50: 1200, 100: 1500, 250: 2500 } },
+  livraison: { FR: 490 }, margeMin: 100
+};
+async function lireImpression(env) {
+  let t = {};
+  try { t = JSON.parse(await env.CLIENTS.get('config:impression') || '{}'); } catch (e) {}
+  const D = IMPRESSION_DEFAUT;
+  return {
+    actif: !!t.actif, imprimeur: t.imprimeur || D.imprimeur,
+    produits: Object.assign({}, D.produits, t.produits), options: Object.assign({}, D.options, t.options),
+    transporteur: t.transporteur != null ? t.transporteur : D.transporteur,
+    quantites: Array.isArray(t.quantites) && t.quantites.length ? t.quantites : D.quantites,
+    prix: t.prix || D.prix, livraison: t.livraison || D.livraison,
+    margeMin: t.margeMin != null ? t.margeMin : D.margeMin,
+    cle: t.cle || null, fin: t.fin || '', le: t.le || null, majLe: t.majLe || null
+  };
+}
+async function etatImpression(env) {
+  const c = await lireImpression(env);
+  const e = Object.assign({}, c, { connecte: !!c.cle, defaut: IMPRESSION_DEFAUT, paysPossibles: PAYS_LIVRAISON, fraisStripe: FRAIS_STRIPE, tva: TVA });
+  delete e.cle;
+  return e;
+}
+async function cleImprimeur(env) {
+  const c = await lireImpression(env);
+  if (!c.cle) throw new ErreurAPI(400, 'Enregistrez d’abord la clé API de l’imprimeur.');
+  return dechiffrer(env, c.cle);
+}
+/* Appel à l'API CloudCore de Cloudprinter : toujours POST JSON, clé dans le corps */
+async function cloudprinter(cle, chemin, corps) {
+  let r;
+  try {
+    r = await fetch(CLOUDPRINTER_API + chemin, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(Object.assign({ apikey: cle }, corps || {})) });
+  } catch (e) { throw new ErreurAPI(502, 'Cloudprinter injoignable : ' + e.message); }
+  const brut = await r.text();
+  let j = null;
+  try { j = JSON.parse(brut); } catch (e) {}
+  if (r.status === 401 || r.status === 403) throw new ErreurAPI(400, 'Clé API Cloudprinter refusée.');
+  if (!r.ok) {
+    const m = (j && (j.error || j.message || (j.errors && JSON.stringify(j.errors)))) || brut.slice(0, 200) || ('HTTP ' + r.status);
+    throw new ErreurAPI(502, 'Cloudprinter (' + chemin + ') : ' + m);
+  }
+  return j;
+}
+/* Coût réel chez l'imprimeur (HT, centimes) pour une face, une quantité et un pays :
+   produit = articles + frais ; livraison = l'offre du transporteur préféré (sinon la moins chère) */
+async function devisImprimeur(cle, conf, face, quantite, pays) {
+  const ref = conf.produits[face];
+  if (!ref) throw new ErreurAPI(400, 'Référence produit manquante (' + (face === 'recto' ? 'recto' : 'recto/verso') + ').');
+  const item = { reference: 'q' + quantite, product: ref, count: String(quantite) };
+  const opts = (conf.options[face] || []).filter(Boolean);
+  if (opts.length) item.options = opts.map(o => ({ type: o }));
+  const q = await cloudprinter(cle, '/orders/quote', { country: pays, items: [item] });
+  const st = q.subtotals || {};
+  const produit = Math.round((Number(st.items || 0) + Number(st.fee || 0) + Number(st.app_fee || 0)) * 100) || Math.round(Number(q.price || 0) * 100);
+  const offres = [];
+  for (const s of (q.shipments || [])) for (const o of (s.quotes || []))
+    offres.push({ hash: o.quote, service: o.service || '', option: o.shipping_option || '', niveau: o.shipping_level || '', prix: Math.round(Number(o.price || 0) * 100) });
+  if (!offres.length) throw new ErreurAPI(502, 'Cloudprinter ne propose aucune livraison vers ' + pays + '.');
+  offres.sort((a, b) => a.prix - b.prix);
+  const filtre = String(conf.transporteur || '').trim().toLowerCase();
+  const pref = filtre ? offres.find(o => (o.service + ' ' + o.option).toLowerCase().includes(filtre)) : null;
+  return { produit, livraison: pref || offres[0], transporteurTrouve: !filtre || !!pref, offres, expire: q.expire_date || null };
+}
+/* Marge d'une commande : prix payé HT − coût imprimeur − frais Stripe (centimes) */
+function margeCommande(prixTTC, coutHT) {
+  return HT(prixTTC) - coutHT - Math.round(prixTTC * FRAIS_STRIPE.pct / 100 + FRAIS_STRIPE.fixe);
+}
+async function enregistrerReglagesImpression(env, d) {
+  const conf = await lireImpression(env);
+  const cent = (v, nom) => {
+    const n = Math.round(Number(String(v).replace(',', '.')) * 100);
+    if (!Number.isFinite(n) || n < 0 || n > 100000) throw new ErreurAPI(400, nom + ' : montant entre 0 et 1 000 €.');
+    return n;
+  };
+  const quantites = [...new Set((Array.isArray(d.quantites) ? d.quantites : String(d.quantites || '').split(/[\s,;]+/))
+    .map(Number).filter(n => Number.isInteger(n) && n > 0 && n <= 10000))].sort((a, b) => a - b).slice(0, 8);
+  if (!quantites.length) throw new ErreurAPI(400, 'Indiquez au moins une quantité (ex. 50, 100, 250).');
+  const prix = {};
+  for (const f of FACES) {
+    prix[f] = {};
+    for (const q of quantites) {
+      const v = d.prix && d.prix[f] && d.prix[f][q];
+      if (v === undefined || v === '') throw new ErreurAPI(400, 'Prix manquant : ' + q + ' cartes ' + (f === 'recto' ? 'recto' : 'recto/verso') + '.');
+      prix[f][q] = cent(v, q + ' cartes ' + (f === 'recto' ? 'recto' : 'recto/verso'));
+    }
+  }
+  const livraison = {};
+  for (const [p, v] of Object.entries(d.livraison || {})) {
+    const pays = String(p).toUpperCase();
+    if (!PAYS_LIVRAISON.includes(pays)) throw new ErreurAPI(400, 'Pays de livraison non pris en charge : ' + pays + '.');
+    livraison[pays] = cent(v, 'Livraison ' + pays);
+  }
+  if (!Object.keys(livraison).length) throw new ErreurAPI(400, 'Ajoutez au moins un pays de livraison.');
+  const refOk = s => String(s || '').trim().slice(0, 120);
+  const opts = v => (Array.isArray(v) ? v : String(v || '').split(/[\s,;]+/)).map(refOk).filter(Boolean).slice(0, 12);
+  Object.assign(conf, {
+    actif: !!d.actif,
+    imprimeur: d.imprimeur === 'manuel' ? 'manuel' : 'cloudprinter',
+    produits: { recto: refOk(d.produits && d.produits.recto), rectoVerso: refOk(d.produits && d.produits.rectoVerso) },
+    options: { recto: opts(d.options && d.options.recto), rectoVerso: opts(d.options && d.options.rectoVerso) },
+    transporteur: String(d.transporteur || '').trim().slice(0, 60),
+    quantites, prix, livraison,
+    margeMin: cent(d.margeMin == null ? 1 : d.margeMin, 'Marge minimale'),
+    majLe: new Date().toISOString()
+  });
+  for (const f of FACES) for (const q of quantites) if (prix[f][q] < 50) throw new ErreurAPI(400, 'Prix des cartes : 0,50 € minimum (paiement par carte).');
+  if (conf.actif && conf.imprimeur === 'cloudprinter' && (!conf.cle || !conf.produits.recto || !conf.produits.rectoVerso))
+    throw new ErreurAPI(400, 'Pour ouvrir la vente : clé API et références produit (recto et recto/verso) obligatoires.');
+  await env.CLIENTS.put('config:impression', JSON.stringify(conf));
+}
+async function gestionImpression(env, action, d, methode) {
+  if (action === 'impression') {
+    if (methode === 'GET') return etatImpression(env);
+    const conf = await lireImpression(env);
+    if (d.deconnecter) {
+      conf.cle = null; conf.fin = ''; conf.actif = false;
+      await env.CLIENTS.put('config:impression', JSON.stringify(conf));
+      return etatImpression(env);
+    }
+    if (d.cle !== undefined) {
+      const cle = String(d.cle || '').trim();
+      if (cle.length < 16 || /\s/.test(cle)) throw new ErreurAPI(400, 'Clé API attendue (Cloudprinter › CloudCore API Interface).');
+      await cloudprinter(cle, '/shipping/countries', {});        // vérifie la clé sans rien commander
+      Object.assign(conf, { cle: await chiffrer(env, cle), fin: cle.slice(-4), le: new Date().toISOString() });
+      await env.CLIENTS.put('config:impression', JSON.stringify(conf));
+      return etatImpression(env);
+    }
+    await enregistrerReglagesImpression(env, d);
+    return etatImpression(env);
+  }
+  if (action === 'impression-produits') {                      // aide au réglage : produits « cartes de visite » et leurs options
+    const cle = await cleImprimeur(env);
+    if (d.reference) {
+      const p = await cloudprinter(cle, '/products/info', { reference: String(d.reference).trim() });
+      return { produit: { reference: p.reference, nom: p.name || '', note: p.note || '',
+        options: (p.options || []).map(o => ({ reference: o.reference, type: o.type || '', note: o.note || '', defaut: !!Number(o.default) })),
+        specs: (p.specs || []).map(s => ({ note: s.note || '', valeur: s.value || '' })) } };
+    }
+    const l = await cloudprinter(cle, '/products', {});
+    const tous = (Array.isArray(l) ? l : (l && l.products) || []).map(p => ({ reference: p.reference, nom: p.name || '', note: p.note || '', categorie: p.category || '', aPartirDe: p.from_price || '' }));
+    const re = /business|card|visite/i;
+    return { produits: tous.filter(p => re.test(p.reference + ' ' + p.nom + ' ' + p.categorie)), total: tous.length };
+  }
+  if (action === 'impression-devis') {                         // simulateur : coût réel et marge pour chaque combinaison
+    const conf = await lireImpression(env);
+    const cle = await cleImprimeur(env);
+    const paysListe = (Array.isArray(d.pays) && d.pays.length ? d.pays : ['FR']).map(p => String(p).toUpperCase()).filter(p => PAYS_LIVRAISON.includes(p)).slice(0, 6);
+    const lignes = [];
+    for (const pays of paysListe) for (const face of FACES) for (const q of conf.quantites) {
+      const prixProduit = (conf.prix[face] || {})[q];
+      const prixLivraison = conf.livraison[pays];
+      const l = { pays, face, quantite: q, prixProduit, prixLivraison };
+      try {
+        const dv = await devisImprimeur(cle, conf, face, q, pays);
+        Object.assign(l, { coutProduit: dv.produit, coutLivraison: dv.livraison.prix, transporteur: (dv.livraison.service + (dv.livraison.option ? ' — ' + dv.livraison.option : '')).trim(),
+          transporteurTrouve: dv.transporteurTrouve, autres: dv.offres.slice(0, 4).map(o => o.service + ' ' + (o.prix / 100).toFixed(2) + ' €') });
+        if (prixProduit != null && prixLivraison != null) l.marge = margeCommande(prixProduit + prixLivraison, dv.produit + dv.livraison.prix);
+      } catch (e) { l.erreur = e.message; }
+      lignes.push(l);
+    }
+    return { lignes, margeMin: conf.margeMin, transporteur: conf.transporteur };
+  }
+  return null;
+}
+/* ---------- Adresses de commande des cartes (client) ---------- */
+function nettoyerLivraison(d) {
+  const c = (v, n) => String(v || '').replace(/\s+/g, ' ').trim().slice(0, n);
+  const l = { prenom: c(d.prenom, 60), nom: c(d.nom, 60), tel: c(d.tel, 30).replace(/[^\d+ ().-]/g, ''), separee: !!d.separee };
+  if (l.separee) Object.assign(l, { societe: c(d.societe, 100), adresse: c(d.adresse, 150), complement: c(d.complement, 100), cp: c(d.cp, 20), ville: c(d.ville, 80),
+    pays: PAYS_LIVRAISON.includes(String(d.pays || '').toUpperCase()) ? String(d.pays).toUpperCase() : 'FR' });
+  return l;
+}
+/* Adresse de livraison complète (format imprimeur) ; null s'il manque quelque chose */
+function adresseLivraison(tit) {
+  const l = tit.livraisonCartes || {}, f = tit.facturation || {};
+  const src = l.separee ? l : { societe: f.nom, adresse: f.adresse, complement: '', cp: f.cp, ville: f.ville, pays: f.pays };
+  const a = { type: 'delivery', firstname: l.prenom || '', lastname: l.nom || '', company: src.societe || '', street1: src.adresse || '', street2: src.complement || '',
+    zip: src.cp || '', city: src.ville || '', country: src.pays || 'FR', email: tit.email || '', phone: l.tel || '' };
+  return a.firstname && a.lastname && a.street1 && a.zip && a.city ? a : null;
+}
+async function offreCartes(env, tit) {
+  const conf = await lireImpression(env);
+  return {
+    actif: conf.actif, quantites: conf.quantites, prix: conf.prix, livraison: conf.livraison, tva: TVA,
+    adresses: { facturation: tit.facturation || null, livraison: tit.livraisonCartes || null, email: tit.email || '' },
+    pret: !!adresseLivraison(tit)
+  };
 }
 /* Paiements Stripe du compte entier (page principale et pages rattachées), les plus récents d'abord */
 async function facturesDe(env, tit) {

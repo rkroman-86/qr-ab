@@ -104,6 +104,25 @@
   .ia .sur{font-size:.75rem;color:var(--doux);font-weight:400}
   .ia button{grid-column:1/-1;min-height:36px;font-size:.88rem}
   .ia .illimite{grid-column:1/-1;font-size:.9rem;color:var(--doux)}
+  /* Impression des cartes */
+  .boite h3{margin-top:16px}
+  .imp-case{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:12px 0}
+  .imp-case input{width:auto;min-height:0}
+  .imp-case small{color:var(--doux)}
+  .imp-table{overflow-x:auto;margin:4px 0 10px}
+  .imp-table table{border-collapse:collapse;width:100%;font-size:.9rem}
+  .imp-table th,.imp-table td{border-bottom:1px solid var(--ligne);padding:6px 8px;text-align:left;vertical-align:middle;white-space:nowrap}
+  .imp-table th{color:var(--doux);font-size:.78rem;font-weight:600}
+  .imp-table td input{min-height:36px;padding:6px 8px;max-width:110px}
+  .imp-table td.n{text-align:right;font-variant-numeric:tabular-nums}
+  .imp-table .neg{color:var(--err);font-weight:700} .imp-table .pos{color:var(--ok);font-weight:600}
+  .imp-table small{color:var(--doux);white-space:normal}
+  .imp-ajout-pays{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+  .imp-ajout-pays select{flex:0 1 220px}
+  .imp-catalogue{display:grid;gap:6px;margin:8px 0}
+  .imp-produit{border:1px solid var(--ligne);border-radius:10px;padding:8px 10px;font-size:.88rem}
+  .imp-produit code{font-size:.82rem;overflow-wrap:anywhere}
+  .imp-produit .actions{margin-top:6px}
 </style>
 </head>
 <body>
@@ -247,6 +266,63 @@
       </form>
       <div class="msg" id="m-stripe"></div>
       <p class="infos">La clé est vérifiée auprès de Stripe, puis rangée chiffrée : elle ne sera plus jamais affichée. Le webhook et le taux de TVA à 20 % sont créés automatiquement.</p>
+    </div>
+
+    <div class="boite" id="b-impression">
+      <h2>Impression des cartes (commande par les clients)</h2>
+      <div id="imp-etat" class="infos">…</div>
+      <form id="f-imp-cle">
+        <label><span>Clé API Cloudprinter (CloudCore API Interface)</span><input type="password" id="imp-cle" autocomplete="off" spellcheck="false" placeholder="clé API"></label>
+        <button class="prim" id="imp-cle-btn">Enregistrer la clé</button>
+        <button type="button" id="imp-cle-off" class="danger cache">Retirer la clé</button>
+      </form>
+      <div class="msg" id="m-imp-cle"></div>
+
+      <form id="f-imp">
+        <label class="imp-case"><input type="checkbox" id="imp-actif"> <b>Vente ouverte aux clients</b> <small>(bouton « Commander mes cartes » dans l’éditeur)</small></label>
+        <div class="g2">
+          <label><span>Imprimeur</span><select id="imp-imprimeur"><option value="cloudprinter">Cloudprinter (commande automatique)</option><option value="manuel">Manuel (commande reçue par e-mail)</option></select></label>
+          <label><span>Transporteur préféré (mot cherché dans les offres de livraison)</span><input type="text" id="imp-transporteur" placeholder="Colissimo"></label>
+        </div>
+
+        <h3>Produits chez l’imprimeur</h3>
+        <div class="g2">
+          <label><span>Référence produit — recto</span><input type="text" id="imp-ref-recto" spellcheck="false" autocapitalize="none"></label>
+          <label><span>Options — recto (références séparées par des virgules : papier 300 g Offset…)</span><input type="text" id="imp-opt-recto" spellcheck="false" autocapitalize="none"></label>
+          <label><span>Référence produit — recto/verso</span><input type="text" id="imp-ref-rectoVerso" spellcheck="false" autocapitalize="none"></label>
+          <label><span>Options — recto/verso</span><input type="text" id="imp-opt-rectoVerso" spellcheck="false" autocapitalize="none"></label>
+        </div>
+        <div class="actions">
+          <button type="button" id="imp-produits">Voir les produits « cartes de visite »</button>
+        </div>
+        <div id="imp-catalogue" class="imp-catalogue"></div>
+
+        <h3>Prix du produit (€ TTC, sans la livraison)</h3>
+        <label><span>Quantités proposées (séparées par des virgules)</span><input type="text" id="imp-quantites" inputmode="numeric" placeholder="50, 100, 250"></label>
+        <div id="imp-prix" class="imp-table"></div>
+
+        <h3>Prix de la livraison (€ TTC, par pays)</h3>
+        <div id="imp-livraison" class="imp-table"></div>
+        <div class="imp-ajout-pays">
+          <select id="imp-pays-ajout"></select>
+          <button type="button" id="imp-pays-btn">Ajouter ce pays</button>
+        </div>
+
+        <div class="g2">
+          <label><span>Marge minimale par commande (€) — en dessous, la commande n’est pas envoyée et vous êtes prévenu</span><input type="text" inputmode="decimal" id="imp-margeMin"></label>
+        </div>
+        <div class="infos" id="imp-apercu"></div>
+        <button class="prim">Enregistrer l’impression</button>
+        <button type="button" id="imp-defaut">Prix d’origine</button>
+        <div class="msg" id="m-imp"></div>
+      </form>
+
+      <h3>Simulateur : coût réel chez l’imprimeur</h3>
+      <p class="infos" style="margin-top:0">Demande un devis à l’imprimeur pour chaque quantité et chaque face (rien n’est commandé), puis compare avec vos prix. Enregistrez d’abord vos réglages.</p>
+      <div class="imp-ajout-pays"><select id="imp-sim-pays"></select><button type="button" id="imp-sim-btn" class="prim">Calculer</button></div>
+      <div class="msg" id="m-imp-sim"></div>
+      <div id="imp-sim" class="imp-table"></div>
+      <p class="infos">Marge = prix payé par le client HT − coût imprimeur (produit + livraison) − frais Stripe estimés (1,5 % + 0,25 €). La clé est vérifiée auprès de l’imprimeur, puis rangée chiffrée : elle ne sera plus jamais affichée.</p>
     </div>
 
     <form class="boite" id="f-tarifs">
@@ -474,6 +550,190 @@
     try { await chargerEmail(await api('email', { deconnecter: true })); } catch (err) { $('#m-email').textContent = err.message; }
   });
 
+  /* ---------- Impression des cartes ---------- */
+  const NOMS_PAYS = { FR: 'France', MC: 'Monaco', BE: 'Belgique', LU: 'Luxembourg', DE: 'Allemagne', ES: 'Espagne', IT: 'Italie', PT: 'Portugal', NL: 'Pays-Bas', AT: 'Autriche', IE: 'Irlande', PL: 'Pologne', RO: 'Roumanie', BG: 'Bulgarie', GR: 'Grèce', CZ: 'Tchéquie', SK: 'Slovaquie', HU: 'Hongrie', SI: 'Slovénie', HR: 'Croatie', DK: 'Danemark', SE: 'Suède', FI: 'Finlande', EE: 'Estonie', LV: 'Lettonie', LT: 'Lituanie', CY: 'Chypre', MT: 'Malte' };
+  const FACES_IMP = [['recto', 'Recto'], ['rectoVerso', 'Recto/verso']];
+  const enEuros = c => (c / 100).toFixed(2).replace('.', ',');
+  const versCent = v => Math.round(Number(String(v).replace(',', '.')) * 100);
+  let imp = null;                                   // état renvoyé par le serveur
+  let impLivraison = {};                            // pays → centimes (édition en cours)
+  function impQuantites() {
+    const l = $('#imp-quantites').value.split(/[\s,;]+/).map(Number).filter(n => Number.isInteger(n) && n > 0);
+    return Array.from(new Set(l)).sort((a, b) => a - b);
+  }
+  function impLirePrix() {                          // valeurs saisies dans le tableau des prix
+    const p = { recto: {}, rectoVerso: {} };
+    document.querySelectorAll('#imp-prix input').forEach(i => { p[i.dataset.face][i.dataset.q] = i.value; });
+    return p;
+  }
+  function impTablePrix(prix) {
+    const z = $('#imp-prix'); z.textContent = '';
+    const qs = impQuantites();
+    const tab = el('table', {}, [el('tr', {}, [el('th', { text: 'Quantité' })].concat(FACES_IMP.map(f => el('th', { text: f[1] }))))]);
+    qs.forEach(q => tab.append(el('tr', {}, [el('td', { text: q + ' cartes' })].concat(FACES_IMP.map(f => {
+      const v = prix[f[0]] && prix[f[0]][q];
+      const i = el('input', { type: 'text', inputmode: 'decimal', 'data-face': f[0], 'data-q': String(q) });
+      i.value = v == null ? '' : (typeof v === 'number' ? enEuros(v) : v);
+      i.addEventListener('input', impApercu);
+      return el('td', {}, [i]);
+    })))));
+    z.append(tab);
+  }
+  function impTableLivraison() {
+    const z = $('#imp-livraison'); z.textContent = '';
+    const tab = el('table', {}, [el('tr', {}, [el('th', { text: 'Pays' }), el('th', { text: 'Prix TTC' }), el('th', { text: '' })])]);
+    Object.keys(impLivraison).forEach(p => {
+      const i = el('input', { type: 'text', inputmode: 'decimal' });
+      i.value = enEuros(impLivraison[p]);
+      i.addEventListener('input', () => { impLivraison[p] = versCent(i.value); impApercu(); });
+      tab.append(el('tr', {}, [el('td', { text: (NOMS_PAYS[p] || p) + ' (' + p + ')' }), el('td', {}, [i]),
+        el('td', {}, [el('button', { type: 'button', class: 'danger', text: 'Retirer', onclick: () => { delete impLivraison[p]; impTableLivraison(); impListesPays(); impApercu(); } })])]));
+    });
+    z.append(tab);
+  }
+  function impListesPays() {
+    const ajout = $('#imp-pays-ajout'), sim = $('#imp-sim-pays');
+    ajout.textContent = ''; sim.textContent = '';
+    ((imp && imp.paysPossibles) || []).filter(p => !(p in impLivraison)).forEach(p => ajout.append(el('option', { value: p, text: NOMS_PAYS[p] || p })));
+    Object.keys(impLivraison).forEach(p => sim.append(el('option', { value: p, text: NOMS_PAYS[p] || p })));
+    $('#imp-pays-btn').disabled = !ajout.options.length;
+  }
+  function impApercu() {
+    const prix = impLirePrix(), fr = impLivraison.FR != null ? impLivraison.FR : impLivraison[Object.keys(impLivraison)[0]];
+    const pays = impLivraison.FR != null ? 'France' : (NOMS_PAYS[Object.keys(impLivraison)[0]] || '');
+    if (fr == null) { $('#imp-apercu').textContent = ''; return; }
+    const parts = [];
+    FACES_IMP.forEach(f => impQuantites().forEach(q => {
+      const v = prix[f[0]][q], c = versCent(v);
+      if (String(v || '').trim() && isFinite(c)) parts.push(q + ' ' + f[1].toLowerCase() + ' : ' + enEuros(c) + ' + ' + enEuros(fr) + ' = ' + enEuros(c + fr) + ' €');
+    }));
+    $('#imp-apercu').textContent = 'Le client voit (livraison ' + pays + ') : ' + parts.join(' · ');
+  }
+  function impRemplir(e) {
+    imp = e;
+    const z = $('#imp-etat');
+    z.innerHTML = (e.connecte ? '<span class="badge b-payant">clé enregistrée</span> clé …' + e.fin + ' · le ' + date(e.le) : '<span class="badge b-inactif">aucune clé</span> Le simulateur et les commandes automatiques sont indisponibles.') +
+      ' · vente <b>' + (e.actif ? 'ouverte' : 'fermée') + '</b>' + (e.majLe ? ' · réglages du ' + date(e.majLe) : '');
+    $('#imp-cle-btn').textContent = e.connecte ? 'Remplacer la clé' : 'Enregistrer la clé';
+    $('#imp-cle-off').classList.toggle('cache', !e.connecte);
+    $('#imp-actif').checked = !!e.actif;
+    $('#imp-imprimeur').value = e.imprimeur || 'cloudprinter';
+    $('#imp-transporteur').value = e.transporteur || '';
+    FACES_IMP.forEach(f => { $('#imp-ref-' + f[0]).value = (e.produits && e.produits[f[0]]) || ''; $('#imp-opt-' + f[0]).value = ((e.options && e.options[f[0]]) || []).join(', '); });
+    $('#imp-quantites').value = (e.quantites || []).join(', ');
+    $('#imp-margeMin').value = enEuros(e.margeMin || 0);
+    impLivraison = Object.assign({}, e.livraison || {});
+    impTablePrix(e.prix || {});
+    impTableLivraison(); impListesPays(); impApercu();
+  }
+  async function chargerImpression() { impRemplir(await api('impression')); }
+  $('#imp-quantites').addEventListener('change', () => { impTablePrix(impLirePrix()); impApercu(); });
+  $('#imp-pays-btn').addEventListener('click', () => {
+    const p = $('#imp-pays-ajout').value; if (!p) return;
+    impLivraison[p] = impLivraison.FR != null ? impLivraison.FR : 490;
+    impTableLivraison(); impListesPays(); impApercu();
+  });
+  $('#imp-defaut').addEventListener('click', () => {
+    if (!imp) return;
+    const d = imp.defaut;
+    $('#imp-quantites').value = d.quantites.join(', ');
+    impLivraison = Object.assign({}, d.livraison);
+    impTablePrix(d.prix); impTableLivraison(); impListesPays(); impApercu();
+    $('#m-imp').className = 'msg'; $('#m-imp').textContent = 'Prix d’origine remis : cliquez sur Enregistrer pour les appliquer.';
+  });
+  $('#f-imp-cle').addEventListener('submit', async e => {
+    e.preventDefault();
+    const m = $('#m-imp-cle'), cle = $('#imp-cle').value.trim();
+    if (!cle) return;
+    m.className = 'msg'; m.textContent = 'Vérification auprès de l’imprimeur…';
+    try { impRemplir(await api('impression', { cle })); $('#imp-cle').value = ''; m.className = 'msg ok'; m.textContent = '✓ Clé vérifiée et enregistrée.'; }
+    catch (err) { m.className = 'msg err'; m.textContent = err.message; }
+  });
+  $('#imp-cle-off').addEventListener('click', async () => {
+    if (!confirm('Retirer la clé de l’imprimeur ? La vente des cartes sera fermée.')) return;
+    const m = $('#m-imp-cle');
+    try { impRemplir(await api('impression', { deconnecter: true })); m.className = 'msg'; m.textContent = 'Clé retirée.'; }
+    catch (err) { m.className = 'msg err'; m.textContent = err.message; }
+  });
+  $('#f-imp').addEventListener('submit', async e => {
+    e.preventDefault();
+    const m = $('#m-imp'); m.className = 'msg'; m.textContent = 'Enregistrement…';
+    const livraison = {}; Object.keys(impLivraison).forEach(p => { livraison[p] = enEuros(impLivraison[p]); });
+    const corps = {
+      actif: $('#imp-actif').checked, imprimeur: $('#imp-imprimeur').value, transporteur: $('#imp-transporteur').value,
+      produits: { recto: $('#imp-ref-recto').value, rectoVerso: $('#imp-ref-rectoVerso').value },
+      options: { recto: $('#imp-opt-recto').value, rectoVerso: $('#imp-opt-rectoVerso').value },
+      quantites: impQuantites(), prix: impLirePrix(), livraison, margeMin: $('#imp-margeMin').value
+    };
+    try { impRemplir(await api('impression', corps)); m.className = 'msg ok'; m.textContent = '✓ Réglages d’impression enregistrés.'; }
+    catch (err) { m.className = 'msg err'; m.textContent = err.message; }
+  });
+  // Catalogue de l'imprimeur : un clic remplit la référence de la face choisie, puis ses options
+  function impProduitCarte(p) {
+    const opts = el('div');
+    const voir = async () => {
+      opts.textContent = 'Chargement des options…';
+      try {
+        const r = (await api('impression-produits', { reference: p.reference })).produit;
+        opts.textContent = '';
+        if (r.specs.length) opts.append(el('div', { class: 'infos', text: r.specs.map(s => s.note + ' : ' + s.valeur).join(' · ') }));
+        const groupes = {};
+        r.options.forEach(o => { (groupes[o.type] = groupes[o.type] || []).push(o); });
+        Object.keys(groupes).forEach(t => {
+          const ligne = el('div', { class: 'infos' }, [el('b', { text: (t || 'option') + ' : ' })]);
+          groupes[t].forEach(o => ligne.append(el('button', { type: 'button', title: o.reference + ' — ajouter aux options recto et recto/verso',
+            text: o.note + (o.defaut ? ' (par défaut)' : ''), onclick: () => {
+              ['recto', 'rectoVerso'].forEach(f => { const i = $('#imp-opt-' + f); const l = i.value.split(/[\s,;]+/).filter(Boolean); if (l.indexOf(o.reference) < 0) l.push(o.reference); i.value = l.join(', '); });
+            } })));
+          ligne.append(el('div', {}, [el('code', { text: groupes[t].map(o => o.reference).join(' · ') })]));
+          opts.append(ligne);
+        });
+        if (!r.options.length) opts.append(el('div', { class: 'infos', text: 'Aucune option pour ce produit.' }));
+      } catch (err) { opts.textContent = err.message; }
+    };
+    return el('div', { class: 'imp-produit' }, [
+      el('b', { text: p.nom || p.reference }), el('div', {}, [el('code', { text: p.reference })]),
+      p.note ? el('small', { class: 'infos', text: p.note }) : null,
+      el('div', { class: 'actions' }, [
+        el('button', { type: 'button', text: '→ Recto', onclick: () => { $('#imp-ref-recto').value = p.reference; } }),
+        el('button', { type: 'button', text: '→ Recto/verso', onclick: () => { $('#imp-ref-rectoVerso').value = p.reference; } }),
+        el('button', { type: 'button', text: 'Voir les options', onclick: voir })
+      ]), opts]);
+  }
+  $('#imp-produits').addEventListener('click', async () => {
+    const z = $('#imp-catalogue'); z.textContent = 'Chargement du catalogue…';
+    try {
+      const r = await api('impression-produits', {});
+      z.textContent = '';
+      if (!r.produits.length) z.append(el('p', { class: 'infos', text: 'Aucun produit « carte de visite » trouvé (' + r.total + ' produits au catalogue).' }));
+      r.produits.forEach(p => z.append(impProduitCarte(p)));
+    } catch (err) { z.textContent = err.message; }
+  });
+  $('#imp-sim-btn').addEventListener('click', async () => {
+    const m = $('#m-imp-sim'), z = $('#imp-sim'), pays = $('#imp-sim-pays').value;
+    if (!pays) return;
+    m.className = 'msg'; m.textContent = 'Devis en cours auprès de l’imprimeur…'; z.textContent = '';
+    try {
+      const r = await api('impression-devis', { pays: [pays] });
+      m.textContent = '';
+      const tab = el('table', {}, [el('tr', {}, ['Cartes', 'Coût produit HT', 'Coût livraison HT', 'Transporteur', 'Prix client TTC', 'Marge'].map(t => el('th', { text: t })))]);
+      r.lignes.forEach(l => {
+        const nom = l.quantite + ' ' + (l.face === 'recto' ? 'recto' : 'recto/verso');
+        if (l.erreur) { tab.append(el('tr', {}, [el('td', { text: nom }), el('td', { colspan: '5', class: 'neg', text: l.erreur })])); return; }
+        const prixClient = (l.prixProduit || 0) + (l.prixLivraison || 0);
+        tab.append(el('tr', {}, [
+          el('td', { text: nom }),
+          el('td', { class: 'n', text: enEuros(l.coutProduit) + ' €' }),
+          el('td', { class: 'n', text: enEuros(l.coutLivraison) + ' €' }),
+          el('td', {}, [el('span', { text: l.transporteur }), l.transporteurTrouve ? null : el('small', { class: 'neg', text: ' (« ' + r.transporteur + ' » non proposé : offre la moins chère)' })]),
+          el('td', { class: 'n', text: enEuros(l.prixProduit) + ' + ' + enEuros(l.prixLivraison) + ' = ' + enEuros(prixClient) + ' €' }),
+          el('td', { class: 'n ' + (l.marge < r.margeMin ? 'neg' : 'pos'), text: l.marge == null ? '—' : enEuros(l.marge) + ' €' })
+        ]));
+      });
+      z.append(tab);
+    } catch (err) { m.className = 'msg err'; m.textContent = err.message; }
+  });
+
   let tousComptes = [];
   async function charger() {
     const { comptes, stats30 } = await api('liste');
@@ -482,6 +742,7 @@
     chargerEmail().catch(() => {});
     chargerPromos().catch(() => {});
     if (!tarifsDefaut) chargerTarifs().catch(() => {});
+    if (!imp) chargerImpression().catch(() => {});
     $('#f-connexion').classList.add('cache'); $('#zone').classList.remove('cache');
     fetch('/api/moi', { credentials: 'include' }).catch(() => {});   // tes visites ne sont pas comptées
     if (!$('#onglet-stats').classList.contains('cache')) chargerStatsSite();
