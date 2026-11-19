@@ -782,12 +782,16 @@
           el('td', { class: 'n', text: enEuros(l.coutProduit) + ' €' }),
           el('td', { class: 'n', text: enEuros(l.coutLivraison) + ' €' }),
           el('td', {}, [el('span', { text: l.transporteur }), l.transporteurTrouve ? null : el('small', { class: 'neg', text: ' (« ' + (l.filtre || r.transporteur) + ' » non proposé : offre la moins chère)' }),
-            l.offres && l.offres.length ? el('div', { class: 'imp-offres' }, l.offres.map(o => el('button', { type: 'button', class: o.service === l.transporteur.split(' — ')[0] ? 'choisie' : '',
-              text: o.service + ' ' + enEuros(o.prix) + ' €', title: 'Utiliser ' + o.service + ' pour ' + l.quantite + ' cartes (' + (NOMS_PAYS[l.pays] || l.pays) + ')',
-              onclick: () => {
-                impTransporteurs[l.pays] = parQte(impTransporteurs[l.pays]); impTransporteurs[l.pays][l.quantite] = o.service; impTableLivraison();
-                m.className = 'msg ok'; m.textContent = '✓ ' + o.service + ' choisi pour ' + l.quantite + ' cartes (' + (NOMS_PAYS[l.pays] || l.pays) + '). Recalculez pour voir la marge, puis Enregistrer l’impression.';
-              } }))) : null]),
+            l.offres && l.offres.length ? el('div', { class: 'imp-offres' }, l.offres.map(o => {
+              // Cloudprinter : « service » = niveau (Ground - Tracked…), « option » = transporteur (Colissimo, DPD…) → on retient le transporteur
+              const mot = o.option || o.service, nomO = [o.option, o.service].filter(Boolean).join(' · ');
+              return el('button', { type: 'button', class: (o.service + (o.option ? ' — ' + o.option : '')) === l.transporteur ? 'choisie' : '',
+                text: nomO + ' ' + enEuros(o.prix) + ' €', title: 'Utiliser ' + mot + ' pour ' + l.quantite + ' cartes (' + (NOMS_PAYS[l.pays] || l.pays) + ')',
+                onclick: () => {
+                  impTransporteurs[l.pays] = parQte(impTransporteurs[l.pays]); impTransporteurs[l.pays][l.quantite] = mot; impTableLivraison();
+                  m.className = 'msg ok'; m.textContent = '✓ ' + mot + ' choisi pour ' + l.quantite + ' cartes (' + (NOMS_PAYS[l.pays] || l.pays) + '). Recalculez pour voir la marge, puis Enregistrer l’impression.';
+                } });
+            })) : null]),
           el('td', { class: 'n', text: enEuros(l.prixProduit) + ' + ' + enEuros(l.prixLivraison) + ' = ' + enEuros(prixClient) + ' €' }),
           el('td', { class: 'n ' + (l.marge < r.margeMin ? 'neg' : 'pos'), text: l.marge == null ? '—' : enEuros(l.marge) + ' €' })
         ]));
