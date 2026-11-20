@@ -305,6 +305,14 @@ async function siteClient(request, env, url, slug) {
   const pages = { '/': 'index.html', '/index.html': 'index.html', '/accueil.html': 'accueil.html', '/sitemap.xml': 'sitemap.xml' };
   if (pages[p]) {
     const nom = pages[p];
+    // « Le QR code ouvre : lien personnel » : le scan (?s=qr) est compté puis renvoyé vers le lien choisi
+    if (p === '/' && url.searchParams.get('s') === 'qr') {
+      const dest = await lienQRPerso(env, slug);
+      if (dest) {
+        compterVisite(request, env, slug, url, compte.langueSite || 'fr');
+        return new Response(null, { status: 302, headers: { location: dest, 'cache-control': 'private, no-store', 'referrer-policy': 'no-referrer-when-downgrade' } });
+      }
+    }
     const langs = languesPage(compte);
     // Page traduite : arrivée dans la langue du téléphone du visiteur (ou celle qu'il a choisie), sauf choix explicite (?l=)
     if (langs.length && nom !== 'sitemap.xml' && !url.searchParams.get('l')) {
@@ -319,6 +327,23 @@ async function siteClient(request, env, url, slug) {
     return reponsePage(corps, nom, langs, langs.length ? langs[0].l : null, slug, url, !!compte.noindex);
   }
   return pageInfo('Page introuvable', 'Ce lien n’existe pas.', 404);
+}
+
+/* Lien personnel ouvert par le QR code (cfg.home.arrivee = 'lien', cfg.home.qrLien) : http(s) seulement,
+   « monsite.fr » devient https://monsite.fr ; jamais vers la page elle-même (pas de boucle) */
+async function lienQRPerso(env, slug) {
+  let cfg;
+  try { cfg = JSON.parse(await env.CLIENTS.get('site:' + slug + ':config.json') || '{}'); } catch (e) { return null; }
+  const h = cfg.home || {};
+  if (h.arrivee !== 'lien') return null;
+  let v = String(h.qrLien || '').trim();
+  if (!v) return null;
+  if (!/^[a-z][a-z0-9+.-]*:/i.test(v)) v = 'https://' + v.replace(/^\/+/, '');
+  let u;
+  try { u = new URL(v); } catch (e) { return null; }
+  if (!/^https?:$/.test(u.protocol) || !u.hostname.includes('.')) return null;
+  if (u.hostname === slug + '.' + DOMAINE && u.searchParams.get('s') === 'qr') return null;
+  return u.href;
 }
 
 /* ---------- Pages traduites et sélecteur de langues ---------- */

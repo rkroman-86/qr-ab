@@ -1045,6 +1045,13 @@
     'PNG ou SVG ?': ['PNG or SVG?', 'PNG или SVG?'],
     'PNG pour un usage courant : écran, document, impression maison. SVG pour un imprimeur : le dessin reste net à n’importe quelle taille.': ['PNG for everyday use: screen, documents, home printing. SVG for a print shop: the pattern stays sharp at any size.', 'PNG — для обычного использования: экран, документы, домашняя печать. SVG — для типографии: рисунок остаётся чётким при любом размере.'],
     'Accueil': ['Home', 'Главная'],
+    // --- le QR code ouvre un lien personnel (20/11/2026) ---
+    'Lien personnel': ['Personal link', 'Своя ссылка'],
+    'Ma page': ['My page', 'Моя страница'],
+    'Lien ouvert par le QR code': ['Link opened by the QR code', 'Ссылка, которую открывает QR-код'],
+    'Seul le scan du QR code ouvre ce lien : votre page reste visible à son adresse. Vous pouvez changer ce lien quand vous voulez, sans réimprimer vos cartes.': ['Only scanning the QR code opens this link: your page stays available at its address. You can change this link at any time, without reprinting your cards.', 'Эту ссылку открывает только сканирование QR-кода: ваша страница остаётся доступной по своему адресу. Ссылку можно изменить в любой момент без перепечатки визиток.'],
+    'Indiquez le lien que le QR code doit ouvrir.': ['Enter the link the QR code should open.', 'Укажите ссылку, которую должен открывать QR-код.'],
+    'Lien invalide : par exemple https://monsite.fr': ['Invalid link: for example https://mysite.com', 'Неверная ссылка: например, https://monsite.fr'],
     // --- appli « carte de visite » sur l'écran d'accueil (20/11/2026) ---
     'Installer l’appli': ['Install the app', 'Установить приложение'],
     'Touchez les cartes à mettre dans l’appli (6 au plus), dans l’ordre, puis « Installer l’appli ».': ['Tap the cards to put in the app (up to 6), in order, then “Install the app”.', 'Отметьте визитки для приложения (не больше 6) по порядку, затем нажмите «Установить приложение».'],
