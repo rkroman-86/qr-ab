@@ -437,7 +437,7 @@ async function appliCarte(request, env, url, slug) {
   if (!compte || compte.traduction) return pageInfo('Page introuvable', 'Cette adresse n’est pas encore utilisée.', 404);
   if (!actif(compte)) return pageInfo('Page en pause', 'Cette page est momentanément indisponible.', 200);
   if (compte.emailAVerifier) return pageInfo('Page bientôt en ligne', 'Cette page sera visible dès que son propriétaire aura confirmé son adresse e-mail.', 200);
-  if (p === '/' || p === '/index.html') return pageCarte(env, slug);
+  if (p === '/' || p === '/index.html') return pageCarte(env, slug, compte.langueSite || 'fr');
   if (p === '/manifest.webmanifest') return manifesteCarte(env, slug);
   if (p.startsWith('/images/')) return imageClient(env, slug, p.slice('/images/'.length), compte);
   return Response.redirect(url.origin + '/', 302);
@@ -469,12 +469,13 @@ async function manifesteCarte(env, slug) {
   };
   return new Response(JSON.stringify(m), { headers: { 'content-type': 'application/manifest+json; charset=utf-8', 'cache-control': 'no-cache' } });
 }
-async function pageCarte(env, slug) {
+async function pageCarte(env, slug, langue) {
   const cfg = await configPage(env, slug), ic = cfg.appIcones || {};
   const nom = 'QR-' + slug;
   const cartes = cartesApp(cfg);
   const icone = ic.i192 ? '/' + ic.i192 : '/apple-touch-icon.png';
-  const html = '<!DOCTYPE html>\n<html lang="fr"><head><meta charset="utf-8">' +
+  langue = /^[a-z]{2}$/.test(langue || '') ? langue : 'fr';       // la langue de la page (la carte et le message vont aux clients)
+  const html = '<!DOCTYPE html>\n<html lang="' + langue + '"><head><meta charset="utf-8">' +
     '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">' +
     '<title>' + esc(nom) + '</title><meta name="robots" content="noindex">' +
     '<meta name="theme-color" content="#000000"><link rel="manifest" href="/manifest.webmanifest">' +
@@ -485,7 +486,7 @@ async function pageCarte(env, slug) {
     '<button id="pastille" type="button" hidden></button><button id="partager" type="button" hidden></button><div id="info" hidden></div>' +
     '<div id="feuille" hidden><div class="boite"><img class="ic" src="' + esc(icone) + '" alt=""><b>' + esc(nom) + '</b><p id="f-txt"></p>' +
     '<button id="f-installer" type="button" class="prim"></button><p id="f-aide" hidden></p><button id="f-plus-tard" type="button" class="sec"></button></div></div>' +
-    '<script>window.QRBC_CARTES=' + JSON.stringify({ nom, slug, cartes, titre: String(cfg.titre || slug).slice(0, 80), url: 'https://' + slug + '.' + DOMAINE + '/' }).replace(/</g, '\\u003c') + ';</script>' +
+    '<script>window.QRBC_CARTES=' + JSON.stringify({ nom, slug, cartes, langue, titre: String(cfg.titre || slug).slice(0, 80), url: 'https://' + slug + '.' + DOMAINE + '/' }).replace(/</g, '\\u003c') + ';</script>' +
     '<script>' + JS_APPLI_CARTE + '</script></body></html>';
   return new Response(html, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache', 'x-robots-tag': 'noindex' } });
 }
@@ -508,7 +509,7 @@ const CSS_APPLI_CARTE = `html,body{margin:0;height:100%;background:#000;color:#f
 [hidden]{display:none !important}`;
 const JS_APPLI_CARTE = `(function () {
   var D = window.QRBC_CARTES, cartes = D.cartes || [];
-  var L = String(navigator.language || 'fr').slice(0, 2); if (['fr', 'en', 'ru'].indexOf(L) < 0) L = 'en';
+  var L = D.langue || 'fr'; if (['fr', 'en', 'ru'].indexOf(L) < 0) L = 'en';          // langue de la page, pas celle du téléphone
   var T = {
     fr: { vide: 'Aucune carte préparée. Dans le constructeur : « QR code et carte de visite » → « Ma carte sur l’écran d’accueil ».', inst: 'Installer', txt: 'Installez l’appli : votre carte s’ouvre en plein écran, en paysage, même sans réseau.', btn: 'Installer sur l’écran d’accueil', tard: 'Plus tard',
       ios: 'Sur iPhone : touchez Partager (carré avec une flèche), puis « Sur l’écran d’accueil ».', autre: 'Ouvrez le menu du navigateur (⋮), puis « Installer l’application » ou « Ajouter à l’écran d’accueil ». Si ce n’est pas proposé, ouvrez ce lien dans Chrome.', ok: 'Appli installée : retrouvez-la sur votre écran d’accueil.', part: 'Partager', msg: 'Voici ma carte de visite', copie: 'Lien copié : collez-le dans votre message.' },
