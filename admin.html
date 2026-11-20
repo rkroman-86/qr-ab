@@ -3151,12 +3151,13 @@
 
   /* =============== Appli « carte de visite » sur l'écran d'accueil (20/11/2026) ===============
      Le client choisit une ou plusieurs cartes ; elles sont dessinées ici en JPEG (images/carte-<génération>-<modèle>.jpg,
-     propres à la page, hors « Mes images ») et listées dans cfg.carteApp. L'appli « QR-nom » (nom.qrbc.app/carte/)
+     propres à la page, hors « Mes images ») et listées dans cfg.carteApp. L'appli « QR-nom » (nom--carte.qrbc.app)
      les montre en plein écran, en paysage, même sans réseau : la 1re par défaut, puis la dernière regardée.
      Refaites automatiquement à l'enregistrement quand la page change (fond, logo, nom, coordonnées…). */
   const APPLI_LARGEUR = 1800;
   function nomAppliCarte() { return 'QR-' + URL_PUBLIQUE.replace(/^https?:\/\//, '').split(/[./]/)[0]; }
-  function lienAppliCarte() { return URL_PUBLIQUE.replace(/\/?$/, '/') + 'carte/'; }
+  // appli sur sa propre adresse (nom--carte.qrbc.app) : elle ne remplace jamais l'appli de la page
+  function lienAppliCarte() { return URL_PUBLIQUE.replace(/^(https?:\/\/)([^./]+)\./, '$1$2--carte.').replace(/^(https?:\/\/[^/]+).*$/, '$1/'); }
   function cleCarteApp() {
     return JSON.stringify([cfg.carteApp && cfg.carteApp.modeles, cfg.design, cfg.logo, cfg.titre, cfg.sousTitre, cfg.pied, coordonnees(), URL_PUBLIQUE]);
   }

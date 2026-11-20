@@ -255,6 +255,8 @@ async function racine(request, env, url) {
 
 /* ===================== Sous-domaine client ===================== */
 async function siteClient(request, env, url, slug) {
+  const mc = slug.match(/^([a-z0-9-]+)--carte$/);
+  if (mc) return appliCarte(request, env, url, mc[1]);
   const p = url.pathname;
 
   if (p === '/api/moi') return marquerProprietaire();
@@ -272,7 +274,7 @@ async function siteClient(request, env, url, slug) {
   }
   // Page installable comme une appli : service worker propre à la page, icônes qrbc par défaut
   if (p === '/sw.js') return new Response(SW_PAGE, { headers: { 'content-type': 'application/javascript; charset=utf-8', 'cache-control': 'no-cache' } });
-  if (p === '/carte/sw.js') return new Response(SW_CARTE, { headers: { 'content-type': 'application/javascript; charset=utf-8', 'cache-control': 'no-cache' } });
+  if (p === '/carte/sw.js') return new Response(SW_RETRAIT, { headers: { 'content-type': 'application/javascript; charset=utf-8', 'cache-control': 'no-cache' } });
   if (FICHIERS_PWA.has(p) && /\.png$/.test(p)) return statique(env, request, p);
 
   // Version traduite : nom.qrbc.app/xx/… (page « nom.xx »)
@@ -292,10 +294,8 @@ async function siteClient(request, env, url, slug) {
     return pageInfo('Page bientôt en ligne', 'Cette page sera visible dès que son propriétaire aura confirmé son adresse e-mail.', 200);
 
   if (p === '/contact') return Response.redirect(url.origin + '/#contact', 302);
-  // Appli « carte de visite » (QR-nom) : la carte en plein écran, en paysage
-  if (p === '/carte') return Response.redirect(url.origin + '/carte/' + url.search, 301);
-  if (p === '/carte/' || p === '/carte/index.html') return pageCarte(env, slug);
-  if (p === '/carte/manifest.webmanifest') return manifesteCarte(env, slug);
+  // Ancienne adresse de l'appli « carte de visite » (20/11 matin) : elle vit maintenant sur nom--carte.qrbc.app
+  if (p === '/carte' || p.startsWith('/carte/')) return Response.redirect(adresseAppliCarte(slug) + url.search, 301);
   if (p === '/manifest.webmanifest') return manifestePage(env, slug);
   if (p === '/config.json') {
     const c = await env.CLIENTS.get('site:' + slug + ':config.json');
@@ -423,9 +423,25 @@ function nomCourt(t) {
   return (n.replace(/(\s+(à|a|au|aux|de|du|des|la|le|les|et|en|d’|d'|l’|l'|&))+$/i, '') || n || t.slice(0, 12)).trim();
 }
 /* ===================== Appli « carte de visite » (20/11/2026) =====================
-   nom.qrbc.app/carte/ : appli installable « QR-nom », distincte de celle de la page (manifeste, portée et service worker propres).
+   nom--carte.qrbc.app : appli installable « QR-nom », sur sa propre adresse pour ne jamais remplacer l'appli de la page
+   (certains téléphones et navigateurs ne gardent qu'une appli par adresse). Le double tiret est interdit dans les noms de pages.
    Elle affiche en plein écran, en paysage, les cartes préparées dans le constructeur (cfg.carteApp.images) :
    la 1re par défaut, puis la dernière regardée ; toucher la carte passe à la suivante. Fonctionne sans réseau. */
+const adresseAppliCarte = slug => 'https://' + slug + '--carte.' + DOMAINE + '/';
+async function appliCarte(request, env, url, slug) {
+  const p = url.pathname;
+  if (p === '/sw.js') return new Response(SW_CARTE, { headers: { 'content-type': 'application/javascript; charset=utf-8', 'cache-control': 'no-cache' } });
+  if (p === '/robots.txt') return texte('User-agent: *\nDisallow: /\n');
+  if (FICHIERS_PWA.has(p) && /\.png$/.test(p)) return statique(env, request, p);
+  const compte = await lireCompte(env, slug);
+  if (!compte || compte.traduction) return pageInfo('Page introuvable', 'Cette adresse n’est pas encore utilisée.', 404);
+  if (!actif(compte)) return pageInfo('Page en pause', 'Cette page est momentanément indisponible.', 200);
+  if (compte.emailAVerifier) return pageInfo('Page bientôt en ligne', 'Cette page sera visible dès que son propriétaire aura confirmé son adresse e-mail.', 200);
+  if (p === '/' || p === '/index.html') return pageCarte(env, slug);
+  if (p === '/manifest.webmanifest') return manifesteCarte(env, slug);
+  if (p.startsWith('/images/')) return imageClient(env, slug, p.slice('/images/'.length), compte);
+  return Response.redirect(url.origin + '/', 302);
+}
 async function configPage(env, slug) {
   try { return JSON.parse(await env.CLIENTS.get('site:' + slug + ':config.json') || '{}'); } catch (e) { return {}; }
 }
@@ -447,8 +463,8 @@ async function manifesteCarte(env, slug) {
     { src: '/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
   ];
   const m = {
-    id: '/carte/', name: nom, short_name: nom, description: 'Carte de visite de ' + String(cfg.titre || slug).slice(0, 80),
-    start_url: '/carte/', scope: '/carte/', display: 'fullscreen', display_override: ['fullscreen', 'standalone'], orientation: 'landscape',
+    id: '/', name: nom, short_name: nom, description: 'Carte de visite de ' + String(cfg.titre || slug).slice(0, 80),
+    start_url: '/', scope: '/', display: 'fullscreen', display_override: ['fullscreen', 'standalone'], orientation: 'landscape',
     lang: 'fr', background_color: '#000000', theme_color: '#000000', icons: icones
   };
   return new Response(JSON.stringify(m), { headers: { 'content-type': 'application/manifest+json; charset=utf-8', 'cache-control': 'no-cache' } });
@@ -461,7 +477,7 @@ async function pageCarte(env, slug) {
   const html = '<!DOCTYPE html>\n<html lang="fr"><head><meta charset="utf-8">' +
     '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">' +
     '<title>' + esc(nom) + '</title><meta name="robots" content="noindex">' +
-    '<meta name="theme-color" content="#000000"><link rel="manifest" href="/carte/manifest.webmanifest">' +
+    '<meta name="theme-color" content="#000000"><link rel="manifest" href="/manifest.webmanifest">' +
     '<link rel="apple-touch-icon" href="' + esc(icone) + '"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">' +
     '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="' + esc(nom) + '">' +
     '<style>' + CSS_APPLI_CARTE + '</style></head><body>' +
@@ -581,7 +597,7 @@ const JS_APPLI_CARTE = `(function () {
   var veille = null;
   function garderAllume() { try { if (navigator.wakeLock && document.visibilityState === 'visible') navigator.wakeLock.request('screen').then(function (v) { veille = v; }).catch(function () {}); } catch (e) {} }
   garderAllume(); document.addEventListener('visibilitychange', garderAllume);
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/carte/sw.js', { scope: '/carte/' }).catch(function () {});
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(function () {});
 
   // Installation (dans le navigateur seulement)
   if (installee) return;
@@ -604,7 +620,11 @@ const JS_APPLI_CARTE = `(function () {
   if (/[?&]installer=1/.test(location.search)) ouvrir(); else pastille.hidden = false;
 })();`;
 /* Service worker de l'appli « carte de visite » : réseau d'abord, dernière copie sans réseau (page et cartes) */
-const SW_CARTE = `const V = 'carte-v1';
+/* Ancien service worker de nom.qrbc.app/carte/ : se retire tout seul (l'appli a changé d'adresse) */
+const SW_RETRAIT = `self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', e => e.waitUntil(caches.keys().then(l => Promise.all(l.filter(k => k.indexOf('carte-') === 0).map(k => caches.delete(k))))
+  .then(() => self.registration.unregister())));`;
+const SW_CARTE = `const V = 'carte-v2';
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
 self.addEventListener('fetch', e => {
@@ -614,7 +634,7 @@ self.addEventListener('fetch', e => {
   e.respondWith(fetch(r).then(rep => {
     if (rep.ok && rep.type === 'basic') { const c = rep.clone(); caches.open(V).then(x => x.put(cle, c)); }
     return rep;
-  }).catch(() => caches.match(cle).then(m => m || (r.mode === 'navigate' ? caches.match(u.origin + '/carte/') : undefined))
+  }).catch(() => caches.match(cle).then(m => m || (r.mode === 'navigate' ? caches.match(u.origin + '/') : undefined))
     .then(m => m || new Response('Pas de connexion', { status: 503, headers: { 'content-type': 'text/plain; charset=utf-8' } }))));
 });`;
 /* Service worker d'une page client : réseau d'abord, dernière copie si pas de réseau (appels, WhatsApp… restent accessibles) */
