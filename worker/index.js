@@ -466,10 +466,10 @@ async function pageCarte(env, slug) {
     '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="' + esc(nom) + '">' +
     '<style>' + CSS_APPLI_CARTE + '</style></head><body>' +
     '<div id="scene"><img id="carte" alt=""></div><div id="points"></div><p id="vide" hidden></p>' +
-    '<button id="pastille" type="button" hidden></button>' +
+    '<button id="pastille" type="button" hidden></button><button id="partager" type="button" hidden></button><div id="info" hidden></div>' +
     '<div id="feuille" hidden><div class="boite"><img class="ic" src="' + esc(icone) + '" alt=""><b>' + esc(nom) + '</b><p id="f-txt"></p>' +
     '<button id="f-installer" type="button" class="prim"></button><p id="f-aide" hidden></p><button id="f-plus-tard" type="button" class="sec"></button></div></div>' +
-    '<script>window.QRBC_CARTES=' + JSON.stringify({ nom, slug, cartes }).replace(/</g, '\\u003c') + ';</script>' +
+    '<script>window.QRBC_CARTES=' + JSON.stringify({ nom, slug, cartes, titre: String(cfg.titre || slug).slice(0, 80), url: 'https://' + slug + '.' + DOMAINE + '/' }).replace(/</g, '\\u003c') + ';</script>' +
     '<script>' + JS_APPLI_CARTE + '</script></body></html>';
   return new Response(html, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache', 'x-robots-tag': 'noindex' } });
 }
@@ -486,17 +486,20 @@ const CSS_APPLI_CARTE = `html,body{margin:0;height:100%;background:#000;color:#f
 #feuille p{color:#cfc9bf;font-size:.95rem;margin:8px 0 14px}
 #feuille button{display:block;width:100%;border:0;border-radius:14px;padding:14px;font:700 1rem system-ui,sans-serif;margin-top:8px}
 #feuille .prim{background:#d9572b;color:#fff}#feuille .sec{background:transparent;color:#aaa;font-weight:500}
+#partager{position:fixed;right:calc(14px + env(safe-area-inset-right));bottom:calc(14px + env(safe-area-inset-bottom));z-index:3;border:0;border-radius:24px;padding:11px 18px;background:rgba(255,255,255,.16);color:#fff;font:700 .95rem system-ui,sans-serif;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);box-shadow:0 2px 12px rgba(0,0,0,.35)}
+#partager:active{background:rgba(255,255,255,.3)}
+#info{-webkit-user-select:text;user-select:text;word-break:break-all;position:fixed;left:50%;bottom:calc(70px + env(safe-area-inset-bottom));transform:translateX(-50%);background:rgba(30,30,30,.92);color:#fff;padding:10px 16px;border-radius:12px;font-size:.92rem;z-index:6;max-width:90vw;text-align:center}
 [hidden]{display:none !important}`;
 const JS_APPLI_CARTE = `(function () {
   var D = window.QRBC_CARTES, cartes = D.cartes || [];
   var L = String(navigator.language || 'fr').slice(0, 2); if (['fr', 'en', 'ru'].indexOf(L) < 0) L = 'en';
   var T = {
     fr: { vide: 'Aucune carte préparée. Dans le constructeur : « QR code et carte de visite » → « Ma carte sur l’écran d’accueil ».', inst: 'Installer', txt: 'Installez l’appli : votre carte s’ouvre en plein écran, en paysage, même sans réseau.', btn: 'Installer sur l’écran d’accueil', tard: 'Plus tard',
-      ios: 'Sur iPhone : touchez Partager (carré avec une flèche), puis « Sur l’écran d’accueil ».', autre: 'Ouvrez le menu du navigateur (⋮), puis « Installer l’application » ou « Ajouter à l’écran d’accueil ». Si ce n’est pas proposé, ouvrez ce lien dans Chrome.', ok: 'Appli installée : retrouvez-la sur votre écran d’accueil.' },
+      ios: 'Sur iPhone : touchez Partager (carré avec une flèche), puis « Sur l’écran d’accueil ».', autre: 'Ouvrez le menu du navigateur (⋮), puis « Installer l’application » ou « Ajouter à l’écran d’accueil ». Si ce n’est pas proposé, ouvrez ce lien dans Chrome.', ok: 'Appli installée : retrouvez-la sur votre écran d’accueil.', part: 'Partager', msg: 'Voici ma carte de visite', copie: 'Lien copié : collez-le dans votre message.' },
     en: { vide: 'No card prepared yet. In the builder: “QR code and business card” → “My card on the home screen”.', inst: 'Install', txt: 'Install the app: your card opens full screen, in landscape, even offline.', btn: 'Install on the home screen', tard: 'Later',
-      ios: 'On iPhone: tap Share (square with an arrow), then “Add to Home Screen”.', autre: 'Open the browser menu (⋮), then “Install app” or “Add to Home screen”. If it is not offered, open this link in Chrome.', ok: 'App installed: find it on your home screen.' },
+      ios: 'On iPhone: tap Share (square with an arrow), then “Add to Home Screen”.', autre: 'Open the browser menu (⋮), then “Install app” or “Add to Home screen”. If it is not offered, open this link in Chrome.', ok: 'App installed: find it on your home screen.', part: 'Share', msg: 'Here is my business card', copie: 'Link copied: paste it into your message.' },
     ru: { vide: 'Визитки ещё не подготовлены. В конструкторе: «QR-код и визитка» → «Моя визитка на главном экране».', inst: 'Установить', txt: 'Установите приложение: визитка откроется на весь экран, горизонтально, даже без интернета.', btn: 'Установить на главный экран', tard: 'Позже',
-      ios: 'На iPhone: нажмите «Поделиться» (квадрат со стрелкой), затем «На экран «Домой»».', autre: 'Откройте меню браузера (⋮), затем «Установить приложение» или «Добавить на главный экран». Если пункта нет, откройте ссылку в Chrome.', ok: 'Приложение установлено: оно на главном экране.' }
+      ios: 'На iPhone: нажмите «Поделиться» (квадрат со стрелкой), затем «На экран «Домой»».', autre: 'Откройте меню браузера (⋮), затем «Установить приложение» или «Добавить на главный экран». Если пункта нет, откройте ссылку в Chrome.', ok: 'Приложение установлено: оно на главном экране.', part: 'Поделиться', msg: 'Моя визитка', copie: 'Ссылка скопирована: вставьте её в сообщение.' }
   }[L];
   var $ = function (i) { return document.getElementById(i); };
   var img = $('carte'), scene = $('scene'), points = $('points');
@@ -541,6 +544,36 @@ const JS_APPLI_CARTE = `(function () {
   }
   window.addEventListener('resize', placer);
   window.addEventListener('orientationchange', function () { setTimeout(placer, 200); });
+
+  // Partager : menu de partage du téléphone (WhatsApp, Telegram, SMS, copier…) avec l'image de la carte affichée et le lien de la page.
+  // Les images sont préparées à l'avance : le partage doit partir tout de suite après la touche (sinon Safari le refuse).
+  var fichiers = {}, btnP = $('partager'), info = $('info'), minuInfo = null;
+  function montrerInfo(t) { info.textContent = t; info.hidden = false; clearTimeout(minuInfo); minuInfo = setTimeout(function () { info.hidden = true; }, 3500); }
+  cartes.forEach(function (c) {
+    if (!window.fetch || !window.File) return;
+    fetch(c.src).then(function (r) { return r.blob(); }).then(function (b) {
+      fichiers[c.m] = new File([b], (D.titre || D.slug).replace(/[^a-zA-Z0-9À-ÿ -]+/g, '').trim().replace(/\\s+/g, '-').slice(0, 40) + '-carte.jpg', { type: 'image/jpeg' });
+    }).catch(function () {});
+  });
+  var texte = T.msg + ' : ' + D.titre + '\\n' + D.url;
+  btnP.textContent = '⤴ ' + T.part; btnP.hidden = false;
+  btnP.addEventListener('click', function (e) {
+    e.stopPropagation();
+    var f = cartes[i] && fichiers[cartes[i].m];
+    if (navigator.share) {
+      var avecImage = f && navigator.canShare && navigator.canShare({ files: [f] });
+      var donnees = avecImage ? { files: [f], title: D.titre, text: texte } : { title: D.titre, text: T.msg + ' : ' + D.titre, url: D.url };
+      navigator.share(donnees).catch(function (er) {
+        if (er && er.name === 'AbortError') return;                                   // le client a fermé le menu
+        if (avecImage) navigator.share({ title: D.titre, text: T.msg + ' : ' + D.titre, url: D.url }).catch(function () {});   // appli qui refuse les images : le lien seul
+      });
+      return;
+    }
+    // Navigateur sans menu de partage (ordinateur) : lien copié
+    var lienAffiche = function () { montrerInfo(D.url); };                         // pas de presse-papiers : le lien à l'écran
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(texte).then(function () { montrerInfo(T.copie); }, lienAffiche);
+    else lienAffiche();
+  });
 
   // Mode appli : paysage et écran allumé
   var installee = (window.matchMedia && (matchMedia('(display-mode: fullscreen)').matches || matchMedia('(display-mode: standalone)').matches)) || navigator.standalone === true;
