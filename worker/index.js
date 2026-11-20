@@ -272,6 +272,7 @@ async function siteClient(request, env, url, slug) {
   }
   // Page installable comme une appli : service worker propre à la page, icônes qrbc par défaut
   if (p === '/sw.js') return new Response(SW_PAGE, { headers: { 'content-type': 'application/javascript; charset=utf-8', 'cache-control': 'no-cache' } });
+  if (p === '/carte/sw.js') return new Response(SW_CARTE, { headers: { 'content-type': 'application/javascript; charset=utf-8', 'cache-control': 'no-cache' } });
   if (FICHIERS_PWA.has(p) && /\.png$/.test(p)) return statique(env, request, p);
 
   // Version traduite : nom.qrbc.app/xx/… (page « nom.xx »)
@@ -291,6 +292,10 @@ async function siteClient(request, env, url, slug) {
     return pageInfo('Page bientôt en ligne', 'Cette page sera visible dès que son propriétaire aura confirmé son adresse e-mail.', 200);
 
   if (p === '/contact') return Response.redirect(url.origin + '/#contact', 302);
+  // Appli « carte de visite » (QR-nom) : la carte en plein écran, en paysage
+  if (p === '/carte') return Response.redirect(url.origin + '/carte/' + url.search, 301);
+  if (p === '/carte/' || p === '/carte/index.html') return pageCarte(env, slug);
+  if (p === '/carte/manifest.webmanifest') return manifesteCarte(env, slug);
   if (p === '/manifest.webmanifest') return manifestePage(env, slug);
   if (p === '/config.json') {
     const c = await env.CLIENTS.get('site:' + slug + ':config.json');
@@ -417,6 +422,164 @@ function nomCourt(t) {
   for (const m of t.split(/[\s,–-]+/).filter(Boolean)) { if ((n + ' ' + m).trim().length > 12) break; n = (n + ' ' + m).trim(); }
   return (n.replace(/(\s+(à|a|au|aux|de|du|des|la|le|les|et|en|d’|d'|l’|l'|&))+$/i, '') || n || t.slice(0, 12)).trim();
 }
+/* ===================== Appli « carte de visite » (20/11/2026) =====================
+   nom.qrbc.app/carte/ : appli installable « QR-nom », distincte de celle de la page (manifeste, portée et service worker propres).
+   Elle affiche en plein écran, en paysage, les cartes préparées dans le constructeur (cfg.carteApp.images) :
+   la 1re par défaut, puis la dernière regardée ; toucher la carte passe à la suivante. Fonctionne sans réseau. */
+async function configPage(env, slug) {
+  try { return JSON.parse(await env.CLIENTS.get('site:' + slug + ':config.json') || '{}'); } catch (e) { return {}; }
+}
+function cartesApp(cfg) {
+  const ca = cfg.carteApp || {};
+  return (Array.isArray(ca.images) ? ca.images : []).filter(x => x && /^images\/carte-\d+-[a-zA-Z]+\.jpg$/.test(x.chemin || ''))
+    .slice(0, 6).map(x => ({ m: String(x.m || ''), nom: String(x.nom || ''), src: '/' + x.chemin, l: Number(x.l) || 2008, h: Number(x.h) || 1300 }));
+}
+async function manifesteCarte(env, slug) {
+  const cfg = await configPage(env, slug), ic = cfg.appIcones || {};
+  const nom = 'QR-' + slug;
+  const icones = ic.i192 && ic.i512 ? [
+    { src: '/' + ic.i192, sizes: '192x192', type: 'image/png', purpose: 'any' },
+    { src: '/' + ic.i512, sizes: '512x512', type: 'image/png', purpose: 'any' },
+    { src: '/' + (ic.m512 || ic.i512), sizes: '512x512', type: 'image/png', purpose: 'maskable' }
+  ] : [
+    { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+    { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+    { src: '/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
+  ];
+  const m = {
+    id: '/carte/', name: nom, short_name: nom, description: 'Carte de visite de ' + String(cfg.titre || slug).slice(0, 80),
+    start_url: '/carte/', scope: '/carte/', display: 'fullscreen', display_override: ['fullscreen', 'standalone'], orientation: 'landscape',
+    lang: 'fr', background_color: '#000000', theme_color: '#000000', icons: icones
+  };
+  return new Response(JSON.stringify(m), { headers: { 'content-type': 'application/manifest+json; charset=utf-8', 'cache-control': 'no-cache' } });
+}
+async function pageCarte(env, slug) {
+  const cfg = await configPage(env, slug), ic = cfg.appIcones || {};
+  const nom = 'QR-' + slug;
+  const cartes = cartesApp(cfg);
+  const icone = ic.i192 ? '/' + ic.i192 : '/apple-touch-icon.png';
+  const html = '<!DOCTYPE html>\n<html lang="fr"><head><meta charset="utf-8">' +
+    '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">' +
+    '<title>' + esc(nom) + '</title><meta name="robots" content="noindex">' +
+    '<meta name="theme-color" content="#000000"><link rel="manifest" href="/carte/manifest.webmanifest">' +
+    '<link rel="apple-touch-icon" href="' + esc(icone) + '"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">' +
+    '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="' + esc(nom) + '">' +
+    '<style>' + CSS_APPLI_CARTE + '</style></head><body>' +
+    '<div id="scene"><img id="carte" alt=""></div><div id="points"></div><p id="vide" hidden></p>' +
+    '<button id="pastille" type="button" hidden></button>' +
+    '<div id="feuille" hidden><div class="boite"><img class="ic" src="' + esc(icone) + '" alt=""><b>' + esc(nom) + '</b><p id="f-txt"></p>' +
+    '<button id="f-installer" type="button" class="prim"></button><p id="f-aide" hidden></p><button id="f-plus-tard" type="button" class="sec"></button></div></div>' +
+    '<script>window.QRBC_CARTES=' + JSON.stringify({ nom, slug, cartes }).replace(/</g, '\\u003c') + ';</script>' +
+    '<script>' + JS_APPLI_CARTE + '</script></body></html>';
+  return new Response(html, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache', 'x-robots-tag': 'noindex' } });
+}
+const CSS_APPLI_CARTE = `html,body{margin:0;height:100%;background:#000;color:#fff;font:16px/1.4 system-ui,-apple-system,sans-serif;overflow:hidden;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+#scene{position:fixed;left:50%;top:50%;display:flex;align-items:center;justify-content:center;transform-origin:center}
+#carte{max-width:100%;max-height:100%;object-fit:contain;display:block;border-radius:2.2vmin;box-shadow:0 0 0 1px rgba(255,255,255,.06)}
+#points{position:fixed;left:0;right:0;bottom:calc(10px + env(safe-area-inset-bottom));display:flex;justify-content:center;gap:8px;pointer-events:none}
+#points i{width:8px;height:8px;border-radius:4px;background:rgba(255,255,255,.35)}#points i.on{background:#fff}
+#vide{position:fixed;inset:0;margin:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;color:#bbb}
+#pastille{position:fixed;top:calc(10px + env(safe-area-inset-top));right:10px;border:0;border-radius:20px;padding:8px 14px;background:rgba(255,255,255,.14);color:#fff;font:600 .85rem system-ui,sans-serif;backdrop-filter:blur(6px)}
+#feuille{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:flex-end;justify-content:center;z-index:5}
+#feuille .boite{background:#1c1b19;border-radius:20px 20px 0 0;padding:22px 20px calc(22px + env(safe-area-inset-bottom));width:100%;max-width:480px;text-align:center}
+#feuille .ic{width:64px;height:64px;border-radius:14px;display:block;margin:0 auto 8px}#feuille b{font-size:1.15rem}
+#feuille p{color:#cfc9bf;font-size:.95rem;margin:8px 0 14px}
+#feuille button{display:block;width:100%;border:0;border-radius:14px;padding:14px;font:700 1rem system-ui,sans-serif;margin-top:8px}
+#feuille .prim{background:#d9572b;color:#fff}#feuille .sec{background:transparent;color:#aaa;font-weight:500}
+[hidden]{display:none !important}`;
+const JS_APPLI_CARTE = `(function () {
+  var D = window.QRBC_CARTES, cartes = D.cartes || [];
+  var L = String(navigator.language || 'fr').slice(0, 2); if (['fr', 'en', 'ru'].indexOf(L) < 0) L = 'en';
+  var T = {
+    fr: { vide: 'Aucune carte préparée. Dans le constructeur : « QR code et carte de visite » → « Ma carte sur l’écran d’accueil ».', inst: 'Installer', txt: 'Installez l’appli : votre carte s’ouvre en plein écran, en paysage, même sans réseau.', btn: 'Installer sur l’écran d’accueil', tard: 'Plus tard',
+      ios: 'Sur iPhone : touchez Partager (carré avec une flèche), puis « Sur l’écran d’accueil ».', autre: 'Ouvrez le menu du navigateur (⋮), puis « Installer l’application » ou « Ajouter à l’écran d’accueil ». Si ce n’est pas proposé, ouvrez ce lien dans Chrome.', ok: 'Appli installée : retrouvez-la sur votre écran d’accueil.' },
+    en: { vide: 'No card prepared yet. In the builder: “QR code and business card” → “My card on the home screen”.', inst: 'Install', txt: 'Install the app: your card opens full screen, in landscape, even offline.', btn: 'Install on the home screen', tard: 'Later',
+      ios: 'On iPhone: tap Share (square with an arrow), then “Add to Home Screen”.', autre: 'Open the browser menu (⋮), then “Install app” or “Add to Home screen”. If it is not offered, open this link in Chrome.', ok: 'App installed: find it on your home screen.' },
+    ru: { vide: 'Визитки ещё не подготовлены. В конструкторе: «QR-код и визитка» → «Моя визитка на главном экране».', inst: 'Установить', txt: 'Установите приложение: визитка откроется на весь экран, горизонтально, даже без интернета.', btn: 'Установить на главный экран', tard: 'Позже',
+      ios: 'На iPhone: нажмите «Поделиться» (квадрат со стрелкой), затем «На экран «Домой»».', autre: 'Откройте меню браузера (⋮), затем «Установить приложение» или «Добавить на главный экран». Если пункта нет, откройте ссылку в Chrome.', ok: 'Приложение установлено: оно на главном экране.' }
+  }[L];
+  var $ = function (i) { return document.getElementById(i); };
+  var img = $('carte'), scene = $('scene'), points = $('points');
+  var cle = 'qrbc-carte:' + D.slug, i = 0;
+  function lire() { try { return localStorage.getItem(cle); } catch (e) { return null; } }
+  function ecrire(v) { try { localStorage.setItem(cle, v); } catch (e) {} }
+  // 1re carte par défaut, sinon la dernière regardée
+  var derniere = lire();
+  for (var k = 0; k < cartes.length; k++) if (cartes[k].m === derniere) i = k;
+  function placer() {
+    var c = cartes[i]; if (!c) return;
+    var W = window.innerWidth, H = window.innerHeight, paysage = c.l >= c.h;
+    var tourner = paysage && H > W;                       // téléphone tenu droit (iPhone, rotation bloquée) : carte tournée
+    var w = tourner ? H : W, h = tourner ? W : H, marge = Math.round(Math.min(w, h) * 0.04);
+    scene.style.width = (w - 2 * marge) + 'px'; scene.style.height = (h - 2 * marge) + 'px';
+    scene.style.transform = 'translate(-50%,-50%)' + (tourner ? ' rotate(90deg)' : '');
+    points.style.display = tourner || cartes.length < 2 ? 'none' : 'flex';
+  }
+  function montrer(n) {
+    if (!cartes.length) return;
+    i = (n + cartes.length) % cartes.length;
+    img.src = cartes[i].src; img.alt = cartes[i].nom;
+    ecrire(cartes[i].m);
+    points.innerHTML = '';
+    for (var k = 0; k < cartes.length; k++) { var p = document.createElement('i'); if (k === i) p.className = 'on'; points.appendChild(p); }
+    placer();
+  }
+  if (!cartes.length) { $('vide').textContent = T.vide; $('vide').hidden = false; }
+  else {
+    montrer(i);
+    cartes.forEach(function (c) { var x = new Image(); x.src = c.src; });   // toutes en cache : l'appli marche sans réseau
+    scene.addEventListener('click', function () { if (cartes.length > 1) montrer(i + 1); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'ArrowRight' || e.key === ' ') montrer(i + 1); if (e.key === 'ArrowLeft') montrer(i - 1); });
+    var x0 = null;
+    scene.addEventListener('touchstart', function (e) { x0 = e.touches[0]; }, { passive: true });
+    scene.addEventListener('touchend', function (e) {
+      if (!x0 || cartes.length < 2) return;
+      var t = e.changedTouches[0], dx = t.clientX - x0.clientX, dy = t.clientY - x0.clientY; x0 = null;
+      var d = Math.abs(dx) > Math.abs(dy) ? dx : dy;
+      if (Math.abs(d) > 40) { e.preventDefault(); montrer(i + (d < 0 ? 1 : -1)); }
+    });
+  }
+  window.addEventListener('resize', placer);
+  window.addEventListener('orientationchange', function () { setTimeout(placer, 200); });
+
+  // Mode appli : paysage et écran allumé
+  var installee = (window.matchMedia && (matchMedia('(display-mode: fullscreen)').matches || matchMedia('(display-mode: standalone)').matches)) || navigator.standalone === true;
+  if (installee) { try { screen.orientation.lock('landscape').catch(function () {}); } catch (e) {} }
+  var veille = null;
+  function garderAllume() { try { if (navigator.wakeLock && document.visibilityState === 'visible') navigator.wakeLock.request('screen').then(function (v) { veille = v; }).catch(function () {}); } catch (e) {} }
+  garderAllume(); document.addEventListener('visibilitychange', garderAllume);
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/carte/sw.js', { scope: '/carte/' }).catch(function () {});
+
+  // Installation (dans le navigateur seulement)
+  if (installee) return;
+  var invite = null, ios = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  var feuille = $('feuille'), pastille = $('pastille');
+  $('f-txt').textContent = T.txt; $('f-installer').textContent = T.btn; $('f-plus-tard').textContent = T.tard; pastille.textContent = '📲 ' + T.inst;
+  window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); invite = e; });
+  window.addEventListener('appinstalled', function () { $('f-txt').textContent = T.ok; $('f-installer').hidden = true; $('f-aide').hidden = true; feuille.hidden = false; pastille.hidden = true; });
+  function ouvrir() { feuille.hidden = false; $('f-aide').hidden = true; $('f-installer').hidden = false; }
+  $('f-installer').addEventListener('click', function () {
+    if (invite) { invite.prompt(); invite.userChoice.then(function (r) { if (r.outcome === 'accepted') feuille.hidden = true; invite = null; }); return; }
+    $('f-aide').textContent = ios ? T.ios : T.autre; $('f-aide').hidden = false; $('f-installer').hidden = true;
+  });
+  $('f-plus-tard').addEventListener('click', function () { feuille.hidden = true; pastille.hidden = false; });
+  pastille.addEventListener('click', ouvrir);
+  if (/[?&]installer=1/.test(location.search)) ouvrir(); else pastille.hidden = false;
+})();`;
+/* Service worker de l'appli « carte de visite » : réseau d'abord, dernière copie sans réseau (page et cartes) */
+const SW_CARTE = `const V = 'carte-v1';
+self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
+self.addEventListener('fetch', e => {
+  const r = e.request, u = new URL(r.url);
+  if (r.method !== 'GET' || u.origin !== location.origin || u.pathname.startsWith('/api/')) return;
+  const cle = u.origin + u.pathname;
+  e.respondWith(fetch(r).then(rep => {
+    if (rep.ok && rep.type === 'basic') { const c = rep.clone(); caches.open(V).then(x => x.put(cle, c)); }
+    return rep;
+  }).catch(() => caches.match(cle).then(m => m || (r.mode === 'navigate' ? caches.match(u.origin + '/carte/') : undefined))
+    .then(m => m || new Response('Pas de connexion', { status: 503, headers: { 'content-type': 'text/plain; charset=utf-8' } }))));
+});`;
 /* Service worker d'une page client : réseau d'abord, dernière copie si pas de réseau (appels, WhatsApp… restent accessibles) */
 const SW_PAGE = `const V = 'page-v1';
 self.addEventListener('install', () => self.skipWaiting());
@@ -513,6 +676,11 @@ async function apiClient(request, env, slug, route) {
         // icônes de l'appli (3 fichiers d'une même génération) : on efface les générations précédentes
         const gen = chemin.match(/^images\/(app-\d+-)/)[1];
         const l = await env.CLIENTS.list({ prefix: 'img:' + slug + ':app-' });
+        for (const k of l.keys) if (!k.name.includes(':' + gen)) await env.CLIENTS.delete(k.name);
+      } else if (/^images\/carte-\d+-/.test(chemin)) {
+        // cartes de l'appli « carte de visite » (une génération = les cartes choisies) : hors « Mes images », anciennes générations effacées
+        const gen = chemin.match(/^images\/(carte-\d+-)/)[1];
+        const l = await env.CLIENTS.list({ prefix: 'img:' + slug + ':carte-' });
         for (const k of l.keys) if (!k.name.includes(':' + gen)) await env.CLIENTS.delete(k.name);
       } else if (/^images\/partage-/.test(chemin)) {
         // image d'aperçu des liens : hors « Mes images », une seule gardée (les précédentes sont effacées)
@@ -1131,6 +1299,7 @@ function genreImage(chemin) {
   if (/^logo/.test(n)) return 'logo';
   if (/^partage/.test(n)) return 'partage';
   if (/^app-\d+-/.test(n)) return 'appli';
+  if (/^carte-\d+-/.test(n)) return 'carte';
   return 'article';
 }
 /* Médiathèque : liste des images d'un client, les plus récentes d'abord.
@@ -3430,7 +3599,7 @@ async function titulaireDe(env, compte) {
 }
 const racineDe = c => (c && c.parent) || (c && c.slug);
 // Images propres à une page (icônes d'appli, aperçu des liens) ; toutes les autres sont communes au compte
-const imagePropre = nom => /^(app-|partage-)/.test(String(nom));
+const imagePropre = nom => /^(app-|partage-|carte-\d+-)/.test(String(nom));
 async function membresGroupe(env, tit) {
   const l = [tit];
   for (const s of (tit && tit.pages) || []) { const c = await lireCompte(env, s); if (c && c.parent === tit.slug) l.push(c); }

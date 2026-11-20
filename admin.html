@@ -327,6 +327,15 @@
     .modale-corps .compteur b{white-space:nowrap;font-variant-numeric:tabular-nums}
     .cmd-ok input{margin-top:3px;flex:0 0 auto}
     .modeles-carte{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+    /* Appli « carte de visite » (écran d'accueil) : choix des cartes, numéro d'ordre sur chaque vignette */
+    .app-cartes{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:10px 0 14px}
+    .app-carte{position:relative;border:2px solid var(--ligne);border-radius:12px;padding:6px;background:var(--bg);color:var(--txt);display:flex;flex-direction:column;gap:4px;cursor:pointer}
+    .app-carte img{width:100%;aspect-ratio:2008/1300;object-fit:contain;border-radius:6px;display:block}
+    .app-carte b{font-size:.78rem}
+    .app-carte.actif{border-color:var(--prim);background:color-mix(in srgb,var(--prim) 8%,var(--bg))}
+    .app-carte .num{position:absolute;top:10px;left:10px;min-width:26px;height:26px;border-radius:13px;background:var(--prim);color:#fff;font:700 .85rem/26px system-ui,sans-serif;text-align:center;display:none}
+    .app-carte.actif .num{display:block}
+    .app-lien{font-size:.85rem;word-break:break-all;color:var(--doux);margin:8px 0}
     .modele-carte{border:2px solid var(--ligne);border-radius:12px;padding:6px;background:var(--bg);cursor:pointer;color:var(--txt);display:flex;flex-direction:column;gap:6px}
     .modele-carte img{width:100%;aspect-ratio:2008/1300;object-fit:contain;border-radius:6px;display:block;background:color-mix(in srgb,var(--txt) 6%,transparent)}
     .modele-carte b{font-size:.8rem}
@@ -1284,7 +1293,7 @@
   }
   function genreImage(chemin) {
     const n = String(chemin).replace(/^images\//, '');
-    return /^fond/.test(n) ? 'fond' : /^logo/.test(n) ? 'logo' : 'article';
+    return /^fond/.test(n) ? 'fond' : /^logo/.test(n) ? 'logo' : /^carte-\d+-/.test(n) ? 'carte' : 'article';
   }
 
   function choixImage(etiquette, obj, cle, reglages) {
@@ -3120,6 +3129,11 @@
       btnCarte.disabled = false; btnCarte.textContent = 'Actualiser les modèles';
     });
 
+    // Appli « carte de visite » sur l'écran d'accueil (pages Cloudflare, pas les versions traduites)
+    const btnAppli = el('button', { type: 'button', class: 'btn btn-plein', style: 'margin-top:12px', text: '📲 Ma carte sur l’écran d’accueil', onclick: () => ouvrirAppliCarte(choisi) });
+    const aideAppli = el('div', { class: 'aide', style: 'margin:4px 0 0', text: 'Une appli qui montre votre carte en plein écran, pour la faire scanner sans l’imprimer.' });
+    if (!CF || !/^https?:\/\/[^/]+\/$/.test(URL_PUBLIQUE)) { btnAppli.classList.add('cache'); aideAppli.classList.add('cache'); }
+
     // Commande de cartes imprimées : bouton visible seulement si la vente est ouverte (réglage dans /gestion)
     const btnCommande = el('button', { type: 'button', class: 'btn btn-prim btn-plein cache', style: 'margin-top:12px', text: '🛒 Commander mes cartes imprimées', onclick: () => ouvrirCommandeCartes(choisi) });
     const aideCommande = el('div', { class: 'aide cache', style: 'margin:4px 0 0', text: 'Imprimées sur papier mat 300 g et livrées chez vous, sans fichier à préparer.' });
@@ -3130,10 +3144,147 @@
       el('div', { style: 'height:16px' }),
       el('span', { class: 'etiq', text: 'Carte de visite' }),
       el('div', { class: 'aide', style: 'margin:0 0 10px', text: 'Créée à partir de la page telle qu’elle est affichée : fond, logo, nom, coordonnées des boutons et QR code.' }),
-      btnCarte, grilleModeles, zoneCarte, btnCommande, aideCommande
+      btnCarte, grilleModeles, zoneCarte, btnAppli, aideAppli, btnCommande, aideCommande
     ]);
   }
 
+
+  /* =============== Appli « carte de visite » sur l'écran d'accueil (20/11/2026) ===============
+     Le client choisit une ou plusieurs cartes ; elles sont dessinées ici en JPEG (images/carte-<génération>-<modèle>.jpg,
+     propres à la page, hors « Mes images ») et listées dans cfg.carteApp. L'appli « QR-nom » (nom.qrbc.app/carte/)
+     les montre en plein écran, en paysage, même sans réseau : la 1re par défaut, puis la dernière regardée.
+     Refaites automatiquement à l'enregistrement quand la page change (fond, logo, nom, coordonnées…). */
+  const APPLI_LARGEUR = 1800;
+  function nomAppliCarte() { return 'QR-' + URL_PUBLIQUE.replace(/^https?:\/\//, '').split(/[./]/)[0]; }
+  function lienAppliCarte() { return URL_PUBLIQUE.replace(/\/?$/, '/') + 'carte/'; }
+  function cleCarteApp() {
+    return JSON.stringify([cfg.carteApp && cfg.carteApp.modeles, cfg.design, cfg.logo, cfg.titre, cfg.sousTitre, cfg.pied, coordonnees(), URL_PUBLIQUE]);
+  }
+  async function preparerCarteApp(forcer) {
+    const ca = cfg.carteApp;
+    if (!CF || !ca || !Array.isArray(ca.modeles)) return;
+    ca.modeles = ca.modeles.filter(k => MODELES_CARTE[k]).slice(0, 6);
+    if (!ca.modeles.length) { delete cfg.carteApp; return; }
+    const cle = cleCarteApp();
+    if (!forcer && ca.cle === cle && Array.isArray(ca.images) && ca.images.length === ca.modeles.length) return;
+    const donnees = await preparerCarte();
+    // une seule génération en attente d'envoi (l'envoi d'une génération efface les précédentes sur le serveur)
+    for (const p in imagesAEnvoyer) if (/^images\/carte-\d+-/.test(p)) delete imagesAEnvoyer[p];
+    const gen = 'images/carte-' + Date.now() + '-';
+    const images = [];
+    for (const k of ca.modeles) {
+      const cv = await genererCarte(k, donnees);
+      const ech = Math.min(1, APPLI_LARGEUR / Math.max(cv.width, cv.height));
+      const r = document.createElement('canvas');
+      r.width = Math.round(cv.width * ech); r.height = Math.round(cv.height * ech);
+      const c = r.getContext('2d'); c.imageSmoothingQuality = 'high'; c.drawImage(cv, 0, 0, r.width, r.height);
+      const data = r.toDataURL('image/jpeg', 0.86);
+      const chemin = gen + k + '.jpg';
+      imagesLocales[chemin] = data; imagesAEnvoyer[chemin] = data.split(',')[1];
+      images.push({ m: k, nom: MODELES_CARTE[k], chemin, l: r.width, h: r.height });
+    }
+    ca.images = images; ca.cle = cle; ca.le = new Date().toISOString();
+  }
+
+  function ouvrirAppliCarte(dernierVu) {
+    const fond = el('div', { class: 'modale-fond' });
+    const boite = el('div', { class: 'modale', role: 'dialog', 'aria-modal': 'true' });
+    const fermer = () => { fond.remove(); document.body.style.overflow = ''; document.removeEventListener('keydown', esc); };
+    const esc = e => { if (e.key === 'Escape') fermer(); };
+    document.addEventListener('keydown', esc);
+    fond.addEventListener('click', e => { if (e.target === fond) fermer(); });
+    const corps = el('div', { class: 'modale-corps' }, [el('p', { class: 'cpt-aide', text: 'Préparation de vos cartes…' })]);
+    boite.append(el('div', { class: 'modale-tete' }, [el('b', { text: '📲 Ma carte sur l’écran d’accueil' }),
+      el('button', { type: 'button', class: 'btn btn-mini', text: '✕', 'aria-label': 'Fermer', onclick: fermer })]), corps);
+    fond.appendChild(boite); document.body.appendChild(fond); document.body.style.overflow = 'hidden';
+    const nom = nomAppliCarte();
+
+    // Écran final : ouvrir la page d'installation (sur le téléphone, dans Chrome ou Safari)
+    function ecranPret() {
+      corps.textContent = '';
+      const lien = lienAppliCarte();
+      const ouvrir = el('a', { class: 'btn btn-prim btn-plein', href: lien + '?installer=1', target: '_blank', rel: 'noopener', text: 'Ouvrir et installer l’appli' });
+      const copier = el('button', { type: 'button', class: 'btn btn-plein', style: 'margin-top:8px', text: 'Copier le lien' });
+      copier.addEventListener('click', async () => {
+        try { await navigator.clipboard.writeText(lien); copier.textContent = '✓ ' + t('Copié'); } catch (e) { prompt(t('Lien de l’appli :'), lien); }
+        setTimeout(() => (copier.textContent = t('Copier le lien')), 2000);
+      });
+      const titre = el('p', { style: 'margin:0 0 6px;font-weight:700' });
+      titre.append(document.createTextNode(t('Vos cartes sont prêtes dans l’appli') + ' '), el('span', { 'data-no-i18n': '', text: '« ' + nom + ' »' }));
+      corps.append(titre,
+        el('p', { class: 'aide', style: 'margin:0 0 12px', text: 'Ouvrez le lien sur votre téléphone puis touchez « Installer ». L’appli s’ouvre en plein écran, en paysage, et marche même sans réseau.' }),
+        ouvrir, copier,
+        el('div', { class: 'app-lien', 'data-no-i18n': '', text: lien }),
+        el('p', { class: 'aide', text: 'Si l’installation n’est pas proposée, ouvrez ce lien dans Chrome (Android) ou Safari (iPhone) : sur iPhone, touchez Partager puis « Sur l’écran d’accueil ».' }),
+        el('p', { class: 'aide', text: 'Les cartes de l’appli se mettent à jour toutes seules quand vous enregistrez votre page.' }));
+    }
+
+    (async () => {
+      let donnees; const minis = {};
+      try {
+        donnees = await preparerCarte();
+        for (const k of Object.keys(MODELES_CARTE)) {
+          const cv = await genererCarte(k, donnees), mini = document.createElement('canvas');
+          const ech = Math.min(420 / cv.width, 272 / cv.height);
+          mini.width = Math.round(cv.width * ech); mini.height = Math.round(cv.height * ech);
+          mini.getContext('2d').drawImage(cv, 0, 0, mini.width, mini.height);
+          minis[k] = mini.toDataURL('image/jpeg', 0.8);
+        }
+      } catch (e) { corps.textContent = ''; corps.appendChild(el('p', { class: 'msg err', text: e.message })); return; }
+      // Choix : liste déjà enregistrée, sinon la dernière carte regardée dans le constructeur
+      let choix = (cfg.carteApp && Array.isArray(cfg.carteApp.modeles) ? cfg.carteApp.modeles : []).filter(k => MODELES_CARTE[k]);
+      if (!choix.length) choix = [MODELES_CARTE[dernierVu] ? dernierVu : 'photo'];
+      corps.textContent = '';
+      const intro = el('p', { class: 'aide', style: 'margin:0 0 6px' });
+      intro.append(document.createTextNode(t('Installez l’appli') + ' '), el('b', { 'data-no-i18n': '', text: '« ' + nom + ' »' }),
+        document.createTextNode(' ' + t('sur votre téléphone : elle affiche votre carte en plein écran, en paysage, pour la faire scanner ou photographier sans carte imprimée.')));
+      const consigne = el('p', { class: 'aide', style: 'margin:0', text: 'Choisissez les cartes à mettre dans l’appli (6 au plus), dans l’ordre : la 1re s’affiche par défaut, ensuite l’appli rouvre la dernière carte regardée.' });
+      const grille = el('div', { class: 'app-cartes' });
+      const msg = el('div', { class: 'msg' });
+      const btn = el('button', { type: 'button', class: 'btn btn-prim btn-plein', text: 'Préparer l’appli' });
+      function majGrille() {
+        grille.querySelectorAll('.app-carte').forEach(b => {
+          const i = choix.indexOf(b.dataset.k);
+          b.classList.toggle('actif', i >= 0);
+          b.querySelector('.num').textContent = i >= 0 ? String(i + 1) : '';
+        });
+        btn.disabled = !choix.length;
+      }
+      Object.keys(MODELES_CARTE).forEach(k => {
+        const b = el('button', { type: 'button', class: 'app-carte', 'data-k': k }, [el('span', { class: 'num' }), el('img', { src: minis[k], alt: '' }), el('b', { text: MODELES_CARTE[k] })]);
+        b.addEventListener('click', () => {
+          const i = choix.indexOf(k);
+          if (i >= 0) choix.splice(i, 1);
+          else if (choix.length < 6) choix.push(k);
+          else { msg.className = 'msg err'; msg.textContent = t('6 cartes au plus.'); return; }
+          msg.textContent = ''; majGrille();
+        });
+        grille.appendChild(b);
+      });
+      btn.addEventListener('click', async () => {
+        btn.disabled = true; msg.className = 'msg'; msg.textContent = t('Préparation de l’appli…');
+        const avant = cfg.carteApp ? JSON.parse(JSON.stringify(cfg.carteApp)) : null;
+        cfg.carteApp = Object.assign({}, cfg.carteApp || {}, { modeles: choix.slice() });
+        try {
+          await preparerCarteApp(true);
+          const ok = await publier();
+          if (!ok) throw new Error($('#etat').textContent || t('Échec de l’enregistrement.'));
+          ecranPret();
+        } catch (e) {
+          if (avant) { cfg.carteApp = avant; delete cfg.carteApp.cle; } else delete cfg.carteApp;   // sans clé : refaites au prochain enregistrement
+          for (const p in imagesAEnvoyer) if (/^images\/carte-\d+-/.test(p)) delete imagesAEnvoyer[p];
+          msg.className = 'msg err'; msg.textContent = e.message; btn.disabled = false;
+        }
+      });
+      corps.append(intro, consigne, grille, btn, msg,
+        el('p', { class: 'aide', style: 'margin:8px 0 0', text: 'La page est enregistrée en même temps (vos modifications en cours sont publiées).' }));
+      majGrille();
+      if (cfg.carteApp && cfg.carteApp.images && cfg.carteApp.images.length) {
+        const deja = el('button', { type: 'button', class: 'btn btn-plein', style: 'margin-top:8px', text: 'Appli déjà prête : afficher le lien d’installation', onclick: ecranPret });
+        corps.insertBefore(deja, msg.nextSibling);
+      }
+    })();
+  }
 
   /* =============== Commande de cartes imprimées (Cloudprinter, depuis le 19/11/2026) ===============
      Écran : recto (glisser), verso (interrupteur + glisser), quantité, prix produit + livraison ;
@@ -4455,13 +4606,16 @@
   }
 
   /* ---------------- Enregistrement ---------------- */
-  $('#btn-enregistrer').addEventListener('click', async () => {
+  $('#btn-enregistrer').addEventListener('click', () => { publier(); });
+  // Publication de la page ; renvoie true si tout est enregistré (sert aussi à l'appli « carte de visite »)
+  async function publier() {
     const btn = $('#btn-enregistrer'), etat = $('#etat');
     btn.disabled = true; etat.className = 'etat'; etat.textContent = 'Enregistrement…';
     try {
       // 0. image d'aperçu des liens, refaite seulement si le fond ou le logo a changé
       try { await preparerImagePartage(); } catch (e) { console.warn('Aperçu des liens non mis à jour', e); }
       try { await preparerIconesAppli(); } catch (e) { console.warn('Icônes de l’appli non mises à jour', e); }
+      try { await preparerCarteApp(false); } catch (e) { console.warn('Cartes de l’appli non mises à jour', e); }
       // 1. images d'abord, pour que la page ne pointe jamais vers une image absente
       const chemins = Object.keys(imagesAEnvoyer).filter(p => CF || JSON.stringify(cfg).includes(p));
       for (const p of chemins) {
@@ -4495,12 +4649,14 @@
       modifie = false;
       etat.className = 'etat ok';
       etat.textContent = CF ? '✓ Publié. Visible sur la page d’ici une minute.' : '✓ Publié. Visible sur la page d’ici 1 à 2 minutes.';
+      return true;
     } catch (e) {
       etat.className = 'etat err';
       etat.textContent = e.status === 401 && !CF ? 'Accès refusé : jeton expiré. Prévenez Roman.' : 'Échec : ' + e.message;
       btn.disabled = false;
+      return false;
     }
-  });
+  }
 })();
 </script>
 </body>
