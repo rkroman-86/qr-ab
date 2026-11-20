@@ -1046,6 +1046,9 @@
     'PNG pour un usage courant : écran, document, impression maison. SVG pour un imprimeur : le dessin reste net à n’importe quelle taille.': ['PNG for everyday use: screen, documents, home printing. SVG for a print shop: the pattern stays sharp at any size.', 'PNG — для обычного использования: экран, документы, домашняя печать. SVG — для типографии: рисунок остаётся чётким при любом размере.'],
     'Accueil': ['Home', 'Главная'],
     // --- appli « carte de visite » sur l'écran d'accueil (20/11/2026) ---
+    'Installer l’appli': ['Install the app', 'Установить приложение'],
+    'Touchez les cartes à mettre dans l’appli (6 au plus), dans l’ordre, puis « Installer l’appli ».': ['Tap the cards to put in the app (up to 6), in order, then “Install the app”.', 'Отметьте визитки для приложения (не больше 6) по порядку, затем нажмите «Установить приложение».'],
+    'Appli déjà prête : l’installer sans changer les cartes': ['App already ready: install it without changing the cards', 'Приложение уже готово: установить без изменения визиток'],
     'Copié': ['Copied', 'Скопировано'],
     '📲 Ma carte sur l’écran d’accueil': ['📲 My card on the home screen', '📲 Моя визитка на главном экране'],
     'Une appli qui montre votre carte en plein écran, pour la faire scanner sans l’imprimer.': ['An app that shows your card full screen, so people can scan it without printing.', 'Приложение показывает визитку на весь экран — её можно отсканировать без печати.'],

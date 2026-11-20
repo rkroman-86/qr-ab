@@ -557,7 +557,11 @@ const JS_APPLI_CARTE = `(function () {
   $('f-txt').textContent = T.txt; $('f-installer').textContent = T.btn; $('f-plus-tard').textContent = T.tard; pastille.textContent = '📲 ' + T.inst;
   window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); invite = e; });
   window.addEventListener('appinstalled', function () { $('f-txt').textContent = T.ok; $('f-installer').hidden = true; $('f-aide').hidden = true; feuille.hidden = false; pastille.hidden = true; });
-  function ouvrir() { feuille.hidden = false; $('f-aide').hidden = true; $('f-installer').hidden = false; }
+  function ouvrir() {
+    feuille.hidden = false;
+    if (ios && !invite) { $('f-aide').textContent = T.ios; $('f-aide').hidden = false; $('f-installer').hidden = true; return; }   // iPhone : la consigne tout de suite
+    $('f-aide').hidden = true; $('f-installer').hidden = false;
+  }
   $('f-installer').addEventListener('click', function () {
     if (invite) { invite.prompt(); invite.userChoice.then(function (r) { if (r.outcome === 'accepted') feuille.hidden = true; invite = null; }); return; }
     $('f-aide').textContent = ios ? T.ios : T.autre; $('f-aide').hidden = false; $('f-installer').hidden = true;

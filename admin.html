@@ -3199,7 +3199,13 @@
     fond.appendChild(boite); document.body.appendChild(fond); document.body.style.overflow = 'hidden';
     const nom = nomAppliCarte();
 
-    // Écran final : ouvrir la page d'installation (sur le téléphone, dans Chrome ou Safari)
+    // Ouvre directement la page de l'appli avec la fenêtre d'installation (une touche « Installer » et c'est fini)
+    function ouvrirInstallation(fen) {
+      const url = lienAppliCarte() + '?installer=1';
+      if (fen && !fen.closed) { try { fen.location.replace(url); return; } catch (e) {} }
+      location.href = url;
+    }
+    // Écran de secours : lien à rouvrir plus tard ou sur un autre téléphone
     function ecranPret() {
       corps.textContent = '';
       const lien = lienAppliCarte();
@@ -3238,10 +3244,10 @@
       const intro = el('p', { class: 'aide', style: 'margin:0 0 6px' });
       intro.append(document.createTextNode(t('Installez l’appli') + ' '), el('b', { 'data-no-i18n': '', text: '« ' + nom + ' »' }),
         document.createTextNode(' ' + t('sur votre téléphone : elle affiche votre carte en plein écran, en paysage, pour la faire scanner ou photographier sans carte imprimée.')));
-      const consigne = el('p', { class: 'aide', style: 'margin:0', text: 'Choisissez les cartes à mettre dans l’appli (6 au plus), dans l’ordre : la 1re s’affiche par défaut, ensuite l’appli rouvre la dernière carte regardée.' });
+      const consigne = el('p', { class: 'aide', style: 'margin:0', text: 'Touchez les cartes à mettre dans l’appli (6 au plus), dans l’ordre, puis « Installer l’appli ».' });
       const grille = el('div', { class: 'app-cartes' });
       const msg = el('div', { class: 'msg' });
-      const btn = el('button', { type: 'button', class: 'btn btn-prim btn-plein', text: 'Préparer l’appli' });
+      const btn = el('button', { type: 'button', class: 'btn btn-prim btn-plein', text: 'Installer l’appli' });
       function majGrille() {
         grille.querySelectorAll('.app-carte').forEach(b => {
           const i = choix.indexOf(b.dataset.k);
@@ -3262,6 +3268,9 @@
         grille.appendChild(b);
       });
       btn.addEventListener('click', async () => {
+        // fenêtre ouverte tout de suite (pendant le geste du client, sinon le navigateur la bloque) ; elle affichera l'appli
+        let fen = null;
+        try { fen = window.open('', '_blank'); if (fen) fen.document.write('<meta name="viewport" content="width=device-width"><body style="margin:0;height:100vh;display:flex;align-items:center;justify-content:center;background:#000;color:#bbb;font:16px system-ui">' + t('Préparation de l’appli…') + '</body>'); } catch (e) { fen = null; }
         btn.disabled = true; msg.className = 'msg'; msg.textContent = t('Préparation de l’appli…');
         const avant = cfg.carteApp ? JSON.parse(JSON.stringify(cfg.carteApp)) : null;
         cfg.carteApp = Object.assign({}, cfg.carteApp || {}, { modeles: choix.slice() });
@@ -3270,7 +3279,9 @@
           const ok = await publier();
           if (!ok) throw new Error($('#etat').textContent || t('Échec de l’enregistrement.'));
           ecranPret();
+          ouvrirInstallation(fen);
         } catch (e) {
+          try { if (fen) fen.close(); } catch (x) {}
           if (avant) { cfg.carteApp = avant; delete cfg.carteApp.cle; } else delete cfg.carteApp;   // sans clé : refaites au prochain enregistrement
           for (const p in imagesAEnvoyer) if (/^images\/carte-\d+-/.test(p)) delete imagesAEnvoyer[p];
           msg.className = 'msg err'; msg.textContent = e.message; btn.disabled = false;
@@ -3280,7 +3291,7 @@
         el('p', { class: 'aide', style: 'margin:8px 0 0', text: 'La page est enregistrée en même temps (vos modifications en cours sont publiées).' }));
       majGrille();
       if (cfg.carteApp && cfg.carteApp.images && cfg.carteApp.images.length) {
-        const deja = el('button', { type: 'button', class: 'btn btn-plein', style: 'margin-top:8px', text: 'Appli déjà prête : afficher le lien d’installation', onclick: ecranPret });
+        const deja = el('button', { type: 'button', class: 'btn btn-plein', style: 'margin-top:8px', text: 'Appli déjà prête : l’installer sans changer les cartes', onclick: () => { ecranPret(); ouvrirInstallation(window.open(lienAppliCarte() + '?installer=1', '_blank')); } });
         corps.insertBefore(deja, msg.nextSibling);
       }
     })();
