@@ -3139,7 +3139,7 @@
     const aideCommande = el('div', { class: 'aide cache', style: 'margin:4px 0 0', text: 'Imprimées sur papier mat 300 g et livrées chez vous, sans fichier à préparer.' });
     if (CF && jetonCF) appelAPI('cartes/offre', jetonCF).then(r => r.json()).then(o => { if (o.actif) { btnCommande.classList.remove('cache'); aideCommande.classList.remove('cache'); } }).catch(() => {});
 
-    const blocQRNeuf = () => (cfg.home.actif ? el('div') : el('div', { style: 'margin-top:14px' }, [choixQR(false)]));
+    const blocQRNeuf = () => el('div', { style: 'margin-top:14px' }, [choixQR(!!cfg.home.actif)]);
     let blocQRPartage = blocQRNeuf();
     rafraichirQRPartage = () => { const neuf = blocQRNeuf(); blocQRPartage.replaceWith(neuf); blocQRPartage = neuf; };
     return section('partage', 'QR code et carte de visite', false, [
@@ -3597,7 +3597,7 @@
      modifiable à tout moment sans réimprimer, et le scan reste compté dans les statistiques. */
   function choixQR(avecHome) {
     const h = cfg.home;
-    const options = avecHome ? { contact: 'Page contact', home: 'Page Home', lien: 'Lien personnel' } : { contact: 'Ma page', lien: 'Lien personnel' };
+    const options = avecHome ? { contact: 'Page contact', home: 'Page Home', lien: 'Lien personnel' } : { contact: 'Page contact', lien: 'Lien personnel' };
     const actuel = () => (h.arrivee === 'lien' ? 'lien' : avecHome && h.arrivee === 'home' ? 'home' : 'contact');
     const box = el('div', { class: 'segments' });
     const champ = el('input', { type: 'url', inputmode: 'url', value: h.qrLien || '', placeholder: 'https://monsite.fr', autocapitalize: 'none', spellcheck: 'false' });
@@ -3626,19 +3626,17 @@
     if (actuel() === 'lien') verifier();
     return el('div', {}, [el('span', { class: 'etiq', text: 'Le QR code ouvre' }), box, zone]);
   }
-  let rafraichirQRPartage = null;      // la section « QR code et carte de visite » montre le choix quand la Home est désactivée
+  let rafraichirQRPartage = null;      // le choix est dans « QR code et carte de visite » ; « Page Home » seulement si la Home est activée
 
   function sectionHome() {
     const h = cfg.home;
     const actif = el('input', { type: 'checkbox', checked: !!h.actif });
     const corps = el('div', { class: h.actif ? '' : 'cache' });
-    let blocQR = choixQR(true);
     actif.addEventListener('change', () => {
       h.actif = actif.checked;
       corps.classList.toggle('cache', !h.actif);
       vueApercu = h.actif ? 'home' : 'contact';
-      const neuf = choixQR(true); blocQR.replaceWith(neuf); blocQR = neuf;
-      if (rafraichirQRPartage) rafraichirQRPartage();
+      if (rafraichirQRPartage) rafraichirQRPartage();       // « Page Home » apparaît ou disparaît dans le choix du QR code
       changement();
     });
 
@@ -3657,7 +3655,6 @@
     });
 
     corps.append(
-      blocQR,
       el('div', { class: 'grille2' }, [
         champTexte('Bouton de la barre du haut', h, 'boutonContact', { ph: 'Contact' }),
         champTexte('Lien vers la Home (page contact)', h, 'lienTexte', { ph: 'Découvrir l’entreprise' })
