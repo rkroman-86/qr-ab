@@ -353,7 +353,16 @@ async function pageTraduite(request, env, url, slug, tc, reste) {
   if (!source || !actif(tc)) return pageInfo('Page en pause', 'Cette page est momentanément indisponible.', 200);
   if (reste === '/manifest.webmanifest') return manifestePage(env, slug);
   if (reste === '/config.json') {
-    const c = await env.CLIENTS.get('site:' + tc.slug + ':config.json');
+    let c = await env.CLIENTS.get('site:' + tc.slug + ':config.json');
+    // galerie : toujours celle de la page d'origine (à jour), avec le titre traduit s'il y en a un
+    try {
+      const src = JSON.parse(await env.CLIENTS.get('site:' + slug + ':config.json') || '{}');
+      const cfgT = JSON.parse(c || '{}');
+      if (src.galerie || cfgT.galerie) {
+        cfgT.galerie = Object.assign({}, src.galerie || {}, { titre: (cfgT.galerie && cfgT.galerie.titre) || '' });
+        c = JSON.stringify(cfgT);
+      }
+    } catch (e) { /* config illisible : servie telle quelle */ }
     return new Response(c || '{}', { headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } });
   }
   if (reste.startsWith('/images/')) return imageClient(env, tc.slug, reste.slice('/images/'.length), tc);
@@ -765,6 +774,18 @@ async function apiClient(request, env, slug, route) {
         const gen = chemin.match(/^images\/(carte-\d+-)/)[1];
         const l = await env.CLIENTS.list({ prefix: 'img:' + slug + ':carte-' });
         for (const k of l.keys) if (!k.name.includes(':' + gen)) await env.CLIENTS.delete(k.name);
+      } else if (/^images\/galerie-/.test(chemin)) {
+        // galerie photos : hors « Mes images » ; les photos retirées sont effacées à l'enregistrement de la page (voir config.json)
+        // garde-fou : 2 fichiers par photo, GALERIE_MAX photos par page du compte (+ marge pour un remplacement en une fois)
+        const racine = racineDe(compte), tit = await lireCompte(env, racine);
+        const nbPages = 1 + ((tit && tit.pages) || []).length;
+        let n = 0, curseur;
+        do {
+          const l = await env.CLIENTS.list({ prefix: 'img:' + racine + ':galerie-', cursor: curseur });
+          n += l.keys.length;
+          curseur = l.list_complete ? null : l.cursor;
+        } while (curseur);
+        if (n > 2 * GALERIE_MAX * (nbPages + 1)) { await env.CLIENTS.delete(cle); throw new ErreurAPI(413, 'Galerie pleine : 100 photos maximum par page.'); }
       } else if (/^images\/partage-/.test(chemin)) {
         // image d'aperçu des liens : hors « Mes images », une seule gardée (les précédentes sont effacées)
         const l = await env.CLIENTS.list({ prefix: 'img:' + slug + ':partage-' });
@@ -778,6 +799,7 @@ async function apiClient(request, env, slug, route) {
       const txt = new TextDecoder().decode(octets);
       if (chemin === 'config.json') { try { JSON.parse(txt); } catch (e) { throw new ErreurAPI(400, 'Configuration invalide.'); } }
       await env.CLIENTS.put(cle, txt);
+      if (chemin === 'config.json') await nettoyerGalerie(env, racineDe(compte));
       if (chemin === 'index.html' && !compte.publie && !compte.parent) {   // 1re page enregistrée (étapes d'inscription)
         compte.publie = new Date().toISOString();
         await ecrireCompte(env, compte);
@@ -1330,6 +1352,7 @@ async function apiClient(request, env, slug, route) {
     const source = await lireCompte(env, compte.traduction.source);
     const traduite = await traduireConfig(env, cleIA, cfg, (source && source.langueSite) || 'fr', compte.traduction.langue);
     delete traduite.partage; delete traduite.appIcones;
+    traduite.galerie = traduite.galerie && traduite.galerie.titre ? { titre: traduite.galerie.titre } : undefined;   // photos : celles de la page d'origine
     traduite.langue = compte.traduction.langue;
     await env.CLIENTS.put('site:' + slug + ':config.json', JSON.stringify(traduite, null, 2));
     // la langue apparaît dans le sélecteur des pages dès la 1re traduction
@@ -1383,6 +1406,7 @@ function genreImage(chemin) {
   if (/^partage/.test(n)) return 'partage';
   if (/^app-\d+-/.test(n)) return 'appli';
   if (/^carte-\d+-/.test(n)) return 'carte';
+  if (/^galerie-/.test(n)) return 'galerie';
   return 'article';
 }
 /* Médiathèque : liste des images d'un client, les plus récentes d'abord.
@@ -1399,7 +1423,7 @@ async function lireMedias(env, slug) {
     const l = await env.CLIENTS.list({ prefix: 'img:' + slug + ':', cursor: curseur });
     for (const k of l.keys) {
       const chemin = 'images/' + k.name.slice(('img:' + slug + ':').length);
-      if (vus.has(chemin)) continue;
+      if (vus.has(chemin) || /^images\/galerie-/.test(chemin)) continue;
       const horo = (chemin.match(/-(\d{13})/) || [])[1];
       liste.push({ chemin, genre: genreImage(chemin), source: /fond-ia-/.test(chemin) ? 'ia' : /^images\/logo-/.test(chemin) ? 'logo' : 'photo',
         le: horo ? new Date(Number(horo)).toISOString() : new Date(0).toISOString() });
@@ -3688,6 +3712,23 @@ async function membresGroupe(env, tit) {
   for (const s of (tit && tit.pages) || []) { const c = await lireCompte(env, s); if (c && c.parent === tit.slug) l.push(c); }
   return l;
 }
+/* Galerie photos : efface les photos qu'aucune page du compte n'utilise plus (retirées dans l'éditeur, page supprimée) */
+const GALERIE_MAX = 100;
+async function nettoyerGalerie(env, racine) {
+  const cles = [];
+  let curseur;
+  do {
+    const l = await env.CLIENTS.list({ prefix: 'img:' + racine + ':galerie-', cursor: curseur });
+    for (const k of l.keys) cles.push(k.name);
+    curseur = l.list_complete ? null : l.cursor;
+  } while (curseur);
+  if (!cles.length) return;
+  const textes = await configsGroupe(env, racine);
+  for (const k of cles) {
+    const nom = k.slice(('img:' + racine + ':').length);
+    if (!textes.includes('images/' + nom)) await env.CLIENTS.delete(k);
+  }
+}
 // Textes des configurations de toutes les pages du compte (une image n'est effacée que si aucune ne l'utilise)
 async function configsGroupe(env, racine) {
   const tit = await lireCompte(env, racine);
@@ -3816,6 +3857,7 @@ function textesATraduire(cfg) {
   (cfg.boutons || []).forEach((b, i) => { if (b) { mettre('boutons.' + i + '.texte', b.texte); mettre('boutons.' + i + '.message', b.message); } });
   const h = cfg.home || {};
   mettre('home.boutonContact', h.boutonContact); mettre('home.lienTexte', h.lienTexte);
+  if (cfg.galerie) mettre('galerie.titre', cfg.galerie.titre);
   (h.articles || []).forEach((a, i) => { if (a) { mettre('home.articles.' + i + '.titre', a.titre); mettre('home.articles.' + i + '.texte', a.texte); mettre('home.articles.' + i + '.alt', a.alt); } });
   if (h.ia) mettre('home.ia.description', h.ia.description);
   const seo = cfg.seo || {};

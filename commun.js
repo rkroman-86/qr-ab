@@ -42,7 +42,8 @@ const ICONES_ACTIONS = {
   tel:   svgIcone('<path d="M5 3h4l2 5-2.5 1.5a11 11 0 0 0 6 6L16 13l5 2v4a2 2 0 0 1-2 2A17 17 0 0 1 3 5a2 2 0 0 1 2-2z" fill="#000"/>'),
   sms:   svgIcone('<path d="M4 4h16v12H8l-4 4z" fill="#000"/>'),
   email: svgIcone('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>'),
-  lien:  svgIcone('<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>')
+  lien:  svgIcone('<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>'),
+  galerie: svgIcone('<path d="M3 8.5h3.5L8.5 5.5h7l2 3H21V19H3z"/><circle cx="12" cy="13.5" r="3.5"/>')
 };
 const COULEURS_ACTIONS = { whatsapp: '#25D366', avis: '#4285F4', maps: '#34A853', tel: '#0A84FF', sms: '#34C759', email: '#EA4335', lien: '#4B5563' };
 function iconeAction(type) {
@@ -107,6 +108,20 @@ const HOME_STYLES = { photo: 'Photo plein écran', image: 'Image + texte', texte
 
 function homeVisible(cfg) {
   return !!(cfg.home && cfg.home.actif && (cfg.home.articles || []).some(a => a && !a.masque && (a.titre || a.texte)));
+}
+
+/* Galerie photos : jusqu'à GALERIE_MAX photos (grande + vignette), ouverte par un bouton « 📷 » */
+const GALERIE_MAX = 100;
+function galerieVisible(cfg) {
+  const g = cfg && cfg.galerie;
+  return !!(g && g.actif && Array.isArray(g.photos) && g.photos.some(x => x && x.src));
+}
+function titreGalerie(cfg, doc) {
+  const t = String((cfg.galerie && cfg.galerie.titre) || '').trim();
+  if (t) return t;
+  const lg = String((doc && doc.documentElement && doc.documentElement.lang) || 'fr').slice(0, 2);
+  return ({ fr: 'Galerie', en: 'Gallery', ru: 'Галерея', es: 'Galería', de: 'Galerie', it: 'Galleria', pt: 'Galeria', nl: 'Galerij', uk: 'Галерея',
+    pl: 'Galeria', ro: 'Galerie', tr: 'Galeri', zh: '相册', ja: 'ギャラリー' })[lg] || 'Gallery';
 }
 
 /* Modèles de disposition */
@@ -449,6 +464,32 @@ const CSS_PAGE = `
 .qp-dispo-affiche .qp-rs-rond{width:56px;height:56px}
 .qp-pied{margin-top:28px;font-size:.85rem;opacity:.65;line-height:1.5;white-space:pre-line}
 .qp-vide{opacity:.55;font-size:.95rem;padding:20px 0}
+/* ---------- Galerie photos ---------- */
+.qh-galerie{flex-shrink:0;width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:inherit;
+  background:color-mix(in srgb,currentColor 13%,transparent)}
+.qh-galerie svg{width:21px;height:21px}
+.qg{position:fixed;inset:0;z-index:60;background:#0e0e10;color:#fff;display:flex;flex-direction:column;font-family:var(--police,system-ui,sans-serif);
+  animation:qg-in .18s ease-out}
+.qg.qg-dans{position:absolute}
+@keyframes qg-in{from{opacity:0}to{opacity:1}}
+.qg *{box-sizing:border-box}
+.qg-tete{display:flex;align-items:center;gap:10px;padding:12px 14px;padding-top:calc(12px + env(safe-area-inset-top));flex-shrink:0}
+.qg-tete h2{flex:1;margin:0;font-size:1.1rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.qg-tete small{opacity:.6;font-size:.85rem}
+.qg-x{flex-shrink:0;width:42px;height:42px;border:0;border-radius:50%;background:rgba(255,255,255,.12);color:#fff;font-size:1.5rem;line-height:1;cursor:pointer}
+.qg-grille{flex:1;overflow-y:auto;overscroll-behavior:contain;display:grid;grid-template-columns:repeat(3,1fr);gap:3px;padding:0 3px calc(12px + env(safe-area-inset-bottom));align-content:start}
+@media (min-width:700px){.qg:not(.qg-dans) .qg-grille{grid-template-columns:repeat(4,1fr);max-width:1100px;width:100%;margin:0 auto}}
+.qg-grille button{display:block;padding:0;border:0;aspect-ratio:1;background:#222;cursor:pointer;overflow:hidden}
+.qg-grille img{width:100%;height:100%;object-fit:cover;display:block}
+.qg-vue{position:absolute;inset:0;z-index:2;background:#000;display:flex;align-items:center;justify-content:center;touch-action:pan-y;user-select:none;-webkit-user-select:none}
+.qg-vue img{max-width:100%;max-height:100%;object-fit:contain;transition:transform .2s ease-out}
+.qg-vue .qg-x{position:absolute;top:calc(12px + env(safe-area-inset-top));right:14px}
+.qg-num{position:absolute;top:calc(22px + env(safe-area-inset-top));left:18px;font-size:.9rem;opacity:.8}
+.qg-fl{position:absolute;top:50%;transform:translateY(-50%);width:46px;height:46px;border:0;border-radius:50%;background:rgba(255,255,255,.14);
+  color:#fff;font-size:1.6rem;line-height:1;cursor:pointer}
+.qg-fl:disabled{opacity:.25;cursor:default}
+.qg-prec{left:10px}.qg-suiv{right:10px}
+@media (hover:none){.qg-fl{display:none}}
 `;
 
 function injecterCSS(doc) {
@@ -557,6 +598,19 @@ function rendrePage(cfgBrut, racine, opts) {
   let grille = null; // grille d'icônes rondes en cours
   const nouvelleGrille = () => { grille = doc.createElement('div'); grille.className = 'qp-rs'; zone.appendChild(grille); };
 
+  function peindre(a, coul) {
+    if (d.style === 'contour') {
+      a.style.background = 'transparent';
+      a.style.borderColor = coul;
+      a.style.color = d.imageFond ? '#ffffff' : coul;
+    } else if (d.style === 'doux') {
+      a.style.background = 'color-mix(in srgb,' + coul + ' 16%, transparent)';
+      a.style.color = d.imageFond ? '#ffffff' : coul;
+    } else {
+      a.style.background = coul;
+      a.style.color = texteContraste(coul);
+    }
+  }
   visibles.forEach(b => {
     if (b.type === 'reseaux') {
       const items = cfg.reseaux.filter(r => r.actif && (opts.apercu || String(r.valeur || '').trim()));
@@ -593,18 +647,7 @@ function rendrePage(cfgBrut, racine, opts) {
     a.className = 'qp-btn';
     a.href = construireLien(b);
     if (/^https?:/i.test(a.getAttribute('href'))) { a.target = '_blank'; a.rel = 'noopener'; }
-    const coul = b.couleur || d.accent;
-    if (d.style === 'contour') {
-      a.style.background = 'transparent';
-      a.style.borderColor = coul;
-      a.style.color = d.imageFond ? '#ffffff' : coul;
-    } else if (d.style === 'doux') {
-      a.style.background = 'color-mix(in srgb,' + coul + ' 16%, transparent)';
-      a.style.color = d.imageFond ? '#ffffff' : coul;
-    } else {
-      a.style.background = coul;
-      a.style.color = texteContraste(coul);
-    }
+    peindre(a, b.couleur || d.accent);
     if (b.icone) {
       const i = doc.createElement('span');
       i.className = 'qp-ico';
@@ -617,6 +660,28 @@ function rendrePage(cfgBrut, racine, opts) {
     if (opts.apercu) a.addEventListener('click', e => e.preventDefault());
     zone.appendChild(a);
   });
+  if (galerieVisible(cfg)) {                        // 📷 Galerie : dernier bouton (icône ronde dans les dispositions à icônes)
+    nbAffiches++;
+    const nomG = titreGalerie(cfg, doc);
+    const ouvrir = e => { e.preventDefault(); ouvrirGalerie(cfg, doc, res, opts.apercu ? racine : null); };
+    if (ronds) {
+      if (!grille) nouvelleGrille();
+      const r = creerRond(doc, { href: '#galerie', nom: nomG, icone: ICONES_ACTIONS.galerie, fond: d.reseauxTheme ? d.accent : (d.accent || '#444'), nomVisible: d.nomsReseaux });
+      r.classList.add('qp-galerie');
+      r.addEventListener('click', ouvrir);
+      grille.appendChild(r);
+    } else {
+      grille = null;
+      const a = doc.createElement('a');
+      a.className = 'qp-btn qp-galerie';
+      a.href = '#galerie';
+      peindre(a, d.accent);
+      const i = doc.createElement('span'); i.className = 'qp-ico'; i.textContent = '📷'; a.appendChild(i);
+      const tx = doc.createElement('span'); tx.textContent = nomG; a.appendChild(tx);
+      a.addEventListener('click', ouvrir);
+      zone.appendChild(a);
+    }
+  }
   if (!nbAffiches && opts.apercu) {
     const v = doc.createElement('div');
     v.className = 'qp-vide';
@@ -1047,6 +1112,16 @@ function rendreHome(cfgBrut, racine, opts) {
   contact.style.background = d.accent;
   contact.style.color = texteContraste(d.accent);
   if (opts.surContact) contact.addEventListener('click', e => { e.preventDefault(); opts.surContact(); });
+  if (galerieVisible(cfg)) {
+    const g = doc.createElement('a');
+    g.className = 'qh-galerie';
+    g.href = '#galerie';
+    const nomG = titreGalerie(cfg, doc);
+    g.title = nomG; g.setAttribute('aria-label', nomG);
+    g.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 8.5h3.5L8.5 5.5h7l2 3H21V19H3z"/><circle cx="12" cy="13.5" r="3.5"/></svg>';
+    g.addEventListener('click', e => { e.preventDefault(); ouvrirGalerie(cfg, doc, res, opts.apercu ? racine : null); });
+    barre.appendChild(g);
+  }
   barre.appendChild(contact);
   const languesH = opts.apercu ? null : selecteurLangues(doc, true);
   if (languesH) barre.appendChild(languesH);          // tout à droite de la barre
@@ -1148,6 +1223,115 @@ function rendreHome(cfgBrut, racine, opts) {
   return cfg;
 }
 
+
+/* ---------- Galerie : grille de vignettes puis photo plein écran (glisser pour la suivante) ----------
+   dans : conteneur de l'aperçu de l'éditeur (sinon plein écran sur la page, avec retour arrière du téléphone) */
+function ouvrirGalerie(cfg, doc, res, dans) {
+  const photos = ((cfg.galerie && cfg.galerie.photos) || []).filter(x => x && x.src).slice(0, GALERIE_MAX);
+  if (!photos.length) return;
+  res = res || (x => x);
+  const win = doc.defaultView || window;
+  const ancienne = (dans || doc.body).querySelector(':scope > .qg');
+  if (ancienne) ancienne.remove();
+  const nomG = titreGalerie(cfg, doc);
+  const fond = doc.createElement('div');
+  fond.className = 'qg' + (dans ? ' qg-dans' : '');
+  fond.setAttribute('role', 'dialog');
+  fond.setAttribute('aria-label', nomG);
+  const tete = doc.createElement('div'); tete.className = 'qg-tete';
+  const h = doc.createElement('h2'); h.textContent = nomG + ' ';
+  const nb = doc.createElement('small'); nb.textContent = String(photos.length); h.appendChild(nb);
+  const fermer = doc.createElement('button'); fermer.type = 'button'; fermer.className = 'qg-x'; fermer.textContent = '×'; fermer.setAttribute('aria-label', 'Fermer');
+  tete.append(h, fermer);
+  const grille = doc.createElement('div'); grille.className = 'qg-grille';
+  const alt = (i) => nomG + ' ' + (i + 1) + ' – ' + (cfg.titre || '');
+  photos.forEach((ph, i) => {
+    const b = doc.createElement('button'); b.type = 'button';
+    const im = doc.createElement('img');
+    im.src = res(ph.mini || ph.src); im.alt = alt(i);
+    im.setAttribute('loading', 'lazy'); im.setAttribute('decoding', 'async');
+    b.appendChild(im);
+    b.addEventListener('click', () => voir(i));
+    grille.appendChild(b);
+  });
+  fond.append(tete, grille);
+  if (dans) { if (win.getComputedStyle(dans).position === 'static') dans.style.position = 'relative'; dans.appendChild(fond); }
+  else { doc.body.appendChild(fond); doc.body.style.overflow = 'hidden'; }
+
+  // Retour arrière (téléphone) : ferme la photo, puis la galerie — sur la page publique seulement
+  const historique = !dans && win.history && win.history.pushState;
+  let niveaux = 0, vue = null, courant = 0;
+  const empiler = () => { if (historique) { win.history.pushState({ qg: ++niveaux }, ''); } };
+  const fermerVue = () => { if (vue) { vue.remove(); vue = null; } };
+  const toutFermer = () => {
+    fermerVue(); fond.remove();
+    if (!dans) doc.body.style.overflow = '';
+    win.removeEventListener('popstate', surRetour); doc.removeEventListener('keydown', surTouche);
+  };
+  function surRetour() {
+    if (niveaux > 0) niveaux--;
+    if (vue) fermerVue(); else toutFermer();
+  }
+  const reculer = (action) => { if (historique && niveaux > 0) win.history.back(); else action(); };
+  fermer.addEventListener('click', () => {
+    const n = niveaux; niveaux = 0;
+    toutFermer();                                     // écouteur retiré d'abord : le retour ci-dessous ne refait rien
+    if (historique && n > 0) win.history.go(-n);
+  });
+  if (historique) win.addEventListener('popstate', surRetour);
+  function surTouche(e) {
+    if (e.key === 'Escape') { e.preventDefault(); if (vue) reculer(fermerVue); else fermer.click(); }
+    else if (vue && e.key === 'ArrowRight') aller(courant + 1, 1);
+    else if (vue && e.key === 'ArrowLeft') aller(courant - 1, -1);
+  }
+  doc.addEventListener('keydown', surTouche);
+  empiler();
+
+  let img, num, prec, suiv;
+  function aller(k, sens) {
+    if (k < 0 || k >= photos.length) {               // petit rebond aux extrémités
+      img.style.transform = 'translateX(' + (k < 0 ? 24 : -24) + 'px)';
+      win.setTimeout(() => { img.style.transform = ''; }, 160);
+      return;
+    }
+    courant = k;
+    img.style.transform = sens ? 'translateX(' + (sens > 0 ? -30 : 30) + 'px)' : '';
+    img.style.opacity = sens ? '0.3' : '1';
+    img.src = res(photos[k].src);
+    img.alt = alt(k);
+    win.setTimeout(() => { img.style.transform = ''; img.style.opacity = '1'; }, 30);
+    num.textContent = (k + 1) + ' / ' + photos.length;
+    prec.disabled = k === 0; suiv.disabled = k === photos.length - 1;
+    [k - 1, k + 1].forEach(j => { if (photos[j]) { const pre = new win.Image(); pre.src = res(photos[j].src); } });   // voisines préchargées
+  }
+  function voir(i) {
+    fermerVue();
+    vue = doc.createElement('div'); vue.className = 'qg-vue';
+    img = doc.createElement('img'); img.setAttribute('decoding', 'async');
+    num = doc.createElement('div'); num.className = 'qg-num';
+    prec = doc.createElement('button'); prec.type = 'button'; prec.className = 'qg-fl qg-prec'; prec.textContent = '‹'; prec.setAttribute('aria-label', '←');
+    suiv = doc.createElement('button'); suiv.type = 'button'; suiv.className = 'qg-fl qg-suiv'; suiv.textContent = '›'; suiv.setAttribute('aria-label', '→');
+    const x = doc.createElement('button'); x.type = 'button'; x.className = 'qg-x'; x.textContent = '×'; x.setAttribute('aria-label', 'Fermer');
+    prec.addEventListener('click', e => { e.stopPropagation(); aller(courant - 1, -1); });
+    suiv.addEventListener('click', e => { e.stopPropagation(); aller(courant + 1, 1); });
+    x.addEventListener('click', e => { e.stopPropagation(); reculer(fermerVue); });
+    let x0 = null, y0 = 0;
+    vue.addEventListener('touchstart', e => { if (e.touches.length > 1) { x0 = null; return; } x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; }, { passive: true });
+    vue.addEventListener('touchmove', e => { if (x0 === null) return; const dx = e.touches[0].clientX - x0; img.style.transition = 'none'; img.style.transform = 'translateX(' + dx + 'px)'; }, { passive: true });
+    vue.addEventListener('touchend', e => {
+      img.style.transition = '';
+      if (x0 === null) return;
+      const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0; x0 = null;
+      if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) aller(courant + (dx < 0 ? 1 : -1), dx < 0 ? 1 : -1);
+      else if (dy > 90 && Math.abs(dy) > 2 * Math.abs(dx)) reculer(fermerVue);       // glisser vers le bas : retour à la grille
+      else img.style.transform = '';
+    });
+    vue.append(img, num, prec, suiv, x);
+    fond.appendChild(vue);
+    empiler();
+    aller(i, 0);
+  }
+}
 
 /* =========================================================
    Pages HTML fixes pour Google (générées par l'éditeur)

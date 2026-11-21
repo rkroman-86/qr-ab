@@ -374,6 +374,18 @@
     .bc-actions .esp{flex:1}
     .bc-coul{display:flex;align-items:center;gap:8px;font-size:.88rem;color:var(--doux)}
     .aide{font-size:.78rem;color:var(--doux);margin:-8px 0 10px}
+    .galp-tete{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:6px 0 10px}
+    .galp-compteur{font-weight:700;font-size:.9rem}
+    .galp-etat{margin:0 0 8px;min-height:1em}
+    .galp-grille{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:6px;max-height:min(420px,55vh);overflow-y:auto;overscroll-behavior:contain;padding:2px}
+    .galp-vign{position:relative;aspect-ratio:1;border-radius:8px;overflow:hidden;background:var(--bord,#ddd)}
+    .galp-vign img{width:100%;height:100%;object-fit:cover;display:block}
+    .galp-vign button{position:absolute;border:0;background:rgba(0,0,0,.6);color:#fff;cursor:pointer;font-size:.8rem;line-height:1;padding:0;width:26px;height:26px;border-radius:50%}
+    .galp-vign .galp-x{top:4px;right:4px}
+    .galp-vign .galp-g{bottom:4px;left:4px}
+    .galp-vign .galp-d{bottom:4px;right:4px}
+    .galp-vign button:disabled{display:none}
+    .galp-vide{font-size:.85rem;color:var(--doux);padding:14px 0}
     .ajout{display:flex;gap:8px}
     .ajout select{flex:1}
 
@@ -1210,7 +1222,7 @@
   }
   // Sections ouvertes : fermées à la toute première visite, puis dernier état mémorisé sur l'appareil
   const CLE_SECTIONS = 'qp-sections', CLE_DEFIL = 'qp-defilement';
-  const ORDRE_SECTIONS = ['textes', 'dispo', 'boutons', 'design', 'fond', 'logo', 'home', 'seo', 'partage'];
+  const ORDRE_SECTIONS = ['textes', 'dispo', 'boutons', 'design', 'fond', 'logo', 'home', 'galerie', 'seo', 'partage'];
   let sectionsOuvertes = (() => {
     try { const v = JSON.parse(localStorage.getItem(CLE_SECTIONS)); return Array.isArray(v) ? new Set(v) : new Set(); }
     catch (e) { return new Set(); }
@@ -2189,6 +2201,9 @@
 
     /* Page Home */
     f.appendChild(sectionHome());
+
+    /* Galerie photos (juste après la page Home) */
+    f.appendChild(sectionGalerie());
 
     /* Disposition */
     const dispos = el('div', { class: 'dispos' });
@@ -3638,6 +3653,96 @@
   let rafraichirQRPartage = null;      // le choix est dans « QR code et carte de visite » ; « Page Home » seulement si la Home est activée
 
   let pancarteActive = 0;
+  /* ---------------- Galerie photos ---------------- */
+  function dataVersBlob(data) {
+    const [ent, b] = data.split(',');
+    const bin = atob(b), o = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) o[i] = bin.charCodeAt(i);
+    return new Blob([o], { type: (ent.match(/data:([^;]+)/) || [])[1] || 'image/jpeg' });
+  }
+  // Une photo = une grande image (1280 px de côté au plus) + une vignette pour la grille (360 px)
+  async function preparerPhotoGalerie(f) {
+    const grande = await reduireImage(f, 1280, 'image/jpeg', 0.8);
+    const mini = await reduireImage(dataVersBlob(grande), 360, 'image/jpeg', 0.72);
+    const dims = await new Promise(ok => { const im = new Image(); im.onload = () => ok([im.naturalWidth, im.naturalHeight]); im.onerror = () => ok([0, 0]); im.src = grande; });
+    return { grande, mini, l: dims[0], h: dims[1] };
+  }
+  function sectionGalerie() {
+    if (!cfg.galerie || typeof cfg.galerie !== 'object') cfg.galerie = { actif: false, titre: '', photos: [] };
+    const g = cfg.galerie;
+    if (!Array.isArray(g.photos)) g.photos = [];
+    const actif = el('input', { type: 'checkbox', checked: !!g.actif });
+    const corps = el('div', { class: g.actif ? '' : 'cache' });
+    actif.addEventListener('change', () => {
+      g.actif = actif.checked;
+      corps.classList.toggle('cache', !g.actif);
+      changement();
+    });
+    const compteur = el('span', { class: 'galp-compteur' });
+    const etat = el('p', { class: 'aide galp-etat' });
+    const grille = el('div', { class: 'galp-grille' });
+    const fichier = el('input', { type: 'file', accept: 'image/*', multiple: true, class: 'cache' });
+    const ajouter = el('button', { type: 'button', class: 'btn btn-prim', text: '📷 Ajouter des photos', onclick: () => fichier.click() });
+    let enCours = false;
+    const oublier = ph => [ph.src, ph.mini].forEach(c => { if (c) { delete imagesAEnvoyer[c]; delete imagesLocales[c]; } });
+    function maj() {
+      const n = g.photos.length;
+      compteur.textContent = t(n + ' / ' + GALERIE_MAX + ' photos');
+      ajouter.disabled = enCours || n >= GALERIE_MAX;
+      grille.innerHTML = '';
+      if (!n) { grille.appendChild(el('div', { class: 'galp-vide', text: 'Aucune photo pour l’instant.' })); return; }
+      g.photos.forEach((ph, i) => {
+        const deplacer = j => { const [x] = g.photos.splice(i, 1); g.photos.splice(j, 0, x); maj(); changement(); };
+        grille.appendChild(el('div', { class: 'galp-vign' }, [
+          el('img', { src: imagesLocales[ph.mini] || imagesLocales[ph.src] || ph.mini || ph.src, alt: '', loading: 'lazy' }),
+          el('button', { type: 'button', class: 'galp-x', text: '✕', title: t('Retirer cette photo'), 'aria-label': t('Retirer cette photo'),
+            onclick: () => { g.photos.splice(i, 1); oublier(ph); maj(); changement(); } }),
+          el('button', { type: 'button', class: 'galp-g', text: '←', title: t('Déplacer vers la gauche'), disabled: i === 0, onclick: () => deplacer(i - 1) }),
+          el('button', { type: 'button', class: 'galp-d', text: '→', title: t('Déplacer vers la droite'), disabled: i === n - 1, onclick: () => deplacer(i + 1) })
+        ]));
+      });
+    }
+    fichier.addEventListener('change', async () => {
+      const tous = [...fichier.files];
+      fichier.value = '';
+      const place = GALERIE_MAX - g.photos.length;
+      const liste = tous.slice(0, Math.max(0, place));
+      if (!liste.length) { etat.textContent = t('La galerie est pleine (' + GALERIE_MAX + ' photos maximum).'); return; }
+      enCours = true; maj();
+      let echecs = 0;
+      for (let k = 0; k < liste.length; k++) {
+        etat.textContent = t('Préparation des photos ' + (k + 1) + ' / ' + liste.length + '…');
+        try {
+          const r = await preparerPhotoGalerie(liste[k]);
+          const base = 'images/galerie-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
+          const src = base + '.jpg', mini = base + '-m.jpg';
+          imagesLocales[src] = r.grande; imagesAEnvoyer[src] = r.grande.split(',')[1];
+          imagesLocales[mini] = r.mini; imagesAEnvoyer[mini] = r.mini.split(',')[1];
+          g.photos.push({ src, mini, l: r.l, h: r.h });
+        } catch (e) { echecs++; }
+        if (k % 4 === 3) maj();
+      }
+      enCours = false;
+      const msgs = [];
+      if (liste.length - echecs) msgs.push(t((liste.length - echecs) + ' photo(s) ajoutée(s). Enregistrez pour les publier.'));
+      if (echecs) msgs.push(t(echecs + ' photo(s) illisible(s), ignorée(s).'));
+      if (tous.length > liste.length) msgs.push(t((tous.length - liste.length) + ' photo(s) en trop : ' + GALERIE_MAX + ' photos maximum.'));
+      etat.textContent = msgs.join(' ');
+      maj(); changement();
+    });
+    maj();
+    corps.append(
+      champTexte('Titre du bouton', g, 'titre', { ph: t('Galerie') }),
+      el('div', { class: 'galp-tete' }, [compteur, ajouter]),
+      fichier, etat, grille,
+      el('p', { class: 'aide', style: 'margin:10px 0 0', text: 'Les photos sont réduites automatiquement pour s’afficher vite et prendre peu de place. Les visiteurs ouvrent la galerie avec le bouton « 📷 » de la page contact (et de la barre de la page Home), puis touchent une photo pour la voir en grand et glissent pour passer à la suivante.' })
+    );
+    return section('galerie', 'Galerie photos', false, [
+      el('label', { class: 'bascule', style: 'border-top:0' }, [el('span', { text: 'Activer la galerie' }), actif]),
+      corps
+    ]);
+  }
+
   function sectionHome() {
     const h = cfg.home;
     const actif = el('input', { type: 'checkbox', checked: !!h.actif });
@@ -4716,9 +4821,12 @@
       try { await preparerIconesAppli(); } catch (e) { console.warn('Icônes de l’appli non mises à jour', e); }
       try { await preparerCarteApp(false); } catch (e) { console.warn('Cartes de l’appli non mises à jour', e); }
       // 1. images d'abord, pour que la page ne pointe jamais vers une image absente
-      const chemins = Object.keys(imagesAEnvoyer).filter(p => CF || JSON.stringify(cfg).includes(p));
+      const texteCfg = JSON.stringify(cfg);
+      // photos de la galerie retirées avant l'enregistrement : jamais envoyées
+      const chemins = Object.keys(imagesAEnvoyer).filter(p => (CF && !/^images\/galerie-/.test(p)) || texteCfg.includes(p));
+      let nEnv = 0;
       for (const p of chemins) {
-        etat.textContent = 'Envoi de l’image…';
+        etat.textContent = chemins.length > 3 ? t('Envoi des images ' + (++nEnv) + ' / ' + chemins.length + '…') : 'Envoi de l’image…';
         await gh.ecrire(p, imagesAEnvoyer[p], 'Image : ' + p, null);
         delete imagesAEnvoyer[p];
       }
