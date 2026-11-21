@@ -316,10 +316,19 @@ const CSS_PAGE = `
 .qp-credit{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(6px + env(safe-area-inset-bottom));z-index:3;
   font:500 .62rem/1.2 system-ui,-apple-system,sans-serif;letter-spacing:.02em;color:inherit;opacity:.42;text-decoration:none;white-space:nowrap}
 .qp-credit:hover,.qp-credit:focus-visible{opacity:.8;text-decoration:underline}
-.qp-haut-droite{position:absolute;top:calc(14px + env(safe-area-inset-top));right:14px;z-index:5;display:flex;gap:8px;align-items:center}
-.qp .qp-haut-droite .qp-appli{position:static}
+.qp-haut-gauche{position:absolute;top:calc(14px + env(safe-area-inset-top));left:14px;z-index:5;display:flex;gap:8px;align-items:center}
+.qp .qp-haut-gauche .qp-appli{position:static}
+.qp-haut-gauche .qp-langsel ul{right:auto;left:0}
+.qp-haut-droite{position:absolute;top:calc(14px + env(safe-area-inset-top));right:14px;z-index:5;display:flex;flex-direction:column;gap:8px;align-items:flex-end;
+  max-width:calc(100% - 28px)}
+.qp-avec-appli .qp-haut-droite,.qp-haut-2 .qp-haut-droite{max-width:calc(100% - 150px)}
+.qp-haut-droite>a{max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.qp-haut-droite .qp-lien-home{position:static;transform:none}
+.qp-galerie{display:inline-flex;align-items:center;gap:7px;padding:9px 16px;border-radius:999px;background:rgba(0,0,0,.38);color:#fff;font-weight:600;font-size:.88rem;
+  text-decoration:none;white-space:nowrap;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 4px 14px rgba(0,0,0,.18)}
+.qp-galerie .qp-ico{font-size:1rem;line-height:1}
+.qp.qp-haut-2{padding-top:124px}
 .qp-appli.qp-appli-court{padding:9px 11px}
-.qp-avec-langues .qp-lien-home{max-width:calc(100% - 172px);overflow:hidden;text-overflow:ellipsis}
 .qp-langsel{position:relative;flex:none;font:600 .88rem/1.2 system-ui,-apple-system,sans-serif}
 .qp-langsel>button{display:inline-flex;align-items:center;gap:5px;margin:0;padding:9px 12px;border:0;border-radius:999px;cursor:pointer;
   background:rgba(0,0,0,.38);color:#fff;font:inherit;letter-spacing:.03em;white-space:nowrap;
@@ -386,7 +395,6 @@ const CSS_PAGE = `
   background:rgba(0,0,0,.38);color:#fff;font:600 .88rem/1.2 var(--police);white-space:nowrap;
   backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 4px 14px rgba(0,0,0,.18)}
 .qp .qp-appli svg{width:16px;height:16px;flex:none}
-.qp-avec-appli .qp-lien-home{left:14px;transform:none}
 .qp-aide-appli{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.5);display:flex;align-items:flex-end;justify-content:center;font-family:system-ui,sans-serif}
 .qp-aide-appli>div{background:#fff;color:#1b1b1b;width:min(100%,420px);border-radius:20px 20px 0 0;padding:22px 20px calc(22px + env(safe-area-inset-bottom));box-sizing:border-box}
 .qp-aide-appli b{display:block;font-size:1.1rem;margin-bottom:8px}
@@ -465,9 +473,11 @@ const CSS_PAGE = `
 .qp-pied{margin-top:28px;font-size:.85rem;opacity:.65;line-height:1.5;white-space:pre-line}
 .qp-vide{opacity:.55;font-size:.95rem;padding:20px 0}
 /* ---------- Galerie photos ---------- */
-.qh-galerie{flex-shrink:0;width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:inherit;
-  background:color-mix(in srgb,currentColor 13%,transparent)}
-.qh-galerie svg{width:21px;height:21px}
+.qh-galerie{position:absolute;right:14px;top:calc(100% + 10px);display:inline-flex;align-items:center;gap:7px;max-width:calc(100% - 28px);
+  padding:8px 15px;border-radius:999px;font-weight:700;font-size:.88rem;text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--texte);
+  background:color-mix(in srgb,var(--fond) 76%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border:1px solid color-mix(in srgb,var(--texte) 12%,transparent);box-shadow:0 4px 14px rgba(0,0,0,.18)}
+.qh-galerie svg{width:17px;height:17px;flex:none}
 .qg{position:fixed;inset:0;z-index:60;background:#0e0e10;color:#fff;display:flex;flex-direction:column;font-family:var(--police,system-ui,sans-serif);
   animation:qg-in .18s ease-out}
 .qg.qg-dans{position:absolute}
@@ -660,28 +670,6 @@ function rendrePage(cfgBrut, racine, opts) {
     if (opts.apercu) a.addEventListener('click', e => e.preventDefault());
     zone.appendChild(a);
   });
-  if (galerieVisible(cfg)) {                        // 📷 Galerie : dernier bouton (icône ronde dans les dispositions à icônes)
-    nbAffiches++;
-    const nomG = titreGalerie(cfg, doc);
-    const ouvrir = e => { e.preventDefault(); ouvrirGalerie(cfg, doc, res, opts.apercu ? racine : null); };
-    if (ronds) {
-      if (!grille) nouvelleGrille();
-      const r = creerRond(doc, { href: '#galerie', nom: nomG, icone: ICONES_ACTIONS.galerie, fond: d.reseauxTheme ? d.accent : (d.accent || '#444'), nomVisible: d.nomsReseaux });
-      r.classList.add('qp-galerie');
-      r.addEventListener('click', ouvrir);
-      grille.appendChild(r);
-    } else {
-      grille = null;
-      const a = doc.createElement('a');
-      a.className = 'qp-btn qp-galerie';
-      a.href = '#galerie';
-      peindre(a, d.accent);
-      const i = doc.createElement('span'); i.className = 'qp-ico'; i.textContent = '📷'; a.appendChild(i);
-      const tx = doc.createElement('span'); tx.textContent = nomG; a.appendChild(tx);
-      a.addEventListener('click', ouvrir);
-      zone.appendChild(a);
-    }
-  }
   if (!nbAffiches && opts.apercu) {
     const v = doc.createElement('div');
     v.className = 'qp-vide';
@@ -716,35 +704,50 @@ function rendrePage(cfgBrut, racine, opts) {
 
   if (d.imageFond) lisibiliteTexte(d, page, c);
   page.appendChild(c);
-  if (opts.lienHome) {
-    const l = doc.createElement('a');
-    l.className = 'qp-lien-home';
-    l.href = opts.hrefHome || '#accueil';
-    l.textContent = cfg.home.lienTexte || 'Découvrir l’entreprise';
-    if (opts.surHome) l.addEventListener('click', e => { e.preventDefault(); opts.surHome(); });
-    page.appendChild(l);
-    page.classList.add('qp-avec-home');
-  }
-  // En haut à droite : « Installer l'appli » (pages qrbc, pas une fois installée) puis le choix de la langue
+  // En haut à gauche : « Installer l'appli » (pages qrbc, pas une fois installée) puis le choix de la langue
+  // En haut à droite : « Découvrir l'entreprise » (page Home) et, dessous, « 📷 Galerie » (si activée)
   const langues = opts.apercu ? null : selecteurLangues(doc, false);
-  const hautDroite = doc.createElement('div');
-  hautDroite.className = 'qp-haut-droite';
+  const hautGauche = doc.createElement('div');
+  hautGauche.className = 'qp-haut-gauche';
   if (d.installer !== false && (opts.apercu || (pageInstallable() && !appliInstallee()))) {
     const b = doc.createElement('button');
     b.type = 'button';
     b.className = 'qp-appli';
     b.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M12 7v7M9 11l3 3 3-3"/></svg>';
     const TA = textesAppli(doc);
-    if (langues) b.classList.add('qp-appli-court');      // avec le choix de langue : icône seule, pour la place
+    if (langues || opts.lienHome) b.classList.add('qp-appli-court');      // place partagée : icône seule
     else b.appendChild(doc.createTextNode(TA.bouton));
     b.title = TA.titre;
     b.setAttribute('aria-label', TA.titre);
     if (!opts.apercu) b.addEventListener('click', () => installerAppli(doc));
-    hautDroite.appendChild(b);
-    page.classList.add('qp-avec-appli');
+    hautGauche.appendChild(b);
   }
-  if (langues) { hautDroite.appendChild(langues); page.classList.add('qp-avec-appli', 'qp-avec-langues'); }
-  if (hautDroite.childNodes.length) page.appendChild(hautDroite);
+  if (langues) { hautGauche.appendChild(langues); page.classList.add('qp-avec-langues'); }
+  const hautDroite = doc.createElement('div');
+  hautDroite.className = 'qp-haut-droite';
+  if (opts.lienHome) {
+    const l = doc.createElement('a');
+    l.className = 'qp-lien-home';
+    l.href = opts.hrefHome || '#accueil';
+    l.textContent = cfg.home.lienTexte || 'Découvrir l’entreprise';
+    if (opts.surHome) l.addEventListener('click', e => { e.preventDefault(); opts.surHome(); });
+    hautDroite.appendChild(l);
+    page.classList.add('qp-avec-home');
+  }
+  if (galerieVisible(cfg)) {
+    const g = doc.createElement('a');
+    g.className = 'qp-galerie';
+    g.href = '#galerie';
+    const ico = doc.createElement('span'); ico.className = 'qp-ico'; ico.textContent = '📷'; g.appendChild(ico);
+    const tx = doc.createElement('span'); tx.textContent = titreGalerie(cfg, doc); g.appendChild(tx);
+    g.addEventListener('click', e => { e.preventDefault(); ouvrirGalerie(cfg, doc, res, opts.apercu ? racine : null); });
+    hautDroite.appendChild(g);
+  }
+  if (hautGauche.childNodes.length) { page.appendChild(hautGauche); page.classList.add('qp-avec-appli'); }
+  if (hautDroite.childNodes.length) {
+    page.appendChild(hautDroite);
+    page.classList.add(hautDroite.childNodes.length > 1 ? 'qp-haut-2' : 'qp-avec-appli');
+  }
   page.appendChild(creditQrbc(doc, opts.apercu));
   racine.appendChild(page);
   return cfg;
@@ -1112,19 +1115,18 @@ function rendreHome(cfgBrut, racine, opts) {
   contact.style.background = d.accent;
   contact.style.color = texteContraste(d.accent);
   if (opts.surContact) contact.addEventListener('click', e => { e.preventDefault(); opts.surContact(); });
-  if (galerieVisible(cfg)) {
+  const languesH = opts.apercu ? null : selecteurLangues(doc, true);
+  if (languesH) barre.appendChild(languesH);
+  barre.appendChild(contact);                         // Contact tout à droite de la barre
+  if (galerieVisible(cfg)) {                          // 📷 Galerie juste sous la barre, à droite
     const g = doc.createElement('a');
     g.className = 'qh-galerie';
     g.href = '#galerie';
-    const nomG = titreGalerie(cfg, doc);
-    g.title = nomG; g.setAttribute('aria-label', nomG);
     g.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 8.5h3.5L8.5 5.5h7l2 3H21V19H3z"/><circle cx="12" cy="13.5" r="3.5"/></svg>';
+    g.appendChild(doc.createTextNode(titreGalerie(cfg, doc)));
     g.addEventListener('click', e => { e.preventDefault(); ouvrirGalerie(cfg, doc, res, opts.apercu ? racine : null); });
     barre.appendChild(g);
   }
-  barre.appendChild(contact);
-  const languesH = opts.apercu ? null : selecteurLangues(doc, true);
-  if (languesH) barre.appendChild(languesH);          // tout à droite de la barre
 
   /* Pancartes */
   const defile = doc.createElement('div');
