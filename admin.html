@@ -328,6 +328,15 @@
     .cmd-ok input{margin-top:3px;flex:0 0 auto}
     .modeles-carte{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
     /* Appli « carte de visite » (écran d'accueil) : choix des cartes, numéro d'ordre sur chaque vignette */
+    /* Rédacteur de la page Home : une pancarte à la fois, glissement gauche/droite, « ◀ 1 / 5 ▶ » en dessous */
+    .carrousel-pancartes{touch-action:pan-y}
+    .carrousel-pancartes .article-carte{animation:pancarteEntre .18s ease-out}
+    .carrousel-pancartes .article-carte.depuis-gauche{animation-name:pancarteGauche}
+    @keyframes pancarteEntre{from{opacity:.3;transform:translateX(24px)}to{opacity:1;transform:none}}
+    @keyframes pancarteGauche{from{opacity:.3;transform:translateX(-24px)}to{opacity:1;transform:none}}
+    .nav-pancartes{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:2px 0 12px}
+    .nav-pancartes button{min-width:56px;font-size:1.25rem;padding:8px 14px}
+    .nav-pancartes span{font-weight:600;font-variant-numeric:tabular-nums}
     .app-cartes{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:10px 0 14px}
     .app-carte{position:relative;border:2px solid var(--ligne);border-radius:12px;padding:6px;background:var(--bg);color:var(--txt);display:flex;flex-direction:column;gap:4px;cursor:pointer}
     .app-carte img{width:100%;aspect-ratio:2008/1300;object-fit:contain;border-radius:6px;display:block}
@@ -3628,6 +3637,7 @@
   }
   let rafraichirQRPartage = null;      // le choix est dans « QR code et carte de visite » ; « Page Home » seulement si la Home est activée
 
+  let pancarteActive = 0;
   function sectionHome() {
     const h = cfg.home;
     const actif = el('input', { type: 'checkbox', checked: !!h.actif });
@@ -3640,18 +3650,54 @@
       changement();
     });
 
-    const liste = el('div');
-    h.articles.forEach((a, i) => liste.appendChild(carteArticle(a, i)));
+    // Carrousel : une pancarte affichée, les autres gardées en mémoire (cachées)
+    const n = h.articles.length;
+    pancarteActive = Math.max(0, Math.min(pancarteActive, n - 1));
+    const liste = el('div', { class: 'carrousel-pancartes' });
+    const cartesP = h.articles.map((a, i) => carteArticle(a, i));
+    cartesP.forEach(c => liste.appendChild(c));
+    const precedente = el('button', { type: 'button', class: 'btn', text: '◀', 'aria-label': t('Pancarte précédente') });
+    const suivante = el('button', { type: 'button', class: 'btn', text: '▶', 'aria-label': t('Pancarte suivante') });
+    const compteur = el('span');
+    function montrerPancarte(k, sens) {
+      if (!n) return;
+      pancarteActive = Math.max(0, Math.min(k, n - 1));
+      cartesP.forEach((c, j) => {
+        c.classList.toggle('cache', j !== pancarteActive);
+        c.classList.toggle('depuis-gauche', sens < 0);
+        if (j === pancarteActive && sens) { c.style.animation = 'none'; void c.offsetWidth; c.style.animation = ''; }
+      });
+      compteur.textContent = t('Pancarte ' + (pancarteActive + 1) + ' / ' + n);
+      precedente.disabled = pancarteActive === 0; suivante.disabled = pancarteActive === n - 1;
+      // pancarte haute : si son début est au-dessus de l'écran (après ◀ ▶ en bas), on y remonte
+      if (sens) { const c = cartesP[pancarteActive], r = c.getBoundingClientRect(); if (r.top < 0) c.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+    }
+    precedente.addEventListener('click', () => montrerPancarte(pancarteActive - 1, -1));
+    suivante.addEventListener('click', () => montrerPancarte(pancarteActive + 1, 1));
+    // Glissement gauche/droite (pas quand on écrit dans un champ)
+    let x0 = null, y0 = 0;
+    liste.addEventListener('touchstart', e => {
+      const cible = e.target.closest('input, textarea, select, [contenteditable]');
+      x0 = cible || e.touches.length > 1 ? null : e.touches[0].clientX; y0 = e.touches[0].clientY;
+    }, { passive: true });
+    liste.addEventListener('touchend', e => {
+      if (x0 === null) return;
+      const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0; x0 = null;
+      if (Math.abs(dx) > 60 && Math.abs(dx) > 2 * Math.abs(dy)) montrerPancarte(pancarteActive + (dx < 0 ? 1 : -1), dx < 0 ? 1 : -1);
+    }, { passive: true });
+    const nav = el('div', { class: 'nav-pancartes' + (n > 1 ? '' : ' cache') }, [precedente, compteur, suivante]);
+    montrerPancarte(pancarteActive, 0);
     const plein = h.articles.length >= HOME_MAX_ARTICLES;
     const ajouter = el('button', { type: 'button', class: 'btn ajout-article', disabled: plein,
       text: plein ? 'Maximum atteint (' + HOME_MAX_ARTICLES + ' articles)' : '＋ Ajouter un article (' + h.articles.length + '/' + HOME_MAX_ARTICLES + ')' });
     ajouter.addEventListener('click', () => {
       if (h.articles.length >= HOME_MAX_ARTICLES) return;
       h.articles.push({ titre: t('Nouvel article'), texte: '', image: '', style: 'texte' });
+      pancarteActive = h.articles.length - 1;             // la nouvelle pancarte s'affiche
       vueApercu = 'home';
       construireFormulaire(); changement();
-      const cartes = document.querySelectorAll('.article-carte');
-      if (cartes.length) cartes[cartes.length - 1].scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const visible = document.querySelector('.carrousel-pancartes .article-carte:not(.cache)');
+      if (visible) visible.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
 
     corps.append(
@@ -3661,7 +3707,7 @@
       ]),
       blocIA(),
       el('span', { class: 'etiq', text: 'Articles — une pancarte plein écran chacun, on passe de l’une à l’autre en glissant' }),
-      liste, ajouter
+      liste, nav, ajouter
     );
     return section('home', 'Page Home', false, [
       el('label', { class: 'bascule', style: 'border-top:0' }, [el('span', { text: 'Activer la page Home' }), actif]),
@@ -4533,6 +4579,7 @@
       const j = i + dir; if (j < 0 || j >= n) return;
       const L = cfg.home.articles;
       [L[i], L[j]] = [L[j], L[i]];
+      pancarteActive = j;                                 // on suit la pancarte déplacée
       construireFormulaire(); changement();
     };
     const champTitre = champTexte('Titre', a, 'titre', { ph: 'Qui sommes-nous ?' });
@@ -4578,12 +4625,12 @@
       champTexte('Description de l’image (Google, malvoyants)', a, 'alt',
         { ph: [a.titre, cfg.titre].filter(Boolean).join(' – ') || t('Ex. : Mercedes Classe V devant l’aéroport d’Orly') }),
       el('div', { class: 'bc-actions' }, [
-        el('button', { type: 'button', class: 'btn btn-mini', text: '↑', disabled: i === 0, onclick: () => deplacer(-1) }),
-        el('button', { type: 'button', class: 'btn btn-mini', text: '↓', disabled: i === n - 1, onclick: () => deplacer(1) }),
+        el('button', { type: 'button', class: 'btn btn-mini', text: '←', title: t('Déplacer vers la gauche'), 'aria-label': t('Déplacer vers la gauche'), disabled: i === 0, onclick: () => deplacer(-1) }),
+        el('button', { type: 'button', class: 'btn btn-mini', text: '→', title: t('Déplacer vers la droite'), 'aria-label': t('Déplacer vers la droite'), disabled: i === n - 1, onclick: () => deplacer(1) }),
         el('span', { class: 'esp' }),
         el('button', { type: 'button', class: 'btn btn-mini', text: '🗑 Supprimer', disabled: n <= 1, onclick: () => {
           if (!confirm(t('Supprimer la pancarte « ' + (a.titre || t('sans titre')) + ' » ?'))) return;
-          cfg.home.articles.splice(i, 1); construireFormulaire(); changement();
+          cfg.home.articles.splice(i, 1); pancarteActive = Math.min(i, cfg.home.articles.length - 1); construireFormulaire(); changement();
         } })
       ])
     );

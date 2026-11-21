@@ -1045,6 +1045,11 @@
     'PNG ou SVG ?': ['PNG or SVG?', 'PNG или SVG?'],
     'PNG pour un usage courant : écran, document, impression maison. SVG pour un imprimeur : le dessin reste net à n’importe quelle taille.': ['PNG for everyday use: screen, documents, home printing. SVG for a print shop: the pattern stays sharp at any size.', 'PNG — для обычного использования: экран, документы, домашняя печать. SVG — для типографии: рисунок остаётся чётким при любом размере.'],
     'Accueil': ['Home', 'Главная'],
+    // --- carrousel des pancartes dans le rédacteur (21/11/2026) ---
+    'Pancarte précédente': ['Previous slide', 'Предыдущий слайд'],
+    'Pancarte suivante': ['Next slide', 'Следующий слайд'],
+    'Déplacer vers la gauche': ['Move left', 'Переместить влево'],
+    'Déplacer vers la droite': ['Move right', 'Переместить вправо'],
     // --- le QR code ouvre un lien personnel (20/11/2026) ---
     'Lien personnel': ['Personal link', 'Своя ссылка'],
     'Ma page': ['My page', 'Моя страница'],
