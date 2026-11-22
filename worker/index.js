@@ -415,7 +415,7 @@ async function pageDemarrage(env, slug, vue) {
   try { cfg = JSON.parse(await env.CLIENTS.get('site:' + slug + ':config.json') || '{}'); } catch (e) {}
   const seo = cfg.seo || {};
   const titre = seo.titre || cfg.titre || slug;
-  const desc = seo.description || cfg.sousTitre || '';
+  const desc = seo.description || sansLiensTxt(cfg.sousTitre) || '';
   return '<!DOCTYPE html>\n<html lang="fr"><head><meta charset="utf-8">' +
     '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">' +
     '<title>' + esc(titre) + '</title>' + (desc ? '<meta name="description" content="' + esc(desc) + '">' : '') +
@@ -444,7 +444,7 @@ async function manifestePage(env, slug) {
     { src: '/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
   ];
   const m = {
-    id: '/', name: nom, short_name: court, description: String((cfg.seo && cfg.seo.description) || cfg.sousTitre || '').slice(0, 300),
+    id: '/', name: nom, short_name: court, description: String((cfg.seo && cfg.seo.description) || sansLiensTxt(cfg.sousTitre) || '').slice(0, 300),
     start_url: '/', scope: '/', display: 'standalone', orientation: 'portrait', lang: 'fr',
     background_color: couleur, theme_color: couleur, icons: icones
   };
@@ -3877,6 +3877,9 @@ function textesATraduire(cfg) {
   mettre('seo.titre', seo.titre); mettre('seo.description', seo.description); mettre('seo.motCle', seo.motCle);
   return t;
 }
+// Liens écrits dans les textes (même forme que RE_LIEN de commun.js)
+const RE_LIEN_TXT = /\[([^\[\]\n]{1,200})\]\(((?:page|article):[a-z0-9_-]+|https?:\/\/[^\s)]+|mailto:[^\s)]+|tel:[^\s)]+)\)/;
+const sansLiensTxt = t => String(t || '').replace(new RegExp(RE_LIEN_TXT.source, 'g'), '$1');
 async function traduireConfig(env, cleIA, cfg, de, vers) {
   const copie = JSON.parse(JSON.stringify(cfg));
   // textes par défaut affichés sur la page (sinon ils resteraient en français)
@@ -3893,6 +3896,7 @@ async function traduireConfig(env, cleIA, cfg, de, vers) {
       system: 'You translate the texts of a small business mobile page from ' + (NOMS_LANGUES[de] || de) + ' to ' + (NOMS_LANGUES[vers] || vers) + '. ' +
         'Translate naturally for local customers, keeping the tone, meaning and approximate length. Keep brand names, person names, ' +
         'street addresses and place names unchanged (transliterate them only if the target script requires it). Keep emojis and line breaks. ' +
+        'Texts may contain links written as [words](target): translate only the words inside the square brackets and copy the (target) part exactly, unchanged. ' +
         'Output ONLY a JSON object with exactly the same keys as the input and the translated strings as values.',
       messages: [{ role: 'user', content: JSON.stringify(textes, null, 1) }]
     })
@@ -3909,10 +3913,14 @@ async function traduireConfig(env, cleIA, cfg, de, vers) {
   for (const cle of Object.keys(textes)) {
     const v = sortie[cle];
     if (typeof v !== 'string' || !v.trim()) continue;            // texte manquant : on garde l'original
+    // liens [mots](cible) : s'ils ont été abîmés par la traduction, on garde le texte traduit sans les liens (jamais de lien cassé)
+    const cibles = x => (String(x).match(new RegExp(RE_LIEN_TXT.source, 'g')) || []).map(m => m.replace(RE_LIEN_TXT, '$2')).sort().join(' ');
+    let w = v;
+    if (cibles(textes[cle]) !== cibles(w)) w = w.replace(new RegExp(RE_LIEN_TXT.source, 'g'), '$1').replace(/\]\([^)\s]*\)/g, '').replace(/[\[\]]/g, '');
     const chemin = cle.split('.');
     let o = copie;
     for (let i = 0; i < chemin.length - 1; i++) { o = o && o[/^\d+$/.test(chemin[i]) ? Number(chemin[i]) : chemin[i]]; }
-    if (o && typeof o === 'object') o[chemin[chemin.length - 1]] = v.slice(0, 4000);
+    if (o && typeof o === 'object') o[chemin[chemin.length - 1]] = w.slice(0, 4000);
   }
   return copie;
 }

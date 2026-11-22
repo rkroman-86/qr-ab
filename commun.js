@@ -135,6 +135,51 @@ function dateBlog(j, doc) {
   try { return new Intl.DateTimeFormat(lg, { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(j + 'T12:00:00')); } catch (e) { return j; }
 }
 
+/* ---------- Liens dans les textes : [mots](cible) ----------
+   cible = page:contact|home|perso|blog|galerie, article:ID (blog), https://…, mailto:…, tel:…
+   Écrits par le menu « 🔗 Lien » de l'éditeur ; affichés sans HTML brut (texte + <a>). Lien vers une page désactivée : texte simple. */
+const RE_LIEN = /\[([^\[\]\n]{1,200})\]\(((?:page|article):[a-z0-9_-]+|https?:\/\/[^\s)]+|mailto:[^\s)]+|tel:[^\s)]+)\)/g;
+function sansLiens(t) { return String(t == null ? '' : t).replace(new RegExp(RE_LIEN.source, 'g'), '$1'); }
+function ciblesLiens(t) { const out = []; String(t || '').replace(new RegExp(RE_LIEN.source, 'g'), (m, l, c) => { out.push(c); return m; }); return out; }
+function lienTexte(cible, ctx) {
+  const { cfg, doc } = ctx, opts = ctx.opts || {};
+  const a = doc.createElement('a');
+  a.className = 'qx-lien';
+  if (/^page:/.test(cible)) {
+    const e = entreesPages(cfg, doc, ctx.res, opts, ctx.racine).find(x => x.id === cible.slice(5));
+    if (!e) return null;                                   // page désactivée : pas de lien
+    a.href = e.href;
+    if (e.sur) a.addEventListener('click', ev => { ev.preventDefault(); e.sur(); });
+    return a;
+  }
+  if (/^article:/.test(cible)) {
+    const id = cible.slice(8);
+    const ok = blogVisible(cfg) && cfg.blog.articles.some(x => x && !x.masque && String(x.id) === id);
+    if (!ok) return null;
+    const L = opts.liens || {}, S = opts.sur || {};
+    a.href = (ctx.actuelle === 'blog' ? '' : (L.blog || 'blog.html')) + '#article-' + encodeURIComponent(id);
+    if (S.article) a.addEventListener('click', ev => { ev.preventDefault(); S.article(id); });
+    else if (opts.surArticle) a.addEventListener('click', ev => { ev.preventDefault(); opts.surArticle(id); });
+    return a;
+  }
+  a.href = cible;
+  if (/^https?:/i.test(cible)) { a.target = '_blank'; a.rel = 'noopener'; }
+  if (opts.apercu) a.addEventListener('click', ev => ev.preventDefault());
+  return a;
+}
+function texteAvecLiens(el, texte, ctx) {
+  const doc = ctx.doc, t = String(texte || ''), re = new RegExp(RE_LIEN.source, 'g');
+  let i = 0, m;
+  while ((m = re.exec(t))) {
+    if (m.index > i) el.appendChild(doc.createTextNode(t.slice(i, m.index)));
+    const a = lienTexte(m[2], ctx);
+    if (a) { a.textContent = m[1]; el.appendChild(a); } else el.appendChild(doc.createTextNode(m[1]));
+    i = m.index + m[0].length;
+  }
+  if (i < t.length) el.appendChild(doc.createTextNode(t.slice(i)));
+  return el;
+}
+
 /* ---------- Passage d'une page à l'autre (contact, Home, blog, galerie) ----------
    2 pages en tout : le nom de l'autre page en haut à droite ; à partir de 3 : un picto ☰ qui ouvre la liste.
    opts.liens = { contact, home, blog } (adresses), opts.sur = { contact, home, blog } (aperçu de l'éditeur) ;
@@ -458,6 +503,7 @@ const CSS_PAGE = `
 .qb-art h1{margin:4px 0 12px;font-size:1.6rem;line-height:1.2}
 .qb-texte{white-space:pre-line;line-height:1.62;font-size:1rem;overflow-wrap:anywhere}
 .qb-vide{opacity:.6}
+.qx-lien{color:inherit;font-weight:600;text-decoration:underline;text-decoration-thickness:1.5px;text-underline-offset:3px;cursor:pointer}
 .qp .qp-appli.qp-appli-court{width:40px;height:40px;padding:0;justify-content:center;border-radius:50%}
 .qp .qp-appli.qp-appli-court svg{width:19px;height:19px}
 .qp-langsel{position:relative;flex:none;font:600 .88rem/1.2 system-ui,-apple-system,sans-serif}
@@ -723,7 +769,7 @@ function rendrePage(cfgBrut, racine, opts) {
   if (cfg.sousTitre) {
     const s = doc.createElement('p');
     s.className = 'qp-sous';
-    s.textContent = cfg.sousTitre;
+    texteAvecLiens(s, cfg.sousTitre, { cfg, doc, res, opts, racine, actuelle: 'contact' });
     texteEntete.appendChild(s);
   }
 
@@ -829,7 +875,7 @@ function rendrePage(cfgBrut, racine, opts) {
   if (cfg.pied) {
     const f = doc.createElement('p');
     f.className = 'qp-pied';
-    f.textContent = cfg.pied;
+    texteAvecLiens(f, cfg.pied, { cfg, doc, res, opts, racine, actuelle: 'contact' });
     c.appendChild(f);
   }
 
@@ -1271,7 +1317,7 @@ function rendreHome(cfgBrut, racine, opts) {
     if (a.texte) {
       const t = doc.createElement('p');
       t.className = 'qh-texte';
-      t.textContent = a.texte;
+      texteAvecLiens(t, a.texte, { cfg, doc, res, opts, racine, actuelle: pagePerso ? 'perso' : 'home' });
       corps.appendChild(t);
     }
     p.appendChild(corps);
@@ -1378,7 +1424,7 @@ function rendreBlog(cfgBrut, racine, opts) {
     const dt = dateBlog(ouvert.date, doc);
     if (dt) { const p = doc.createElement('p'); p.className = 'qb-date'; const t = doc.createElement('time'); t.setAttribute('datetime', ouvert.date); t.textContent = dt; p.appendChild(t); art.appendChild(p); }
     const h = doc.createElement('h1'); h.textContent = ouvert.titre || ''; art.appendChild(h);
-    const tx = doc.createElement('div'); tx.className = 'qb-texte'; tx.textContent = ouvert.texte || ''; art.appendChild(tx);
+    const tx = doc.createElement('div'); tx.className = 'qb-texte'; texteAvecLiens(tx, ouvert.texte, { cfg, doc, res, opts, racine, actuelle: 'blog' }); art.appendChild(tx);
     corps.append(retour, art);
   } else {
     rendreBlog.depuisListe = false;
@@ -1403,7 +1449,7 @@ function rendreBlog(cfgBrut, racine, opts) {
       const dt = dateBlog(a.date, doc);
       if (dt) { const p = doc.createElement('p'); p.className = 'qb-date'; p.textContent = dt; z.appendChild(p); }
       if (a.titre) { const t = doc.createElement('h2'); t.textContent = a.titre; z.appendChild(t); }
-      if (a.texte) { const t = doc.createElement('p'); t.className = 'qb-extrait'; t.textContent = String(a.texte).slice(0, 400); z.appendChild(t); }
+      if (a.texte) { const t = doc.createElement('p'); t.className = 'qb-extrait'; t.textContent = sansLiens(a.texte).slice(0, 400); z.appendChild(t); }
       c.appendChild(z);
       liste.appendChild(c);
     });
@@ -1572,7 +1618,7 @@ function donneesStructurees(cfg, base) {
     '@context': 'https://schema.org',
     '@type': 'LocalBusiness',
     name: cfg.titre || '',
-    description: seo.description || cfg.sousTitre || '',
+    description: seo.description || sansLiens(cfg.sousTitre) || '',
     url: base,
     image: urlAbsolue(base, cfg.design.imageFond || cfg.logo) || undefined,
     logo: urlAbsolue(base, cfg.logo) || undefined,
@@ -1681,8 +1727,8 @@ function genererFichiersSite(cfgBrut, base, doc) {
   // Pages hébergées sur qrbc.app : installables comme une appli (manifeste servi par le serveur)
   const appli = /\.qrbc\.app\/([a-z]{2}\/)?$/i.test(base) ? { nom: String(cfg.appNom || '').trim().slice(0, 15) || nomCourtAppli(cfg.titre), icone: (cfg.appIcones && cfg.appIcones.i192) || '/apple-touch-icon.png' } : null;
   const icone = cfg.logo || '';
-  const titreSite = seo.titre || [cfg.titre, cfg.sousTitre].filter(Boolean).join(' – ') || 'Bienvenue';
-  const descSite = seo.description || couper([cfg.sousTitre, cfg.pied].filter(Boolean).join('. '), 155);
+  const titreSite = seo.titre || [cfg.titre, sansLiens(cfg.sousTitre)].filter(Boolean).join(' – ') || 'Bienvenue';
+  const descSite = seo.description || couper([sansLiens(cfg.sousTitre), sansLiens(cfg.pied)].filter(Boolean).join('. '), 155);
 
   const avecBlog = blogVisible(cfg);
   const liensDe = vue => {                                 // mêmes adresses que BOOT_SITE
@@ -1712,9 +1758,9 @@ function genererFichiersSite(cfgBrut, base, doc) {
     const arts = cfg.home.articles.filter(a => a && !a.masque && a.titre);
     const nom = cfg.titre || '';
     const doublon = t => nom && String(t || '').toLowerCase().includes(nom.toLowerCase());
-    const sujet = (arts.find(a => !doublon(a.titre)) || {}).titre || cfg.sousTitre || 'Nos services';
+    const sujet = (arts.find(a => !doublon(a.titre)) || {}).titre || sansLiens(cfg.sousTitre) || 'Nos services';
     const titreHome = arriveeHome ? titreSite : couper(nom ? sujet + ' – ' + nom : sujet, 65);
-    const descHome = arriveeHome ? descSite : couper(art.texte || descSite, 155);
+    const descHome = arriveeHome ? descSite : couper(sansLiens(art.texte) || descSite, 155);
     fichiers['accueil.html'] = pageHTML({
       titre: titreHome, description: descHome, canonique: arriveeHome ? base : base + 'accueil.html', nom: cfg.titre,
       image, imageTaille, icone, couleur: d.fond, jsonld, appli, langue: cfg.langue, contenu: preRendu('home'), modeHome: true, vue: 'home'
@@ -1732,7 +1778,7 @@ function genererFichiersSite(cfgBrut, base, doc) {
     const arts = cfg.perso.articles.filter(a => a && !a.masque && (a.titre || a.texte));
     fichiers['page.html'] = pageHTML({
       titre: couper(titrePerso(cfg) + (cfg.titre ? ' – ' + cfg.titre : ''), 65),
-      description: couper((arts[0] && arts[0].texte) || descSite, 155),
+      description: couper(sansLiens(arts[0] && arts[0].texte) || descSite, 155),
       canonique: base + 'page.html', nom: cfg.titre, image, imageTaille, icone, couleur: d.fond, jsonld, appli, langue: cfg.langue,
       contenu: preRendu('perso', 'page.html'), modeHome: true, vue: 'perso'
     });

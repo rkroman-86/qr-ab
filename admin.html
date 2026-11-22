@@ -390,6 +390,22 @@
     .blogp-photo img{width:120px;height:68px;object-fit:cover;border-radius:8px;background:var(--bord,#ddd)}
     .blogp-date{max-width:200px}
     .menu-pages{display:flex;flex-direction:column;gap:6px}
+    .champ-liens{margin-bottom:12px}
+    .champ-liens>.champ{margin-bottom:4px}
+    .barre-liens{position:relative;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+    .liens-aide{font-size:.75rem;color:var(--doux)}
+    .menu-liens{position:absolute;left:0;top:calc(100% + 6px);z-index:30;width:min(360px,calc(100vw - 40px));padding:12px;border:1px solid var(--ligne);border-radius:12px;
+      background:var(--panneau);box-shadow:0 12px 32px rgba(0,0,0,.22);display:flex;flex-direction:column;gap:6px}
+    .menu-liens.cache{display:none}
+    .liens-tete{display:flex;align-items:flex-start;gap:8px}
+    .liens-tete b{flex:1;font-size:.86rem;overflow-wrap:anywhere}
+    .liens-x{border:0;background:none;font-size:1.1rem;cursor:pointer;color:var(--doux);padding:0 2px}
+    .liens-pages{display:flex;flex-wrap:wrap;gap:6px}
+    .liens-ext{display:flex;gap:6px}
+    .liens-ext input{flex:1;min-width:0}
+    .liens-msg{margin:0;font-size:.85rem}
+    .liens-retirer{align-self:flex-start}
+    .menu-liens .etiq{margin:4px 0 0}
     .menu-page{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--ligne);border-radius:10px;background:var(--panneau)}
     .menu-page.inactif{opacity:.55}
     .menu-page .mp-ico{width:24px;text-align:center}
@@ -1205,7 +1221,8 @@
         b.classList.toggle('cache', (b.dataset.p === 'home' && !avecHome) || (b.dataset.p === 'blog' && !avecBlog) || (b.dataset.p === 'perso' && !avecPerso));
         if (b.dataset.p === 'perso') b.textContent = (cfg.perso && cfg.perso.titre) || t('Page');
       });
-      const sur = { contact: () => choisirApercu('contact'), home: () => choisirApercu('home'), blog: () => choisirApercu('blog'), perso: () => choisirApercu('perso') };
+      const sur = { contact: () => choisirApercu('contact'), home: () => choisirApercu('home'), blog: () => choisirApercu('blog'), perso: () => choisirApercu('perso'),
+        article: id => { vueApercu = 'blog'; articleApercu = id; majApercu(); } };
       const resoudre = p => imagesLocales[p] || p;
       const cfgVue = proposition ? Object.assign({}, cfg, { home: Object.assign({}, cfg.home, { actif: true, articles: proposition }) }) : cfg;
       const ancien = cadre.querySelector('.qh-defile');
@@ -1263,7 +1280,95 @@
     const input = el(opts.multi ? 'textarea' : 'input', { type: opts.multi ? undefined : (opts.type || 'text'), value: obj[cle] || '', placeholder: opts.ph || '' });
     if (opts.multi) input.rows = 2;
     input.addEventListener('input', () => { obj[cle] = input.value; changement(); });
-    return el('label', { class: 'champ' }, [el('span', { text: etiquette }), input]);
+    const champ = el('label', { class: 'champ' }, [el('span', { text: etiquette }), input]);
+    return opts.liens ? el('div', { class: 'champ-liens' }, [champ, outilLiens(input)]) : champ;
+  }
+
+  /* 🔗 Lien : la sélection d'un texte devient un lien [mots](cible) vers une page du site, un article du blog ou une adresse externe */
+  const RE_LIEN_ED = new RegExp(RE_LIEN.source, 'g');
+  function nomPageLien(id) {
+    return ({ contact: cfg.home.boutonContact || t('Contact'), home: cfg.home.lienTexte || t('Découvrir l’entreprise'),
+      perso: (cfg.perso && cfg.perso.titre) || t('Page personnalisée'), blog: (cfg.blog && cfg.blog.titre) || t('Blog'),
+      galerie: (cfg.galerie && cfg.galerie.titre) || t('Galerie') })[id] || id;
+  }
+  function libelleCible(c) {
+    if (/^page:/.test(c)) return nomPageLien(c.slice(5));
+    if (/^article:/.test(c)) { const a = ((cfg.blog && cfg.blog.articles) || []).find(x => String(x.id) === c.slice(8)); return t('Article') + ' : ' + ((a && a.titre) || '?'); }
+    return c.replace(/^mailto:/, '').replace(/^tel:/, '');
+  }
+  function cibleExterne(v) {
+    v = String(v || '').trim();
+    if (!v) return '';
+    if (/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(v)) return 'mailto:' + v;
+    if (/^\+?[\d\s().-]{6,}$/.test(v)) return 'tel:' + v.replace(/[^\d+]/g, '');
+    if (/^(mailto|tel):/i.test(v)) return v.replace(/\s/g, '');
+    if (!/^https?:\/\//i.test(v)) { if (/^[a-z][a-z0-9+.-]*:/i.test(v)) return ''; v = 'https://' + v; }
+    try { const u = new URL(v); return /\./.test(u.hostname) ? u.href.replace(/[\s)]/g, encodeURIComponent) : ''; } catch (e) { return ''; }
+  }
+  function outilLiens(champ) {
+    const bouton = el('button', { type: 'button', class: 'btn btn-mini', text: '🔗 Lien' });
+    const aide = el('span', { class: 'liens-aide', text: 'Sélectionnez des mots du texte, puis 🔗 Lien.' });
+    const menu = el('div', { class: 'menu-liens cache' });
+    const barre = el('div', { class: 'barre-liens' }, [bouton, aide, menu]);
+    let sel = [0, 0], existant = null;
+    const fermer = () => menu.classList.add('cache');
+    function lienSous(a, b) {                               // lien qui contient la sélection (ou le curseur)
+      RE_LIEN_ED.lastIndex = 0; let m;
+      while ((m = RE_LIEN_ED.exec(champ.value))) { if (a >= m.index && b <= m.index + m[0].length) return { debut: m.index, fin: m.index + m[0].length, mots: m[1], cible: m[2] }; }
+      return null;
+    }
+    function remplacer(debut, fin, texte) {
+      champ.value = champ.value.slice(0, debut) + texte + champ.value.slice(fin);
+      champ.dispatchEvent(new Event('input', { bubbles: true }));
+      champ.focus();
+      try { champ.setSelectionRange(debut + texte.length, debut + texte.length); } catch (e) {}
+      fermer();
+    }
+    function appliquer(cible) {
+      if (!cible) return;
+      if (existant) return remplacer(existant.debut, existant.fin, '[' + existant.mots + '](' + cible + ')');
+      const mots = champ.value.slice(sel[0], sel[1]);
+      const avant = mots.length - mots.trimStart().length, apres = mots.length - mots.trimEnd().length;   // espaces autour : hors du lien
+      remplacer(sel[0] + avant, sel[1] - apres, '[' + mots.trim() + '](' + cible + ')');
+    }
+    function ouvrir() {
+      sel = [champ.selectionStart || 0, champ.selectionEnd || 0];
+      existant = lienSous(sel[0], sel[1]);
+      const mots = champ.value.slice(sel[0], sel[1]);
+      menu.innerHTML = '';
+      const msg = txt => { menu.append(el('p', { class: 'liens-msg', text: txt }), el('button', { type: 'button', class: 'btn btn-mini', text: 'Fermer', onclick: fermer })); menu.classList.remove('cache'); };
+      if (!existant) {
+        if (!mots.trim()) return msg(t('Sélectionnez d’abord les mots à transformer en lien (appui long sur un mot, puis étendez la sélection).'));
+        if (/[\n\[\]]/.test(mots) || mots.length > 200) return msg(t('Sélectionnez quelques mots sur une seule ligne, sans crochets.'));
+        if (lienSous(sel[0], sel[0]) || lienSous(sel[1], sel[1])) return msg(t('La sélection touche un lien existant : placez le curseur dans ce lien pour le modifier.'));
+      }
+      menu.append(el('div', { class: 'liens-tete' }, [
+        el('b', { text: existant ? t('Lien') + ' « ' + existant.mots + ' » → ' + libelleCible(existant.cible) : '« ' + mots.trim().slice(0, 40) + ' » → ' }),
+        el('button', { type: 'button', class: 'liens-x', text: '✕', 'aria-label': t('Fermer'), onclick: fermer })]));
+      if (existant) menu.append(el('button', { type: 'button', class: 'btn btn-mini liens-retirer', text: 'Retirer le lien', onclick: () => remplacer(existant.debut, existant.fin, existant.mots) }));
+      menu.append(el('span', { class: 'etiq', text: 'Page du site' }));
+      const pages = [['contact', '✉️', true], ['home', '🏠', !!cfg.home.actif], ['perso', '📄', !!(cfg.perso && cfg.perso.actif)],
+        ['blog', '📰', !!(cfg.blog && cfg.blog.actif)], ['galerie', '📷', !!(cfg.galerie && cfg.galerie.actif)]];
+      const grille = el('div', { class: 'liens-pages' });
+      pages.forEach(([id, ico, actif]) => { if (actif) grille.append(el('button', { type: 'button', class: 'btn btn-mini', onclick: () => appliquer('page:' + id) }, [ico + ' ', el('span', { text: nomPageLien(id), 'data-no-i18n': '' })])); });
+      menu.append(grille);
+      const arts = (cfg.blog && cfg.blog.actif && cfg.blog.articles || []).filter(a => a && a.id && a.titre);
+      if (arts.length) {
+        const choix = el('select', {}, [el('option', { value: '', text: t('Choisir un article…') })].concat(arts.map(a => el('option', { value: a.id, text: a.titre, 'data-no-i18n': '' }))));
+        choix.addEventListener('change', () => { if (choix.value) appliquer('article:' + choix.value); });
+        menu.append(el('span', { class: 'etiq', text: 'Article du blog' }), choix);
+      }
+      const ext = el('input', { type: 'text', placeholder: 'https://… , e-mail ou téléphone', value: existant && !/^(page|article):/.test(existant.cible) ? libelleCible(existant.cible) : '', autocapitalize: 'off', spellcheck: false });
+      const err = el('div', { class: 'msg err', style: 'margin:4px 0 0' });
+      const ok = el('button', { type: 'button', class: 'btn btn-mini', text: 'OK', onclick: () => { const c = cibleExterne(ext.value); if (!c) { err.textContent = t('Adresse invalide.'); return; } appliquer(c); } });
+      ext.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); ok.click(); } });
+      menu.append(el('span', { class: 'etiq', text: 'Adresse externe' }), el('div', { class: 'liens-ext' }, [ext, ok]), err);
+      menu.classList.remove('cache');
+    }
+    // garder la sélection quand on touche le bouton (sinon le champ perd le focus avant le clic)
+    bouton.addEventListener('mousedown', e => e.preventDefault());
+    bouton.addEventListener('click', () => { if (menu.classList.contains('cache')) ouvrir(); else fermer(); });
+    return barre;
   }
   function segments(etiquette, options, obj, cle) {
     const box = el('div', { class: 'segments' });
@@ -2202,8 +2307,8 @@
     /* Textes */
     f.appendChild(section('textes', 'Textes', true, [
       champTexte('Titre', cfg, 'titre', { ph: 'Nom de l’établissement' }),
-      champTexte('Sous-titre', cfg, 'sousTitre', { ph: 'Merci de votre visite !', multi: true }),
-      champTexte('Texte en bas de page', cfg, 'pied', { ph: 'Adresse, horaires…', multi: true })
+      champTexte('Sous-titre', cfg, 'sousTitre', { ph: 'Merci de votre visite !', multi: true, liens: true }),
+      champTexte('Texte en bas de page', cfg, 'pied', { ph: 'Adresse, horaires…', multi: true, liens: true })
     ]));
 
     /* Boutons */
@@ -2679,7 +2784,7 @@
     }
     if (cfgT.sousTitre) {
       ctx.font = '400 ' + (c.sous || 54) + 'px ' + fam; ctx.fillStyle = c.texte; ctx.globalAlpha = 0.8;
-      coupeLignes(ctx, cfgT.sousTitre, largeur, 2).forEach(l => { ctx.fillText(l, ax, y); y += (c.sous || 54) * 1.26; });
+      coupeLignes(ctx, sansLiens(cfgT.sousTitre), largeur, 2).forEach(l => { ctx.fillText(l, ax, y); y += (c.sous || 54) * 1.26; });
       ctx.globalAlpha = 1;
     }
     y += 30;
@@ -2705,7 +2810,7 @@
     if (!cfg.pied) return;
     ctx.font = '500 40px ' + D.fam; ctx.fillStyle = couleur; ctx.globalAlpha = .7;
     ctx.textBaseline = 'alphabetic'; ctx.textAlign = align || 'left';
-    ctx.fillText(String(cfg.pied).split('\n')[0], x, y);
+    ctx.fillText(sansLiens(cfg.pied).split('\n')[0], x, y);
     ctx.globalAlpha = 1; ctx.textAlign = 'left';
   }
 
@@ -2786,7 +2891,7 @@
       coupeLignes(ctx, cfg.titre || '', L, 2).forEach(l => { ctx.fillText(l, 100, y); y += parseInt(ctx.font.match(/(\d+)px/)[1], 10) * 1.12; });
       if (cfg.sousTitre) {
         ctx.font = '400 42px ' + D.fam; ctx.fillStyle = '#555';
-        coupeLignes(ctx, cfg.sousTitre, L, 2).forEach(l => { ctx.fillText(l, 100, y + 6); y += 54; });
+        coupeLignes(ctx, sansLiens(cfg.sousTitre), L, 2).forEach(l => { ctx.fillText(l, 100, y + 6); y += 54; });
       }
       y += 40;
       dessinerCoords(ctx, Object.assign({}, D, { coords: D.coords.slice(0, 3) }), 100, y, L, { texte: '#111', accent, etiq: 32, val: 44, pas: 98 }, 'left');
@@ -3064,8 +3169,8 @@
       ctx.font = policeAjustee(ctx, cfg.titre || '', '800', 112, 52, Lt, D.fam);
       ctx.fillText(cfg.titre || '', x, Hh - (cfg.sousTitre ? 130 : 70));
       if (cfg.sousTitre) {
-        ctx.font = policeAjustee(ctx, cfg.sousTitre, '400', 50, 28, Lt, D.fam); ctx.globalAlpha = .85;
-        ctx.fillText(cfg.sousTitre, x, Hh - 64); ctx.globalAlpha = 1;
+        ctx.font = policeAjustee(ctx, sansLiens(cfg.sousTitre), '400', 50, 28, Lt, D.fam); ctx.globalAlpha = .85;
+        ctx.fillText(sansLiens(cfg.sousTitre), x, Hh - 64); ctx.globalAlpha = 1;
       }
       const accent = luminance(D.d.accent) > 0.6 ? '#1a1a1a' : D.d.accent;
       dessinerBlocQR(ctx, D, qx, qy, q, '', true);
@@ -3970,7 +4075,7 @@
     const champTitre = champTexte('Titre', a, 'titre', { ph: 'Titre de l’article' });
     const date = el('input', { type: 'date', value: a.date || '', class: 'blogp-date' });
     date.addEventListener('change', () => { a.date = date.value; changement(); });
-    const champCorps = (() => { const c = champTexte('Texte', a, 'texte', { multi: true, ph: 'Votre article…' }); c.querySelector('textarea').rows = 10; return c; })();
+    const champCorps = (() => { const c = champTexte('Texte', a, 'texte', { multi: true, ph: 'Votre article…', liens: true }); c.querySelector('textarea').rows = 10; return c; })();
     // Photo : réduite comme celles de la galerie (1280 px + vignette 640 px pour la liste)
     const zonePhoto = el('div', { class: 'blogp-photo' });
     const fichier = el('input', { type: 'file', accept: 'image/*', class: 'cache' });
@@ -4016,7 +4121,9 @@
         a.titre = p.titre; a.texte = p.texte;
         champTitre.querySelector('input').value = a.titre; champCorps.querySelector('textarea').value = a.texte;
         annulerIA.classList.remove('cache');
-        msgIA.className = 'msg ok'; msgIA.textContent = t('Relisez et corrigez si besoin, puis Enregistrer.');
+        const perdus = ciblesLiens(avantIA.texte).filter(c => !ciblesLiens(a.texte).includes(c)).length;
+        msgIA.className = 'msg ' + (perdus ? 'err' : 'ok');
+        msgIA.textContent = perdus ? t('Attention : l’IA a retiré des liens du texte. Remettez-les avec 🔗 Lien, ou ↩ Annuler.') : t('Relisez et corrigez si besoin, puis Enregistrer.');
         changement();
       } catch (e) { msgIA.className = 'msg err'; msgIA.textContent = e.message; }
       texteIA.disabled = false; texteIA.textContent = t('✨ Texte IA');
@@ -4061,6 +4168,7 @@
       '- Référencement : si un mot-clé principal ou des lieux sont connus, places-en un naturellement, sans bourrage.',
       '- Pas d’emoji, pas de hashtag, pas de superlatif creux.',
       '- Corrige silencieusement les fautes de frappe évidentes.',
+      '- Si le texte actuel contient des liens écrits [mots](cible), garde-les : même cible entre parenthèses, mots entre crochets adaptables.',
       '- Réponds uniquement en appelant l’outil proposer_article.'
     ].join('\n');
     const autres = arts.map((x, k) => k === i || x.masque || !x.titre ? '' : '- ' + x.titre).filter(Boolean);
@@ -4242,6 +4350,7 @@
       '- Référencement : si un mot-clé principal ou des lieux sont connus, places-en un naturellement dans le titre ou le texte, sans bourrage.',
       '- Pas d’emoji, pas de hashtag, pas de superlatif creux.',
       '- Corrige silencieusement les fautes de frappe évidentes.',
+      '- Si le texte actuel contient des liens écrits [mots](cible), garde-les : même cible entre parenthèses, mots entre crochets adaptables.',
       '- Réponds uniquement en appelant l’outil proposer_articles avec exactement une pancarte.'
     ].join('\n');
     const autres = arts.map((x, k) => k === i || x.masque || !(x.titre || x.texte) ? '' : '- Pancarte ' + (k + 1) + ' : ' + (x.titre || '') + ' — ' + String(x.texte || '').slice(0, 160)).filter(Boolean);
@@ -5006,8 +5115,8 @@
     const S = cfg.seo;
     const apT = el('div', { class: 'g-titre' }), apU = el('div', { class: 'g-url', text: URL_PUBLIQUE.replace(/^https?:\/\//, '') }), apD = el('div', { class: 'g-desc' });
     const maj = () => {
-      apT.textContent = couper(S.titre || [cfg.titre, cfg.sousTitre].filter(Boolean).join(' – '), 62);
-      apD.textContent = couper(S.description || [cfg.sousTitre, cfg.pied].filter(Boolean).join('. '), 158);
+      apT.textContent = couper(S.titre || [cfg.titre, sansLiens(cfg.sousTitre)].filter(Boolean).join(' – '), 62);
+      apD.textContent = couper(S.description || [sansLiens(cfg.sousTitre), sansLiens(cfg.pied)].filter(Boolean).join('. '), 158);
     };
     const champ = (etiq, cle, min, max, multi, ph) => {
       const c = el(multi ? 'textarea' : 'input', multi ? { rows: 3, value: S[cle] || '', placeholder: ph } : { type: 'text', value: S[cle] || '', placeholder: ph });
@@ -5040,7 +5149,7 @@
       construireFormulaire(); changement();
     };
     const champTitre = champTexte('Titre', a, 'titre', { ph: 'Qui sommes-nous ?' });
-    const champCorps = (() => { const c = champTexte('Texte', a, 'texte', { multi: true, ph: 'Votre texte…' }); c.querySelector('textarea').rows = 5; return c; })();
+    const champCorps = (() => { const c = champTexte('Texte', a, 'texte', { multi: true, ph: 'Votre texte…', liens: true }); c.querySelector('textarea').rows = 5; return c; })();
     // ✨ Texte IA : rédige ou améliore cette pancarte seulement (avec « Annuler » pour revenir au texte précédent)
     const msgIA = el('div', { class: 'msg', style: 'margin:0' });
     let avantIA = null;
@@ -5058,7 +5167,9 @@
         a.titre = p.titre; a.texte = p.texte;
         champTitre.querySelector('input').value = a.titre; champCorps.querySelector('textarea').value = a.texte;
         annulerIA.classList.remove('cache');
-        msgIA.className = 'msg ok'; msgIA.textContent = t('Relisez et corrigez si besoin, puis Enregistrer.');
+        const perdus = ciblesLiens(avantIA.texte).filter(c => !ciblesLiens(a.texte).includes(c)).length;
+        msgIA.className = 'msg ' + (perdus ? 'err' : 'ok');
+        msgIA.textContent = perdus ? t('Attention : l’IA a retiré des liens du texte. Remettez-les avec 🔗 Lien, ou ↩ Annuler.') : t('Relisez et corrigez si besoin, puis Enregistrer.');
         changement(); majApercu();
       } catch (e) { msgIA.className = 'msg err'; msgIA.textContent = e.message; }
       texteIA.disabled = false; texteIA.textContent = t('✨ Texte IA');

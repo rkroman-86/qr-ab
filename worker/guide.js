@@ -86,6 +86,14 @@ qrbc.app (QR-BC, édité par KPS) permet de créer en quelques minutes, depuis u
 - Sur la page, la galerie s'ouvre depuis le coin en haut à droite (voir « Passer d'une page à l'autre »). Elle montre une grille de vignettes ; toucher une photo l'affiche en grand, glisser à gauche/droite pour la suivante, vers le bas ou « × » pour revenir à la grille ; le bouton retour du téléphone ferme la photo puis la galerie. Sur ordinateur : flèches ‹ › et clavier (← → Échap).
 - Décocher « Activer la galerie » cache le bouton sans effacer les photos. Les versions traduites de la page montrent les mêmes photos (le titre du bouton est traduit).
 
+## Liens dans les textes
+- Sous chaque texte modifiable (sous-titre et bas de la page contact, textes des pancartes de la Home et de la page personnalisée, articles du blog) : bouton « 🔗 Lien ».
+- Sélectionner des mots du texte (sur téléphone : appui long sur un mot puis étirer la sélection), puis « 🔗 Lien » : choisir une page du site (Contact, Home, page personnalisée, Blog, Galerie), un article du blog, ou une adresse externe (site, e-mail ou numéro de téléphone).
+- Dans le champ, le lien s'écrit [mots](cible) : ne pas effacer les crochets ni la partie entre parenthèses. Pour le modifier ou le retirer : placer le curseur dans le lien puis « 🔗 Lien » (« Retirer le lien »).
+- Sur la page, les mots apparaissent soulignés et cliquables (adresse externe : nouvel onglet). Un lien vers une page désactivée s'affiche comme du texte simple.
+- « ✨ Texte IA » garde les liens ; s'il en retire, un message prévient (↩ Annuler). Les traductions gardent aussi les liens.
+- Pas de lien dans les titres ni dans les boutons (les boutons ont déjà leur propre lien).
+
 ## Page personnalisée (ex. Tarifs)
 - Section « Page personnalisée », juste après la page Home. Désactivée par défaut : cocher « Activer la page personnalisée ».
 - « Nom de la page (menu) » : nom affiché aux visiteurs (proposé : « Tarifs » ; ex. Prestations, Menu, Horaires).
