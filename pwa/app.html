@@ -111,7 +111,7 @@
   <div class="onglets" role="tablist">
     <div class="curseur" id="curseur"></div>
     <button type="button" role="tab" data-i="0" aria-selected="true">Se connecter</button>
-    <button type="button" role="tab" data-i="1" aria-selected="false">Créer ma page</button>
+    <button type="button" role="tab" data-i="1" aria-selected="false">Créer mon site</button>
   </div>
 </header>
 
@@ -120,13 +120,13 @@
   <section class="carte" aria-label="Se connecter">
     <div class="carte-in">
       <h1>Bon retour</h1>
-      <p class="sous">Connectez-vous pour modifier votre page.</p>
+      <p class="sous">Connectez-vous pour modifier votre site.</p>
 
       <div class="pages" id="pages" hidden><h2>Mes pages</h2></div>
-      <div class="ou" id="ou" hidden>ou une autre page</div>
+      <div class="ou" id="ou" hidden>ou un autre site</div>
 
       <form id="f-cx" autocomplete="on">
-        <label><span>Adresse de la page</span>
+        <label><span>Adresse du site</span>
           <div class="adresse"><input type="text" id="cx-nom" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="30" placeholder="nom-du-site" required><em>.qrbc.app</em></div>
         </label>
         <label><span>Mot de passe</span><input type="password" id="cx-mdp" autocomplete="current-password" required></label>
@@ -137,8 +137,8 @@
 
       <form id="f-oubli" hidden>
         <h1 style="font-size:1.25rem">Mot de passe oublié</h1>
-        <p class="sous">Indiquez l’adresse de votre page ou votre e-mail : nous vous envoyons un lien pour choisir un nouveau mot de passe.</p>
-        <label><span>Adresse de la page ou e-mail</span>
+        <p class="sous">Indiquez l’adresse de votre site ou votre e-mail : nous vous envoyons un lien pour choisir un nouveau mot de passe.</p>
+        <label><span>Adresse du site ou e-mail</span>
           <input type="text" id="oubli-id" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="120" placeholder="nom-du-site ou vous@exemple.fr" required>
         </label>
         <button class="prim" id="oubli-btn">Recevoir le lien</button>
@@ -147,18 +147,18 @@
         <button type="button" class="lien" id="retour-cx">← Retour à la connexion</button>
       </form>
 
-      <div class="bascule">Pas encore de page ? <button type="button" data-aller="1">Créer ma page →</button></div>
+      <div class="bascule">Pas encore de site ? <button type="button" data-aller="1">Créer mon site →</button></div>
       <p class="liens"><a href="/cgv" target="_blank" rel="noopener">Conditions générales de vente</a> · <a href="/mentions-legales" target="_blank" rel="noopener">Mentions légales et confidentialité</a></p>
     </div>
   </section>
 
   <!-- ===== Pancarte 2 : inscription ===== -->
-  <section class="carte" aria-label="Créer ma page">
+  <section class="carte" aria-label="Créer mon site">
     <div class="carte-in">
-      <h1>Votre page en 5 minutes</h1>
+      <h1>Votre site en 5 minutes</h1>
       <p class="sous">1 mois gratuit, sans carte bancaire.</p>
       <ul class="points">
-        <li>Une page mobile à votre nom, avec QR code</li>
+        <li>Un site mobile à votre nom, avec QR code</li>
         <li>Cartes de visite prêtes à imprimer</li>
         <li>Textes et logo avec l’aide de l’IA</li>
       </ul>
@@ -173,11 +173,11 @@
         <div class="robot" id="in-robot"></div>
         <button class="prim" id="in-btn">Recevoir mon lien</button>
         <div class="msg" id="in-msg"></div>
-        <p class="note">Vous recevez un lien pour choisir l’adresse de votre page et votre mot de passe.</p>
+        <p class="note">Vous recevez un lien pour choisir l’adresse de votre site et votre mot de passe.</p>
       </form>
       <div class="attente-mail" id="in-attente" hidden></div>
 
-      <div class="bascule">Déjà une page ? <button type="button" data-aller="0">← Se connecter</button></div>
+      <div class="bascule">Déjà un site ? <button type="button" data-aller="0">← Se connecter</button></div>
       <p class="liens"><a href="/cgv" target="_blank" rel="noopener">Conditions générales de vente</a> · <a href="/mentions-legales" target="_blank" rel="noopener">Mentions légales et confidentialité</a></p>
     </div>
   </section>
@@ -193,10 +193,10 @@
 
 <main id="ecran-fin" hidden>
   <div class="carte-in">
-    <h1 id="fin-titre">Finalisez votre page</h1>
+    <h1 id="fin-titre">Finalisez votre site</h1>
     <p class="sous" id="fin-sous">Vérification du lien…</p>
     <form id="f-fin" autocomplete="on" novalidate hidden>
-      <label><span>Adresse de votre page</span>
+      <label><span>Adresse de votre site</span>
         <div class="adresse"><input type="text" id="fin-nom" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="30" placeholder="nom-du-site" required><em>.qrbc.app</em></div>
         <div class="dispo" id="fin-dispo"></div>
         <p class="aide">C’est l’adresse de votre QR code : choisissez-la bien, elle ne pourra plus changer une fois vos cartes imprimées.</p>
@@ -205,7 +205,7 @@
       <label><span>Mot de passe (10 caractères minimum)</span>
         <div class="mdp"><input type="password" id="fin-mdp" name="password" autocomplete="new-password" minlength="10" required><button type="button" id="fin-voir" aria-label="Afficher le mot de passe" aria-pressed="false">👁</button></div>
       </label>
-      <button class="prim" id="fin-btn">Créer ma page</button>
+      <button class="prim" id="fin-btn">Créer mon site</button>
       <div class="msg" id="fin-msg"></div>
       <p class="note" id="fin-essai"></p>
     </form>
@@ -226,7 +226,7 @@
       <label><span>Nouveau mot de passe (10 caractères minimum)</span><input type="password" id="re-mdp" autocomplete="new-password" minlength="10" required></label>
       <label><span>Confirmez le mot de passe</span><input type="password" id="re-mdp2" autocomplete="new-password" minlength="10" required></label>
       <div class="accord" id="re-accord"></div>
-      <button class="prim" id="re-btn">Enregistrer et ouvrir ma page</button>
+      <button class="prim" id="re-btn">Enregistrer et ouvrir mon site</button>
       <div class="msg" id="re-msg"></div>
     </form>
     <button type="button" class="lien" id="re-retour" hidden>Refaire une demande</button>
@@ -235,7 +235,7 @@
 
 <nav class="points-nav" aria-label="Pancartes">
   <button type="button" data-i="0" aria-label="Se connecter" aria-current="true"></button>
-  <button type="button" data-i="1" aria-label="Créer ma page" aria-current="false"></button>
+  <button type="button" data-i="1" aria-label="Créer mon site" aria-current="false"></button>
 </nav>
 
 <script src="/i18n.js"></script>
@@ -323,7 +323,7 @@
     btn.disabled = true; btn.textContent = 'Connexion…';
     try {
       const d = await (await fetch('/api/disponible?nom=' + encodeURIComponent(slug))).json();
-      if (d.disponible || d.raison) throw new Error('Aucune page à cette adresse.');
+      if (d.disponible || d.raison) throw new Error('Aucun site à cette adresse.');
       await connecter(slug, $('#cx-mdp').value);
     } catch (err) {
       msg.textContent = err.message === 'Failed to fetch' ? 'Pas de connexion internet.' : err.message;
@@ -403,7 +403,7 @@
         try { localStorage.setItem('qp-jeton:' + j.slug, j.jeton); sessionStorage.setItem('qp-jeton:' + j.slug, j.jeton); } catch (x) {}
         memoriser(j.slug);
         location.href = '/app/' + j.slug + '/';
-      } catch (er) { msg.textContent = er.message; btn.disabled = false; btn.textContent = 'Enregistrer et ouvrir ma page'; }
+      } catch (er) { msg.textContent = er.message; btn.disabled = false; btn.textContent = 'Enregistrer et ouvrir mon site'; }
     });
   }
 
@@ -439,7 +439,7 @@
     };
     return b;
   }
-  /* ---------- Étape 2 : lien « Créer ma page » reçu par e-mail : ?finaliser=… ---------- */
+  /* ---------- Étape 2 : lien « Créer mon site » reçu par e-mail : ?finaliser=… ---------- */
   const jetonFin = params.get('finaliser');
   if (jetonFin) {
     document.body.classList.add('reinit');
@@ -552,7 +552,7 @@
         location.href = '/app/' + j.slug + '/';
       } catch (er) {
         finMsg.textContent = er.message === 'Failed to fetch' ? 'Pas de connexion internet.' : er.message;
-        btn.disabled = false; btn.textContent = t('Créer ma page');
+        btn.disabled = false; btn.textContent = t('Créer mon site');
       }
     });
   }

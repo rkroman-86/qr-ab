@@ -181,7 +181,7 @@
       const renvoyer = el('button', 'lien', 'Renvoyer le lien'); renvoyer.type = 'button';
       const corriger = el('button', 'lien', 'Corriger l’adresse'); corriger.type = 'button';
       z.append(el('div', 'grand', '✉️'), el('h2', '', 'Vérifiez votre boîte mail'), p1,
-        el('p', 'sous', 'Ouvrez cet e-mail et touchez « Créer ma page » pour choisir l’adresse de votre page et votre mot de passe.'),
+        el('p', 'sous', 'Ouvrez cet e-mail et touchez « Créer mon site » pour choisir l’adresse de votre site et votre mot de passe.'),
         el('p', 'sous', 'Rien reçu ? Regardez dans les indésirables (spam).'), el('div', 'actions'), zone);
       z.querySelector('.actions').append(renvoyer, corriger);
       renvoyer.onclick = async () => {

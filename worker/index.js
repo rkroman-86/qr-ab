@@ -1670,12 +1670,12 @@ async function envoyerLienInscription(env, conf, jeton, d) {
   const url = 'https://' + DOMAINE + '/app?finaliser=' + jeton + (L !== 'fr' ? '&lang=' + L : '');
   const act = esc(d.activite || '');
   const T = {
-    fr: { sujet: 'Finalisez votre page qrbc', bonjour: 'Bonjour,', corps: 'Merci ! Il ne reste qu’une étape pour créer votre page' + (act ? ' « <b>' + act + '</b> »' : '') + ' : choisissez son adresse (nous vous en proposons une) et votre mot de passe.',
-      bouton: 'Créer ma page', fin: 'Ce lien est valable 7 jours. Votre essai gratuit commence quand vous créez votre page. Si vous n’êtes pas à l’origine de cette demande, ignorez simplement cet e-mail.' },
-    en: { sujet: 'Finish your qrbc page', bonjour: 'Hello,', corps: 'Thank you! Just one step left to create your page' + (act ? ' “<b>' + act + '</b>”' : '') + ': choose its address (we suggest one) and your password.',
-      bouton: 'Create my page', fin: 'This link is valid for 7 days. Your free trial starts when you create your page. If you did not request this, simply ignore this email.' },
-    ru: { sujet: 'Завершите создание страницы qrbc', bonjour: 'Здравствуйте!', corps: 'Спасибо! Остался один шаг, чтобы создать вашу страницу' + (act ? ' «<b>' + act + '</b>»' : '') + ': выберите её адрес (мы предложим вариант) и пароль.',
-      bouton: 'Создать страницу', fin: 'Ссылка действительна 7 дней. Бесплатный пробный период начнётся, когда вы создадите страницу. Если вы ничего не запрашивали, просто проигнорируйте это письмо.' }
+    fr: { sujet: 'Finalisez votre site qrbc', bonjour: 'Bonjour,', corps: 'Merci ! Il ne reste qu’une étape pour créer votre site' + (act ? ' « <b>' + act + '</b> »' : '') + ' : choisissez son adresse (nous vous en proposons une) et votre mot de passe.',
+      bouton: 'Créer mon site', fin: 'Ce lien est valable 7 jours. Votre essai gratuit commence quand vous créez votre site. Si vous n’êtes pas à l’origine de cette demande, ignorez simplement cet e-mail.' },
+    en: { sujet: 'Finish your qrbc website', bonjour: 'Hello,', corps: 'Thank you! Just one step left to create your website' + (act ? ' “<b>' + act + '</b>”' : '') + ': choose its address (we suggest one) and your password.',
+      bouton: 'Create my website', fin: 'This link is valid for 7 days. Your free trial starts when you create your website. If you did not request this, simply ignore this email.' },
+    ru: { sujet: 'Завершите создание сайта qrbc', bonjour: 'Здравствуйте!', corps: 'Спасибо! Остался один шаг, чтобы создать ваш сайт' + (act ? ' «<b>' + act + '</b>»' : '') + ': выберите его адрес (мы предложим вариант) и пароль.',
+      bouton: 'Создать сайт', fin: 'Ссылка действительна 7 дней. Бесплатный пробный период начнётся, когда вы создадите сайт. Если вы ничего не запрашивали, просто проигнорируйте это письмо.' }
   }[L];
   const html = '<div style="font:16px/1.5 system-ui,sans-serif;color:#1b1a17;max-width:480px">' +
     '<p>' + T.bonjour + '</p><p>' + T.corps + '</p>' +
@@ -4432,10 +4432,10 @@ async function planGlobal(env, frais) {
 /* Page d'accueil dans la langue du lien (?lang=en|ru) : les robots d'aperçu (WhatsApp, Facebook…)
    et Google lisent le titre et la description sans exécuter le JavaScript */
 const META_ACCUEIL = {
-  en: { lang: 'en', locale: 'en_GB', titre: "Your business page in 5 minutes, €1.99/month, no commitment | qrbc",
-        desc: "Create your business page from your smartphone: call, WhatsApp, Google reviews, QR code and business cards. 1-month free trial, no card needed." },
-  ru: { lang: 'ru', locale: 'ru_RU', titre: "Бизнес-страница за 5 минут, 1,99 € в месяц без обязательств | qrbc",
-        desc: "Создайте страницу для своего бизнеса со смартфона: звонок, WhatsApp, отзывы Google, QR-код и визитки. 1 месяц бесплатно, без карты." },
+  en: { lang: 'en', locale: 'en_GB', titre: "Your mobile website in 5 minutes, €1.99/month, no commitment | qrbc",
+        desc: "Create your mobile website from your smartphone: call, WhatsApp, Google reviews, QR code and business cards. 1-month free trial, no card needed." },
+  ru: { lang: 'ru', locale: 'ru_RU', titre: "Мобильный сайт за 5 минут, 1,99 € в месяц без обязательств | qrbc",
+        desc: "Создайте мобильный сайт со смартфона: звонок, WhatsApp, отзывы Google, QR-код и визитки. 1 месяц бесплатно, без карты." },
 };
 /* Dictionnaire de l'interface (i18n.js : 'français': ['English', 'Русский']) lu une fois par instance du Worker,
    pour envoyer l'accueil déjà traduit aux moteurs de recherche (sans attendre le JavaScript) */
