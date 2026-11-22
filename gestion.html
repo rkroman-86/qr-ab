@@ -1074,7 +1074,7 @@
       el('div', { class: 'st-axe' }, [el('span', { text: jourCourt(jrs[0]) }), el('span', { text: jourCourt(jrs[Math.floor(jrs.length / 2)]) }), el('span', { text: jourCourt(jrs[jrs.length - 1]) })]), info]);
   }
   /* Étapes d'inscription : où les visiteurs s'arrêtent (compteurs anonymes, depuis le 17/11/2026) */
-  let filtreEntonnoir = '*';
+  let filtreEntonnoir = '*', sourcesConnues = {}, inscriptionsConnues = {}, codesConnus = [];
   const nomProvenance = p => !p ? 'Sans code ni provenance' : p.indexOf('via:') === 0 ? 'via:' + p.slice(4) + (p === 'via:outil-qr' ? ' (générateur de QR)' : '') : 'Code promo : ' + p;
   function entonnoir(e, ep) {
     const ETAPES = [['form', 'Arrivée sur le formulaire'], ['saisie', 'Début de saisie (activité)'], ['lien', 'Lien demandé'],
@@ -1082,6 +1082,10 @@
     // filtre par provenance : lignes « étape|provenance » (comptées depuis le 22/11/2026)
     const provs = {};
     Object.entries(ep || {}).forEach(([k, n]) => { const i = k.indexOf('|'); const p = k.slice(i + 1); provs[p] = (provs[p] || 0) + n; });
+    // toujours proposées, même sans donnée encore : campagnes connues, provenances déjà vues, codes promo
+    ['via:google', 'via:outil-qr'].concat(Object.keys(sourcesConnues || {}).filter(k => k.indexOf('campagne:') === 0).map(k => 'via:' + k.slice(9)),
+      Object.keys(inscriptionsConnues || {}).filter(k => k), (codesConnus || []))
+      .forEach(p => { if (provs[p] === undefined) provs[p] = 0; });
     const choix = [['*', 'Toutes les provenances']];
     Object.keys(provs).filter(p => p.indexOf('via:') === 0).sort().forEach(p => choix.push([p, nomProvenance(p)]));
     const codes = Object.keys(provs).filter(p => p && p.indexOf('via:') !== 0).sort();
@@ -1123,6 +1127,7 @@
     let s;
     try { s = await api('stats-site?jours=' + periodeSite); } catch (e) { att.textContent = 'Statistiques indisponibles : ' + e.message; return; }
     att.remove();
+    try { const pr = await api('promos'); codesConnus = (pr.promos || []).map(x => x.code).filter(Boolean); } catch (e) { codesConnus = []; }
     if (!s.actif) { z.append(el('p', { class: 'st-vide', text: 'Base de statistiques non branchée.' })); return; }
     const taux = s.visites ? (s.inscriptions / s.visites * 100).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' %' : '—';
     z.append(
@@ -1135,7 +1140,7 @@
       listeSite('Page d’arrivée', s.page, k => PAGES_SITE[k] || k),
       listeSite('Pays', s.pays, pays),
       listeSite('Langue choisie', s.langue, k => ({ fr: 'Français', en: 'Anglais', ru: 'Russe' })[k] || k),
-      entonnoir(s.etape || {}, s.etapep || {}),
+      (sourcesConnues = s.source || {}, inscriptionsConnues = s.inscription || {}, entonnoir(s.etape || {}, s.etapep || {})),
       listeSite('Inscriptions par code promo ou provenance', s.inscription, k => !k ? 'Sans code' : k === 'via:outil-qr' ? 'Sans code, venu du générateur de QR' : k.indexOf('via:') === 0 ? 'Sans code, venu de ' + k.slice(4) : k),
       el('p', { class: 'infos', text: 'Visiteurs de qrbc.app (accueil, générateur de QR code, appli, pages légales), sans cookie ni donnée personnelle, hors robots et hors tes propres visites. Une visite = une arrivée sur le site ; la navigation d’une page à l’autre n’est pas recomptée. Compté depuis le 14 novembre 2026. Les visites des pages clients restent dans l’onglet Clients.' }));
   }
