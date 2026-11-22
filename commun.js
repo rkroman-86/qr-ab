@@ -168,7 +168,7 @@ function navPages(cfg, doc, res, actuelle, opts, racine, enBarre) {
   const nomListe = ({ en: 'Pages', ru: 'Страницы', es: 'Páginas', de: 'Seiten', it: 'Pagine', pt: 'Páginas', uk: 'Сторінки' })[String((doc.documentElement && doc.documentElement.lang) || 'fr').slice(0, 2)] || 'Pages';
   b.title = nomListe; b.setAttribute('aria-label', nomListe);
   b.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>';
-  if (enBarre) { b.style.background = d.accent; b.style.color = texteContraste(d.accent); }
+  b.style.background = d.accent; b.style.color = texteContraste(d.accent);      // même rond couleur d'accent partout (contact, Home, blog)
   const ul = doc.createElement('ul');
   ul.className = 'qn-liste';
   const fermer = () => { boite.classList.remove('ouvert'); b.setAttribute('aria-expanded', 'false'); };
@@ -416,9 +416,8 @@ const CSS_PAGE = `
 .qn{position:relative;flex-shrink:0}
 .qn-btn{display:inline-flex;align-items:center;justify-content:center;border:0;cursor:pointer;padding:0;margin:0}
 .qn-btn svg{width:20px;height:20px}
-.qp .qn-btn{width:42px;height:38px;border-radius:999px;background:rgba(0,0,0,.38);color:#fff;
-  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 4px 14px rgba(0,0,0,.18)}
-.qh-barre .qn-btn{width:40px;height:40px;border-radius:50%}
+.qn-btn{width:40px;height:40px;border-radius:50%}
+.qp .qn-btn{box-shadow:0 4px 14px rgba(0,0,0,.25)}
 .qn-liste{position:absolute;right:0;top:calc(100% + 8px);z-index:30;min-width:210px;max-width:min(300px,86vw);margin:0;padding:6px;list-style:none;
   background:#fff;color:#1b1b1b;border-radius:14px;box-shadow:0 12px 34px rgba(0,0,0,.28);display:none;font:500 .95rem/1.25 system-ui,-apple-system,sans-serif;text-align:left}
 .qn.ouvert .qn-liste{display:block}
