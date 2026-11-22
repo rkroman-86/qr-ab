@@ -124,7 +124,7 @@ const RESERVES = new Set(['www', 'api', 'admin', 'app', 'mail', 'smtp', 'gestion
 const FICHIERS_STATIQUES = new Set(['/admin.html', '/commun.js', '/i18n.js', '/qrcode.js', '/inscription.js']);
 // Appli installable (PWA) servie depuis qrbc.app
 const FICHIERS_PWA = new Set(['/og-qrbc.jpg', '/og-qrbc-en.jpg', '/og-qrbc-ru.jpg', '/manifest.webmanifest', '/sw.js', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/apple-touch-icon.png', '/favicon.png']);
-const FICHIERS_SITE = new Set(['config.json', 'index.html', 'accueil.html', 'blog.html', 'sitemap.xml']);
+const FICHIERS_SITE = new Set(['config.json', 'index.html', 'accueil.html', 'blog.html', 'page.html', 'sitemap.xml']);
 const TAILLE_MAX = { 'config.json': 512 * 1024, html: 768 * 1024, image: 3 * 1024 * 1024 };
 
 export default {
@@ -302,7 +302,7 @@ async function siteClient(request, env, url, slug) {
     return new Response(c || '{}', { headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } });
   }
   if (p.startsWith('/images/')) return imageClient(env, slug, p.slice('/images/'.length), compte);
-  const pages = { '/': 'index.html', '/index.html': 'index.html', '/accueil.html': 'accueil.html', '/blog.html': 'blog.html', '/sitemap.xml': 'sitemap.xml' };
+  const pages = { '/': 'index.html', '/index.html': 'index.html', '/accueil.html': 'accueil.html', '/blog.html': 'blog.html', '/page.html': 'page.html', '/sitemap.xml': 'sitemap.xml' };
   if (pages[p]) {
     const nom = pages[p];
     // « Le QR code ouvre : lien personnel » : le scan (?s=qr) est compté puis renvoyé vers le lien choisi
@@ -321,7 +321,7 @@ async function siteClient(request, env, url, slug) {
         return new Response(null, { status: 302, headers: { location: '/' + pref + '/' + (nom === 'index.html' ? '' : nom) + url.search, 'cache-control': 'private, no-store', vary: 'Accept-Language, Cookie' } });
     }
     let corps = await env.CLIENTS.get('site:' + slug + ':' + nom);
-    if (!corps && nom !== 'sitemap.xml') corps = await pageDemarrage(env, slug, nom === 'accueil.html' ? 'home' : nom === 'blog.html' ? 'blog' : '');
+    if (!corps && nom !== 'sitemap.xml') corps = await pageDemarrage(env, slug, nom === 'accueil.html' ? 'home' : nom === 'blog.html' ? 'blog' : nom === 'page.html' ? 'perso' : '');
     if (!corps) return texte('Introuvable', 404);
     if (nom !== 'sitemap.xml') compterVisite(request, env, slug, url, (langs.length ? langs[0].l : null) || compte.langueSite || 'fr');
     return reponsePage(corps, nom, langs, langs.length ? langs[0].l : null, slug, url, !!compte.noindex);
@@ -366,11 +366,11 @@ async function pageTraduite(request, env, url, slug, tc, reste) {
     return new Response(c || '{}', { headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } });
   }
   if (reste.startsWith('/images/')) return imageClient(env, tc.slug, reste.slice('/images/'.length), tc);
-  const pages = { '/': 'index.html', '/index.html': 'index.html', '/accueil.html': 'accueil.html', '/blog.html': 'blog.html', '/sitemap.xml': 'sitemap.xml' };
+  const pages = { '/': 'index.html', '/index.html': 'index.html', '/accueil.html': 'accueil.html', '/blog.html': 'blog.html', '/page.html': 'page.html', '/sitemap.xml': 'sitemap.xml' };
   const nom = pages[reste];
   if (!nom) return pageInfo('Page introuvable', 'Ce lien n’existe pas.', 404);
   let corps = await env.CLIENTS.get('site:' + tc.slug + ':' + nom);
-  if (!corps && nom !== 'sitemap.xml') corps = await pageDemarrage(env, tc.slug, nom === 'accueil.html' ? 'home' : nom === 'blog.html' ? 'blog' : '');
+  if (!corps && nom !== 'sitemap.xml') corps = await pageDemarrage(env, tc.slug, nom === 'accueil.html' ? 'home' : nom === 'blog.html' ? 'blog' : nom === 'page.html' ? 'perso' : '');
   if (!corps) return texte('Introuvable', 404);
   if (nom !== 'sitemap.xml') compterVisite(request, env, slug, url, tc.traduction.langue);
   return reponsePage(corps, nom, languesPage(source), tc.traduction.langue, slug, url, !!(source.noindex || tc.noindex));
@@ -2252,7 +2252,7 @@ async function importer(env, slug, source) {
   await env.CLIENTS.put('site:' + slug + ':config.json', nouveau);
   await env.CLIENTS.delete('site:' + slug + ':medias');   // la médiathèque sera reconstruite avec les images importées
   // Les pages pré-rendues seront régénérées au prochain « Enregistrer » ; d'ici là, page de démarrage
-  for (const n of ['index.html', 'accueil.html', 'blog.html', 'sitemap.xml']) await env.CLIENTS.delete('site:' + slug + ':' + n);
+  for (const n of ['index.html', 'accueil.html', 'blog.html', 'page.html', 'sitemap.xml']) await env.CLIENTS.delete('site:' + slug + ':' + n);
   return { ok: true, images: copiees, echecs: ratees };
 }
 
@@ -3863,6 +3863,10 @@ function textesATraduire(cfg) {
   const h = cfg.home || {};
   mettre('home.boutonContact', h.boutonContact); mettre('home.lienTexte', h.lienTexte);
   if (cfg.galerie) mettre('galerie.titre', cfg.galerie.titre);
+  if (cfg.perso) {
+    mettre('perso.titre', cfg.perso.titre);
+    (cfg.perso.articles || []).forEach((a, i) => { if (a) { mettre('perso.articles.' + i + '.titre', a.titre); mettre('perso.articles.' + i + '.texte', a.texte); mettre('perso.articles.' + i + '.alt', a.alt); } });
+  }
   if (cfg.blog) {
     mettre('blog.titre', cfg.blog.titre);
     (cfg.blog.articles || []).forEach((a, i) => { if (a) { mettre('blog.articles.' + i + '.titre', a.titre); mettre('blog.articles.' + i + '.texte', a.texte); } });

@@ -459,7 +459,7 @@
 
   <div class="corps">
     <div class="col-edit" id="formulaire"></div>
-    <div class="col-apercu"><div class="choix-apercu" id="choix-apercu"><button type="button" data-p="contact" class="actif">Page contact</button><button type="button" data-p="home">Page Home</button><button type="button" data-p="blog">Blog</button></div><div class="cadre" id="apercu"></div></div>
+    <div class="col-apercu"><div class="choix-apercu" id="choix-apercu"><button type="button" data-p="contact" class="actif">Page contact</button><button type="button" data-p="home">Page Home</button><button type="button" data-p="perso">Page</button><button type="button" data-p="blog">Blog</button></div><div class="cadre" id="apercu"></div></div>
   </div>
 
   <div id="stats" class="vue-stats"></div>
@@ -1197,20 +1197,22 @@
     minuterie = setTimeout(() => {
       const cadre = $('#apercu');
       const avecHome = (cfg.home && cfg.home.actif) || !!proposition;
-      const avecBlog = !!(cfg.blog && cfg.blog.actif);
-      if ((vueApercu === 'home' && !avecHome) || (vueApercu === 'blog' && !avecBlog)) vueApercu = 'contact';
-      $('#choix-apercu').classList.toggle('cache', !avecHome && !avecBlog);
+      const avecBlog = !!(cfg.blog && cfg.blog.actif), avecPerso = !!(cfg.perso && cfg.perso.actif);
+      if ((vueApercu === 'home' && !avecHome) || (vueApercu === 'blog' && !avecBlog) || (vueApercu === 'perso' && !avecPerso)) vueApercu = 'contact';
+      $('#choix-apercu').classList.toggle('cache', !avecHome && !avecBlog && !avecPerso);
       document.querySelectorAll('#choix-apercu button').forEach(b => {
         b.classList.toggle('actif', b.dataset.p === vueApercu);
-        b.classList.toggle('cache', (b.dataset.p === 'home' && !avecHome) || (b.dataset.p === 'blog' && !avecBlog));
+        b.classList.toggle('cache', (b.dataset.p === 'home' && !avecHome) || (b.dataset.p === 'blog' && !avecBlog) || (b.dataset.p === 'perso' && !avecPerso));
+        if (b.dataset.p === 'perso') b.textContent = (cfg.perso && cfg.perso.titre) || t('Page');
       });
-      const sur = { contact: () => choisirApercu('contact'), home: () => choisirApercu('home'), blog: () => choisirApercu('blog') };
+      const sur = { contact: () => choisirApercu('contact'), home: () => choisirApercu('home'), blog: () => choisirApercu('blog'), perso: () => choisirApercu('perso') };
       const resoudre = p => imagesLocales[p] || p;
       const cfgVue = proposition ? Object.assign({}, cfg, { home: Object.assign({}, cfg.home, { actif: true, articles: proposition }) }) : cfg;
       const ancien = cadre.querySelector('.qh-defile');
       const position = ancien ? ancien.scrollTop : 0;
-      cadre.classList.toggle('mode-home', vueApercu === 'home');
+      cadre.classList.toggle('mode-home', vueApercu === 'home' || vueApercu === 'perso');
       if (vueApercu === 'home') rendreHome(cfgVue, cadre, { apercu: true, resoudre, position, sur });
+      else if (vueApercu === 'perso') rendreHome(cfg, cadre, { apercu: true, resoudre, position, sur, page: 'perso' });
       else if (vueApercu === 'blog') rendreBlog(cfg, cadre, { apercu: true, resoudre, sur, article: articleApercu, surArticle: id => { articleApercu = id; majApercu(); } });
       else rendrePage(cfg, cadre, { apercu: true, resoudre, sur });
     }, 60);
@@ -1239,7 +1241,7 @@
   }
   // Sections ouvertes : fermées à la toute première visite, puis dernier état mémorisé sur l'appareil
   const CLE_SECTIONS = 'qp-sections', CLE_DEFIL = 'qp-defilement';
-  const ORDRE_SECTIONS = ['textes', 'dispo', 'boutons', 'design', 'fond', 'logo', 'home', 'galerie', 'blog', 'menu', 'seo', 'partage'];
+  const ORDRE_SECTIONS = ['textes', 'dispo', 'boutons', 'design', 'fond', 'logo', 'home', 'perso', 'galerie', 'blog', 'menu', 'seo', 'partage'];
   let sectionsOuvertes = (() => {
     try { const v = JSON.parse(localStorage.getItem(CLE_SECTIONS)); return Array.isArray(v) ? new Set(v) : new Set(); }
     catch (e) { return new Set(); }
@@ -2180,6 +2182,7 @@
   document.getElementById('formulaire').addEventListener('focusin', e => {
     const sec = e.target.closest('details.section');
     if (!sec || sec.dataset.id === 'partage') return;
+    if (sec.dataset.id === 'perso') { if (cfg.perso && cfg.perso.actif) choisirApercu('perso'); return; }
     if (sec.dataset.id === 'blog') {                        // section Blog : l'aperçu montre le blog (article en cours gardé)
       if (cfg.blog && cfg.blog.actif && vueApercu !== 'blog') { vueApercu = 'blog'; majApercu(); }
       return;
@@ -2223,7 +2226,8 @@
     /* Page Home */
     f.appendChild(sectionHome());
 
-    /* Galerie photos (juste après la page Home), puis page Blog */
+    /* Page personnalisée (juste après la page Home), galerie photos, page Blog */
+    f.appendChild(sectionPerso());
     f.appendChild(sectionGalerie());
     f.appendChild(sectionBlog());
     f.appendChild(sectionMenuPages());
@@ -3766,6 +3770,78 @@
     ]);
   }
 
+  /* ---------------- Page personnalisée (ex. « Tarifs ») : pancartes comme la page Home ---------------- */
+  let pancartePersoActive = 0;
+  function sectionPerso() {
+    if (!cfg.perso || typeof cfg.perso !== 'object') cfg.perso = { actif: false, titre: '', articles: [] };
+    const P = cfg.perso;
+    if (!Array.isArray(P.articles)) P.articles = [];
+    const actif = el('input', { type: 'checkbox', checked: !!P.actif });
+    const corps = el('div', { class: P.actif ? '' : 'cache' });
+    actif.addEventListener('change', () => {
+      P.actif = actif.checked;
+      if (P.actif && !String(P.titre || '').trim()) P.titre = t('Tarifs');
+      if (P.actif && !P.articles.length) P.articles.push({ titre: t('Nos tarifs'), texte: '', image: '', style: 'texte' });
+      vueApercu = P.actif ? 'perso' : (vueApercu === 'perso' ? 'contact' : vueApercu);
+      construireFormulaire(); changement();
+    });
+    const n = P.articles.length;
+    pancartePersoActive = Math.max(0, Math.min(pancartePersoActive, n - 1));
+    const liste = el('div', { class: 'carrousel-pancartes carrousel-perso' });
+    const cartes = P.articles.map((a, i) => carteArticle(a, i, 'perso'));
+    cartes.forEach(c => liste.appendChild(c));
+    const precedente = el('button', { type: 'button', class: 'btn', text: '◀', 'aria-label': t('Pancarte précédente') });
+    const suivante = el('button', { type: 'button', class: 'btn', text: '▶', 'aria-label': t('Pancarte suivante') });
+    const compteur = el('span');
+    function montrer(k, sens) {
+      if (!n) return;
+      pancartePersoActive = Math.max(0, Math.min(k, n - 1));
+      cartes.forEach((c, j) => {
+        c.classList.toggle('cache', j !== pancartePersoActive);
+        c.classList.toggle('depuis-gauche', sens < 0);
+        if (j === pancartePersoActive && sens) { c.style.animation = 'none'; void c.offsetWidth; c.style.animation = ''; }
+      });
+      compteur.textContent = t('Pancarte ' + (pancartePersoActive + 1) + ' / ' + n);
+      precedente.disabled = pancartePersoActive === 0; suivante.disabled = pancartePersoActive === n - 1;
+      if (sens) { const c = cartes[pancartePersoActive], r = c.getBoundingClientRect(); if (r.top < 0) c.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+    }
+    precedente.addEventListener('click', () => montrer(pancartePersoActive - 1, -1));
+    suivante.addEventListener('click', () => montrer(pancartePersoActive + 1, 1));
+    let x0 = null, y0 = 0;
+    liste.addEventListener('touchstart', e => {
+      const cible = e.target.closest('input, textarea, select, [contenteditable]');
+      x0 = cible || e.touches.length > 1 ? null : e.touches[0].clientX; y0 = e.touches[0].clientY;
+    }, { passive: true });
+    liste.addEventListener('touchend', e => {
+      if (x0 === null) return;
+      const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0; x0 = null;
+      if (Math.abs(dx) > 60 && Math.abs(dx) > 2 * Math.abs(dy)) montrer(pancartePersoActive + (dx < 0 ? 1 : -1), dx < 0 ? 1 : -1);
+    }, { passive: true });
+    const nav = el('div', { class: 'nav-pancartes' + (n > 1 ? '' : ' cache') }, [precedente, compteur, suivante]);
+    montrer(pancartePersoActive, 0);
+    const plein = n >= HOME_MAX_ARTICLES;
+    const ajouter = el('button', { type: 'button', class: 'btn ajout-article', disabled: plein,
+      text: plein ? 'Maximum atteint (' + HOME_MAX_ARTICLES + ' articles)' : '＋ Ajouter un article (' + n + '/' + HOME_MAX_ARTICLES + ')' });
+    ajouter.addEventListener('click', () => {
+      if (P.articles.length >= HOME_MAX_ARTICLES) return;
+      P.articles.push({ titre: t('Nouvel article'), texte: '', image: '', style: 'texte' });
+      pancartePersoActive = P.articles.length - 1; vueApercu = 'perso';
+      construireFormulaire(); changement();
+      const visible = document.querySelector('.carrousel-perso .article-carte:not(.cache)');
+      if (visible) visible.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    corps.append(
+      champTexte('Nom de la page (menu)', P, 'titre', { ph: 'Tarifs' }),
+      el('span', { class: 'etiq', text: 'Pancartes — une plein écran chacune, comme la page Home ; glissez à gauche ou à droite pour passer de l’une à l’autre' }),
+      liste, nav, ajouter,
+      el('p', { class: 'aide', style: 'margin:10px 0 0', text: 'Page à part (adresse …/page.html), par exemple vos tarifs, vos prestations ou un menu. Les visiteurs y passent par le coin en haut à droite des autres pages.' })
+    );
+    return section('perso', 'Page personnalisée', false, [
+      el('label', { class: 'bascule', style: 'border-top:0' }, [el('span', { text: 'Activer la page personnalisée' }), actif]),
+      corps
+    ]);
+  }
+
   /* ---------------- Menu des pages : ordre dans la liste ☰ ---------------- */
   function sectionMenuPages() {
     const base = PAGES_MENU.slice();
@@ -3775,6 +3851,7 @@
     const infos = {
       contact: () => ['✉️', cfg.home.boutonContact || t('Contact'), true],
       home: () => ['🏠', cfg.home.lienTexte || t('Découvrir l’entreprise'), !!cfg.home.actif],
+      perso: () => ['📄', (cfg.perso && cfg.perso.titre) || t('Page personnalisée'), !!(cfg.perso && cfg.perso.actif)],
       blog: () => ['📰', (cfg.blog && cfg.blog.titre) || t('Blog'), !!(cfg.blog && cfg.blog.actif)],
       galerie: () => ['📷', (cfg.galerie && cfg.galerie.titre) || t('Galerie'), !!(cfg.galerie && cfg.galerie.actif)]
     };
@@ -4148,8 +4225,9 @@
 
   /* ✨ Texte IA d'une seule pancarte : rédige (ou améliore) cette pancarte sans toucher aux autres.
      Décompté comme un texte IA (même outil que la rédaction complète). */
-  async function redigerPancarte(i) {
-    const arts = cfg.home.articles, a = arts[i], ia = cfg.home.ia || {};
+  async function redigerPancarte(i, cle) {
+    const perso = cle === 'perso';
+    const arts = perso ? cfg.perso.articles : cfg.home.articles, a = arts[i], ia = cfg.home.ia || {};
     const seo = cfg.seo || {};
     const systeme = [
       'Tu es rédacteur web. Tu écris UNE pancarte de la page d’accueil mobile d’une petite entreprise : elle occupe tout l’écran d’un téléphone, avec un titre court et un texte clair, concret et informatif.',
@@ -4176,6 +4254,7 @@
       cfg.pied ? 'Mention en bas de page : ' + cfg.pied : '',
       'Moyens de contact disponibles : ' + (moyensDeContact().join(', ') || '(non précisés)'),
       'Ton souhaité : ' + (TONS_IA[ia.ton] || TONS_IA.pro),
+      perso ? 'Cette pancarte fait partie de la page « ' + (cfg.perso.titre || 'Page') + ' » du site (et non de la page d’accueil) : reste dans ce sujet (par exemple, pour une page Tarifs : prestations et prix donnés par le client, sans en inventer).' : '',
       autres.length ? 'Autres pancartes (ne pas répéter) :\n' + autres.join('\n') : 'Pas d’autre pancarte pour l’instant.',
       'Pancarte à rédiger : n° ' + (i + 1) + ' sur ' + arts.length + (i === arts.length - 1 && arts.length > 1 ? ' (la dernière)' : ''),
       'Titre actuel : ' + (a.titre || '(vide)'),
@@ -4949,14 +5028,15 @@
     ]);
   }
 
-  function carteArticle(a, i) {
-    const n = cfg.home.articles.length;
+  function carteArticle(a, i, cle) {
+    cle = cle || 'home';                                  // 'home' ou 'perso' (page personnalisée)
+    const L = cfg[cle].articles, n = L.length;
+    const activer = k => { if (cle === 'perso') pancartePersoActive = k; else pancarteActive = k; };
     const carte = el('div', { class: 'bouton-carte article-carte' + (a.masque ? ' masque' : '') });
     const deplacer = dir => {
       const j = i + dir; if (j < 0 || j >= n) return;
-      const L = cfg.home.articles;
       [L[i], L[j]] = [L[j], L[i]];
-      pancarteActive = j;                                 // on suit la pancarte déplacée
+      activer(j);                                         // on suit la pancarte déplacée
       construireFormulaire(); changement();
     };
     const champTitre = champTexte('Titre', a, 'titre', { ph: 'Qui sommes-nous ?' });
@@ -4973,7 +5053,7 @@
     const texteIA = el('button', { type: 'button', class: 'btn btn-mini', text: '✨ Texte IA', onclick: async () => {
       texteIA.disabled = true; texteIA.textContent = t('Rédaction…'); msgIA.className = 'msg'; msgIA.textContent = '';
       try {
-        const p = await redigerPancarte(i);
+        const p = await redigerPancarte(i, cle);
         avantIA = { titre: a.titre || '', texte: a.texte || '' };
         a.titre = p.titre; a.texte = p.texte;
         champTitre.querySelector('input').value = a.titre; champCorps.querySelector('textarea').value = a.texte;
@@ -5007,7 +5087,7 @@
         el('span', { class: 'esp' }),
         el('button', { type: 'button', class: 'btn btn-mini', text: '🗑 Supprimer', disabled: n <= 1, onclick: () => {
           if (!confirm(t('Supprimer la pancarte « ' + (a.titre || t('sans titre')) + ' » ?'))) return;
-          cfg.home.articles.splice(i, 1); pancarteActive = Math.min(i, cfg.home.articles.length - 1); construireFormulaire(); changement();
+          L.splice(i, 1); activer(Math.min(i, L.length - 1)); construireFormulaire(); changement();
         } })
       ])
     );

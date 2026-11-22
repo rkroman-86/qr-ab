@@ -86,6 +86,13 @@ qrbc.app (QR-BC, édité par KPS) permet de créer en quelques minutes, depuis u
 - Sur la page, la galerie s'ouvre depuis le coin en haut à droite (voir « Passer d'une page à l'autre »). Elle montre une grille de vignettes ; toucher une photo l'affiche en grand, glisser à gauche/droite pour la suivante, vers le bas ou « × » pour revenir à la grille ; le bouton retour du téléphone ferme la photo puis la galerie. Sur ordinateur : flèches ‹ › et clavier (← → Échap).
 - Décocher « Activer la galerie » cache le bouton sans effacer les photos. Les versions traduites de la page montrent les mêmes photos (le titre du bouton est traduit).
 
+## Page personnalisée (ex. Tarifs)
+- Section « Page personnalisée », juste après la page Home. Désactivée par défaut : cocher « Activer la page personnalisée ».
+- « Nom de la page (menu) » : nom affiché aux visiteurs (proposé : « Tarifs » ; ex. Prestations, Menu, Horaires).
+- Même fonctionnement que la page Home : 1 à 10 pancartes plein écran (titre, texte, mise en page, image, ✨ Texte IA, ✨ Image IA), glisser ou ◀ ▶ pour passer de l'une à l'autre, ← → pour l'ordre.
+- Pour le visiteur : page à part (nom.qrbc.app/page.html), ouverte depuis le coin en haut à droite des autres pages (nom de la page ou menu ☰). Sa place dans le menu se règle dans « Menu des pages ».
+- L'IA n'invente pas de prix : écrire les tarifs soi-même (ou les donner dans le texte) avant « ✨ Texte IA ».
+
 ## Page Blog
 - Section « Page Blog », après la galerie. Désactivée par défaut : cocher « Activer le blog ». « Titre de la page » : nom du blog (vide = « Blog »).
 - « ＋ Nouvel article » ajoute un article en tête (le plus récent en premier), daté du jour. Jusqu'à 50 articles.
@@ -95,7 +102,7 @@ qrbc.app (QR-BC, édité par KPS) permet de créer en quelques minutes, depuis u
 - Pour le visiteur : page à part (nom.qrbc.app/blog.html) avec la liste des articles (photo, date, titre, début du texte) ; toucher un article l'ouvre en entier, « ← Blog » ou le retour du téléphone revient à la liste. Les versions traduites traduisent aussi les articles (bouton « Retraduire » après une modification).
 
 ## Passer d'une page à l'autre (visiteurs)
-- Les pages possibles : Contact, Home (si activée), Blog (si activé), Galerie (si activée).
+- Les pages possibles : Contact, Home, page personnalisée (ex. Tarifs), Blog, Galerie (chacune si activée).
 - 2 pages en tout : le nom de l'autre page s'affiche en haut à droite (ex. « Découvrir l'entreprise » sur la page contact, « Contact » dans la barre de la Home ou du blog, « 📷 Galerie »).
 - À partir de 3 : un picto ☰ en haut à droite ouvre la liste des pages pour choisir (la page en cours est marquée).
 - Ordre des pages dans ce menu : section « Menu des pages » du rédacteur (après le blog), boutons ↑ ↓. Les pages désactivées y figurent en grisé pour garder leur place.

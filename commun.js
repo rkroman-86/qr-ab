@@ -110,6 +110,13 @@ function homeVisible(cfg) {
   return !!(cfg.home && cfg.home.actif && (cfg.home.articles || []).some(a => a && !a.masque && (a.titre || a.texte)));
 }
 
+/* Page personnalisée (ex. « Tarifs ») : mêmes pancartes que la page Home, fichier page.html */
+function persoVisible(cfg) {
+  const p = cfg && cfg.perso;
+  return !!(p && p.actif && Array.isArray(p.articles) && p.articles.some(a => a && !a.masque && (a.titre || a.texte)));
+}
+function titrePerso(cfg) { return String((cfg.perso && cfg.perso.titre) || '').trim() || 'Page'; }
+
 /* Blog : articles (titre, date, photo, texte), page blog.html (liste puis article) */
 const BLOG_MAX = 50;
 function blogVisible(cfg) {
@@ -136,6 +143,7 @@ function entreesPages(cfg, doc, res, opts, racine) {
   const L = opts.liens || {}, S = opts.sur || {};
   const e = [{ id: 'contact', nom: cfg.home.boutonContact || 'Contact', ico: '✉️', href: L.contact || opts.hrefContact || '#contact', sur: S.contact || opts.surContact }];
   if (homeVisible(cfg)) e.push({ id: 'home', nom: cfg.home.lienTexte || 'Découvrir l’entreprise', ico: '🏠', href: L.home || opts.hrefHome || 'accueil.html', sur: S.home || opts.surHome });
+  if (persoVisible(cfg)) e.push({ id: 'perso', nom: titrePerso(cfg), ico: '📄', href: L.perso || 'page.html', sur: S.perso });
   if (blogVisible(cfg)) e.push({ id: 'blog', nom: titreBlog(cfg, doc), ico: '📰', href: L.blog || 'blog.html', sur: S.blog });
   if (galerieVisible(cfg)) e.push({ id: 'galerie', nom: titreGalerie(cfg, doc), ico: '📷', href: '#galerie', sur: () => ouvrirGalerie(cfg, doc, res, opts.apercu ? racine : null) });
   // ordre choisi dans l'éditeur (section « Menu des pages ») ; pages absentes de la liste : à la fin, dans l'ordre par défaut
@@ -143,7 +151,7 @@ function entreesPages(cfg, doc, res, opts, racine) {
   const rang = x => { const k = ordre.indexOf(x.id); return k < 0 ? 100 + PAGES_MENU.indexOf(x.id) : k; };
   return e.sort((a, b) => rang(a) - rang(b));
 }
-const PAGES_MENU = ['contact', 'home', 'blog', 'galerie'];
+const PAGES_MENU = ['contact', 'home', 'perso', 'blog', 'galerie'];
 function navPages(cfg, doc, res, actuelle, opts, racine, enBarre) {
   const toutes = entreesPages(cfg, doc, res, opts, racine);
   if (toutes.length < 2) return null;
@@ -1184,6 +1192,7 @@ function creditQrbc(doc, apercu) {
 function rendreHome(cfgBrut, racine, opts) {
   opts = opts || {};
   const cfg = normaliser(fusion(CONFIG_DEFAUT, cfgBrut));
+  const pagePerso = opts.page === 'perso';                 // même rendu pour la page personnalisée (ex. « Tarifs »)
   const d = cfg.design;
   const res = opts.resoudre || (x => x);
   const doc = racine.ownerDocument;
@@ -1215,14 +1224,14 @@ function rendreHome(cfgBrut, racine, opts) {
   barre.appendChild(nom);
   const languesH = opts.apercu ? null : selecteurLangues(doc, true);
   if (languesH) barre.appendChild(languesH);
-  const navH = navPages(cfg, doc, res, 'home', opts, racine, true);   // « Contact » (2 pages) ou ☰ (3 et plus), tout à droite
+  const navH = navPages(cfg, doc, res, pagePerso ? 'perso' : 'home', opts, racine, true);   // « Contact » (2 pages) ou ☰ (3 et plus), tout à droite
   if (navH) barre.appendChild(navH);
 
   /* Pancartes */
   const defile = doc.createElement('div');
   defile.className = 'qh-defile';
   defile.tabIndex = 0;
-  const articles = cfg.home.articles.filter(a => a && !a.masque && (a.titre || a.texte));
+  const articles = (pagePerso ? ((cfg.perso && cfg.perso.articles) || []) : cfg.home.articles).filter(a => a && !a.masque && (a.titre || a.texte));
   const total = articles.length;
   const points = doc.createElement('div');
   points.className = 'qh-points';
@@ -1601,9 +1610,13 @@ const BOOT_SITE = `(function(){
     var avecHome = homeVisible(c), arriveeHome = avecHome && c.home.arrivee === 'home';
     if (vueFixe === 'home' && !avecHome) { location.replace('./'); return; }
     if (vueFixe === 'blog' && !blogVisible(c)) { location.replace('./'); return; }
+    if (vueFixe === 'perso' && !persoVisible(c)) { location.replace('./'); return; }
     var ici = vueFixe === '';
-    var liens = { contact: ici ? '#contact' : './#contact', home: arriveeHome ? (ici ? '#accueil' : './#accueil') : 'accueil.html', blog: 'blog.html' };
-    if (vueFixe === 'blog') {
+    var liens = { contact: ici ? '#contact' : './#contact', home: arriveeHome ? (ici ? '#accueil' : './#accueil') : 'accueil.html', blog: 'blog.html', perso: 'page.html' };
+    if (vueFixe === 'perso') {
+      document.body.classList.add('mode-home');
+      rendreHome(cfg, racine, { liens: liens, page: 'perso' });
+    } else if (vueFixe === 'blog') {
       document.body.classList.remove('mode-home');
       var m = /^#article-(.+)$/.exec(ancre);
       rendreBlog(cfg, racine, { liens: liens, article: m ? decodeURIComponent(m[1]) : '' });
@@ -1675,13 +1688,14 @@ function genererFichiersSite(cfgBrut, base, doc) {
   const liensDe = vue => {                                 // mêmes adresses que BOOT_SITE
     const ici = vue === (arriveeHome ? 'home' : 'contact');
     const surIndex = vue === 'index';
-    return { contact: surIndex ? '#contact' : './#contact', home: arriveeHome ? (surIndex ? '#accueil' : './#accueil') : 'accueil.html', blog: 'blog.html', ici };
+    return { contact: surIndex ? '#contact' : './#contact', home: arriveeHome ? (surIndex ? '#accueil' : './#accueil') : 'accueil.html', blog: 'blog.html', perso: 'page.html', ici };
   };
   const preRendu = (vue, fichier) => {
     const tmp = doc.createElement('div');
     const liens = liensDe(fichier === 'index.html' ? 'index' : vue);
     if (vue === 'home') rendreHome(cfgBrut, tmp, { liens });
     else if (vue === 'blog') rendreBlog(cfgBrut, tmp, { liens });
+    else if (vue === 'perso') rendreHome(cfgBrut, tmp, { liens, page: 'perso' });
     else rendrePage(cfgBrut, tmp, { liens });
     return tmp.innerHTML;
   };
@@ -1712,6 +1726,18 @@ function genererFichiersSite(cfgBrut, base, doc) {
   }
 
   const langueHTML = /^[a-z]{2}$/.test(cfg.langue || '') ? cfg.langue : 'fr';
+  const renvoi = () => '<!DOCTYPE html>\n<html lang="' + langueHTML + '"><head><meta charset="utf-8"><title>' + echapperHTML(cfg.titre) +
+    '</title><link rel="canonical" href="' + echapperHTML(base) + '"><meta http-equiv="refresh" content="0; url=./"></head><body></body></html>\n';
+  if (persoVisible(cfg)) {
+    const arts = cfg.perso.articles.filter(a => a && !a.masque && (a.titre || a.texte));
+    fichiers['page.html'] = pageHTML({
+      titre: couper(titrePerso(cfg) + (cfg.titre ? ' – ' + cfg.titre : ''), 65),
+      description: couper((arts[0] && arts[0].texte) || descSite, 155),
+      canonique: base + 'page.html', nom: cfg.titre, image, imageTaille, icone, couleur: d.fond, jsonld, appli, langue: cfg.langue,
+      contenu: preRendu('perso', 'page.html'), modeHome: true, vue: 'perso'
+    });
+    urls.push(base + 'page.html');
+  } else fichiers['page.html'] = renvoi();
   if (avecBlog) {
     const arts = cfg.blog.articles.filter(a => a && !a.masque && (a.titre || a.texte));
     const nomBlog = titreBlog(cfg, { documentElement: { lang: langueHTML } });
@@ -1738,6 +1764,7 @@ function genererFichiersSite(cfgBrut, base, doc) {
   ajouterImage(pageContact, cfg.logo); ajouterImage(pageContact, d.imageFond);
   if (cfg.home && cfg.home.actif) (cfg.home.articles || []).forEach(a => { if (a && !a.masque && a.image && (a.style === 'photo' || a.style === 'image')) ajouterImage(pageHome, a.image); });
   if (avecBlog) cfg.blog.articles.forEach(a => { if (a && !a.masque && a.image) ajouterImage(base + 'blog.html', a.image); });
+  if (persoVisible(cfg)) cfg.perso.articles.forEach(a => { if (a && !a.masque && a.image && (a.style === 'photo' || a.style === 'image')) ajouterImage(base + 'page.html', a.image); });
   fichiers['sitemap.xml'] = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">\n' +
     urls.map(u => '  <url><loc>' + echapperHTML(u) + '</loc><lastmod>' + jour + '</lastmod>' +
       (imagesDe[u] || []).slice(0, 20).map(i => '<image:image><image:loc>' + echapperHTML(i) + '</image:loc></image:image>').join('') +
