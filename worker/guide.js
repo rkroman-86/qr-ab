@@ -98,6 +98,7 @@ qrbc.app (QR-BC, édité par KPS) permet de créer en quelques minutes, depuis u
 - Les pages possibles : Contact, Home (si activée), Blog (si activé), Galerie (si activée).
 - 2 pages en tout : le nom de l'autre page s'affiche en haut à droite (ex. « Découvrir l'entreprise » sur la page contact, « Contact » dans la barre de la Home ou du blog, « 📷 Galerie »).
 - À partir de 3 : un picto ☰ en haut à droite ouvre la liste des pages pour choisir (la page en cours est marquée).
+- Ordre des pages dans ce menu : section « Menu des pages » du rédacteur (après le blog), boutons ↑ ↓. Les pages désactivées y figurent en grisé pour garder leur place.
 - « Installer » et le choix de langue sont en haut à gauche de la page contact.
 
 ## QR code et carte de visite

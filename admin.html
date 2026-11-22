@@ -389,6 +389,12 @@
     .blogp-photo{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 12px}
     .blogp-photo img{width:120px;height:68px;object-fit:cover;border-radius:8px;background:var(--bord,#ddd)}
     .blogp-date{max-width:200px}
+    .menu-pages{display:flex;flex-direction:column;gap:6px}
+    .menu-page{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--ligne);border-radius:10px;background:var(--panneau)}
+    .menu-page.inactif{opacity:.55}
+    .menu-page .mp-ico{width:24px;text-align:center}
+    .menu-page .mp-nom{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+    .menu-page small{font-weight:400;color:var(--doux)}
     .ajout{display:flex;gap:8px}
     .ajout select{flex:1}
 
@@ -1233,7 +1239,7 @@
   }
   // Sections ouvertes : fermées à la toute première visite, puis dernier état mémorisé sur l'appareil
   const CLE_SECTIONS = 'qp-sections', CLE_DEFIL = 'qp-defilement';
-  const ORDRE_SECTIONS = ['textes', 'dispo', 'boutons', 'design', 'fond', 'logo', 'home', 'galerie', 'blog', 'seo', 'partage'];
+  const ORDRE_SECTIONS = ['textes', 'dispo', 'boutons', 'design', 'fond', 'logo', 'home', 'galerie', 'blog', 'menu', 'seo', 'partage'];
   let sectionsOuvertes = (() => {
     try { const v = JSON.parse(localStorage.getItem(CLE_SECTIONS)); return Array.isArray(v) ? new Set(v) : new Set(); }
     catch (e) { return new Set(); }
@@ -2220,6 +2226,7 @@
     /* Galerie photos (juste après la page Home), puis page Blog */
     f.appendChild(sectionGalerie());
     f.appendChild(sectionBlog());
+    f.appendChild(sectionMenuPages());
 
     /* Disposition */
     const dispos = el('div', { class: 'dispos' });
@@ -3757,6 +3764,40 @@
       el('label', { class: 'bascule', style: 'border-top:0' }, [el('span', { text: 'Activer la galerie' }), actif]),
       corps
     ]);
+  }
+
+  /* ---------------- Menu des pages : ordre dans la liste ☰ ---------------- */
+  function sectionMenuPages() {
+    const base = PAGES_MENU.slice();
+    const ordre = (Array.isArray(cfg.ordrePages) ? cfg.ordrePages.filter(x => base.includes(x)) : []);
+    base.forEach(x => { if (!ordre.includes(x)) ordre.push(x); });
+    const liste = el('div', { class: 'menu-pages' });
+    const infos = {
+      contact: () => ['✉️', cfg.home.boutonContact || t('Contact'), true],
+      home: () => ['🏠', cfg.home.lienTexte || t('Découvrir l’entreprise'), !!cfg.home.actif],
+      blog: () => ['📰', (cfg.blog && cfg.blog.titre) || t('Blog'), !!(cfg.blog && cfg.blog.actif)],
+      galerie: () => ['📷', (cfg.galerie && cfg.galerie.titre) || t('Galerie'), !!(cfg.galerie && cfg.galerie.actif)]
+    };
+    function dessiner() {
+      liste.innerHTML = '';
+      ordre.forEach((id, i) => {
+        const [ico, nom, actif] = infos[id]();
+        const bouger = j => { [ordre[i], ordre[j]] = [ordre[j], ordre[i]]; cfg.ordrePages = ordre.slice(); dessiner(); changement(); };
+        liste.appendChild(el('div', { class: 'menu-page' + (actif ? '' : ' inactif') }, [
+          el('span', { class: 'mp-ico', text: ico }),
+          el('span', { class: 'mp-nom' }, [el('span', { text: nom, 'data-no-i18n': '' }), actif ? null : el('small', { text: ' — ' + t('désactivée') })].filter(Boolean)),
+          el('button', { type: 'button', class: 'btn btn-mini', text: '↑', title: t('Monter'), 'aria-label': t('Monter'), disabled: i === 0, onclick: () => bouger(i - 1) }),
+          el('button', { type: 'button', class: 'btn btn-mini', text: '↓', title: t('Descendre'), 'aria-label': t('Descendre'), disabled: i === ordre.length - 1, onclick: () => bouger(i + 1) })
+        ]));
+      });
+    }
+    dessiner();
+    const sec = section('menu', 'Menu des pages', false, [
+      el('p', { class: 'aide', style: 'margin:0 0 10px', text: 'Ordre des pages dans le menu ☰ en haut à droite (il apparaît dès que la page a au moins 3 pages : contact, Home, blog, galerie). Avec 2 pages seulement, le nom de l’autre page s’affiche directement.' }),
+      liste
+    ]);
+    sec.addEventListener('toggle', () => { if (sec.open) dessiner(); });   // noms et pages activées à jour
+    return sec;
   }
 
   /* ---------------- Page Blog ---------------- */

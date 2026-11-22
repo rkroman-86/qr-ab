@@ -138,8 +138,12 @@ function entreesPages(cfg, doc, res, opts, racine) {
   if (homeVisible(cfg)) e.push({ id: 'home', nom: cfg.home.lienTexte || 'Découvrir l’entreprise', ico: '🏠', href: L.home || opts.hrefHome || 'accueil.html', sur: S.home || opts.surHome });
   if (blogVisible(cfg)) e.push({ id: 'blog', nom: titreBlog(cfg, doc), ico: '📰', href: L.blog || 'blog.html', sur: S.blog });
   if (galerieVisible(cfg)) e.push({ id: 'galerie', nom: titreGalerie(cfg, doc), ico: '📷', href: '#galerie', sur: () => ouvrirGalerie(cfg, doc, res, opts.apercu ? racine : null) });
-  return e;
+  // ordre choisi dans l'éditeur (section « Menu des pages ») ; pages absentes de la liste : à la fin, dans l'ordre par défaut
+  const ordre = Array.isArray(cfg.ordrePages) ? cfg.ordrePages : [];
+  const rang = x => { const k = ordre.indexOf(x.id); return k < 0 ? 100 + PAGES_MENU.indexOf(x.id) : k; };
+  return e.sort((a, b) => rang(a) - rang(b));
 }
+const PAGES_MENU = ['contact', 'home', 'blog', 'galerie'];
 function navPages(cfg, doc, res, actuelle, opts, racine, enBarre) {
   const toutes = entreesPages(cfg, doc, res, opts, racine);
   if (toutes.length < 2) return null;
