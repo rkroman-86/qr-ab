@@ -135,6 +135,25 @@ function dateBlog(j, doc) {
   try { return new Intl.DateTimeFormat(lg, { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(j + 'T12:00:00')); } catch (e) { return j; }
 }
 
+/* ---------- Style et taille d'un texte (réglés dans l'éditeur, « Aa ») ----------
+   typo = { p: police (clé de FONTS, '' = celle du design), g: '' | 'normal' | 'gras' | 'italique' | 'gras-italique', t: '' | 'xs' | 's' | 'l' | 'xl' }
+   Le texte est placé dans un <span> dont la taille est relative à celle prévue par la mise en page (em). Rien de réglé : texte inchangé. */
+const TAILLES_TEXTE = { xs: 0.78, s: 0.89, l: 1.15, xl: 1.32 };
+function zoneTypo(el, typo) {
+  if (!typo || !(typo.p || typo.g || typo.t)) return el;
+  const sp = el.ownerDocument.createElement('span');
+  sp.className = 'qx-t';
+  if (typo.p && FONTS[typo.p]) sp.style.fontFamily = FONTS[typo.p].css;
+  if (typo.g) {
+    sp.style.fontWeight = /gras/.test(typo.g) ? '800' : '400';
+    sp.style.fontStyle = /italique/.test(typo.g) ? 'italic' : 'normal';
+  }
+  if (TAILLES_TEXTE[typo.t]) sp.style.fontSize = TAILLES_TEXTE[typo.t] + 'em';
+  el.appendChild(sp);
+  return sp;
+}
+const typoDe = (obj, cle) => (obj && obj.typo && obj.typo[cle]) || null;
+
 /* ---------- Liens dans les textes : [mots](cible) ----------
    cible = page:contact|home|perso|blog|galerie, article:ID (blog), https://…, mailto:…, tel:…
    Écrits par le menu « 🔗 Lien » de l'éditeur ; affichés sans HTML brut (texte + <a>). Lien vers une page désactivée : texte simple. */
@@ -503,6 +522,7 @@ const CSS_PAGE = `
 .qb-art h1{margin:4px 0 12px;font-size:1.6rem;line-height:1.2}
 .qb-texte{white-space:pre-line;line-height:1.62;font-size:1rem;overflow-wrap:anywhere}
 .qb-vide{opacity:.6}
+.qx-t{line-height:inherit}
 .qx-lien{color:inherit;font-weight:600;text-decoration:underline;text-decoration-thickness:1.5px;text-underline-offset:3px;cursor:pointer}
 .qp .qp-appli.qp-appli-court{width:40px;height:40px;padding:0;justify-content:center;border-radius:50%}
 .qp .qp-appli.qp-appli-court svg{width:19px;height:19px}
@@ -763,13 +783,13 @@ function rendrePage(cfgBrut, racine, opts) {
   if (cfg.titre) {
     const h = doc.createElement('h1');
     h.className = 'qp-titre';
-    h.textContent = cfg.titre;
+    zoneTypo(h, typoDe(cfg, 'titre')).textContent = cfg.titre;
     texteEntete.appendChild(h);
   }
   if (cfg.sousTitre) {
     const s = doc.createElement('p');
     s.className = 'qp-sous';
-    texteAvecLiens(s, cfg.sousTitre, { cfg, doc, res, opts, racine, actuelle: 'contact' });
+    texteAvecLiens(zoneTypo(s, typoDe(cfg, 'sousTitre')), cfg.sousTitre, { cfg, doc, res, opts, racine, actuelle: 'contact' });
     texteEntete.appendChild(s);
   }
 
@@ -875,7 +895,7 @@ function rendrePage(cfgBrut, racine, opts) {
   if (cfg.pied) {
     const f = doc.createElement('p');
     f.className = 'qp-pied';
-    texteAvecLiens(f, cfg.pied, { cfg, doc, res, opts, racine, actuelle: 'contact' });
+    texteAvecLiens(zoneTypo(f, typoDe(cfg, 'pied')), cfg.pied, { cfg, doc, res, opts, racine, actuelle: 'contact' });
     c.appendChild(f);
   }
 
@@ -1311,13 +1331,13 @@ function rendreHome(cfgBrut, racine, opts) {
     if (a.titre) {
       const h = doc.createElement('h2');
       h.className = 'qh-titre';
-      h.textContent = a.titre;
+      zoneTypo(h, typoDe(a, 'titre')).textContent = a.titre;
       corps.appendChild(h);
     }
     if (a.texte) {
       const t = doc.createElement('p');
       t.className = 'qh-texte';
-      texteAvecLiens(t, a.texte, { cfg, doc, res, opts, racine, actuelle: pagePerso ? 'perso' : 'home' });
+      texteAvecLiens(zoneTypo(t, typoDe(a, 'texte')), a.texte, { cfg, doc, res, opts, racine, actuelle: pagePerso ? 'perso' : 'home' });
       corps.appendChild(t);
     }
     p.appendChild(corps);
@@ -1423,8 +1443,8 @@ function rendreBlog(cfgBrut, racine, opts) {
     if (ouvert.image) { const im = doc.createElement('img'); im.src = res(ouvert.image); im.alt = altImage(ouvert); im.setAttribute('decoding', 'async'); art.appendChild(im); }
     const dt = dateBlog(ouvert.date, doc);
     if (dt) { const p = doc.createElement('p'); p.className = 'qb-date'; const t = doc.createElement('time'); t.setAttribute('datetime', ouvert.date); t.textContent = dt; p.appendChild(t); art.appendChild(p); }
-    const h = doc.createElement('h1'); h.textContent = ouvert.titre || ''; art.appendChild(h);
-    const tx = doc.createElement('div'); tx.className = 'qb-texte'; texteAvecLiens(tx, ouvert.texte, { cfg, doc, res, opts, racine, actuelle: 'blog' }); art.appendChild(tx);
+    const h = doc.createElement('h1'); zoneTypo(h, typoDe(ouvert, 'titre')).textContent = ouvert.titre || ''; art.appendChild(h);
+    const tx = doc.createElement('div'); tx.className = 'qb-texte'; texteAvecLiens(zoneTypo(tx, typoDe(ouvert, 'texte')), ouvert.texte, { cfg, doc, res, opts, racine, actuelle: 'blog' }); art.appendChild(tx);
     corps.append(retour, art);
   } else {
     rendreBlog.depuisListe = false;
@@ -1448,7 +1468,7 @@ function rendreBlog(cfgBrut, racine, opts) {
       const z = doc.createElement('div'); z.className = 'qb-carte-c';
       const dt = dateBlog(a.date, doc);
       if (dt) { const p = doc.createElement('p'); p.className = 'qb-date'; p.textContent = dt; z.appendChild(p); }
-      if (a.titre) { const t = doc.createElement('h2'); t.textContent = a.titre; z.appendChild(t); }
+      if (a.titre) { const t = doc.createElement('h2'); zoneTypo(t, typoDe(a, 'titre')).textContent = a.titre; z.appendChild(t); }
       if (a.texte) { const t = doc.createElement('p'); t.className = 'qb-extrait'; t.textContent = sansLiens(a.texte).slice(0, 400); z.appendChild(t); }
       c.appendChild(z);
       liste.appendChild(c);

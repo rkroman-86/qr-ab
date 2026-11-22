@@ -393,6 +393,11 @@
     .champ-liens{margin-bottom:12px}
     .champ-liens>.champ{margin-bottom:4px}
     .barre-liens{position:relative;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+    .champ-outils{display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap}
+    .btn-typo{font-family:Georgia,serif;font-weight:700;min-width:40px}
+    .btn-typo.regle{background:var(--accent,#2563eb);color:#fff;border-color:transparent}
+    .rangee-typo{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 0}
+    .rangee-typo select{flex:1 1 120px;min-width:0}
     .liens-aide{font-size:.75rem;color:var(--doux)}
     .menu-liens{position:absolute;left:0;top:calc(100% + 6px);z-index:30;width:min(360px,calc(100vw - 40px));padding:12px;border:1px solid var(--ligne);border-radius:12px;
       background:var(--panneau);box-shadow:0 12px 32px rgba(0,0,0,.22);display:flex;flex-direction:column;gap:6px}
@@ -1281,7 +1286,45 @@
     if (opts.multi) input.rows = 2;
     input.addEventListener('input', () => { obj[cle] = input.value; changement(); });
     const champ = el('label', { class: 'champ' }, [el('span', { text: etiquette }), input]);
-    return opts.liens ? el('div', { class: 'champ-liens' }, [champ, outilLiens(input)]) : champ;
+    if (!opts.liens && !opts.typo) return champ;
+    const outils = el('div', { class: 'champ-outils' });
+    const enfants = [champ, outils];
+    if (opts.typo) { const [b, rangee] = outilTypo(obj, cle); outils.append(b); enfants.push(rangee); }
+    if (opts.liens) outils.append(outilLiens(input));
+    return el('div', { class: 'champ-liens' }, enfants);
+  }
+
+  /* « Aa » : police, gras / italique et taille d'un texte (par défaut : ceux du design et de la mise en page) */
+  const STYLES_TEXTE = { '': 'Style par défaut', normal: 'Normal', gras: 'Gras', italique: 'Italique', 'gras-italique': 'Gras italique' };
+  const TAILLES_CHOIX = { xs: 'Très petit', s: 'Petit', '': 'Taille normale', l: 'Grand', xl: 'Très grand' };
+  function outilTypo(obj, cle) {
+    const lire = () => (obj.typo && obj.typo[cle]) || {};
+    const bouton = el('button', { type: 'button', class: 'btn btn-mini btn-typo', text: 'Aa', title: t('Police, style et taille'), 'aria-label': t('Police, style et taille') });
+    const majBouton = () => { const v = lire(); bouton.classList.toggle('regle', !!(v.p || v.g || v.t)); };
+    const ecrire = (k, v) => {
+      obj.typo = obj.typo || {};
+      const x = Object.assign({}, obj.typo[cle] || {});
+      if (v) x[k] = v; else delete x[k];
+      if (Object.keys(x).length) obj.typo[cle] = x; else delete obj.typo[cle];
+      if (!Object.keys(obj.typo).length) delete obj.typo;
+      majBouton(); changement();
+    };
+    const choix = (k, options) => {
+      const s = el('select', {}, Object.keys(options).map(v => el('option', { value: v, text: options[v], selected: (lire()[k] || '') === v })));
+      s.addEventListener('change', () => ecrire(k, s.value));
+      return s;
+    };
+    const polices = { '': t('Police du design') };
+    Object.keys(FONTS).forEach(k => { polices[k] = FONTS[k].nom; });
+    const rangee = el('div', { class: 'rangee-typo cache' }, [choix('p', polices), choix('g', STYLES_TEXTE), choix('t', TAILLES_CHOIX),
+      el('button', { type: 'button', class: 'btn btn-mini', text: 'Par défaut', onclick: () => {
+        if (obj.typo) { delete obj.typo[cle]; if (!Object.keys(obj.typo).length) delete obj.typo; }
+        rangee.querySelectorAll('select').forEach(x => { x.value = ''; });
+        majBouton(); changement();
+      } })]);
+    bouton.addEventListener('click', () => rangee.classList.toggle('cache'));
+    majBouton();
+    return [bouton, rangee];
   }
 
   /* 🔗 Lien : la sélection d'un texte devient un lien [mots](cible) vers une page du site, un article du blog ou une adresse externe */
@@ -2306,9 +2349,9 @@
 
     /* Textes */
     f.appendChild(section('textes', 'Textes', true, [
-      champTexte('Titre', cfg, 'titre', { ph: 'Nom de l’établissement' }),
-      champTexte('Sous-titre', cfg, 'sousTitre', { ph: 'Merci de votre visite !', multi: true, liens: true }),
-      champTexte('Texte en bas de page', cfg, 'pied', { ph: 'Adresse, horaires…', multi: true, liens: true })
+      champTexte('Titre', cfg, 'titre', { ph: 'Nom de l’établissement', typo: true }),
+      champTexte('Sous-titre', cfg, 'sousTitre', { ph: 'Merci de votre visite !', multi: true, liens: true, typo: true }),
+      champTexte('Texte en bas de page', cfg, 'pied', { ph: 'Adresse, horaires…', multi: true, liens: true, typo: true })
     ]));
 
     /* Boutons */
@@ -4072,10 +4115,10 @@
       articleBlogActif = j;
       construireFormulaire(); changement();
     };
-    const champTitre = champTexte('Titre', a, 'titre', { ph: 'Titre de l’article' });
+    const champTitre = champTexte('Titre', a, 'titre', { ph: 'Titre de l’article', typo: true });
     const date = el('input', { type: 'date', value: a.date || '', class: 'blogp-date' });
     date.addEventListener('change', () => { a.date = date.value; changement(); });
-    const champCorps = (() => { const c = champTexte('Texte', a, 'texte', { multi: true, ph: 'Votre article…', liens: true }); c.querySelector('textarea').rows = 10; return c; })();
+    const champCorps = (() => { const c = champTexte('Texte', a, 'texte', { multi: true, ph: 'Votre article…', liens: true, typo: true }); c.querySelector('textarea').rows = 10; return c; })();
     // Photo : réduite comme celles de la galerie (1280 px + vignette 640 px pour la liste)
     const zonePhoto = el('div', { class: 'blogp-photo' });
     const fichier = el('input', { type: 'file', accept: 'image/*', class: 'cache' });
@@ -5148,8 +5191,8 @@
       activer(j);                                         // on suit la pancarte déplacée
       construireFormulaire(); changement();
     };
-    const champTitre = champTexte('Titre', a, 'titre', { ph: 'Qui sommes-nous ?' });
-    const champCorps = (() => { const c = champTexte('Texte', a, 'texte', { multi: true, ph: 'Votre texte…', liens: true }); c.querySelector('textarea').rows = 5; return c; })();
+    const champTitre = champTexte('Titre', a, 'titre', { ph: 'Qui sommes-nous ?', typo: true });
+    const champCorps = (() => { const c = champTexte('Texte', a, 'texte', { multi: true, ph: 'Votre texte…', liens: true, typo: true }); c.querySelector('textarea').rows = 5; return c; })();
     // ✨ Texte IA : rédige ou améliore cette pancarte seulement (avec « Annuler » pour revenir au texte précédent)
     const msgIA = el('div', { class: 'msg', style: 'margin:0' });
     let avantIA = null;
