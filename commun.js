@@ -110,6 +110,92 @@ function homeVisible(cfg) {
   return !!(cfg.home && cfg.home.actif && (cfg.home.articles || []).some(a => a && !a.masque && (a.titre || a.texte)));
 }
 
+/* Blog : articles (titre, date, photo, texte), page blog.html (liste puis article) */
+const BLOG_MAX = 50;
+function blogVisible(cfg) {
+  const b = cfg && cfg.blog;
+  return !!(b && b.actif && Array.isArray(b.articles) && b.articles.some(a => a && !a.masque && (a.titre || a.texte)));
+}
+function titreBlog(cfg, doc) {
+  const t = String((cfg.blog && cfg.blog.titre) || '').trim();
+  if (t) return t;
+  const lg = String((doc && doc.documentElement && doc.documentElement.lang) || 'fr').slice(0, 2);
+  return ({ ru: 'Блог', uk: 'Блог', zh: '博客', ja: 'ブログ' })[lg] || 'Blog';
+}
+function dateBlog(j, doc) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(j || ''))) return '';
+  const lg = String((doc && doc.documentElement && doc.documentElement.lang) || 'fr').slice(0, 2);
+  try { return new Intl.DateTimeFormat(lg, { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(j + 'T12:00:00')); } catch (e) { return j; }
+}
+
+/* ---------- Passage d'une page à l'autre (contact, Home, blog, galerie) ----------
+   2 pages en tout : le nom de l'autre page en haut à droite ; à partir de 3 : un picto ☰ qui ouvre la liste.
+   opts.liens = { contact, home, blog } (adresses), opts.sur = { contact, home, blog } (aperçu de l'éditeur) ;
+   hrefContact / hrefHome / surContact / surHome : anciens noms, gardés pour les pages déjà publiées. */
+function entreesPages(cfg, doc, res, opts, racine) {
+  const L = opts.liens || {}, S = opts.sur || {};
+  const e = [{ id: 'contact', nom: cfg.home.boutonContact || 'Contact', ico: '✉️', href: L.contact || opts.hrefContact || '#contact', sur: S.contact || opts.surContact }];
+  if (homeVisible(cfg)) e.push({ id: 'home', nom: cfg.home.lienTexte || 'Découvrir l’entreprise', ico: '🏠', href: L.home || opts.hrefHome || 'accueil.html', sur: S.home || opts.surHome });
+  if (blogVisible(cfg)) e.push({ id: 'blog', nom: titreBlog(cfg, doc), ico: '📰', href: L.blog || 'blog.html', sur: S.blog });
+  if (galerieVisible(cfg)) e.push({ id: 'galerie', nom: titreGalerie(cfg, doc), ico: '📷', href: '#galerie', sur: () => ouvrirGalerie(cfg, doc, res, opts.apercu ? racine : null) });
+  return e;
+}
+function navPages(cfg, doc, res, actuelle, opts, racine, enBarre) {
+  const toutes = entreesPages(cfg, doc, res, opts, racine);
+  if (toutes.length < 2) return null;
+  const d = cfg.design;
+  const lien = (x, cls) => {
+    const a = doc.createElement('a');
+    a.className = cls;
+    a.href = x.href;
+    if (x.sur) a.addEventListener('click', e => { e.preventDefault(); x.sur(); });
+    return a;
+  };
+  if (toutes.length === 2) {
+    const x = toutes.find(y => y.id !== actuelle) || toutes[1];
+    const a = lien(x, enBarre ? 'qh-contact' : (x.id === 'galerie' ? 'qp-galerie' : 'qp-lien-home'));
+    if (x.id === 'galerie') { const i = doc.createElement('span'); i.className = 'qp-ico'; i.textContent = '📷'; a.appendChild(i); }
+    a.appendChild(doc.createTextNode(x.nom));
+    if (enBarre) { a.style.background = d.accent; a.style.color = texteContraste(d.accent); }
+    return a;
+  }
+  const boite = doc.createElement('div');
+  boite.className = 'qn';
+  const b = doc.createElement('button');
+  b.type = 'button';
+  b.className = 'qn-btn';
+  b.setAttribute('aria-haspopup', 'true'); b.setAttribute('aria-expanded', 'false');
+  const nomListe = ({ en: 'Pages', ru: 'Страницы', es: 'Páginas', de: 'Seiten', it: 'Pagine', pt: 'Páginas', uk: 'Сторінки' })[String((doc.documentElement && doc.documentElement.lang) || 'fr').slice(0, 2)] || 'Pages';
+  b.title = nomListe; b.setAttribute('aria-label', nomListe);
+  b.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>';
+  if (enBarre) { b.style.background = d.accent; b.style.color = texteContraste(d.accent); }
+  const ul = doc.createElement('ul');
+  ul.className = 'qn-liste';
+  const fermer = () => { boite.classList.remove('ouvert'); b.setAttribute('aria-expanded', 'false'); };
+  toutes.forEach(x => {
+    const li = doc.createElement('li');
+    const a = lien(x, x.id === actuelle ? 'actuelle' : '');
+    if (x.id === actuelle) { a.setAttribute('aria-current', 'page'); a.addEventListener('click', e => { e.preventDefault(); fermer(); }); }
+    else a.addEventListener('click', fermer);
+    const i = doc.createElement('span'); i.className = 'qn-ico'; i.textContent = x.ico;
+    const t = doc.createElement('span'); t.textContent = x.nom;
+    a.append(i, t);
+    li.appendChild(a); ul.appendChild(li);
+  });
+  b.addEventListener('click', e => {
+    e.stopPropagation();
+    const ouvrir = !boite.classList.contains('ouvert');
+    boite.classList.toggle('ouvert', ouvrir); b.setAttribute('aria-expanded', String(ouvrir));
+    if (ouvrir) {
+      const dehors = ev => { if (!boite.contains(ev.target)) { fermer(); doc.removeEventListener('click', dehors, true); } };
+      doc.addEventListener('click', dehors, true);
+    }
+  });
+  boite.addEventListener('keydown', e => { if (e.key === 'Escape') { fermer(); b.focus(); } });
+  boite.append(b, ul);
+  return boite;
+}
+
 /* Galerie photos : jusqu'à GALERIE_MAX photos (grande + vignette), ouverte par un bouton « 📷 » */
 const GALERIE_MAX = 100;
 function galerieVisible(cfg) {
@@ -277,7 +363,7 @@ function couleurIcone(hex) {
 const CSS_BUREAU = `#qp-decor{display:none}
 @media (min-width:700px) and (min-aspect-ratio:1/1){
   #page{justify-content:center;position:relative;z-index:1}
-  #page>.qp,#page>.qh{flex:none;width:min(480px,max(390px,50vh));box-shadow:0 0 0 1px rgba(255,255,255,.08),0 20px 80px rgba(0,0,0,.55)}
+  #page>.qp,#page>.qh,#page>.qb{flex:none;width:min(480px,max(390px,50vh));box-shadow:0 0 0 1px rgba(255,255,255,.08),0 20px 80px rgba(0,0,0,.55)}
   #qp-decor{display:block;position:fixed;inset:-60px;z-index:0;background-size:cover;background-position:center;filter:blur(30px) brightness(.5);pointer-events:none;transition:background-image .4s}
 }`;
 function formatBureau(doc, racine) {
@@ -327,7 +413,40 @@ const CSS_PAGE = `
 .qp-galerie{display:inline-flex;align-items:center;gap:7px;padding:9px 16px;border-radius:999px;background:rgba(0,0,0,.38);color:#fff;font-weight:600;font-size:.88rem;
   text-decoration:none;white-space:nowrap;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 4px 14px rgba(0,0,0,.18)}
 .qp-galerie .qp-ico{font-size:1rem;line-height:1}
-.qp.qp-haut-2{padding-top:124px}
+.qn{position:relative;flex-shrink:0}
+.qn-btn{display:inline-flex;align-items:center;justify-content:center;border:0;cursor:pointer;padding:0;margin:0}
+.qn-btn svg{width:20px;height:20px}
+.qp .qn-btn{width:42px;height:38px;border-radius:999px;background:rgba(0,0,0,.38);color:#fff;
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 4px 14px rgba(0,0,0,.18)}
+.qh-barre .qn-btn{width:40px;height:40px;border-radius:50%}
+.qn-liste{position:absolute;right:0;top:calc(100% + 8px);z-index:30;min-width:210px;max-width:min(300px,86vw);margin:0;padding:6px;list-style:none;
+  background:#fff;color:#1b1b1b;border-radius:14px;box-shadow:0 12px 34px rgba(0,0,0,.28);display:none;font:500 .95rem/1.25 system-ui,-apple-system,sans-serif;text-align:left}
+.qn.ouvert .qn-liste{display:block}
+.qn-liste a{display:flex;align-items:center;gap:11px;padding:11px 12px;border-radius:10px;color:inherit;text-decoration:none}
+.qn-liste a span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qn-liste a:hover,.qn-liste a:focus-visible{background:#f1f1f1}
+.qn-liste a.actuelle{font-weight:700;background:#f3f3f3}
+.qn-ico{width:22px;text-align:center;flex:none}
+/* ---------- Blog ---------- */
+.qb{width:100%;min-height:100%;display:flex;flex-direction:column;font-family:var(--police);color:var(--texte);background:var(--fond)}
+.qb *{box-sizing:border-box}
+.qb .qh-barre{position:sticky}
+.qb-corps{flex:1;width:100%;max-width:680px;margin:0 auto;padding:18px 16px 26px}
+.qb-titre{font-size:1.7rem;line-height:1.15;font-weight:800;margin:6px 0 16px}
+.qb-liste{display:flex;flex-direction:column;gap:14px}
+.qb-carte{display:block;color:inherit;text-decoration:none;border-radius:16px;overflow:hidden;
+  background:color-mix(in srgb,var(--texte) 6%,var(--fond));border:1px solid color-mix(in srgb,var(--texte) 11%,transparent)}
+.qb-carte img{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;background:color-mix(in srgb,var(--texte) 8%,transparent)}
+.qb-carte-c{padding:12px 14px 14px}
+.qb-date{margin:0 0 4px;font-size:.8rem;opacity:.65}
+.qb-carte h2{margin:0 0 6px;font-size:1.12rem;line-height:1.25}
+.qb-extrait{margin:0;font-size:.93rem;line-height:1.45;opacity:.85;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.qb-retour{display:inline-flex;align-items:center;gap:6px;margin:0 0 14px;padding:8px 14px;border:0;border-radius:999px;cursor:pointer;text-decoration:none;
+  background:color-mix(in srgb,var(--texte) 10%,transparent);color:inherit;font:600 .9rem var(--police)}
+.qb-art>img{display:block;width:100%;border-radius:14px;margin:0 0 14px}
+.qb-art h1{margin:4px 0 12px;font-size:1.6rem;line-height:1.2}
+.qb-texte{white-space:pre-line;line-height:1.62;font-size:1rem;overflow-wrap:anywhere}
+.qb-vide{opacity:.6}
 .qp-appli.qp-appli-court{padding:9px 11px}
 .qp-langsel{position:relative;flex:none;font:600 .88rem/1.2 system-ui,-apple-system,sans-serif}
 .qp-langsel>button{display:inline-flex;align-items:center;gap:5px;margin:0;padding:9px 12px;border:0;border-radius:999px;cursor:pointer;
@@ -715,7 +834,7 @@ function rendrePage(cfgBrut, racine, opts) {
     b.className = 'qp-appli';
     b.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M12 7v7M9 11l3 3 3-3"/></svg>';
     const TA = textesAppli(doc);
-    if (langues || opts.lienHome) b.classList.add('qp-appli-court');      // place partagée : icône seule
+    if (langues || entreesPages(cfg, doc, res, opts, racine).length > 1) b.classList.add('qp-appli-court');      // place partagée : icône seule
     else b.appendChild(doc.createTextNode(TA.bouton));
     b.title = TA.titre;
     b.setAttribute('aria-label', TA.titre);
@@ -725,29 +844,10 @@ function rendrePage(cfgBrut, racine, opts) {
   if (langues) { hautGauche.appendChild(langues); page.classList.add('qp-avec-langues'); }
   const hautDroite = doc.createElement('div');
   hautDroite.className = 'qp-haut-droite';
-  if (opts.lienHome) {
-    const l = doc.createElement('a');
-    l.className = 'qp-lien-home';
-    l.href = opts.hrefHome || '#accueil';
-    l.textContent = cfg.home.lienTexte || 'Découvrir l’entreprise';
-    if (opts.surHome) l.addEventListener('click', e => { e.preventDefault(); opts.surHome(); });
-    hautDroite.appendChild(l);
-    page.classList.add('qp-avec-home');
-  }
-  if (galerieVisible(cfg)) {
-    const g = doc.createElement('a');
-    g.className = 'qp-galerie';
-    g.href = '#galerie';
-    const ico = doc.createElement('span'); ico.className = 'qp-ico'; ico.textContent = '📷'; g.appendChild(ico);
-    const tx = doc.createElement('span'); tx.textContent = titreGalerie(cfg, doc); g.appendChild(tx);
-    g.addEventListener('click', e => { e.preventDefault(); ouvrirGalerie(cfg, doc, res, opts.apercu ? racine : null); });
-    hautDroite.appendChild(g);
-  }
+  const nav = navPages(cfg, doc, res, 'contact', opts, racine, false);
+  if (nav) { hautDroite.appendChild(nav); page.classList.add('qp-avec-home'); }
   if (hautGauche.childNodes.length) { page.appendChild(hautGauche); page.classList.add('qp-avec-appli'); }
-  if (hautDroite.childNodes.length) {
-    page.appendChild(hautDroite);
-    page.classList.add(hautDroite.childNodes.length > 1 ? 'qp-haut-2' : 'qp-avec-appli');
-  }
+  if (hautDroite.childNodes.length) { page.appendChild(hautDroite); page.classList.add('qp-avec-appli'); }
   page.appendChild(creditQrbc(doc, opts.apercu));
   racine.appendChild(page);
   return cfg;
@@ -1108,25 +1208,10 @@ function rendreHome(cfgBrut, racine, opts) {
   nom.className = 'qh-nom';
   nom.textContent = cfg.titre || '';
   barre.appendChild(nom);
-  const contact = doc.createElement('a');
-  contact.className = 'qh-contact';
-  contact.href = opts.hrefContact || '#contact';
-  contact.textContent = cfg.home.boutonContact || 'Contact';
-  contact.style.background = d.accent;
-  contact.style.color = texteContraste(d.accent);
-  if (opts.surContact) contact.addEventListener('click', e => { e.preventDefault(); opts.surContact(); });
   const languesH = opts.apercu ? null : selecteurLangues(doc, true);
   if (languesH) barre.appendChild(languesH);
-  barre.appendChild(contact);                         // Contact tout à droite de la barre
-  if (galerieVisible(cfg)) {                          // 📷 Galerie juste sous la barre, à droite
-    const g = doc.createElement('a');
-    g.className = 'qh-galerie';
-    g.href = '#galerie';
-    g.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 8.5h3.5L8.5 5.5h7l2 3H21V19H3z"/><circle cx="12" cy="13.5" r="3.5"/></svg>';
-    g.appendChild(doc.createTextNode(titreGalerie(cfg, doc)));
-    g.addEventListener('click', e => { e.preventDefault(); ouvrirGalerie(cfg, doc, res, opts.apercu ? racine : null); });
-    barre.appendChild(g);
-  }
+  const navH = navPages(cfg, doc, res, 'home', opts, racine, true);   // « Contact » (2 pages) ou ☰ (3 et plus), tout à droite
+  if (navH) barre.appendChild(navH);
 
   /* Pancartes */
   const defile = doc.createElement('div');
@@ -1225,6 +1310,98 @@ function rendreHome(cfgBrut, racine, opts) {
   return cfg;
 }
 
+
+/* ---------- Page Blog : liste des articles (photo, date, titre, début du texte), puis l'article en entier ----------
+   opts.article = identifiant de l'article ouvert ; opts.surArticle(id | '') pour l'aperçu de l'éditeur ;
+   sur la page publiée, l'article ouvert est dans l'adresse (#article-ID), le retour du téléphone revient à la liste. */
+function rendreBlog(cfgBrut, racine, opts) {
+  opts = opts || {};
+  const cfg = normaliser(fusion(CONFIG_DEFAUT, cfgBrut));
+  const d = cfg.design;
+  const res = opts.resoudre || (x => x);
+  const doc = racine.ownerDocument;
+  injecterCSS(doc);
+  if (racine.id === 'page') formatBureau(doc, racine);
+  racine.innerHTML = '';
+  const b = doc.createElement('div');
+  b.className = 'qb';
+  const st = b.style;
+  st.setProperty('--fond', d.fond); st.setProperty('--fond2', d.fond2 || d.fond);
+  st.setProperty('--texte', d.texte); st.setProperty('--accent', d.accent);
+  st.setProperty('--police', (FONTS[d.police] || FONTS.moderne).css);
+
+  const barre = doc.createElement('div');
+  barre.className = 'qh-barre';
+  if (cfg.logo) { const img = doc.createElement('img'); img.className = 'qh-logo' + (d.logoRond ? ' rond' : ''); img.src = res(cfg.logo); img.alt = ''; barre.appendChild(img); }
+  const nom = doc.createElement('div'); nom.className = 'qh-nom'; nom.textContent = cfg.titre || ''; barre.appendChild(nom);
+  const langues = opts.apercu ? null : selecteurLangues(doc, false);
+  if (langues) barre.appendChild(langues);
+  const nav = navPages(cfg, doc, res, 'blog', opts, racine, true);
+  if (nav) barre.appendChild(nav);
+  b.appendChild(barre);
+
+  const corps = doc.createElement('div');
+  corps.className = 'qb-corps';
+  const articles = ((cfg.blog && cfg.blog.articles) || []).filter(a => a && !a.masque && (a.titre || a.texte));
+  const nomBlog = titreBlog(cfg, doc);
+  const ouvert = opts.article ? articles.find(a => String(a.id) === String(opts.article)) : null;
+  const allerA = (id, e) => { if (opts.surArticle) { e.preventDefault(); opts.surArticle(id); } };
+  const altImage = a => [a.titre, cfg.titre].filter(Boolean).join(' – ');
+
+  if (ouvert) {
+    const retour = doc.createElement('a');
+    retour.className = 'qb-retour';
+    retour.href = '#liste';
+    retour.textContent = '← ' + nomBlog;
+    retour.addEventListener('click', e => {
+      if (opts.surArticle) { e.preventDefault(); opts.surArticle(''); return; }
+      // revenu depuis la liste : on recule (même effet que le bouton retour du téléphone)
+      if (rendreBlog.depuisListe && typeof history !== 'undefined') { e.preventDefault(); history.back(); }
+    });
+    const art = doc.createElement('article');
+    art.className = 'qb-art';
+    if (ouvert.image) { const im = doc.createElement('img'); im.src = res(ouvert.image); im.alt = altImage(ouvert); im.setAttribute('decoding', 'async'); art.appendChild(im); }
+    const dt = dateBlog(ouvert.date, doc);
+    if (dt) { const p = doc.createElement('p'); p.className = 'qb-date'; const t = doc.createElement('time'); t.setAttribute('datetime', ouvert.date); t.textContent = dt; p.appendChild(t); art.appendChild(p); }
+    const h = doc.createElement('h1'); h.textContent = ouvert.titre || ''; art.appendChild(h);
+    const tx = doc.createElement('div'); tx.className = 'qb-texte'; tx.textContent = ouvert.texte || ''; art.appendChild(tx);
+    corps.append(retour, art);
+  } else {
+    rendreBlog.depuisListe = false;
+    const h = doc.createElement('h1'); h.className = 'qb-titre'; h.textContent = nomBlog; corps.appendChild(h);
+    const liste = doc.createElement('div'); liste.className = 'qb-liste';
+    if (!articles.length) { const v = doc.createElement('p'); v.className = 'qb-vide'; v.textContent = 'Aucun article pour l’instant'; liste.appendChild(v); }
+    articles.forEach((a, i) => {
+      const c = doc.createElement('a');
+      c.className = 'qb-carte';
+      c.href = '#article-' + encodeURIComponent(a.id || i);
+      c.addEventListener('click', e => {
+        allerA(String(a.id || i), e);
+        if (!opts.surArticle) rendreBlog.depuisListe = true;
+      });
+      if (a.image) {
+        const im = doc.createElement('img');
+        im.src = res(a.mini || a.image); im.alt = altImage(a);
+        im.setAttribute('decoding', 'async'); if (i > 1) im.setAttribute('loading', 'lazy');
+        c.appendChild(im);
+      }
+      const z = doc.createElement('div'); z.className = 'qb-carte-c';
+      const dt = dateBlog(a.date, doc);
+      if (dt) { const p = doc.createElement('p'); p.className = 'qb-date'; p.textContent = dt; z.appendChild(p); }
+      if (a.titre) { const t = doc.createElement('h2'); t.textContent = a.titre; z.appendChild(t); }
+      if (a.texte) { const t = doc.createElement('p'); t.className = 'qb-extrait'; t.textContent = String(a.texte).slice(0, 400); z.appendChild(t); }
+      c.appendChild(z);
+      liste.appendChild(c);
+    });
+    corps.appendChild(liste);
+  }
+  corps.appendChild(creditQrbc(doc, opts.apercu));
+  b.appendChild(corps);
+  racine.appendChild(b);
+  if (!opts.apercu && typeof window !== 'undefined' && window.scrollTo && racine.id === 'page') window.scrollTo(0, 0);
+  else if (opts.apercu && racine.scrollTo) racine.scrollTop = 0;
+  return cfg;
+}
 
 /* ---------- Galerie : grille de vignettes puis photo plein écran (glisser pour la suivante) ----------
    dans : conteneur de l'aperçu de l'éditeur (sinon plein écran sur la page, avec retour arrière du téléphone) */
@@ -1405,6 +1582,7 @@ const CSS_BASE_SITE = `html,body{margin:0;height:100%}
 #page{min-height:100vh;min-height:100dvh;display:flex}
 #page>.qp{min-height:100vh;min-height:100dvh}
 #page>.qh{height:100vh;height:100dvh}
+#page>.qb{min-height:100vh;min-height:100dvh}
 body.mode-home{overflow:hidden}`;
 
 /* Script de démarrage commun aux pages générées */
@@ -1415,12 +1593,21 @@ const BOOT_SITE = `(function(){
     var racine = document.getElementById('page');
     var ancre = location.hash;
     var c = normaliser(fusion(CONFIG_DEFAUT, cfg));
-    var avecHome = homeVisible(c);
+    var avecHome = homeVisible(c), arriveeHome = avecHome && c.home.arrivee === 'home';
     if (vueFixe === 'home' && !avecHome) { location.replace('./'); return; }
-    var montrerHome = avecHome && (vueFixe === 'home' || ancre === '#accueil' || (ancre !== '#contact' && c.home.arrivee === 'home'));
-    document.body.classList.toggle('mode-home', montrerHome);
-    if (montrerHome) rendreHome(cfg, racine, { hrefContact: vueFixe === 'home' ? './#contact' : '#contact' });
-    else rendrePage(cfg, racine, { lienHome: avecHome, hrefHome: c.home.arrivee === 'home' ? '#accueil' : 'accueil.html' });
+    if (vueFixe === 'blog' && !blogVisible(c)) { location.replace('./'); return; }
+    var ici = vueFixe === '';
+    var liens = { contact: ici ? '#contact' : './#contact', home: arriveeHome ? (ici ? '#accueil' : './#accueil') : 'accueil.html', blog: 'blog.html' };
+    if (vueFixe === 'blog') {
+      document.body.classList.remove('mode-home');
+      var m = /^#article-(.+)$/.exec(ancre);
+      rendreBlog(cfg, racine, { liens: liens, article: m ? decodeURIComponent(m[1]) : '' });
+    } else {
+      var montrerHome = avecHome && (vueFixe === 'home' || ancre === '#accueil' || (ancre !== '#contact' && c.home.arrivee === 'home'));
+      document.body.classList.toggle('mode-home', montrerHome);
+      if (montrerHome) rendreHome(cfg, racine, { liens: liens });
+      else rendrePage(cfg, racine, { liens: liens });
+    }
     document.body.style.background = c.design.fond;
   }
   if ('serviceWorker' in navigator && /\.qrbc\.app$/i.test(location.hostname)) navigator.serviceWorker.register('/sw.js').catch(function () {});
@@ -1479,17 +1666,25 @@ function genererFichiersSite(cfgBrut, base, doc) {
   const titreSite = seo.titre || [cfg.titre, cfg.sousTitre].filter(Boolean).join(' – ') || 'Bienvenue';
   const descSite = seo.description || couper([cfg.sousTitre, cfg.pied].filter(Boolean).join('. '), 155);
 
-  const preRendu = (vue) => {
+  const avecBlog = blogVisible(cfg);
+  const liensDe = vue => {                                 // mêmes adresses que BOOT_SITE
+    const ici = vue === (arriveeHome ? 'home' : 'contact');
+    const surIndex = vue === 'index';
+    return { contact: surIndex ? '#contact' : './#contact', home: arriveeHome ? (surIndex ? '#accueil' : './#accueil') : 'accueil.html', blog: 'blog.html', ici };
+  };
+  const preRendu = (vue, fichier) => {
     const tmp = doc.createElement('div');
-    if (vue === 'home') rendreHome(cfgBrut, tmp, { hrefContact: arriveeHome ? '#contact' : './#contact' });
-    else rendrePage(cfgBrut, tmp, { lienHome: avecHome, hrefHome: arriveeHome ? '#accueil' : 'accueil.html' });
+    const liens = liensDe(fichier === 'index.html' ? 'index' : vue);
+    if (vue === 'home') rendreHome(cfgBrut, tmp, { liens });
+    else if (vue === 'blog') rendreBlog(cfgBrut, tmp, { liens });
+    else rendrePage(cfgBrut, tmp, { liens });
     return tmp.innerHTML;
   };
 
   const fichiers = {};
   fichiers['index.html'] = pageHTML({
     titre: titreSite, description: descSite, canonique: base, nom: cfg.titre, image, imageTaille, icone, couleur: d.fond, jsonld, appli, langue: cfg.langue,
-    contenu: preRendu(arriveeHome ? 'home' : 'contact'), modeHome: arriveeHome, vue: ''
+    contenu: preRendu(arriveeHome ? 'home' : 'contact', 'index.html'), modeHome: arriveeHome, vue: ''
   });
 
   const urls = [base];
@@ -1511,6 +1706,22 @@ function genererFichiersSite(cfgBrut, base, doc) {
       '</title><link rel="canonical" href="' + echapperHTML(base) + '"><meta http-equiv="refresh" content="0; url=./"></head><body></body></html>\n';
   }
 
+  const langueHTML = /^[a-z]{2}$/.test(cfg.langue || '') ? cfg.langue : 'fr';
+  if (avecBlog) {
+    const arts = cfg.blog.articles.filter(a => a && !a.masque && (a.titre || a.texte));
+    const nomBlog = titreBlog(cfg, { documentElement: { lang: langueHTML } });
+    fichiers['blog.html'] = pageHTML({
+      titre: couper(nomBlog + (cfg.titre ? ' – ' + cfg.titre : ''), 65),
+      description: couper(arts.map(a => a.titre).filter(Boolean).join(' · ') || descSite, 155),
+      canonique: base + 'blog.html', nom: cfg.titre, image, imageTaille, icone, couleur: d.fond, jsonld, appli, langue: cfg.langue,
+      contenu: preRendu('blog', 'blog.html'), modeHome: false, vue: 'blog'
+    });
+    urls.push(base + 'blog.html');
+  } else {
+    fichiers['blog.html'] = '<!DOCTYPE html>\n<html lang="' + langueHTML + '"><head><meta charset="utf-8"><title>' + echapperHTML(cfg.titre) +
+      '</title><link rel="canonical" href="' + echapperHTML(base) + '"><meta http-equiv="refresh" content="0; url=./"></head><body></body></html>\n';
+  }
+
   const jour = new Date().toISOString().slice(0, 10);
   // Images déclarées dans le plan du site (Google Images) : logo et fond sur la page contact, images des pancartes sur la page Home
   const imagesDe = {};
@@ -1521,6 +1732,7 @@ function genererFichiersSite(cfgBrut, base, doc) {
   const pageContact = base, pageHome = typeof arriveeHome !== 'undefined' && arriveeHome ? base : base + 'accueil.html';
   ajouterImage(pageContact, cfg.logo); ajouterImage(pageContact, d.imageFond);
   if (cfg.home && cfg.home.actif) (cfg.home.articles || []).forEach(a => { if (a && !a.masque && a.image && (a.style === 'photo' || a.style === 'image')) ajouterImage(pageHome, a.image); });
+  if (avecBlog) cfg.blog.articles.forEach(a => { if (a && !a.masque && a.image) ajouterImage(base + 'blog.html', a.image); });
   fichiers['sitemap.xml'] = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">\n' +
     urls.map(u => '  <url><loc>' + echapperHTML(u) + '</loc><lastmod>' + jour + '</lastmod>' +
       (imagesDe[u] || []).slice(0, 20).map(i => '<image:image><image:loc>' + echapperHTML(i) + '</image:loc></image:image>').join('') +

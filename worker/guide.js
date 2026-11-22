@@ -83,8 +83,22 @@ qrbc.app (QR-BC, édité par KPS) permet de créer en quelques minutes, depuis u
 - Section « Galerie photos », juste après la page Home. Désactivée par défaut : cocher « Activer la galerie ».
 - « 📷 Ajouter des photos » : on peut en choisir plusieurs d'un coup, jusqu'à 100 photos par page. Elles sont réduites automatiquement (1280 px au plus, avec une petite vignette pour la grille) : chargement rapide et peu de place. Une photo illisible est ignorée, avec un message.
 - Sur chaque vignette : ✕ retire la photo, ← → changent sa place dans l'ordre. « Titre du bouton » : texte du bouton (vide = « Galerie », traduit selon la langue de la page). Penser à enregistrer : les photos sont envoyées à ce moment-là (compteur « Envoi des images 3 / 20… »), et les photos retirées sont effacées du serveur.
-- Sur la page contact : en haut à droite « Découvrir l'entreprise » (si la page Home est activée) et juste dessous « 📷 Galerie » ; « Installer » (et le choix de langue) passent en haut à gauche. Sur la page Home : « Contact » à droite de la barre du haut et « 📷 Galerie » juste dessous. Le bouton Galerie ouvre une grille de vignettes ; toucher une photo l'affiche en grand, glisser à gauche/droite pour la suivante, vers le bas ou « × » pour revenir à la grille ; le bouton retour du téléphone ferme la photo puis la galerie. Sur ordinateur : flèches ‹ › et clavier (← → Échap).
+- Sur la page, la galerie s'ouvre depuis le coin en haut à droite (voir « Passer d'une page à l'autre »). Elle montre une grille de vignettes ; toucher une photo l'affiche en grand, glisser à gauche/droite pour la suivante, vers le bas ou « × » pour revenir à la grille ; le bouton retour du téléphone ferme la photo puis la galerie. Sur ordinateur : flèches ‹ › et clavier (← → Échap).
 - Décocher « Activer la galerie » cache le bouton sans effacer les photos. Les versions traduites de la page montrent les mêmes photos (le titre du bouton est traduit).
+
+## Page Blog
+- Section « Page Blog », après la galerie. Désactivée par défaut : cocher « Activer le blog ». « Titre de la page » : nom du blog (vide = « Blog »).
+- « ＋ Nouvel article » ajoute un article en tête (le plus récent en premier), daté du jour. Jusqu'à 50 articles.
+- Les articles s'affichent un par un : glisser à gauche/droite ou boutons ◀ « Article 2 / 5 » ▶. Sur chaque article : titre, date (modifiable), photo (facultative, réduite automatiquement), texte, case « Afficher » pour le cacher sans le supprimer, ← → pour changer l'ordre, 🗑 Supprimer.
+- « ✨ Texte IA » rédige ou améliore l'article affiché (décompté comme un texte IA), avec « ↩ Annuler ». Écrire d'abord un titre ou quelques idées pour choisir le sujet.
+- L'aperçu (bouton « Blog » au-dessus) montre la liste ou l'article en cours.
+- Pour le visiteur : page à part (nom.qrbc.app/blog.html) avec la liste des articles (photo, date, titre, début du texte) ; toucher un article l'ouvre en entier, « ← Blog » ou le retour du téléphone revient à la liste. Les versions traduites traduisent aussi les articles (bouton « Retraduire » après une modification).
+
+## Passer d'une page à l'autre (visiteurs)
+- Les pages possibles : Contact, Home (si activée), Blog (si activé), Galerie (si activée).
+- 2 pages en tout : le nom de l'autre page s'affiche en haut à droite (ex. « Découvrir l'entreprise » sur la page contact, « Contact » dans la barre de la Home ou du blog, « 📷 Galerie »).
+- À partir de 3 : un picto ☰ en haut à droite ouvre la liste des pages pour choisir (la page en cours est marquée).
+- « Installer » et le choix de langue sont en haut à gauche de la page contact.
 
 ## QR code et carte de visite
 - « ⬇ QR code (PNG) » : le QR code de la page, à imprimer ou afficher. Le QR mène toujours à nom.qrbc.app : il reste valable même si la page change.

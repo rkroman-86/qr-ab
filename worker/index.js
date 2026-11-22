@@ -116,7 +116,7 @@ async function chargerTarifs(env) {
   return t;
 }
 // Le type d'appel est décidé par le serveur d'après l'outil demandé, jamais par le client
-const OUTILS_IA = { proposer_articles: 'texte', proposer_motifs: 'picto' };
+const OUTILS_IA = { proposer_articles: 'texte', proposer_article: 'texte', proposer_motifs: 'picto' };   // proposer_article : article du blog
 const ITERATIONS = 100000;                    // maximum accepté par PBKDF2 dans les Workers
 const RESERVES = new Set(['www', 'api', 'admin', 'app', 'mail', 'smtp', 'gestion', 'static', 'cdn', 'qrbc',
   'support', 'aide', 'help', 'blog', 'docs', 'status', 'billing', 'paiement', 'compte', 'login', 'inscription',
@@ -124,7 +124,7 @@ const RESERVES = new Set(['www', 'api', 'admin', 'app', 'mail', 'smtp', 'gestion
 const FICHIERS_STATIQUES = new Set(['/admin.html', '/commun.js', '/i18n.js', '/qrcode.js', '/inscription.js']);
 // Appli installable (PWA) servie depuis qrbc.app
 const FICHIERS_PWA = new Set(['/og-qrbc.jpg', '/og-qrbc-en.jpg', '/og-qrbc-ru.jpg', '/manifest.webmanifest', '/sw.js', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/apple-touch-icon.png', '/favicon.png']);
-const FICHIERS_SITE = new Set(['config.json', 'index.html', 'accueil.html', 'sitemap.xml']);
+const FICHIERS_SITE = new Set(['config.json', 'index.html', 'accueil.html', 'blog.html', 'sitemap.xml']);
 const TAILLE_MAX = { 'config.json': 512 * 1024, html: 768 * 1024, image: 3 * 1024 * 1024 };
 
 export default {
@@ -302,7 +302,7 @@ async function siteClient(request, env, url, slug) {
     return new Response(c || '{}', { headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } });
   }
   if (p.startsWith('/images/')) return imageClient(env, slug, p.slice('/images/'.length), compte);
-  const pages = { '/': 'index.html', '/index.html': 'index.html', '/accueil.html': 'accueil.html', '/sitemap.xml': 'sitemap.xml' };
+  const pages = { '/': 'index.html', '/index.html': 'index.html', '/accueil.html': 'accueil.html', '/blog.html': 'blog.html', '/sitemap.xml': 'sitemap.xml' };
   if (pages[p]) {
     const nom = pages[p];
     // « Le QR code ouvre : lien personnel » : le scan (?s=qr) est compté puis renvoyé vers le lien choisi
@@ -318,10 +318,10 @@ async function siteClient(request, env, url, slug) {
     if (langs.length && nom !== 'sitemap.xml' && !url.searchParams.get('l')) {
       const pref = cookieLangue(request) || langueNavigateur(request, langs.map(x => x.l));
       if (pref && pref !== langs[0].l && compte.traductions.includes(pref))
-        return new Response(null, { status: 302, headers: { location: '/' + pref + '/' + (nom === 'accueil.html' ? 'accueil.html' : '') + url.search, 'cache-control': 'private, no-store', vary: 'Accept-Language, Cookie' } });
+        return new Response(null, { status: 302, headers: { location: '/' + pref + '/' + (nom === 'index.html' ? '' : nom) + url.search, 'cache-control': 'private, no-store', vary: 'Accept-Language, Cookie' } });
     }
     let corps = await env.CLIENTS.get('site:' + slug + ':' + nom);
-    if (!corps && nom !== 'sitemap.xml') corps = await pageDemarrage(env, slug, nom === 'accueil.html' ? 'home' : '');
+    if (!corps && nom !== 'sitemap.xml') corps = await pageDemarrage(env, slug, nom === 'accueil.html' ? 'home' : nom === 'blog.html' ? 'blog' : '');
     if (!corps) return texte('Introuvable', 404);
     if (nom !== 'sitemap.xml') compterVisite(request, env, slug, url, (langs.length ? langs[0].l : null) || compte.langueSite || 'fr');
     return reponsePage(corps, nom, langs, langs.length ? langs[0].l : null, slug, url, !!compte.noindex);
@@ -366,11 +366,11 @@ async function pageTraduite(request, env, url, slug, tc, reste) {
     return new Response(c || '{}', { headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } });
   }
   if (reste.startsWith('/images/')) return imageClient(env, tc.slug, reste.slice('/images/'.length), tc);
-  const pages = { '/': 'index.html', '/index.html': 'index.html', '/accueil.html': 'accueil.html', '/sitemap.xml': 'sitemap.xml' };
+  const pages = { '/': 'index.html', '/index.html': 'index.html', '/accueil.html': 'accueil.html', '/blog.html': 'blog.html', '/sitemap.xml': 'sitemap.xml' };
   const nom = pages[reste];
   if (!nom) return pageInfo('Page introuvable', 'Ce lien n’existe pas.', 404);
   let corps = await env.CLIENTS.get('site:' + tc.slug + ':' + nom);
-  if (!corps && nom !== 'sitemap.xml') corps = await pageDemarrage(env, tc.slug, nom === 'accueil.html' ? 'home' : '');
+  if (!corps && nom !== 'sitemap.xml') corps = await pageDemarrage(env, tc.slug, nom === 'accueil.html' ? 'home' : nom === 'blog.html' ? 'blog' : '');
   if (!corps) return texte('Introuvable', 404);
   if (nom !== 'sitemap.xml') compterVisite(request, env, slug, url, tc.traduction.langue);
   return reponsePage(corps, nom, languesPage(source), tc.traduction.langue, slug, url, !!(source.noindex || tc.noindex));
@@ -389,14 +389,14 @@ function langueNavigateur(request, dispo) {
 /* Ajoute les versions linguistiques (Google + sélecteur) et retient le choix du visiteur */
 /* Format téléphone sur ordinateur (copie de CSS_BUREAU de commun.js) : injecté dans le <head> dès le chargement,
    sinon la page s'affiche d'abord en pleine largeur puis « saute » quand commun.js l'applique. */
-const CSS_BUREAU = `#qp-decor{display:none} @media (min-width:700px) and (min-aspect-ratio:1/1){   #page{justify-content:center;position:relative;z-index:1}   #page>.qp,#page>.qh{flex:none;width:min(480px,max(390px,50vh));box-shadow:0 0 0 1px rgba(255,255,255,.08),0 20px 80px rgba(0,0,0,.55)}   #qp-decor{display:block;position:fixed;inset:-60px;z-index:0;background-size:cover;background-position:center;filter:blur(30px) brightness(.5);pointer-events:none;transition:background-image .4s} }`;
+const CSS_BUREAU = `#qp-decor{display:none} @media (min-width:700px) and (min-aspect-ratio:1/1){   #page{justify-content:center;position:relative;z-index:1}   #page>.qp,#page>.qh,#page>.qb{flex:none;width:min(480px,max(390px,50vh));box-shadow:0 0 0 1px rgba(255,255,255,.08),0 20px 80px rgba(0,0,0,.55)}   #qp-decor{display:block;position:fixed;inset:-60px;z-index:0;background-size:cover;background-position:center;filter:blur(30px) brightness(.5);pointer-events:none;transition:background-image .4s} }`;
 function reponsePage(corps, nom, langs, actuelle, slug, url, exclue) {
   const h = { 'content-type': nom.endsWith('.xml') ? 'application/xml; charset=utf-8' : 'text/html; charset=utf-8', 'cache-control': 'public, max-age=60' };
   if (/\.html$/.test(nom) && corps.indexOf('qp-css-bureau') < 0) corps = corps.replace('</head>', '<style id="qp-css-bureau">' + CSS_BUREAU + '</style>\n</head>');
   if (exclue) h['x-robots-tag'] = 'noindex';      // page exclue des moteurs de recherche (réglage dans /gestion)
   if (langs.length && nom !== 'sitemap.xml') {
     const base = 'https://' + slug + '.' + DOMAINE;
-    const fin = nom === 'accueil.html' ? 'accueil.html' : '';
+    const fin = nom === 'index.html' ? '' : nom;
     const liens = langs.map(x => '<link rel="alternate" hreflang="' + x.l + '" href="' + base + x.u + fin + '">').join('\n') +
       '\n<link rel="alternate" hreflang="x-default" href="' + base + '/' + fin + '">';
     const donnees = '<script>window.QRBC_LANGUES=' + JSON.stringify({ a: actuelle, l: langs }) + ';</script>';
@@ -774,18 +774,19 @@ async function apiClient(request, env, slug, route) {
         const gen = chemin.match(/^images\/(carte-\d+-)/)[1];
         const l = await env.CLIENTS.list({ prefix: 'img:' + slug + ':carte-' });
         for (const k of l.keys) if (!k.name.includes(':' + gen)) await env.CLIENTS.delete(k.name);
-      } else if (/^images\/galerie-/.test(chemin)) {
+      } else if (/^images\/(galerie|blog)-/.test(chemin)) {
         // galerie photos : hors « Mes images » ; les photos retirées sont effacées à l'enregistrement de la page (voir config.json)
         // garde-fou : 2 fichiers par photo, GALERIE_MAX photos par page du compte (+ marge pour un remplacement en une fois)
         const racine = racineDe(compte), tit = await lireCompte(env, racine);
         const nbPages = 1 + ((tit && tit.pages) || []).length;
+        const prefixe = /^images\/blog-/.test(chemin) ? 'blog-' : 'galerie-';
         let n = 0, curseur;
         do {
-          const l = await env.CLIENTS.list({ prefix: 'img:' + racine + ':galerie-', cursor: curseur });
+          const l = await env.CLIENTS.list({ prefix: 'img:' + racine + ':' + prefixe, cursor: curseur });
           n += l.keys.length;
           curseur = l.list_complete ? null : l.cursor;
         } while (curseur);
-        if (n > 2 * GALERIE_MAX * (nbPages + 1)) { await env.CLIENTS.delete(cle); throw new ErreurAPI(413, 'Galerie pleine : 100 photos maximum par page.'); }
+        if (n > 2 * GALERIE_MAX * (nbPages + 1)) { await env.CLIENTS.delete(cle); throw new ErreurAPI(413, prefixe === 'blog-' ? 'Trop de photos dans le blog.' : 'Galerie pleine : 100 photos maximum par page.'); }
       } else if (/^images\/partage-/.test(chemin)) {
         // image d'aperçu des liens : hors « Mes images », une seule gardée (les précédentes sont effacées)
         const l = await env.CLIENTS.list({ prefix: 'img:' + slug + ':partage-' });
@@ -1407,6 +1408,7 @@ function genreImage(chemin) {
   if (/^app-\d+-/.test(n)) return 'appli';
   if (/^carte-\d+-/.test(n)) return 'carte';
   if (/^galerie-/.test(n)) return 'galerie';
+  if (/^blog-/.test(n)) return 'blog';
   return 'article';
 }
 /* Médiathèque : liste des images d'un client, les plus récentes d'abord.
@@ -1423,7 +1425,7 @@ async function lireMedias(env, slug) {
     const l = await env.CLIENTS.list({ prefix: 'img:' + slug + ':', cursor: curseur });
     for (const k of l.keys) {
       const chemin = 'images/' + k.name.slice(('img:' + slug + ':').length);
-      if (vus.has(chemin) || /^images\/galerie-/.test(chemin)) continue;
+      if (vus.has(chemin) || /^images\/(galerie|blog)-/.test(chemin)) continue;
       const horo = (chemin.match(/-(\d{13})/) || [])[1];
       liste.push({ chemin, genre: genreImage(chemin), source: /fond-ia-/.test(chemin) ? 'ia' : /^images\/logo-/.test(chemin) ? 'logo' : 'photo',
         le: horo ? new Date(Number(horo)).toISOString() : new Date(0).toISOString() });
@@ -2250,7 +2252,7 @@ async function importer(env, slug, source) {
   await env.CLIENTS.put('site:' + slug + ':config.json', nouveau);
   await env.CLIENTS.delete('site:' + slug + ':medias');   // la médiathèque sera reconstruite avec les images importées
   // Les pages pré-rendues seront régénérées au prochain « Enregistrer » ; d'ici là, page de démarrage
-  for (const n of ['index.html', 'accueil.html', 'sitemap.xml']) await env.CLIENTS.delete('site:' + slug + ':' + n);
+  for (const n of ['index.html', 'accueil.html', 'blog.html', 'sitemap.xml']) await env.CLIENTS.delete('site:' + slug + ':' + n);
   return { ok: true, images: copiees, echecs: ratees };
 }
 
@@ -3717,12 +3719,14 @@ async function membresGroupe(env, tit) {
 const GALERIE_MAX = 100;
 async function nettoyerGalerie(env, racine) {
   const cles = [];
-  let curseur;
-  do {
-    const l = await env.CLIENTS.list({ prefix: 'img:' + racine + ':galerie-', cursor: curseur });
-    for (const k of l.keys) cles.push(k.name);
-    curseur = l.list_complete ? null : l.cursor;
-  } while (curseur);
+  for (const prefixe of ['galerie-', 'blog-']) {          // photos de la galerie et du blog
+    let curseur;
+    do {
+      const l = await env.CLIENTS.list({ prefix: 'img:' + racine + ':' + prefixe, cursor: curseur });
+      for (const k of l.keys) cles.push(k.name);
+      curseur = l.list_complete ? null : l.cursor;
+    } while (curseur);
+  }
   if (!cles.length) return;
   const textes = await configsGroupe(env, racine);
   for (const k of cles) {
@@ -3859,6 +3863,10 @@ function textesATraduire(cfg) {
   const h = cfg.home || {};
   mettre('home.boutonContact', h.boutonContact); mettre('home.lienTexte', h.lienTexte);
   if (cfg.galerie) mettre('galerie.titre', cfg.galerie.titre);
+  if (cfg.blog) {
+    mettre('blog.titre', cfg.blog.titre);
+    (cfg.blog.articles || []).forEach((a, i) => { if (a) { mettre('blog.articles.' + i + '.titre', a.titre); mettre('blog.articles.' + i + '.texte', a.texte); } });
+  }
   (h.articles || []).forEach((a, i) => { if (a) { mettre('home.articles.' + i + '.titre', a.titre); mettre('home.articles.' + i + '.texte', a.texte); mettre('home.articles.' + i + '.alt', a.alt); } });
   if (h.ia) mettre('home.ia.description', h.ia.description);
   const seo = cfg.seo || {};
@@ -3877,7 +3885,7 @@ async function traduireConfig(env, cleIA, cfg, de, vers) {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-api-key': cleIA, 'anthropic-version': '2023-06-01' },
     body: JSON.stringify({
-      model: MODELE_PAR_TYPE.texte, max_tokens: 8000,
+      model: MODELE_PAR_TYPE.texte, max_tokens: 16000,
       system: 'You translate the texts of a small business mobile page from ' + (NOMS_LANGUES[de] || de) + ' to ' + (NOMS_LANGUES[vers] || vers) + '. ' +
         'Translate naturally for local customers, keeping the tone, meaning and approximate length. Keep brand names, person names, ' +
         'street addresses and place names unchanged (transliterate them only if the target script requires it). Keep emojis and line breaks. ' +

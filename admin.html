@@ -386,6 +386,9 @@
     .galp-vign .galp-d{bottom:4px;right:4px}
     .galp-vign button:disabled{display:none}
     .galp-vide{font-size:.85rem;color:var(--doux);padding:14px 0}
+    .blogp-photo{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 12px}
+    .blogp-photo img{width:120px;height:68px;object-fit:cover;border-radius:8px;background:var(--bord,#ddd)}
+    .blogp-date{max-width:200px}
     .ajout{display:flex;gap:8px}
     .ajout select{flex:1}
 
@@ -450,7 +453,7 @@
 
   <div class="corps">
     <div class="col-edit" id="formulaire"></div>
-    <div class="col-apercu"><div class="choix-apercu" id="choix-apercu"><button type="button" data-p="contact" class="actif">Page contact</button><button type="button" data-p="home">Page Home</button></div><div class="cadre" id="apercu"></div></div>
+    <div class="col-apercu"><div class="choix-apercu" id="choix-apercu"><button type="button" data-p="contact" class="actif">Page contact</button><button type="button" data-p="home">Page Home</button><button type="button" data-p="blog">Blog</button></div><div class="cadre" id="apercu"></div></div>
   </div>
 
   <div id="stats" class="vue-stats"></div>
@@ -1174,8 +1177,10 @@
   /* ---------------- Aperçu ---------------- */
   let minuterie = null;
   let vueApercu = 'contact';
+  let articleApercu = '';                                  // article du blog ouvert dans l'aperçu ('' = liste)
   function choisirApercu(v) {
-    if (v === vueApercu) return;
+    if (v === 'blog') articleApercu = '';
+    if (v === vueApercu && v !== 'blog') return;
     vueApercu = v;
     majApercu();
   }
@@ -1186,16 +1191,22 @@
     minuterie = setTimeout(() => {
       const cadre = $('#apercu');
       const avecHome = (cfg.home && cfg.home.actif) || !!proposition;
-      if (!avecHome) vueApercu = 'contact';
-      $('#choix-apercu').classList.toggle('cache', !avecHome);
-      document.querySelectorAll('#choix-apercu button').forEach(b => b.classList.toggle('actif', b.dataset.p === vueApercu));
+      const avecBlog = !!(cfg.blog && cfg.blog.actif);
+      if ((vueApercu === 'home' && !avecHome) || (vueApercu === 'blog' && !avecBlog)) vueApercu = 'contact';
+      $('#choix-apercu').classList.toggle('cache', !avecHome && !avecBlog);
+      document.querySelectorAll('#choix-apercu button').forEach(b => {
+        b.classList.toggle('actif', b.dataset.p === vueApercu);
+        b.classList.toggle('cache', (b.dataset.p === 'home' && !avecHome) || (b.dataset.p === 'blog' && !avecBlog));
+      });
+      const sur = { contact: () => choisirApercu('contact'), home: () => choisirApercu('home'), blog: () => choisirApercu('blog') };
       const resoudre = p => imagesLocales[p] || p;
       const cfgVue = proposition ? Object.assign({}, cfg, { home: Object.assign({}, cfg.home, { actif: true, articles: proposition }) }) : cfg;
       const ancien = cadre.querySelector('.qh-defile');
       const position = ancien ? ancien.scrollTop : 0;
       cadre.classList.toggle('mode-home', vueApercu === 'home');
-      if (vueApercu === 'home') rendreHome(cfgVue, cadre, { apercu: true, resoudre, position, surContact: () => choisirApercu('contact') });
-      else rendrePage(cfg, cadre, { apercu: true, resoudre, lienHome: homeVisible(cfg), surHome: () => choisirApercu('home') });
+      if (vueApercu === 'home') rendreHome(cfgVue, cadre, { apercu: true, resoudre, position, sur });
+      else if (vueApercu === 'blog') rendreBlog(cfg, cadre, { apercu: true, resoudre, sur, article: articleApercu, surArticle: id => { articleApercu = id; majApercu(); } });
+      else rendrePage(cfg, cadre, { apercu: true, resoudre, sur });
     }, 60);
   }
   function changement() {
@@ -1222,7 +1233,7 @@
   }
   // Sections ouvertes : fermées à la toute première visite, puis dernier état mémorisé sur l'appareil
   const CLE_SECTIONS = 'qp-sections', CLE_DEFIL = 'qp-defilement';
-  const ORDRE_SECTIONS = ['textes', 'dispo', 'boutons', 'design', 'fond', 'logo', 'home', 'galerie', 'seo', 'partage'];
+  const ORDRE_SECTIONS = ['textes', 'dispo', 'boutons', 'design', 'fond', 'logo', 'home', 'galerie', 'blog', 'seo', 'partage'];
   let sectionsOuvertes = (() => {
     try { const v = JSON.parse(localStorage.getItem(CLE_SECTIONS)); return Array.isArray(v) ? new Set(v) : new Set(); }
     catch (e) { return new Set(); }
@@ -2163,6 +2174,10 @@
   document.getElementById('formulaire').addEventListener('focusin', e => {
     const sec = e.target.closest('details.section');
     if (!sec || sec.dataset.id === 'partage') return;
+    if (sec.dataset.id === 'blog') {                        // section Blog : l'aperçu montre le blog (article en cours gardé)
+      if (cfg.blog && cfg.blog.actif && vueApercu !== 'blog') { vueApercu = 'blog'; majApercu(); }
+      return;
+    }
     choisirApercu(sec.dataset.id === 'home' && (cfg.home.actif || proposition) ? 'home' : 'contact');
   });
 
@@ -2202,8 +2217,9 @@
     /* Page Home */
     f.appendChild(sectionHome());
 
-    /* Galerie photos (juste après la page Home) */
+    /* Galerie photos (juste après la page Home), puis page Blog */
     f.appendChild(sectionGalerie());
+    f.appendChild(sectionBlog());
 
     /* Disposition */
     const dispos = el('div', { class: 'dispos' });
@@ -3661,9 +3677,9 @@
     return new Blob([o], { type: (ent.match(/data:([^;]+)/) || [])[1] || 'image/jpeg' });
   }
   // Une photo = une grande image (1280 px de côté au plus) + une vignette pour la grille (360 px)
-  async function preparerPhotoGalerie(f) {
+  async function preparerPhotoGalerie(f, miniMax) {
     const grande = await reduireImage(f, 1280, 'image/jpeg', 0.8);
-    const mini = await reduireImage(dataVersBlob(grande), 360, 'image/jpeg', 0.72);
+    const mini = await reduireImage(dataVersBlob(grande), miniMax || 360, 'image/jpeg', 0.72);
     const dims = await new Promise(ok => { const im = new Image(); im.onload = () => ok([im.naturalWidth, im.naturalHeight]); im.onerror = () => ok([0, 0]); im.src = grande; });
     return { grande, mini, l: dims[0], h: dims[1] };
   }
@@ -3741,6 +3757,221 @@
       el('label', { class: 'bascule', style: 'border-top:0' }, [el('span', { text: 'Activer la galerie' }), actif]),
       corps
     ]);
+  }
+
+  /* ---------------- Page Blog ---------------- */
+  let articleBlogActif = 0;
+  const idArticle = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+  const aujourdhui = () => new Intl.DateTimeFormat('fr-CA').format(new Date());
+  const oublierImages = (...chemins) => chemins.forEach(c => { if (c) { delete imagesAEnvoyer[c]; delete imagesLocales[c]; } });
+  function sectionBlog() {
+    if (!cfg.blog || typeof cfg.blog !== 'object') cfg.blog = { actif: false, titre: '', articles: [] };
+    const B = cfg.blog;
+    if (!Array.isArray(B.articles)) B.articles = [];
+    B.articles.forEach(a => { if (a && !a.id) a.id = idArticle(); });
+    const actif = el('input', { type: 'checkbox', checked: !!B.actif });
+    const corps = el('div', { class: B.actif ? '' : 'cache' });
+    actif.addEventListener('change', () => {
+      B.actif = actif.checked;
+      corps.classList.toggle('cache', !B.actif);
+      if (B.actif) { vueApercu = 'blog'; articleApercu = ''; } else if (vueApercu === 'blog') vueApercu = 'contact';
+      changement();
+    });
+    const n = B.articles.length;
+    articleBlogActif = Math.max(0, Math.min(articleBlogActif, n - 1));
+    const liste = el('div', { class: 'carrousel-pancartes carrousel-blog' });
+    const cartes = B.articles.map((a, i) => carteBlog(a, i));
+    cartes.forEach(c => liste.appendChild(c));
+    const precedent = el('button', { type: 'button', class: 'btn', text: '◀', 'aria-label': t('Article précédent') });
+    const suivant = el('button', { type: 'button', class: 'btn', text: '▶', 'aria-label': t('Article suivant') });
+    const compteur = el('span');
+    function montrer(k, sens) {
+      if (!n) return;
+      articleBlogActif = Math.max(0, Math.min(k, n - 1));
+      cartes.forEach((c, j) => {
+        c.classList.toggle('cache', j !== articleBlogActif);
+        c.classList.toggle('depuis-gauche', sens < 0);
+        if (j === articleBlogActif && sens) { c.style.animation = 'none'; void c.offsetWidth; c.style.animation = ''; }
+      });
+      compteur.textContent = t('Article ' + (articleBlogActif + 1) + ' / ' + n);
+      precedent.disabled = articleBlogActif === 0; suivant.disabled = articleBlogActif === n - 1;
+      if (sens) {
+        const c = cartes[articleBlogActif], r = c.getBoundingClientRect();
+        if (r.top < 0) c.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        if (vueApercu === 'blog') { articleApercu = B.articles[articleBlogActif].id; majApercu(); }   // l'aperçu suit l'article affiché
+      }
+    }
+    precedent.addEventListener('click', () => montrer(articleBlogActif - 1, -1));
+    suivant.addEventListener('click', () => montrer(articleBlogActif + 1, 1));
+    let x0 = null, y0 = 0;
+    liste.addEventListener('touchstart', e => {
+      const cible = e.target.closest('input, textarea, select, [contenteditable]');
+      x0 = cible || e.touches.length > 1 ? null : e.touches[0].clientX; y0 = e.touches[0].clientY;
+    }, { passive: true });
+    liste.addEventListener('touchend', e => {
+      if (x0 === null) return;
+      const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0; x0 = null;
+      if (Math.abs(dx) > 60 && Math.abs(dx) > 2 * Math.abs(dy)) montrer(articleBlogActif + (dx < 0 ? 1 : -1), dx < 0 ? 1 : -1);
+    }, { passive: true });
+    const nav = el('div', { class: 'nav-pancartes' + (n > 1 ? '' : ' cache') }, [precedent, compteur, suivant]);
+    montrer(articleBlogActif, 0);
+    const plein = n >= BLOG_MAX;
+    const ajouter = el('button', { type: 'button', class: 'btn ajout-article', disabled: plein,
+      text: plein ? t('Maximum atteint (' + BLOG_MAX + ' articles)') : t('＋ Nouvel article (' + n + '/' + BLOG_MAX + ')') });
+    ajouter.addEventListener('click', () => {
+      if (B.articles.length >= BLOG_MAX) return;
+      const a = { id: idArticle(), titre: t('Nouvel article'), date: aujourdhui(), texte: '', image: '', mini: '' };
+      B.articles.unshift(a);                                  // le plus récent en premier
+      articleBlogActif = 0; vueApercu = 'blog'; articleApercu = a.id;
+      construireFormulaire(); changement();
+      const visible = document.querySelector('.carrousel-blog .article-carte:not(.cache)');
+      if (visible) visible.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    corps.append(
+      champTexte('Titre de la page', B, 'titre', { ph: 'Blog' }),
+      el('span', { class: 'etiq', text: 'Articles — du plus récent au plus ancien ; glissez à gauche ou à droite pour passer de l’un à l’autre' }),
+      ajouter,
+      n ? liste : el('div', { class: 'galp-vide', text: 'Aucun article pour l’instant.' }),
+      nav,
+      el('p', { class: 'aide', style: 'margin:10px 0 0', text: 'Le blog a sa propre page (adresse …/blog.html) : liste des articles, puis l’article en entier. Les visiteurs y passent par le menu en haut à droite des autres pages.' })
+    );
+    return section('blog', 'Page Blog', false, [
+      el('label', { class: 'bascule', style: 'border-top:0' }, [el('span', { text: 'Activer le blog' }), actif]),
+      corps
+    ]);
+  }
+  function carteBlog(a, i) {
+    const B = cfg.blog, n = B.articles.length;
+    const carte = el('div', { class: 'bouton-carte article-carte' + (a.masque ? ' masque' : '') });
+    const deplacer = dir => {
+      const j = i + dir; if (j < 0 || j >= n) return;
+      [B.articles[i], B.articles[j]] = [B.articles[j], B.articles[i]];
+      articleBlogActif = j;
+      construireFormulaire(); changement();
+    };
+    const champTitre = champTexte('Titre', a, 'titre', { ph: 'Titre de l’article' });
+    const date = el('input', { type: 'date', value: a.date || '', class: 'blogp-date' });
+    date.addEventListener('change', () => { a.date = date.value; changement(); });
+    const champCorps = (() => { const c = champTexte('Texte', a, 'texte', { multi: true, ph: 'Votre article…' }); c.querySelector('textarea').rows = 10; return c; })();
+    // Photo : réduite comme celles de la galerie (1280 px + vignette 640 px pour la liste)
+    const zonePhoto = el('div', { class: 'blogp-photo' });
+    const fichier = el('input', { type: 'file', accept: 'image/*', class: 'cache' });
+    const msgPhoto = el('span', { class: 'aide', style: 'margin:0' });
+    function majPhoto() {
+      zonePhoto.innerHTML = '';
+      if (a.image) zonePhoto.append(el('img', { src: imagesLocales[a.mini] || imagesLocales[a.image] || a.mini || a.image, alt: '' }));
+      zonePhoto.append(
+        el('button', { type: 'button', class: 'btn btn-mini', text: a.image ? '📷 Changer la photo' : '📷 Ajouter une photo', onclick: () => fichier.click() }),
+        a.image ? el('button', { type: 'button', class: 'btn btn-mini', text: 'Retirer la photo', onclick: () => { oublierImages(a.image, a.mini); a.image = ''; a.mini = ''; majPhoto(); changement(); } }) : null,
+        msgPhoto, fichier);
+    }
+    fichier.addEventListener('change', async () => {
+      const f = fichier.files[0]; fichier.value = '';
+      if (!f) return;
+      msgPhoto.textContent = t('Préparation de la photo…');
+      try {
+        const r = await preparerPhotoGalerie(f, 640);
+        const base = 'images/blog-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
+        oublierImages(a.image, a.mini);
+        a.image = base + '.jpg'; a.mini = base + '-m.jpg';
+        imagesLocales[a.image] = r.grande; imagesAEnvoyer[a.image] = r.grande.split(',')[1];
+        imagesLocales[a.mini] = r.mini; imagesAEnvoyer[a.mini] = r.mini.split(',')[1];
+        msgPhoto.textContent = '';
+        majPhoto(); changement();
+      } catch (e) { msgPhoto.textContent = t('Photo illisible.'); }
+    });
+    majPhoto();
+    // ✨ Texte IA : rédige ou améliore cet article seulement
+    const msgIA = el('div', { class: 'msg', style: 'margin:0' });
+    let avantIA = null;
+    const annulerIA = el('button', { type: 'button', class: 'btn btn-mini cache', text: '↩ Annuler', onclick: () => {
+      if (!avantIA) return;
+      a.titre = avantIA.titre; a.texte = avantIA.texte; avantIA = null;
+      champTitre.querySelector('input').value = a.titre || ''; champCorps.querySelector('textarea').value = a.texte || '';
+      annulerIA.classList.add('cache'); msgIA.textContent = ''; changement();
+    } });
+    const texteIA = el('button', { type: 'button', class: 'btn btn-mini', text: '✨ Texte IA', onclick: async () => {
+      texteIA.disabled = true; texteIA.textContent = t('Rédaction…'); msgIA.className = 'msg'; msgIA.textContent = '';
+      try {
+        const p = await redigerArticleBlog(i);
+        avantIA = { titre: a.titre || '', texte: a.texte || '' };
+        a.titre = p.titre; a.texte = p.texte;
+        champTitre.querySelector('input').value = a.titre; champCorps.querySelector('textarea').value = a.texte;
+        annulerIA.classList.remove('cache');
+        msgIA.className = 'msg ok'; msgIA.textContent = t('Relisez et corrigez si besoin, puis Enregistrer.');
+        changement();
+      } catch (e) { msgIA.className = 'msg err'; msgIA.textContent = e.message; }
+      texteIA.disabled = false; texteIA.textContent = t('✨ Texte IA');
+    } });
+    carte.append(
+      el('div', { class: 'ac-tete' }, [el('b', { text: t('Article ' + (i + 1)) }), caseAfficher(a, carte)]),
+      champTitre,
+      el('label', { class: 'champ' }, [el('span', { text: 'Date' }), date]),
+      el('span', { class: 'etiq', text: 'Photo' }),
+      zonePhoto,
+      champCorps,
+      el('div', { class: 'bc-actions', style: 'margin:-4px 0 4px' }, [texteIA, annulerIA]),
+      el('div', { class: 'aide', style: 'margin:0 0 10px', text: 'L’IA rédige ou améliore cet article. Écrivez d’abord un titre ou quelques idées pour choisir le sujet.' }),
+      msgIA,
+      el('div', { class: 'bc-actions' }, [
+        el('button', { type: 'button', class: 'btn btn-mini', text: '←', title: t('Déplacer vers la gauche'), 'aria-label': t('Déplacer vers la gauche'), disabled: i === 0, onclick: () => deplacer(-1) }),
+        el('button', { type: 'button', class: 'btn btn-mini', text: '→', title: t('Déplacer vers la droite'), 'aria-label': t('Déplacer vers la droite'), disabled: i === n - 1, onclick: () => deplacer(1) }),
+        el('span', { class: 'esp' }),
+        el('button', { type: 'button', class: 'btn btn-mini', text: '🗑 Supprimer', onclick: () => {
+          if (!confirm(t('Supprimer l’article « ' + (a.titre || t('sans titre')) + ' » ?'))) return;
+          oublierImages(a.image, a.mini);
+          B.articles.splice(i, 1); articleBlogActif = Math.min(i, B.articles.length - 1);
+          if (articleApercu === a.id) articleApercu = '';
+          construireFormulaire(); changement();
+        } })
+      ])
+    );
+    return carte;
+  }
+  /* ✨ Texte IA d'un article du blog (décompté comme un texte IA) */
+  async function redigerArticleBlog(i) {
+    const arts = cfg.blog.articles, a = arts[i], ia = cfg.home.ia || {}, seo = cfg.seo || {};
+    const systeme = [
+      'Tu es rédacteur web. Tu écris UN article du blog d’une petite entreprise, lu sur téléphone.',
+      'Règles :',
+      '- Écris dans la langue des textes existants de la page (titre, article, description) ; à défaut, en français.',
+      '- Si l’article a déjà un titre ou un texte, garde son sujet : améliore-le, complète-le, rends-le concret et utile pour un client. S’il est vide, choisis un sujet utile lié à l’activité, qui n’est pas déjà traité par les autres articles.',
+      '- N’invente aucun fait vérifiable absent des informations : prix, chiffres, années d’expérience, labels, certifications, noms, adresses, horaires, avis clients, garanties, marques. Si une information manque, reste général.',
+      '- Titre : 40 à 70 caractères, accrocheur et précis, sans point final.',
+      '- Texte : 3 à 6 paragraphes courts séparés par une ligne vide, entre 900 et 1800 caractères. Pas de titres intermédiaires, pas de listes à puces, pas de mise en forme.',
+      '- Termine par une phrase qui invite à prendre contact.',
+      '- Référencement : si un mot-clé principal ou des lieux sont connus, places-en un naturellement, sans bourrage.',
+      '- Pas d’emoji, pas de hashtag, pas de superlatif creux.',
+      '- Corrige silencieusement les fautes de frappe évidentes.',
+      '- Réponds uniquement en appelant l’outil proposer_article.'
+    ].join('\n');
+    const autres = arts.map((x, k) => k === i || x.masque || !x.titre ? '' : '- ' + x.titre).filter(Boolean);
+    const infos = [
+      'Nom de l’entreprise : ' + (cfg.titre || '(non précisé)'),
+      cfg.sousTitre ? 'Accroche : ' + cfg.sousTitre : '',
+      ia.description ? 'Description de l’activité par le client : ' + ia.description : '',
+      (ia.zone || seo.zone) ? 'Zone d’action : ' + (ia.zone || seo.zone) : '',
+      seo.motCle ? 'Mot-clé principal : ' + seo.motCle : '',
+      'Moyens de contact disponibles : ' + (moyensDeContact().join(', ') || '(non précisés)'),
+      'Ton souhaité : ' + (TONS_IA[ia.ton] || TONS_IA.pro),
+      autres.length ? 'Autres articles du blog (ne pas répéter) :\n' + autres.join('\n') : 'Pas d’autre article pour l’instant.',
+      'Titre actuel : ' + (a.titre && a.titre !== t('Nouvel article') ? a.titre : '(vide)'),
+      'Texte actuel : ' + (a.texte || '(vide)')
+    ].filter(Boolean).join('\n');
+    const r = await appelIA({
+      model: MODELE_IA, max_tokens: 3000, system: systeme,
+      tools: [{ name: 'proposer_article', description: 'Renvoie l’article rédigé.',
+        input_schema: { type: 'object', properties: { titre: { type: 'string' }, texte: { type: 'string' } }, required: ['titre', 'texte'] } }],
+      tool_choice: { type: 'tool', name: 'proposer_article' },
+      messages: [{ role: 'user', content: infos }]
+    });
+    let j = null;
+    try { j = await r.json(); } catch (e) {}
+    if (!r.ok) throw new Error((j && j.error && j.error.message) || (j && j.erreur) || 'Le service IA est surchargé. Réessayez dans un instant.');
+    const outil = (j.content || []).find(c => c.type === 'tool_use' && c.input);
+    const p = outil && outil.input;
+    if (!p || !(p.titre || p.texte)) throw new Error('Réponse vide de l’IA. Réessayez.');
+    return { titre: String(p.titre || '').trim().replace(/[.\s]+$/, ''), texte: String(p.texte || '').trim() };
   }
 
   function sectionHome() {
@@ -4823,7 +5054,7 @@
       // 1. images d'abord, pour que la page ne pointe jamais vers une image absente
       const texteCfg = JSON.stringify(cfg);
       // photos de la galerie retirées avant l'enregistrement : jamais envoyées
-      const chemins = Object.keys(imagesAEnvoyer).filter(p => (CF && !/^images\/galerie-/.test(p)) || texteCfg.includes(p));
+      const chemins = Object.keys(imagesAEnvoyer).filter(p => (CF && !/^images\/(galerie|blog)-/.test(p)) || texteCfg.includes(p));
       let nEnv = 0;
       for (const p of chemins) {
         etat.textContent = chemins.length > 3 ? t('Envoi des images ' + (++nEnv) + ' / ' + chemins.length + '…') : 'Envoi de l’image…';
