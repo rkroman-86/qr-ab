@@ -156,7 +156,7 @@ function navPages(cfg, doc, res, actuelle, opts, racine, enBarre) {
     const a = lien(x, enBarre ? 'qh-contact' : (x.id === 'galerie' ? 'qp-galerie' : 'qp-lien-home'));
     if (x.id === 'galerie') { const i = doc.createElement('span'); i.className = 'qp-ico'; i.textContent = '📷'; a.appendChild(i); }
     a.appendChild(doc.createTextNode(x.nom));
-    if (enBarre) { a.style.background = d.accent; a.style.color = texteContraste(d.accent); }
+    a.style.background = d.accent; a.style.color = texteContraste(d.accent);       // couleur d'accent partout, comme ☰ et « Installer »
     return a;
   }
   const boite = doc.createElement('div');
@@ -446,7 +446,8 @@ const CSS_PAGE = `
 .qb-art h1{margin:4px 0 12px;font-size:1.6rem;line-height:1.2}
 .qb-texte{white-space:pre-line;line-height:1.62;font-size:1rem;overflow-wrap:anywhere}
 .qb-vide{opacity:.6}
-.qp-appli.qp-appli-court{padding:9px 11px}
+.qp .qp-appli.qp-appli-court{width:40px;height:40px;padding:0;justify-content:center;border-radius:50%}
+.qp .qp-appli.qp-appli-court svg{width:19px;height:19px}
 .qp-langsel{position:relative;flex:none;font:600 .88rem/1.2 system-ui,-apple-system,sans-serif}
 .qp-langsel>button{display:inline-flex;align-items:center;gap:5px;margin:0;padding:9px 12px;border:0;border-radius:999px;cursor:pointer;
   background:rgba(0,0,0,.38);color:#fff;font:inherit;letter-spacing:.03em;white-space:nowrap;
@@ -831,6 +832,7 @@ function rendrePage(cfgBrut, racine, opts) {
     const b = doc.createElement('button');
     b.type = 'button';
     b.className = 'qp-appli';
+    b.style.background = d.accent; b.style.color = texteContraste(d.accent);   // même apparence que le menu ☰ (visible sur tout fond)
     b.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M12 7v7M9 11l3 3 3-3"/></svg>';
     const TA = textesAppli(doc);
     if (langues || entreesPages(cfg, doc, res, opts, racine).length > 1) b.classList.add('qp-appli-court');      // place partagée : icône seule
