@@ -803,7 +803,7 @@ async function apiClient(request, env, slug, route) {
       if (chemin === 'index.html' && !compte.publie && !compte.parent) {   // 1re page enregistrée (étapes d'inscription)
         compte.publie = new Date().toISOString();
         await ecrireCompte(env, compte);
-        if (compte.plan === 'essai' && compte.entonnoir && !compte.noindex) ecrireStats(env, PAGE_SITE, [['etape', 'publie']]);
+        if (compte.plan === 'essai' && compte.entonnoir && !compte.noindex) ecrireStats(env, PAGE_SITE, lignesEtape('publie', compte.provenance));
       }
     }
     return json({ sha: 'kv' });
@@ -1712,7 +1712,7 @@ async function inscriptionLien(request, env) {
   const depuis = String(d.depuis || '').toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 25);
   const r = await enregistrerAttente(env, { activite, email, promo, depuis, langue: langueMail(d.langue), humain: visiteurHumain(request) });
   const envoi = await envoyerOuDirect(env, r.jeton, r.data);
-  if (r.nouvelle && visiteurHumain(request)) ecrireStats(env, PAGE_SITE, [['etape', 'lien']]);
+  if (r.nouvelle && visiteurHumain(request)) ecrireStats(env, PAGE_SITE, lignesEtape('lien', provenance(promo && promo.code, depuis)));
   return json(Object.assign({ ok: true, email }, envoi));
 }
 /* « Renvoyer le lien » (écran « Vérifiez votre boîte mail ») : même lien, validité repartie pour 7 jours */
@@ -1769,7 +1769,7 @@ async function inscriptionFinaliser(request, env) {
     if (!data.confirme) {                                  // le clic sur le lien prouve l'adresse e-mail
       data.confirme = new Date().toISOString();
       await env.CLIENTS.put('inscription:' + h, JSON.stringify(data), data.exp ? { expiration: data.exp } : { expirationTtl: DUREE_INSCRIPTION });
-      if (data.humain !== false && visiteurHumain(request)) ecrireStats(env, PAGE_SITE, [['etape', 'confirme']]);
+      if (data.humain !== false && visiteurHumain(request)) ecrireStats(env, PAGE_SITE, lignesEtape('confirme', provenance(data.promo && data.promo.code, data.depuis)));
     }
     return json({ ok: true, email: data.email, activite: data.activite || '', nom: await proposerSlug(env, baseSlug(data.activite)),
       essaiJours, promo: data.promo ? data.promo.code : null });
@@ -1787,13 +1787,14 @@ async function inscriptionFinaliser(request, env) {
   try {
     compte = await creerCompte(env, { slug, email: data.email, mdp: String(d.mdp), plan: 'essai', titre, langue: langueMail(data.langue),
       joursBonus: data.promo ? data.promo.jours : 0, promo: data.promo ? { code: data.promo.code, jours: data.promo.jours, le: maintenant } : null,
-      champs: Object.assign({ emailVerifie: data.confirme || maintenant, activite: data.activite || '' }, humain ? { entonnoir: true } : {}) });
+      champs: Object.assign({ emailVerifie: data.confirme || maintenant, activite: data.activite || '' }, humain ? { entonnoir: true } : {},
+        provenance(data.promo && data.promo.code, data.depuis) ? { provenance: provenance(data.promo && data.promo.code, data.depuis) } : {}) });
   } catch (e) { if (e.status === 409) throw await nomPris(); throw e; }
   await env.CLIENTS.delete('inscription:' + h);
   if ((await env.CLIENTS.get('inscription-email:' + data.email)) === jeton) await env.CLIENTS.delete('inscription-email:' + data.email);
   await env.CLIENTS.put('inscription-fait:' + h, slug, { expirationTtl: 60 * 86400 });
-  const stats = [['inscription', data.promo ? String(data.promo.code).slice(0, 30) : data.depuis ? 'via:' + data.depuis : '']];
-  if (humain) stats.push(['etape', 'cree']);
+  const stats = [['inscription', provenance(data.promo && data.promo.code, data.depuis)]];
+  if (humain) stats.push(...lignesEtape('cree', compte.provenance));
   ecrireStats(env, PAGE_SITE, stats);
   const session = await signerSession(env, { s: slug, v: compte.version || 1, e: Math.floor(Date.now() / 1000) + 30 * 86400 });
   return json({ ok: true, slug, jeton: session, adresse: 'https://' + slug + '.' + DOMAINE + '/' });
@@ -2356,7 +2357,7 @@ async function verifierEmail(request, env) {
   if (!compte) { await env.CLIENTS.delete(cle); throw new ErreurAPI(410, 'Ce compte n’existe plus.'); }
   if (compte.email !== info.email) { await env.CLIENTS.delete(cle); throw new ErreurAPI(410, 'L’adresse e-mail du compte a changé : utilisez le lien du dernier e-mail reçu.'); }
   await env.CLIENTS.delete(cle);
-  if (compte.emailAVerifier) { delete compte.emailAVerifier; compte.emailVerifie = new Date().toISOString(); await ecrireCompte(env, compte); ecrireStats(env, PAGE_SITE, [['etape', 'confirme']]); }
+  if (compte.emailAVerifier) { delete compte.emailAVerifier; compte.emailVerifie = new Date().toISOString(); await ecrireCompte(env, compte); ecrireStats(env, PAGE_SITE, lignesEtape('confirme', provenance(compte.promo && compte.promo.code, ''))); }
   const session = await signerSession(env, { s: compte.slug, v: compte.version || 1, e: Math.floor(Date.now() / 1000) + 30 * 86400 });
   return json({ ok: true, slug: compte.slug, jeton: session, adresse: 'https://' + compte.slug + '.' + DOMAINE + '/' });
 }
@@ -3527,7 +3528,7 @@ async function majAbonnement(env, idSub, facture, objet) {
   if (premierAbo) tit.abonneCompte = new Date().toISOString();
   await ecrireCompte(env, tit);
   await env.CLIENTS.put('abo:' + sub.id, tit.slug);
-  if (premierAbo) ecrireStats(env, PAGE_SITE, [['etape', 'abonne']]);
+  if (premierAbo) ecrireStats(env, PAGE_SITE, lignesEtape('abonne', tit.provenance));
   await synchroniserPages(env, tit, false);
   return 'appliqué';
 }
@@ -4262,11 +4263,29 @@ function compterVisite(request, env, slug, url, langue) {
 const PAGE_SITE = '@site';
 function compterVisiteSite(request, env, url, page) {
   if (!env.STATS || (request.method !== 'GET' && request.method !== 'HEAD') || !visiteurHumain(request)) return;
-  const source = sourceVisite(url, request, '', [DOMAINE, 'www.' + DOMAINE]);
-  if (!source) return;
+  let source = sourceVisite(url, request, '', [DOMAINE, 'www.' + DOMAINE]);
+  if (!source) return;                                                      // navigation interne : déjà comptée
+  const campagne = campagneVisite(url);
+  if (campagne) source = 'campagne:' + campagne;                            // ?depuis=NOM ou ?gclid (Google Ads) : ligne à part
   const pays = (request.cf && request.cf.country) || 'XX', l = url.searchParams.get('lang');
   ecrireStats(env, PAGE_SITE, [['visite', ''], ['source', source], ['page', page], ['pays', /^[A-Z]{2}$/.test(pays) ? pays : 'XX'],
     ['langue', l === 'en' || l === 'ru' ? l : 'fr']]);
+}
+// Campagne d'une visite du site : ?depuis=NOM (lettres, chiffres, tirets), sinon ?gclid seul (ajouté par Google Ads) = « google-ads »
+function campagneVisite(url) {
+  const d = String(url.searchParams.get('depuis') || '').toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 25);
+  if (d) return d;
+  return url.searchParams.get('gclid') ? 'google-ads' : '';
+}
+/* Provenance d'une inscription : code promo, sinon « via:NOM » (?depuis gardé dans le navigateur), sinon vide.
+   Sert aux inscriptions par provenance et au filtre de l'entonnoir (lignes « etapep » = étape|provenance). */
+function provenance(codePromo, depuis) {
+  if (codePromo) return String(codePromo).slice(0, 30);
+  const d = String(depuis || '').toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 25);
+  return d ? 'via:' + d : '';
+}
+function lignesEtape(etape, prov) {
+  return [['etape', etape], ['etapep', etape + '|' + String(prov || '').slice(0, 30)]];
 }
 /* Étapes d'inscription vues depuis le formulaire (arrivée, début de saisie de l'activité) : un compteur par jour.
    Les suivantes sont comptées par le serveur : lien, confirme, cree, publie, abonne. */
@@ -4275,7 +4294,11 @@ async function compterEtape(request, env, url) {
   const e = url.searchParams.get('e') || '';
   if (ETAPES_PAGE.has(e) && visiteurHumain(request)) {
     await limiter(env, 'etape:' + ip(request) + ':' + new Date().toISOString().slice(0, 13), 60, 7200, 'Trop de requêtes.').catch(() => {});
-    ecrireStats(env, PAGE_SITE, [['etape', e]]);
+    // provenance envoyée par la page : « via:NOM » ou un code promo existant (sinon ignorée : pas de clés inventées)
+    let p = String(url.searchParams.get('p') || '').toLowerCase().slice(0, 40);
+    if (/^via:/.test(p)) p = provenance('', p.slice(4));
+    else if (p) { const c = normCode(p); p = c && (await lirePromos(env)).some(x => x.code === c) ? c : ''; }
+    ecrireStats(env, PAGE_SITE, lignesEtape(e, p));
   }
   return new Response(null, { status: 204 });
 }
@@ -4294,7 +4317,7 @@ function marquerProprietaire() {
 }
 async function lireStats(env, page, jours) {
   const debut = jourParis(new Date(Date.now() - (jours - 1) * 86400000));
-  const res = { actif: !!env.STATS, jours, debut, fin: jourParis(), parJour: {}, source: {}, pays: {}, langue: {}, clic: {}, page: {}, inscription: {}, etape: {}, visites: 0, clics: 0, inscriptions: 0 };
+  const res = { actif: !!env.STATS, jours, debut, fin: jourParis(), parJour: {}, source: {}, pays: {}, langue: {}, clic: {}, page: {}, inscription: {}, etape: {}, etapep: {}, visites: 0, clics: 0, inscriptions: 0 };
   if (!(await tablesStats(env))) return res;
   const { results } = await env.STATS.prepare('SELECT jour, type, cle, SUM(n) AS n FROM stats WHERE page = ? AND jour >= ? GROUP BY jour, type, cle')
     .bind(page, debut).all();

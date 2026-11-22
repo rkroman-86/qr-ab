@@ -1074,21 +1074,45 @@
       el('div', { class: 'st-axe' }, [el('span', { text: jourCourt(jrs[0]) }), el('span', { text: jourCourt(jrs[Math.floor(jrs.length / 2)]) }), el('span', { text: jourCourt(jrs[jrs.length - 1]) })]), info]);
   }
   /* Étapes d'inscription : où les visiteurs s'arrêtent (compteurs anonymes, depuis le 17/11/2026) */
-  function entonnoir(e) {
+  let filtreEntonnoir = '*';
+  const nomProvenance = p => !p ? 'Sans code ni provenance' : p.indexOf('via:') === 0 ? 'via:' + p.slice(4) + (p === 'via:outil-qr' ? ' (générateur de QR)' : '') : 'Code promo : ' + p;
+  function entonnoir(e, ep) {
     const ETAPES = [['form', 'Arrivée sur le formulaire'], ['saisie', 'Début de saisie (activité)'], ['lien', 'Lien demandé'],
       ['confirme', 'E-mail confirmé (lien cliqué)'], ['cree', 'Page créée'], ['publie', 'Première page enregistrée'], ['abonne', 'Abonnement souscrit']];
-    const b = el('div', { class: 'boite' }, [el('h3', { text: 'Étapes d’inscription' })]);
-    const max = Math.max(1, ...ETAPES.map(([k]) => e[k] || 0));
+    // filtre par provenance : lignes « étape|provenance » (comptées depuis le 22/11/2026)
+    const provs = {};
+    Object.entries(ep || {}).forEach(([k, n]) => { const i = k.indexOf('|'); const p = k.slice(i + 1); provs[p] = (provs[p] || 0) + n; });
+    const choix = [['*', 'Toutes les provenances']];
+    Object.keys(provs).filter(p => p.indexOf('via:') === 0).sort().forEach(p => choix.push([p, nomProvenance(p)]));
+    const codes = Object.keys(provs).filter(p => p && p.indexOf('via:') !== 0).sort();
+    if (codes.length) { choix.push(['#codes', 'Codes promo (tous)']); codes.forEach(p => choix.push([p, nomProvenance(p)])); }
+    if (provs[''] !== undefined) choix.push(['', nomProvenance('')]);
+    if (!choix.some(c => c[0] === filtreEntonnoir)) filtreEntonnoir = '*';
+    const garde = p => filtreEntonnoir === '#codes' ? (p && p.indexOf('via:') !== 0) : p === filtreEntonnoir;
+    let vals = e;
+    if (filtreEntonnoir !== '*') {
+      vals = {};
+      Object.entries(ep || {}).forEach(([k, n]) => { const i = k.indexOf('|'); if (garde(k.slice(i + 1))) vals[k.slice(0, i)] = (vals[k.slice(0, i)] || 0) + n; });
+    }
+    const sel = el('select', { 'aria-label': 'Provenance', style: 'margin:0 0 10px;max-width:100%' }, choix.map(([v, t]) => el('option', { value: v, text: t })));
+    sel.value = filtreEntonnoir;
+    const b = el('div', { class: 'boite' }, [el('h3', { text: 'Étapes d’inscription' }), sel]);
     const z = el('div', { class: 'st-liste' });
-    let avant = null;
-    ETAPES.forEach(([k, nom]) => {
-      const n = e[k] || 0;
-      const taux = avant ? ' (' + Math.round(n / avant * 100) + ' %)' : '';
-      z.append(el('div', { class: 'st-ligne' }, [el('span', { class: 'nom', text: nom, title: nom }),
-        el('span', {}, [el('div', { class: 'barre-st', style: 'width:' + Math.max(1, Math.round(n / max * 100)) + '%' })]), el('span', { class: 'n', text: nombre(n) + taux })]));
-      avant = n || null;
-    });
-    b.append(z, el('p', { class: 'infos', text: 'Entre parenthèses : part des visiteurs de l’étape précédente. Compteurs anonymes (sans cookie), hors tes propres visites, comptes créés depuis /gestion et pages exclues des moteurs. « Abonnement souscrit » = premier abonnement d’un compte (pas les renouvellements). Inscription en deux temps depuis le 19 novembre 2026.' }));
+    function dessiner() {
+      z.innerHTML = '';
+      const max = Math.max(1, ...ETAPES.map(([k]) => vals[k] || 0));
+      let avant = null;
+      ETAPES.forEach(([k, nom]) => {
+        const n = vals[k] || 0;
+        const taux = avant ? ' (' + Math.round(n / avant * 100) + ' %)' : '';
+        z.append(el('div', { class: 'st-ligne' }, [el('span', { class: 'nom', text: nom, title: nom }),
+          el('span', {}, [el('div', { class: 'barre-st', style: 'width:' + Math.max(1, Math.round(n / max * 100)) + '%' })]), el('span', { class: 'n', text: nombre(n) + taux })]));
+        avant = n || null;
+      });
+    }
+    dessiner();
+    sel.addEventListener('change', () => { filtreEntonnoir = sel.value; b.replaceWith(entonnoir(e, ep)); });
+    b.append(z, el('p', { class: 'infos', text: 'Filtre par provenance compté depuis le 22 novembre 2026 (« Toutes » reprend aussi les jours d’avant). ' + 'Entre parenthèses : part des visiteurs de l’étape précédente. Compteurs anonymes (sans cookie), hors tes propres visites, comptes créés depuis /gestion et pages exclues des moteurs. « Abonnement souscrit » = premier abonnement d’un compte (pas les renouvellements). Inscription en deux temps depuis le 19 novembre 2026.' }));
     return b;
   }
   async function chargerStatsSite() {
@@ -1107,11 +1131,11 @@
         el('div', { class: 'st-tuile' }, [el('div', { class: 'v', text: nombre(s.inscriptions) }), el('div', { class: 'l', text: 'Inscriptions' })]),
         el('div', { class: 'st-tuile' }, [el('div', { class: 'v', text: taux }), el('div', { class: 'l', text: 'Visites → inscription' })])]),
       grapheSite(s),
-      listeSite('Provenance', s.source, k => SOURCES_SITE[k] || k),
+      listeSite('Provenance', s.source, k => SOURCES_SITE[k] || (k.indexOf('campagne:') === 0 ? 'Campagne : ' + k.slice(9) : k)),
       listeSite('Page d’arrivée', s.page, k => PAGES_SITE[k] || k),
       listeSite('Pays', s.pays, pays),
       listeSite('Langue choisie', s.langue, k => ({ fr: 'Français', en: 'Anglais', ru: 'Russe' })[k] || k),
-      entonnoir(s.etape || {}),
+      entonnoir(s.etape || {}, s.etapep || {}),
       listeSite('Inscriptions par code promo ou provenance', s.inscription, k => !k ? 'Sans code' : k === 'via:outil-qr' ? 'Sans code, venu du générateur de QR' : k.indexOf('via:') === 0 ? 'Sans code, venu de ' + k.slice(4) : k),
       el('p', { class: 'infos', text: 'Visiteurs de qrbc.app (accueil, générateur de QR code, appli, pages légales), sans cookie ni donnée personnelle, hors robots et hors tes propres visites. Une visite = une arrivée sur le site ; la navigation d’une page à l’autre n’est pas recomptée. Compté depuis le 14 novembre 2026. Les visites des pages clients restent dans l’onglet Clients.' }));
   }

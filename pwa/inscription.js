@@ -13,9 +13,11 @@
   const lang = () => String(document.documentElement.lang || 'fr').slice(0, 2);
 
   /* Étapes d'inscription (compteurs anonymes, sans cookie, une fois par visite) */
+  let provenanceEtape = () => '';      // code promo, sinon « via:NOM » (filtre de l'entonnoir dans /gestion)
   function etape(e) {
     try { if (sessionStorage.getItem('qrbc-etape-' + e)) return; sessionStorage.setItem('qrbc-etape-' + e, '1'); } catch (x) {}
-    try { fetch('/api/etape?e=' + e, { method: 'POST', keepalive: true }).catch(() => {}); } catch (x) {}
+    const p = provenanceEtape();
+    try { fetch('/api/etape?e=' + e + (p ? '&p=' + encodeURIComponent(p) : ''), { method: 'POST', keepalive: true }).catch(() => {}); } catch (x) {}
   }
 
   /* ---------- Turnstile ---------- */
@@ -92,7 +94,10 @@
   }
   function lireDepuis() {
     let d = '';
-    try { d = (new URLSearchParams(location.search).get('depuis') || lireLS('qrbc-depuis')).toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 25); } catch (e) {}
+    try {
+      const p = new URLSearchParams(location.search);       // ?gclid seul (Google Ads) = « google-ads »
+      d = (p.get('depuis') || (p.get('gclid') ? 'google-ads' : '') || lireLS('qrbc-depuis')).toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 25);
+    } catch (e) {}
     if (d) ecrireLS('qrbc-depuis', d);
     return d;
   }
@@ -104,6 +109,7 @@
     const robot = antiRobot(o.robot);
     let promo = lirePromo(), promoValide = false;
     const depuis = lireDepuis();
+    provenanceEtape = () => (promo ? String(promo).trim().toLowerCase() : depuis ? 'via:' + depuis : '');
 
     // Code promo : ligne « ✓ … » s'il vient du lien, sinon petit lien « J'ai un code promo » qui ouvre le champ
     async function verifierPromo(code, depuisLien) {
