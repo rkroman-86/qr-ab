@@ -393,21 +393,26 @@
     .champ-liens{margin-bottom:12px}
     .champ-liens>.champ{margin-bottom:4px}
     .barre-liens{position:relative;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-    .champ-outils{display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap}
+    .champ-outils{display:flex;align-items:flex-start;gap:8px}
+    .champ-outils>.barre-liens{flex:1;min-width:0}
+    .liens-aide{flex:1;min-width:120px;line-height:1.3}
+    .menu-liens select,.menu-liens input{width:100%;box-sizing:border-box;min-width:0}
+    .liens-pages .btn{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .btn-typo{font-family:Georgia,serif;font-weight:700;min-width:40px}
     .btn-typo.regle{background:var(--accent,#2563eb);color:#fff;border-color:transparent}
     .rangee-typo{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 0}
     .rangee-typo select{flex:1 1 120px;min-width:0}
     .liens-aide{font-size:.75rem;color:var(--doux)}
-    .menu-liens{position:absolute;left:0;top:calc(100% + 6px);z-index:30;width:min(360px,calc(100vw - 40px));padding:12px;border:1px solid var(--ligne);border-radius:12px;
-      background:var(--panneau);box-shadow:0 12px 32px rgba(0,0,0,.22);display:flex;flex-direction:column;gap:6px}
+    .menu-liens{box-sizing:border-box;width:100%;max-width:100%;margin-top:8px;padding:12px;border:1px solid var(--ligne);border-radius:12px;
+      background:var(--panneau);box-shadow:0 6px 18px rgba(0,0,0,.12);display:flex;flex-direction:column;gap:8px}
     .menu-liens.cache{display:none}
     .liens-tete{display:flex;align-items:flex-start;gap:8px}
     .liens-tete b{flex:1;font-size:.86rem;overflow-wrap:anywhere}
     .liens-x{border:0;background:none;font-size:1.1rem;cursor:pointer;color:var(--doux);padding:0 2px}
     .liens-pages{display:flex;flex-wrap:wrap;gap:6px}
     .liens-ext{display:flex;gap:6px}
-    .liens-ext input{flex:1;min-width:0}
+    .liens-ext input{flex:1;min-width:0;width:auto}
+    .liens-ext .btn{flex:none}
     .liens-msg{margin:0;font-size:.85rem}
     .liens-retirer{align-self:flex-start}
     .menu-liens .etiq{margin:4px 0 0}
@@ -1290,7 +1295,7 @@
     const outils = el('div', { class: 'champ-outils' });
     const enfants = [champ, outils];
     if (opts.typo) { const [b, rangee] = outilTypo(obj, cle); outils.append(b); enfants.push(rangee); }
-    if (opts.liens) outils.append(outilLiens(input));
+    if (opts.liens) { const b = outilLiens(input); outils.append(b); enfants.push(b.menu); }   // menu des liens : toute la largeur, sous le champ
     return el('div', { class: 'champ-liens' }, enfants);
   }
 
@@ -1352,7 +1357,8 @@
     const bouton = el('button', { type: 'button', class: 'btn btn-mini', text: '🔗 Lien' });
     const aide = el('span', { class: 'liens-aide', text: 'Sélectionnez des mots du texte, puis 🔗 Lien.' });
     const menu = el('div', { class: 'menu-liens cache' });
-    const barre = el('div', { class: 'barre-liens' }, [bouton, aide, menu]);
+    const barre = el('div', { class: 'barre-liens' }, [bouton, aide]);
+    barre.menu = menu;
     let sel = [0, 0], existant = null;
     const fermer = () => menu.classList.add('cache');
     function lienSous(a, b) {                               // lien qui contient la sélection (ou le curseur)
