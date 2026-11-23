@@ -345,13 +345,21 @@ const CSS_SITE = `<style>
   .nav-site>a{color:var(--txt);font-weight:600;font-size:.92rem;text-decoration:none;padding:4px 0;border-bottom:2px solid transparent}
   .nav-site>a.ici{border-bottom-color:var(--accent)}
   .nav-bouton{display:none;width:auto;min-height:0;padding:8px 12px;border-radius:10px;background:var(--panneau);color:var(--txt);border:1px solid var(--ligne);font-weight:700}
-  header{gap:14px;flex-wrap:wrap}
+  header{gap:14px;flex-wrap:wrap;position:relative}
   @media (max-width:859px){
     .nav-bouton{display:inline-block}
-    .nav-site{display:none;position:absolute;left:16px;right:16px;top:64px;z-index:15;flex-direction:column;align-items:stretch;gap:0;padding:8px;background:var(--panneau);border:1px solid var(--ligne);border-radius:14px;box-shadow:0 12px 30px rgba(0,0,0,.18)}
+    /* téléphone : logo | langue ☰, « Se connecter » juste dessous à droite */
+    .hd-actions.avec-menu{display:grid;grid-template-columns:auto auto;justify-items:end;align-items:center;column-gap:10px;row-gap:4px}
+    .hd-actions.avec-menu>[data-langue]{order:1}
+    .hd-actions.avec-menu>.nav-bouton{order:2}
+    .hd-actions.avec-menu>a{order:3;grid-column:1 / -1;font-size:.9rem}
+    .hd-actions.avec-menu>.installer{order:4;grid-column:1 / -1}
+    .nav-site{display:none;position:absolute;left:0;right:0;top:calc(100% + 6px);z-index:15;flex-direction:column;align-items:stretch;gap:0;padding:8px;background:var(--panneau);border:1px solid var(--ligne);border-radius:14px;box-shadow:0 12px 30px rgba(0,0,0,.18)}
     .nav-site.ouvert{display:flex}
     .nav-site>a{padding:12px 10px;border-bottom:1px solid var(--ligne)}
     .nav-site>a:last-child{border-bottom:0}
+    .nav-site>a.ici{color:var(--accent);border-bottom-color:var(--ligne)}
+    .nav-site>a.ici:last-child{border-bottom:0}
   }
   .page{position:relative}
   .grille-seule{grid-template-columns:1fr !important}
@@ -449,7 +457,7 @@ export async function rendrePageSite(env, request, cfg, page, lang, opts) {
   }).join('');
   const entete = g.entete.replace('<div class="marque">', '<a href="' + esc(adresse(cfg.pages.find(p => p.chemin === '') || page, lang)) + '" style="color:inherit;text-decoration:none"><div class="marque">')
     .replace('</small></div>', '</small></div></a>')
-    .replace('<div class="hd-actions">', (menu ? '<nav class="nav-site" aria-label="' + NOMS.menu[lang] + '">' + menu + '</nav>' : '') + '<div class="hd-actions">' +
+    .replace('<div class="hd-actions">', (menu ? '<nav class="nav-site" aria-label="' + NOMS.menu[lang] + '">' + menu + '</nav>' : '') + '<div class="hd-actions' + (menu ? ' avec-menu' : '') + '">' +
       (menu ? '<button type="button" class="nav-bouton" aria-label="' + NOMS.menu[lang] + '" aria-expanded="false">☰</button>' : ''));
   // vidéo de la page (articles) : vidéo choisie dans le constructeur, sinon la vidéo de présentation qrbc
   let video = '';
