@@ -6,7 +6,8 @@
 (function () {
   'use strict';
 
-  const LANGUES = { fr: 'FR', en: 'EN', ru: 'RU' };
+  // le site qrbc.app construit peut déclarer ses langues (window.QRBC_LANGUES) et les textes fixes d'une langue ajoutée (window.QRBC_DICO)
+  const LANGUES = window.QRBC_LANGUES || { fr: 'FR', en: 'EN', ru: 'RU' };
   const CLE = 'qp-langue';
 
   // 'texte français': ['English', 'Русский']
@@ -1357,6 +1358,11 @@
       const u = new URLSearchParams(location.search).get('lang');
       if (LANGUES[u]) { try { localStorage.setItem(CLE, u); } catch (e) {} return u; }
     } catch (e) {}
+    // page déjà traduite par le serveur (site qrbc.app, aperçu du constructeur) : la langue de la page
+    try {
+      const lp = document.documentElement.getAttribute('lang');
+      if (document.documentElement.hasAttribute('data-pretraduit') && LANGUES[lp]) return lp;
+    } catch (e) {}
     // robots des moteurs (Google, Bing…) : on garde la langue annoncée par la page publique,
     // sinon l'accueil français serait indexé en anglais (le navigateur du robot est réglé en anglais)
     try {
@@ -1366,7 +1372,7 @@
     } catch (e) {}
     try { const l = localStorage.getItem(CLE); if (LANGUES[l]) return l; } catch (e) {}
     const n = (navigator.language || 'fr').slice(0, 2).toLowerCase();
-    return LANGUES[n] ? n : 'en';
+    return LANGUES[n] ? n : (LANGUES.en ? 'en' : 'fr');
   }
   let langue = langueInitiale();
 
@@ -1377,6 +1383,10 @@
     const brut = String(s);
     const cle = brut.trim();
     if (!cle) return brut;
+    if (lng !== 'en' && lng !== 'ru') {                  // langue ajoutée au site : ses textes fixes, sinon l'anglais
+      const x = window.QRBC_DICO && window.QRBC_DICO[cle];
+      return x ? brut.replace(cle, x) : t(s, 'en');
+    }
     const i = lng === 'en' ? 0 : 1;
     const avant = brut.slice(0, brut.indexOf(cle)), apres = brut.slice(brut.indexOf(cle) + cle.length);
     let r = null;

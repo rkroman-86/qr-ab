@@ -40,9 +40,14 @@
   .barre .marque{font-weight:800;font-size:1.05rem;margin-right:6px}
   .barre .marque span{color:var(--accent)}
   .barre .esp{flex:1}
-  .langues{display:inline-flex;border:1px solid var(--ligne);border-radius:10px;overflow:hidden}
+  .langues{display:inline-flex;flex-wrap:wrap;max-width:100%;border:1px solid var(--ligne);border-radius:10px;overflow:hidden}
   .langues button{border:0;background:none;padding:7px 12px;font-weight:700;cursor:pointer}
   .langues button.actif{background:var(--prim);color:var(--prim-txt)}
+  .langues button.plus{color:var(--accent);font-size:1.05rem;padding:7px 11px}
+  .menu-langues{position:fixed;z-index:60;background:#fff;border:1px solid var(--ligne);border-radius:12px;box-shadow:0 12px 30px rgba(0,0,0,.18);padding:6px;display:grid;grid-template-columns:1fr 1fr;gap:2px;width:280px}
+  .menu-langues button{border:0;background:none;text-align:left;padding:8px 10px;border-radius:8px;cursor:pointer;font-weight:600}
+  .menu-langues button:hover{background:var(--bg)}
+  .menu-langues small{color:var(--doux);font-weight:400;margin-left:4px}
   #etat{font-size:.85rem;color:var(--doux)}
   #etat.modif{color:var(--accent);font-weight:700}
   .corps{flex:1;display:flex;min-height:0}
@@ -116,7 +121,7 @@
   <div class="barre">
     <div class="marque">qrbc<span>.</span> constructeur</div>
     <div class="langues" id="langues" title="Langue modifiée">
-      <button type="button" data-l="fr" class="actif">FR</button><button type="button" data-l="en">EN</button><button type="button" data-l="ru">RU</button>
+      <button type="button" data-l="fr" class="actif">FR</button>
     </div>
     <div class="langues onglets-mobile" id="onglets"><button type="button" data-v="modif" class="actif">Modifier</button><button type="button" data-v="apercu">Aperçu</button></div>
     <span class="esp"></span>
@@ -160,7 +165,7 @@
   }
   var jeton = '';
   try { jeton = sessionStorage.getItem('qrbc-gestion') || ''; } catch (e) {}
-  var cfg = null, actif = false, dejaPublie = false, reserves = [];
+  var cfg = null, actif = false, dejaPublie = false, reserves = [], languesDispo = {};
   var pageSel = null, langue = 'fr', modifie = false, articleApercu = '';
   var carteSel = {};                       // section / article affiché par page (carrousel)
 
@@ -204,7 +209,7 @@
   });
   async function charger() {
     var j = await api('site');
-    cfg = j.cfg; actif = j.actif; dejaPublie = j.publie; reserves = j.reserves || [];
+    cfg = j.cfg; actif = j.actif; dejaPublie = j.publie; reserves = j.reserves || []; languesDispo = j.languesDispo || {};
     $('#connexion').hidden = true; $('#editeur').hidden = false;
     pageSel = cfg.pages[0].id;
     majBoutons(); dessiner(); apercu();
@@ -241,10 +246,46 @@
   });
 
   /* ---------- Langue modifiée / onglets mobile / taille de l'aperçu ---------- */
+  // langues du site : FR (base) + langues ajoutées ; « + » pour en ajouter une, « Retirer » dans la carte de traduction
+  function langs() { return ['fr'].concat(cfg.langues || ['en', 'ru']); }
+  function nomLangue(l) { return l === 'fr' ? 'Français' : (languesDispo[l] || l.toUpperCase()); }
+  function dessinerLangues() {
+    var z = $('#langues'); z.innerHTML = '';
+    if (langs().indexOf(langue) < 0) langue = 'fr';
+    langs().forEach(function (l) { z.append(el('button', { type: 'button', 'data-l': l, class: l === langue ? 'actif' : '', title: nomLangue(l), text: l.toUpperCase() })); });
+    if (Object.keys(languesDispo).some(function (l) { return langs().indexOf(l) < 0; }))
+      z.append(el('button', { type: 'button', class: 'plus', 'data-plus': '1', title: 'Ajouter une langue', text: '+' }));
+  }
+  function fermerMenuLangues() { var m = $('.menu-langues'); if (m) m.remove(); }
+  function ouvrirMenuLangues(b) {
+    if ($('.menu-langues')) { fermerMenuLangues(); return; }
+    var r = b.getBoundingClientRect();
+    var m = el('div', { class: 'menu-langues' }, Object.keys(languesDispo).filter(function (l) { return langs().indexOf(l) < 0; }).map(function (l) {
+      return el('button', { type: 'button', onclick: function () { fermerMenuLangues(); ajouterLangue(l); } }, [l.toUpperCase(), el('small', { text: languesDispo[l] })]);
+    }));
+    m.style.top = (r.bottom + 6) + 'px'; m.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 290)) + 'px';
+    document.body.append(m);
+  }
+  document.addEventListener('click', function (e) { if (!e.target.closest('.menu-langues') && !e.target.closest('[data-plus]')) fermerMenuLangues(); });
+  async function ajouterLangue(l) {
+    cfg.langues = langs().slice(1).concat([l]);
+    cfg.traductions = cfg.traductions || {}; cfg.traductions[l] = cfg.traductions[l] || {};
+    langue = l; changement(); apercu();
+    if (l === 'en' || l === 'ru') return;
+    toast('Préparation de la langue ' + nomLangue(l) + '…');
+    try { await api('site-langue', { lang: l }); toast(nomLangue(l) + ' ajouté : traduisez maintenant chaque page'); apercu(); }
+    catch (e) { alert('Les textes fixes (menu, formulaire, pied de page) n’ont pas pu être traduits : ' + e.message + '\nIls s’afficheront en anglais. Vous pouvez retirer puis rajouter la langue pour réessayer.'); }
+  }
+  function retirerLangue(l) {
+    if (!confirm('Retirer la langue ' + nomLangue(l) + ' du site ? Ses traductions et retouches seront effacées à l’enregistrement.')) return;
+    cfg.langues = langs().slice(1).filter(function (x) { return x !== l; });
+    if (cfg.traductions) delete cfg.traductions[l];
+    langue = 'fr'; changement(); apercu(); toast(nomLangue(l) + ' retiré (enregistrez ou publiez pour confirmer)');
+  }
   $('#langues').addEventListener('click', function (e) {
     var b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.plus) { ouvrirMenuLangues(b); return; }
     langue = b.dataset.l;
-    [].forEach.call(this.children, function (x) { x.classList.toggle('actif', x === b); });
     dessiner(); apercu();
   });
   $('#onglets').addEventListener('click', function (e) {
@@ -421,6 +462,7 @@
 
   /* ---------- Dessin de la colonne de gauche ---------- */
   function dessiner() {
+    dessinerLangues();
     var g = $('#gauche'), haut = g.scrollTop;
     g.innerHTML = '';
     g.append(cartePages());
@@ -528,7 +570,7 @@
     var vid = el('div', { class: 'carte' }, [el('h2', { text: '🎬 Vidéo flottante' }),
       caseACocher('Afficher une vidéo sur cette page', p.video, 'actif', false, dessiner)]);
     if (p.video.actif) {
-      ['fr', 'en', 'ru'].forEach(function (l) {
+      langs().forEach(function (l) {
         var f = el('input', { type: 'file', accept: 'video/mp4', hidden: true });
         var src = p.video.src[l];
         f.addEventListener('change', async function () {
@@ -598,7 +640,7 @@
         if (e.key !== 'Tab') return; e.preventDefault();
         var a = zone.selectionStart; zone.setRangeText('  ', a, zone.selectionEnd, 'end'); zone.dispatchEvent(new Event('input'));
       });
-      f.push(el('div', { class: 'langues-code' }, ['fr', 'en', 'ru'].map(function (l) {
+      f.push(el('div', { class: 'langues-code' }, langs().map(function (l) {
         return el('button', { type: 'button', class: 'btn btn-mini' + (l === lc ? ' actif' : ''), text: l.toUpperCase() + (l !== 'fr' && !(s.code[l] || '').trim() ? ' (= FR)' : ''), onclick: function () { carteSel['code-' + s.id] = l; dessiner(); } });
       })), zone,
         el('p', { class: 'aide', text: 'HTML, <style> et <script> collés tels quels, entre l’en-tête et le pied de page du site. Une seule section « Code » = une page entièrement libre. EN / RU vides : le code français est affiché (il peut lire document.documentElement.lang). Ce code n’est pas traduit par l’IA. Scripts utiles déjà en ligne : /qrcode.js.' }));
@@ -700,6 +742,8 @@
         changement(); toast('Traduction prête : relisez-la');
       } catch (e) { msg.className = 'msg err'; msg.textContent = e.message; btn.disabled = false; }
     } });
+    c.append(el('div', { class: 'actions', style: 'margin:0 0 10px' }, [el('span', { class: 'aide', style: 'margin:0;flex:1', text: nomLangue(langue) }),
+      el('button', { type: 'button', class: 'btn btn-mini btn-danger', text: '🗑 Retirer cette langue', onclick: function () { retirerLangue(langue); } })]));
     c.append(el('p', { class: 'aide', style: 'margin:0 0 10px', text: 'La structure (sections, images, liens) vient de la page française. Ici, vous retouchez seulement les textes. Sans traduction, la page s’affiche en français.' }), btn, msg);
     if (!t) return c;
     var fr = textesPage(p);

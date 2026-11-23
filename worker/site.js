@@ -9,7 +9,13 @@
 
 const CLES = { brouillon: 'principal:brouillon', publie: 'principal:publie', actif: 'principal:actif' };
 const PREFIXE_MEDIA = 'principal:media:';
-export const LANGUES_SITE = ['fr', 'en', 'ru'];
+export const LANGUES_SITE = ['fr', 'en', 'ru'];          // langues par défaut d'un nouveau site
+// langues qu'on peut ajouter au site (bouton « + » du constructeur) ; fr = langue de base
+export const LANGUES_DISPO = { en: 'English', ru: 'Русский', es: 'Español', de: 'Deutsch', it: 'Italiano', pt: 'Português', nl: 'Nederlands',
+  uk: 'Українська', pl: 'Polski', ro: 'Română', tr: 'Türkçe', zh: '中文', ja: '日本語' };
+const LANGUES_TOUTES = ['fr'].concat(Object.keys(LANGUES_DISPO));
+export const languesDe = cfg => ['fr'].concat(cfg && Array.isArray(cfg.langues) ? cfg.langues : ['en', 'ru']);
+const PREFIXE_FIXES = 'principal:fixes:';                 // textes fixes (en-tête, formulaire, pied) traduits pour une langue ajoutée
 const TYPES = ['articles', 'galerie', 'blog', 'contact'];
 const GENRES = ['accroche', 'texte', 'cartes', 'etiquettes', 'faq', 'inscription', 'bouton', 'image', 'code'];
 const MAX_CODE = 200000;   // section « Code HTML » : par langue
@@ -87,7 +93,7 @@ function nettoyerSection(s) {
     encart: { titre: ch(s.encart && s.encart.titre, 300), texte: ch(s.encart && s.encart.texte, 1000), image: media(s.encart && s.encart.image) },
     avecInscription: !!s.avecInscription,
     // Code HTML libre (Roman seul y a accès) : une version par langue, le français sert par défaut
-    code: s.genre === 'code' ? ['fr', 'en', 'ru'].reduce((o, l) => { o[l] = typeof (s.code && s.code[l]) === 'string' ? s.code[l].slice(0, MAX_CODE) : ''; return o; }, {}) : undefined
+    code: s.genre === 'code' ? LANGUES_TOUTES.reduce((o, l) => { o[l] = typeof (s.code && s.code[l]) === 'string' ? s.code[l].slice(0, MAX_CODE) : ''; return o; }, {}) : undefined
   };
 }
 function nettoyerPage(p, deja) {
@@ -105,7 +111,7 @@ function nettoyerPage(p, deja) {
   r.chemin = c; deja.chemins.add(c);
   if (type === 'articles') {
     r.video = { actif: !!(p.video && p.video.actif), src: {} };
-    for (const l of LANGUES_SITE) { const v = media(p.video && p.video.src && p.video.src[l]); if (v) r.video.src[l] = v; }
+    for (const l of LANGUES_TOUTES) { const v = media(p.video && p.video.src && p.video.src[l]); if (v) r.video.src[l] = v; }
     r.sections = (Array.isArray(p.sections) ? p.sections : []).slice(0, MAX.sections).map(nettoyerSection);
   } else if (type === 'galerie') {
     r.intro = ch(p.intro, 4000);
@@ -140,8 +146,9 @@ export function nettoyerConfig(cfg) {
   pages = nettoyees.filter(Boolean);
   if (!pages.length) pages = [nettoyerPage({ type: 'articles', titre: 'Accueil', chemin: '', sections: [] }, { ids: new Set(), chemins: new Set(), accueil: false })];
   if (!pages.some(p => p.chemin === '')) pages[0].chemin = '';
+  const langues = Array.isArray(cfg.langues) ? [...new Set(cfg.langues.filter(l => LANGUES_DISPO[l]))] : ['en', 'ru'];
   const trad = {};
-  for (const l of ['en', 'ru']) {
+  for (const l of langues) {
     trad[l] = {};
     const src = (cfg.traductions && cfg.traductions[l]) || {};
     for (const p of pages) {
@@ -151,7 +158,7 @@ export function nettoyerConfig(cfg) {
       trad[l][p.id] = { page: appliquerTextes(p, textesPage(nettoyerPage(Object.assign({}, t.page, { id: p.id, type: p.type, chemin: p.chemin }), { ids: new Set(), chemins: new Set(), accueil: true }))), source: ch(t.source, 20), le: ch(t.le, 30) };
     }
   }
-  return { v: 1, pages, traductions: trad, maj: new Date().toISOString() };
+  return { v: 1, pages, langues, traductions: trad, maj: new Date().toISOString() };
 }
 
 /* ---------------- Lecture ---------------- */
@@ -308,21 +315,21 @@ function contenuPage(cfg, page, lang, ctx, article) {
         const img = image(x.mini || x.src, x.legende || page.titre + ' ' + (i + 1), '', i > 5);
         const leg = x.legende ? '<span class="leg">' + esc(x.legende) + '</span>' : '';
         return href ? '<a class="ph" href="' + esc(href) + '"' + attrsLien(href) + '>' + img + leg + '</a>'
-          : '<button type="button" class="ph" data-grande="' + esc(x.src) + '" aria-label="' + esc(x.legende || NOMS.galerie[lang] + ' ' + (i + 1)) + '">' + img + leg + '</button>';
+          : '<button type="button" class="ph" data-grande="' + esc(x.src) + '" aria-label="' + esc(x.legende || nomF('galerie', lang, ctx.fx) + ' ' + (i + 1)) + '">' + img + leg + '</button>';
       }).join('') + '</div></section></div>';
   }
   if (page.type === 'blog') {
     const arts = (page.articles || []).filter(a => !a.masque).sort((a, b) => b.date.localeCompare(a.date));
     if (article) {
-      return '<div class="infos infos-haut"><article class="blog-article"><p><a class="retour" href="' + esc(adresse(page, lang)) + '">' + NOMS.retour[lang] + '</a></p>' +
+      return '<div class="infos infos-haut"><article class="blog-article"><p><a class="retour" href="' + esc(adresse(page, lang)) + '">' + nomF('retour', lang, ctx.fx) + '</a></p>' +
         '<p class="date"><time datetime="' + article.date + '">' + dateLisible(article.date, lang) + '</time></p><h1 class="titre-page">' + esc(article.titre) + '</h1>' +
         image(article.image, article.titre, 'photo-article', false) + paragraphes(article.texte, ctx) + '</article></div>';
     }
     return '<div class="infos infos-haut"><section><h1 class="titre-page">' + enLigne(page.titre, ctx) + '</h1>' + paragraphes(page.intro, ctx, 'intro') +
       (arts.length ? '<div class="blog-liste">' + arts.map((a, i) => '<a class="blog-carte" href="' + esc(adresse(page, lang, a.slug)) + '">' +
         image(a.mini || a.image, a.titre, '', i > 2) + '<div><p class="date">' + dateLisible(a.date, lang) + '</p><h2>' + esc(a.titre) + '</h2><p>' +
-        esc((a.description || sansMarques(a.texte)).slice(0, 220)) + '</p><span class="lire">' + NOMS.lire[lang] + ' →</span></div></a>').join('') + '</div>'
-        : '<p class="intro">' + NOMS.vide[lang] + '</p>') + '</section></div>';
+        esc((a.description || sansMarques(a.texte)).slice(0, 220)) + '</p><span class="lire">' + nomF('lire', lang, ctx.fx) + ' →</span></div></a>').join('') + '</div>'
+        : '<p class="intro">' + nomF('vide', lang, ctx.fx) + '</p>') + '</section></div>';
   }
   if (page.type === 'contact') {
     return '<div class="infos infos-haut"><section><h1 class="titre-page">' + enLigne(page.titre, ctx) + '</h1>' + paragraphes(page.intro, ctx, 'intro') +
@@ -429,22 +436,27 @@ const JS_SITE = `<script>
 /* Document HTML complet d'une page du site (ou d'un article du blog) */
 /* Page française ouverte sans ?lang : on recharge dans la langue retenue ou celle du téléphone (comme l'ancien accueil),
    la page étant traduite par le serveur. Les robots gardent la version française. */
-const REDIRECTION_LANGUE = '<script>(function(){try{var u=new URL(location.href);if(u.searchParams.has("lang")||/bot|crawl|spider|slurp|lighthouse|google|bing|yandex|baidu|duckduck|facebookexternalhit|whatsapp|telegram/i.test(navigator.userAgent))return;' +
-  'var l=null;try{l=localStorage.getItem("qp-langue");}catch(e){}if(l!=="fr"&&l!=="en"&&l!=="ru"){var n=(navigator.language||"fr").slice(0,2).toLowerCase();l=n==="fr"||n==="ru"?n:"en";}' +
-  'if(l!=="fr"){u.searchParams.set("lang",l);location.replace(u.pathname+u.search+u.hash);}}catch(e){}})();</script>\n';
+function redirectionLangue(langues) {
+  return '<script>(function(){try{var L=' + JSON.stringify(langues) + ';var u=new URL(location.href);if(u.searchParams.has("lang")||/bot|crawl|spider|slurp|lighthouse|google|bing|yandex|baidu|duckduck|facebookexternalhit|whatsapp|telegram/i.test(navigator.userAgent))return;' +
+    'var l=null;try{l=localStorage.getItem("qp-langue");}catch(e){}if(L.indexOf(l)<0){var n=(navigator.language||"fr").slice(0,2).toLowerCase();l=L.indexOf(n)>=0?n:(L.indexOf("en")>=0?"en":"fr");}' +
+    'if(l!=="fr"){u.searchParams.set("lang",l);location.replace(u.pathname+u.search+u.hash);}}catch(e){}})();</script>\n';
+}
+const nomF = (k, lang, fx) => NOMS[k][lang] || (fx && fx[NOMS[k].fr]) || NOMS[k].en;
 export async function rendrePageSite(env, request, cfg, page, lang, opts) {
   opts = opts || {};
   const g = await gabarit(env, request);
   const vue = pageEnLangue(cfg, page, lang);
-  const ctx = { cfg, lang, g, formulaireMis: false };
+  const langues = languesDe(cfg);
+  const fx = lang === 'fr' || lang === 'en' || lang === 'ru' ? null : await lireFixes(env, lang);
+  const ctx = { cfg, lang, g, fx, formulaireMis: false };
   const article = opts.article ? (vue.articles || []).find(a => a.slug === opts.article && !a.masque) : null;
   if (opts.article && !article) return null;
   const titre = article ? article.titre + ' | qrbc' : (vue.seo && vue.seo.titre) || (vue.titre + ' | qrbc');
   const desc = article ? (article.description || sansMarques(article.texte).slice(0, 155)) : (vue.seo && vue.seo.description) || '';
   const chemin = article ? '/' + page.chemin + '/' + article.slug : '/' + page.chemin;
   const absolue = l => 'https://qrbc.app' + chemin + (l !== 'fr' ? '?lang=' + l : '');
-  const locale = { fr: 'fr_FR', en: 'en_GB', ru: 'ru_RU' }[lang];
-  const ogImage = (article && article.image) ? 'https://qrbc.app' + article.image : 'https://qrbc.app/og-qrbc' + (lang !== 'fr' ? '-' + lang : '') + '.jpg';
+  const locale = { fr: 'fr_FR', en: 'en_GB', ru: 'ru_RU', es: 'es_ES', de: 'de_DE', it: 'it_IT', pt: 'pt_PT', nl: 'nl_NL', uk: 'uk_UA', pl: 'pl_PL', ro: 'ro_RO', tr: 'tr_TR', zh: 'zh_CN', ja: 'ja_JP' }[lang] || lang;
+  const ogImage = (article && article.image) ? 'https://qrbc.app' + article.image : 'https://qrbc.app/og-qrbc' + (lang === 'en' || lang === 'ru' ? '-' + lang : '') + '.jpg';
   let jsonld = page.chemin === '' && !article ? g.jsonld : '';
   if (article) jsonld = '<script type="application/ld+json">' + JSON.stringify({ '@context': 'https://schema.org', '@type': 'BlogPosting', headline: article.titre,
     datePublished: article.date, inLanguage: lang, image: article.image ? 'https://qrbc.app' + article.image : undefined, description: desc || undefined,
@@ -457,12 +469,13 @@ export async function rendrePageSite(env, request, cfg, page, lang, opts) {
   }).join('');
   const entete = g.entete.replace('<div class="marque">', '<a href="' + esc(adresse(cfg.pages.find(p => p.chemin === '') || page, lang)) + '" style="color:inherit;text-decoration:none"><div class="marque">')
     .replace('</small></div>', '</small></div></a>')
-    .replace('<div class="hd-actions">', (menu ? '<nav class="nav-site" aria-label="' + NOMS.menu[lang] + '">' + menu + '</nav>' : '') + '<div class="hd-actions' + (menu ? ' avec-menu' : '') + '">' +
-      (menu ? '<button type="button" class="nav-bouton" aria-label="' + NOMS.menu[lang] + '" aria-expanded="false">☰</button>' : ''));
+    .replace('<div class="hd-actions">', (menu ? '<nav class="nav-site" aria-label="' + nomF('menu', lang, fx) + '">' + menu + '</nav>' : '') + '<div class="hd-actions' + (menu ? ' avec-menu' : '') + '">' +
+      (menu ? '<button type="button" class="nav-bouton" aria-label="' + nomF('menu', lang, fx) + '" aria-expanded="false">☰</button>' : ''));
   // vidéo de la page (articles) : vidéo choisie dans le constructeur, sinon la vidéo de présentation qrbc
   let video = '';
   if (page.type === 'articles' && page.video && page.video.actif && !article) {
-    const src = page.video.src[lang] || page.video.src.fr || '';
+    // vidéo de présentation qrbc : FR / EN / RU seulement (anglaise pour les autres langues)
+    const src = page.video.src[lang] || page.video.src.fr || (lang === 'fr' || lang === 'en' || lang === 'ru' ? '' : '/videos/qrbc-en.mp4?v=3');
     video = g.video.replace('<div class="video-promo"', '<div class="video-promo"' + (src ? ' data-src="' + esc(src) + '"' : ''));
   }
   let corps = contenuPage(cfg, vue, lang, ctx, article);
@@ -472,9 +485,9 @@ export async function rendrePageSite(env, request, cfg, page, lang, opts) {
     if (cc) fin = '<script src="/commun.js"></script><script>(function(){var base=' + JSON.stringify(cc.base) + ';var c=' + cc.cfg.replace(/</g, '\\u003c') +
       ';rendrePage(c,document.getElementById("contact-client"),{resoudre:function(x){return /^(https?:|data:)/.test(x)?x:base+x;},liens:{contact:base,home:base+"accueil.html",blog:base+"blog.html",perso:base+"page.html"}});})();</script>';
   }
-  const alternates = LANGUES_SITE.map(l => '<link rel="alternate" hreflang="' + l + '" href="' + esc(absolue(l)) + '">').join('\n') +
+  const alternates = langues.map(l => '<link rel="alternate" hreflang="' + l + '" href="' + esc(absolue(l)) + '">').join('\n') +
     '\n<link rel="alternate" hreflang="x-default" href="' + esc(absolue('fr')) + '">';
-  const html = '<!DOCTYPE html>\n<html lang="' + lang + '" data-lien-langue data-pretraduit>\n<head>\n<meta charset="utf-8">\n' + (lang === 'fr' && !opts.apercu ? REDIRECTION_LANGUE : '') +
+  const html = '<!DOCTYPE html>\n<html lang="' + lang + '" data-lien-langue data-pretraduit>\n<head>\n<meta charset="utf-8">\n' + (lang === 'fr' && !opts.apercu ? redirectionLangue(langues) : '') +
     '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n<title>' + esc(titre) + '</title>\n' +
     (desc ? '<meta name="description" content="' + esc(desc) + '">\n' : '') +
     '<link rel="canonical" href="' + esc(absolue(lang)) + '">\n<meta property="og:type" content="' + (article ? 'article' : 'website') + '">\n<meta property="og:site_name" content="qrbc">\n' +
@@ -483,14 +496,19 @@ export async function rendrePageSite(env, request, cfg, page, lang, opts) {
     '<link rel="manifest" href="/manifest.webmanifest">\n<meta name="theme-color" content="#1b1a17">\n<link rel="icon" href="/favicon.png">\n<link rel="apple-touch-icon" href="/apple-touch-icon.png">\n' +
     '<meta name="apple-mobile-web-app-capable" content="yes">\n<meta name="apple-mobile-web-app-title" content="qrbc">\n' + jsonld + '\n' + g.style + '\n' + CSS_SITE + '\n</head>\n<body>\n' +
     (opts.apercu ? '<div class="apercu-bandeau">Aperçu — ' + esc(opts.apercu) + '</div>' : '') +
-    '<div class="page">\n  ' + entete + '\n  ' + video + '\n' + corps + '\n  ' + g.pied + '\n</div>\n' + g.scripts + JS_SITE + fin + '\n</body>\n</html>\n';
+    '<div class="page">\n  ' + entete + '\n  ' + video + '\n' + corps + '\n  ' + g.pied + '\n</div>\n' +
+    // langues du sélecteur (i18n.js) et textes fixes d'une langue ajoutée
+    '<script>window.QRBC_LANGUES=' + JSON.stringify(Object.fromEntries(langues.map(l => [l, l.toUpperCase()]))) + (fx ? ';window.QRBC_DICO=' + JSON.stringify(fx).replace(/</g, '\\u003c') : '') + ';</script>\n' + g.scripts + JS_SITE + fin + '\n</body>\n</html>\n';
   return html;
 }
 
 /* Traduction des textes fixes (formulaire, pied de page…) restés en français, avec le dictionnaire de i18n.js */
-function traduireFixes(html, lang, dico) {
+function traduireFixes(html, lang, dico, fx) {
   if (lang === 'fr') return new Response(html, { headers: { 'content-type': 'text/html; charset=utf-8' } });
-  const i = lang === 'en' ? 0 : 1;
+  // EN / RU : dictionnaire de i18n.js ; autre langue : textes fixes traduits à l'ajout de la langue (sinon l'anglais)
+  const base = lang === 'en' || lang === 'ru';
+  const i = lang === 'ru' ? 1 : 0;
+  const trouver = cle => { if (!base && fx && fx[cle]) return fx[cle]; const v = dico.get(cle); return v && v[i]; };
   let tampon = '', dansScript = false, dansCode = 0;
   return new HTMLRewriter()
     .on('script', { element(e) { dansScript = true; e.onEndTag(() => { dansScript = false; }); } })
@@ -499,10 +517,10 @@ function traduireFixes(html, lang, dico) {
       tampon += t.text;
       if (!t.lastInTextNode) { t.remove(); return; }
       const brut = tampon; tampon = '';
-      const cle = brut.trim(), v = !dansScript && !dansCode && cle && dico.get(cle);
-      if (!v || !v[i]) { t.replace(brut, { html: true }); return; }
+      const cle = brut.trim(), v = !dansScript && !dansCode && cle && trouver(cle);
+      if (!v) { t.replace(brut, { html: true }); return; }
       const d = brut.indexOf(cle);
-      t.replace(brut.slice(0, d) + esc(v[i]) + brut.slice(d + cle.length), { html: true });
+      t.replace(brut.slice(0, d) + esc(v) + brut.slice(d + cle.length), { html: true });
     } })
     .transform(new Response(html, { headers: { 'content-type': 'text/html; charset=utf-8', 'content-language': lang } }));
 }
@@ -522,11 +540,11 @@ export async function routeSite(request, env, url, O) {
   if (!page) return null;
   if (segs.length === 2 && page.type !== 'blog') return null;
   const l = url.searchParams.get('lang');
-  const lang = l === 'en' || l === 'ru' ? l : 'fr';
+  const lang = languesDe(cfg).includes(l) ? l : 'fr';
   O.compterVisiteSite(request, env, url, page.chemin === '' ? 'accueil' : page.chemin.slice(0, 30));
   const html = await rendrePageSite(env, request, cfg, page, lang, { article: segs.length === 2 ? segs[1] : '' });
   if (!html) return null;
-  const r = traduireFixes(html, lang, await O.dictionnaire(env, request));
+  const r = traduireFixes(html, lang, await O.dictionnaire(env, request), await lireFixes(env, lang));
   const h = new Headers(r.headers); h.set('cache-control', 'public, max-age=60');
   return new Response(r.body, { status: 200, headers: h });
 }
@@ -550,8 +568,8 @@ export async function adressesSite(env) {
   if (!cfg) return null;
   const out = [];
   for (const p of cfg.pages) {
-    for (const l of LANGUES_SITE) out.push({ loc: adresse(p, l), lastmod: (cfg.maj || '').slice(0, 10) });
-    if (p.type === 'blog') for (const a of p.articles || []) if (!a.masque) for (const l of LANGUES_SITE) out.push({ loc: adresse(p, l, a.slug), lastmod: a.date });
+    for (const l of languesDe(cfg)) out.push({ loc: adresse(p, l), lastmod: (cfg.maj || '').slice(0, 10) });
+    if (p.type === 'blog') for (const a of p.articles || []) if (!a.masque) for (const l of languesDe(cfg)) out.push({ loc: adresse(p, l, a.slug), lastmod: a.date });
   }
   return out;
 }
@@ -560,7 +578,7 @@ export async function adressesSite(env) {
 export async function apiSite(request, env, action, d, O) {
   if (action === 'site' && request.method === 'GET') {
     const brouillon = (await lire(env, 'brouillon')) || await brouillonInitial(env, request, O);
-    return O.json({ cfg: brouillon, publie: !!(await lire(env, 'publie')), actif: await siteActif(env), reserves: [...RESERVES] });
+    return O.json({ cfg: brouillon, publie: !!(await lire(env, 'publie')), actif: await siteActif(env), reserves: [...RESERVES], languesDispo: LANGUES_DISPO });
   }
   if (action === 'site' && request.method === 'POST') {
     const cfg = nettoyerConfig(d.cfg);
@@ -585,11 +603,11 @@ export async function apiSite(request, env, action, d, O) {
   }
   if (action === 'site-apercu' && request.method === 'POST') {
     const cfg = nettoyerConfig(d.cfg);
-    const lang = LANGUES_SITE.includes(d.lang) ? d.lang : 'fr';
+    const lang = languesDe(cfg).includes(d.lang) ? d.lang : 'fr';
     const page = cfg.pages.find(p => p.id === d.page) || cfg.pages[0];
     let html = await rendrePageSite(env, request, cfg, page, lang, { article: d.article || '', apercu: 'non publié, visible par vous seul' });
     if (!html) html = await rendrePageSite(env, request, cfg, page, lang, { apercu: 'article introuvable' });
-    const r = traduireFixes(html, lang, await O.dictionnaire(env, request));
+    const r = traduireFixes(html, lang, await O.dictionnaire(env, request), await lireFixes(env, lang));
     // dans l'aperçu, les liens internes changent la page de l'aperçu (pas de navigation hors du constructeur)
     const pages = cfg.pages.map(p => ({ id: p.id, chemin: p.chemin }));
     const origine = new URL(request.url).origin;
@@ -609,7 +627,7 @@ export async function apiSite(request, env, action, d, O) {
     return O.json({ ok: true, src: '/media/' + nom });
   }
   if (action === 'site-traduire' && request.method === 'POST') {
-    const lang = d.lang === 'en' || d.lang === 'ru' ? d.lang : null;
+    const lang = LANGUES_DISPO[d.lang] ? d.lang : null;
     if (!lang) throw new O.ErreurAPI(400, 'Langue invalide.');
     const page = nettoyerPage(d.page, { ids: new Set(), chemins: new Set(), accueil: d.page && d.page.chemin === '' ? false : true });
     if (d.page && d.page.id) page.id = d.page.id;
@@ -623,7 +641,47 @@ export async function apiSite(request, env, action, d, O) {
     await envoyer();
     return O.json({ ok: true, page: appliquerTextes(page, traduits), source, le: new Date().toISOString() });
   }
+  if (action === 'site-langue' && request.method === 'POST') {       // langue ajoutée : traduire une fois les textes fixes du site
+    const lang = LANGUES_DISPO[d.lang] ? d.lang : null;
+    if (!lang) throw new O.ErreurAPI(400, 'Langue invalide.');
+    if (lang === 'en' || lang === 'ru') return O.json({ ok: true, n: 0 });   // déjà dans le dictionnaire de i18n.js
+    if (!d.refaire && await lireFixes(env, lang)) return O.json({ ok: true, deja: true });
+    const fr = await textesFixes(env, request, O), entree = {};
+    fr.forEach((x, k) => { entree[k] = x; });
+    const sortie = {};
+    let paquet = {}, taille = 0;
+    const envoyer = async () => { if (Object.keys(paquet).length) Object.assign(sortie, await O.traduireTextes(env, paquet, 'fr', lang)); paquet = {}; taille = 0; };
+    for (const k of Object.keys(entree)) { paquet[k] = entree[k]; taille += entree[k].length; if (taille > 6000) await envoyer(); }
+    await envoyer();
+    const fx = {};
+    for (const k of Object.keys(sortie)) fx[entree[k]] = sortie[k];
+    await env.CLIENTS.put(PREFIXE_FIXES + lang, JSON.stringify(fx));
+    CACHE_FIXES.delete(lang);
+    return O.json({ ok: true, n: Object.keys(fx).length });
+  }
   throw new O.ErreurAPI(404, 'Action inconnue.');
+}
+/* Textes fixes du gabarit (en-tête, formulaire, pied, messages de l'inscription) : ceux que i18n.js sait traduire en EN / RU */
+let TEXTES_FIXES = null;
+async function textesFixes(env, request, O) {
+  if (TEXTES_FIXES) return TEXTES_FIXES;
+  const g = await gabarit(env, request);
+  let source = g.entete + g.formulaire + g.pied + g.scripts;
+  try { const u = new URL(request.url); u.pathname = '/inscription.js'; u.search = ''; source += await (await env.ASSETS.fetch(new Request(u.toString()))).text(); } catch (e) {}
+  const dico = await O.dictionnaire(env, request), out = new Set(Object.values(NOMS).map(n => n.fr));
+  for (const cle of dico.keys()) if (cle.length > 1 && source.includes(cle)) out.add(cle);
+  TEXTES_FIXES = [...out];
+  return TEXTES_FIXES;
+}
+const CACHE_FIXES = new Map();
+async function lireFixes(env, lang) {
+  if (!lang || lang === 'fr' || lang === 'en' || lang === 'ru') return null;
+  const c = CACHE_FIXES.get(lang);
+  if (c && c.t > Date.now()) return c.v;
+  let v = null;
+  try { v = JSON.parse(await env.CLIENTS.get(PREFIXE_FIXES + lang) || 'null'); } catch (e) {}
+  CACHE_FIXES.set(lang, { t: Date.now() + 30000, v });
+  return v;
 }
 async function nettoyerMedias(env, texteCfg) {
   const brouillon = (await env.CLIENTS.get(CLES.brouillon)) || '';
