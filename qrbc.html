@@ -286,8 +286,8 @@
     };
     z.textContent = t[l] || t.fr;
   }
-  /* Étape 1 de l'inscription : activité + e-mail, lien envoyé par e-mail (inscription.js) */
-  window.qrbcInscription({
+  /* Étape 1 de l'inscription : activité + e-mail, lien envoyé par e-mail (inscription.js) — seulement si la page a le formulaire */
+  if ($('#inscription')) window.qrbcInscription({
     form: $('#inscription'), activite: $('#activite'), email: $('#email'), cgu: $('#cgu'), bouton: $('#btn'), msg: $('#msg'),
     promoLigne: $('#promo-ligne'), promoLien: $('#promo-lien'), promoChamp: $('#promo'), promoEtat: $('#promo-etat'),
     robot: $('#robot'), attente: $('#attente'), onPromo: majEssai,
@@ -311,6 +311,7 @@
    Fermée avec la × : cachée jusqu'au prochain chargement de la page. */
 (function () {
   var boite = document.getElementById('video-promo'), v = document.getElementById('video-promo-v');
+  if (!boite || !v) return;
   try { localStorage.removeItem('qrbc-video-fermee'); } catch (e) {}   // ancienne fermeture retenue : oubliée
   function langue() {
     var l = (window.langueInterface && window.langueInterface()) || document.documentElement.lang || 'fr';
@@ -322,7 +323,8 @@
     var l = langue();
     if (l === actuelle) return;
     actuelle = l;
-    v.src = '/videos/qrbc-' + l + '.mp4?v=3';
+    // vidéo choisie dans le constructeur du site (data-src, {l} = langue), sinon la vidéo de présentation qrbc
+    v.src = (boite.getAttribute('data-src') || '/videos/qrbc-{l}.mp4?v=3').replace('{l}', l);
     var p = v.play(); if (p && p.catch) p.catch(function () {});
   }
   // au-dessus du bandeau « installer sur iPhone » s'il est affiché

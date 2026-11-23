@@ -25,6 +25,7 @@ const IA_PAR_JOUR = 30;                       // garde-fou anti-abus, par client
 const MODELES_IA = ['claude-sonnet-5-5', 'claude-haiku-5-5'];
 // Le serveur choisit le modèle selon le travail : rédaction soignée → Sonnet, pictogrammes SVG → Haiku (le moins coûteux)
 import { GUIDE } from './guide.js';
+import { routeSite, apiSite, adressesSite } from './site.js';
 const AIDE_PAR_JOUR = 50;             // questions à l'assistant « ❓ Aide » par compte et par jour (gratuites)
 const MODELE_PAR_TYPE = { texte: 'claude-sonnet-5-5', picto: 'claude-haiku-5-5' };
 const DUREE_EXPRESS = 30 * 60 * 1000;
@@ -201,6 +202,10 @@ async function racine(request, env, url) {
     if (err) return json({ disponible: false, raison: err });
     return json({ disponible: !(await env.CLIENTS.get('compte:' + slug)) && !(await env.CLIENTS.get('reserve:' + slug)) });
   }
+  // Site construit dans /constructeur (une fois mis en ligne, il remplace l'accueil historique) et ses médias (/media/…)
+  const rs = await routeSite(request, env, url, outilsSite());
+  if (rs) return rs;
+  if (p === '/constructeur' || p === '/constructeur.html') return statique(env, request, '/constructeur.html', true);
   if (p === '/' || p === '/index.html') { compterVisiteSite(request, env, url, 'accueil'); return accueilLangue(env, request, url); }
   // Générateur de QR code gratuit (attire des visiteurs depuis Google, invite à créer une page)
   if (p === '/generateur-qr-code') { compterVisiteSite(request, env, url, 'generateur-qr'); return pageSiteTraduite(env, request, url, '/outil-qr.html', META_OUTIL, '/generateur-qr-code'); }
@@ -208,7 +213,7 @@ async function racine(request, env, url) {
   // Référencement : robots.txt du site principal, plan du site global (toutes les pages clients actives)
   if (p === '/robots.txt') return texte('User-agent: *\nAllow: /\nDisallow: /gestion\nDisallow: /app/\nDisallow: /api/\n\nSitemap: https://' + DOMAINE + '/sitemap.xml\n');
   if (p === '/sitemap.xml') return planGlobal(env, url.searchParams.has('frais'));
-  if (p === '/sitemap-site.xml') return xml(planSitePrincipal());
+  if (p === '/sitemap-site.xml') return xml(planSitePrincipal(await adressesSite(env)));
   if (p === '/gestion' || p === '/gestion.html') return statique(env, request, '/gestion.html', true);
   // Pages légales : français (seul faisant foi) + traductions anglaise et russe (?lang=en|ru)
   if (p === '/cgv' || p === '/cgv.html' || p === '/mentions-legales' || p === '/mentions-legales.html') {
@@ -1898,6 +1903,8 @@ async function gestion(request, env, action) {
     throw new ErreurAPI(401, 'Accès refusé.');
   }
   const d = request.method === 'POST' ? await corpsJSON(request) : {};
+  // ✏️ Constructeur du site qrbc.app (worker/site.js)
+  if (action === 'site' || action.startsWith('site-')) return apiSite(request, env, action, d, outilsSite());
 
   // 👤 Mon entreprise : coordonnées du vendeur et mot de passe de gestion
   if (action === 'vendeur') {
@@ -4376,11 +4383,44 @@ async function purgerStats(env) {
    Exclues : pages en pause, e-mail non confirmé, jamais enregistrées, ou marquées « noindex ».
    Le résultat est gardé 6 h en KV (cache:plan-global) ; ?frais le recalcule tout de suite. */
 const DUREE_CACHE_PLAN = 6 * 3600;
-function planSitePrincipal() {
+function planSitePrincipal(construit) {
   const jour = new Date().toISOString().slice(0, 10);
-  const adresses = ['/', '/?lang=en', '/?lang=ru', '/generateur-qr-code', '/generateur-qr-code?lang=en', '/generateur-qr-code?lang=ru', '/cgv', '/cgv?lang=en', '/cgv?lang=ru', '/mentions-legales', '/mentions-legales?lang=en', '/mentions-legales?lang=ru'];
+  const fixes = ['/generateur-qr-code', '/generateur-qr-code?lang=en', '/generateur-qr-code?lang=ru', '/cgv', '/cgv?lang=en', '/cgv?lang=ru', '/mentions-legales', '/mentions-legales?lang=en', '/mentions-legales?lang=ru'];
+  // site construit dans /constructeur (pages + articles du blog), sinon l'accueil historique
+  const adresses = (construit || ['/', '/?lang=en', '/?lang=ru'].map(loc => ({ loc, lastmod: jour }))).concat(fixes.map(loc => ({ loc, lastmod: jour })));
   return '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
-    adresses.map(a => '  <url><loc>' + esc('https://' + DOMAINE + a) + '</loc><lastmod>' + jour + '</lastmod></url>\n').join('') + '</urlset>\n';
+    adresses.map(a => '  <url><loc>' + esc('https://' + DOMAINE + a.loc) + '</loc><lastmod>' + (a.lastmod || jour) + '</lastmod></url>\n').join('') + '</urlset>\n';
+}
+/* Outils transmis au module du site principal (worker/site.js) */
+function outilsSite() { return { json, ErreurAPI, dictionnaire, compterVisiteSite, traduireTextes }; }
+/* Traduction d'un ensemble de textes { clé: texte } du site principal (constructeur) */
+async function traduireTextes(env, textes, de, vers) {
+  const cleIA = await cleAnthropic(env);
+  if (!cleIA) throw new ErreurAPI(400, 'Clé IA absente : réglez-la dans /gestion → Réglages.');
+  const r = await fetch(env.ANTHROPIC_URL || 'https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-api-key': cleIA, 'anthropic-version': '2023-06-01' },
+    body: JSON.stringify({
+      model: MODELE_PAR_TYPE.texte, max_tokens: 16000,
+      system: 'You translate the texts of the qrbc.app marketing website (a low-cost builder of mobile websites, QR codes and business cards for small businesses) from ' +
+        (NOMS_LANGUES[de] || de) + ' to ' + (NOMS_LANGUES[vers] || vers) + '. Translate naturally and persuasively for local small-business owners, keeping the meaning, tone and approximate length. ' +
+        'Keep brand names (qrbc, QR Business Card, Google, WhatsApp…), prices and numbers unchanged. Keep emojis and line breaks. ' +
+        'Texts may contain links written as [words](target): translate only the words inside the square brackets and copy the (target) part exactly. ' +
+        'Words between single asterisks (*like this*) are highlighted: keep the asterisks around the translated words. ' +
+        'Output ONLY a JSON object with exactly the same keys as the input and the translated strings as values.',
+      messages: [{ role: 'user', content: JSON.stringify(textes, null, 1) }]
+    })
+  });
+  const txt = await r.text();
+  if (!r.ok) { console.error('traduction site', r.status, txt.slice(0, 300)); throw new ErreurAPI(502, 'La traduction a échoué. Réessayez dans un instant.'); }
+  try {
+    const j = JSON.parse(txt);
+    const brut = (j.content || []).filter(c => c.type === 'text').map(c => c.text).join('');
+    const sortie = JSON.parse(brut.slice(brut.indexOf('{'), brut.lastIndexOf('}') + 1));
+    const out = {};
+    for (const k of Object.keys(textes)) if (typeof sortie[k] === 'string' && sortie[k].trim()) out[k] = sortie[k].slice(0, 20000);
+    return out;
+  } catch (e) { throw new ErreurAPI(502, 'La traduction a échoué. Réessayez dans un instant.'); }
 }
 async function planGlobal(env, frais) {
   if (!frais) {

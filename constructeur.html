@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Constructeur du site qrbc.app</title>
+<link rel="icon" href="/favicon.png">
+<style>
+  :root{--bg:#f6f4ef;--panneau:#fff;--ligne:#e3dfd6;--txt:#1b1a17;--doux:#6a665d;--prim:#1b1a17;--prim-txt:#f6f4ef;--accent:#d9572b;--ok:#1a7f37;--err:#cf222e}
+  *{box-sizing:border-box}
+  [hidden],.cache{display:none !important}
+  html,body{margin:0;height:100%}
+  body{font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--txt)}
+  button,input,select,textarea{font:inherit;color:inherit}
+  .btn{padding:9px 14px;border:1px solid var(--ligne);border-radius:10px;background:var(--panneau);cursor:pointer;font-weight:600;white-space:nowrap}
+  .btn:disabled{opacity:.45;cursor:default}
+  .btn-prim{background:var(--prim);color:var(--prim-txt);border-color:var(--prim)}
+  .btn-accent{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .btn-mini{padding:5px 9px;font-size:.85rem;border-radius:8px}
+  .btn-danger{color:var(--err)}
+  input[type=text],input[type=url],input[type=date],input[type=password],select,textarea{width:100%;padding:9px 10px;border:1px solid var(--ligne);border-radius:9px;background:var(--bg);outline:none}
+  textarea{resize:vertical;min-height:70px}
+  input:focus,textarea:focus,select:focus{border-color:var(--accent)}
+  label.champ{display:block;margin:0 0 12px}
+  label.champ>span,.etiq{display:block;font-size:.78rem;font-weight:700;color:var(--doux);margin:0 0 4px;text-transform:uppercase;letter-spacing:.03em}
+  .aide{font-size:.8rem;color:var(--doux);margin:-6px 0 12px}
+  .case{display:flex;gap:8px;align-items:center;margin:0 0 12px;font-weight:600}
+  /* connexion */
+  #connexion{max-width:380px;margin:12vh auto;padding:26px;background:var(--panneau);border:1px solid var(--ligne);border-radius:18px}
+  #connexion h1{margin:0 0 6px;font-size:1.3rem}
+  .msg{font-size:.9rem;margin-top:10px;min-height:1.2em}
+  .msg.err{color:var(--err)} .msg.ok{color:var(--ok)}
+  /* éditeur */
+  #editeur{display:flex;flex-direction:column;height:100%}
+  .barre{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 14px;background:var(--panneau);border-bottom:1px solid var(--ligne)}
+  .barre .marque{font-weight:800;font-size:1.05rem;margin-right:6px}
+  .barre .marque span{color:var(--accent)}
+  .barre .esp{flex:1}
+  .langues{display:inline-flex;border:1px solid var(--ligne);border-radius:10px;overflow:hidden}
+  .langues button{border:0;background:none;padding:7px 12px;font-weight:700;cursor:pointer}
+  .langues button.actif{background:var(--prim);color:var(--prim-txt)}
+  #etat{font-size:.85rem;color:var(--doux)}
+  #etat.modif{color:var(--accent);font-weight:700}
+  .corps{flex:1;display:flex;min-height:0}
+  .col-gauche{width:470px;max-width:100%;overflow-y:auto;padding:14px;border-right:1px solid var(--ligne)}
+  .col-droite{flex:1;display:flex;flex-direction:column;min-width:0;background:#e9e6df}
+  .apercu-barre{display:flex;gap:8px;align-items:center;padding:8px 12px;font-size:.85rem;color:var(--doux)}
+  .apercu-cadre{flex:1;display:flex;justify-content:center;padding:0 12px 12px;min-height:0}
+  #apercu{width:100%;height:100%;border:0;border-radius:12px;background:#fff;box-shadow:0 4px 18px rgba(0,0,0,.12);transition:width .2s}
+  .apercu-cadre.mobile #apercu{width:390px}
+  .onglets-mobile{display:none}
+  @media (max-width:999px){
+    .col-droite{display:none}
+    .col-gauche{width:100%;border-right:0}
+    .onglets-mobile{display:inline-flex}
+    body.vue-apercu .col-gauche{display:none}
+    body.vue-apercu .col-droite{display:flex}
+  }
+  .carte{background:var(--panneau);border:1px solid var(--ligne);border-radius:14px;padding:14px;margin:0 0 14px}
+  .carte h2{font-size:1rem;margin:0 0 10px}
+  .liste-pages{display:flex;flex-direction:column;gap:6px}
+  .lp{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--ligne);border-radius:10px;background:var(--bg);cursor:pointer}
+  .lp.actif{border-color:var(--accent);background:#fff4ef}
+  .lp .ico{width:22px;text-align:center}
+  .lp .nom{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+  .lp .chemin{color:var(--doux);font-size:.8rem}
+  .lp .btn-mini{padding:3px 7px}
+  .menu-ajout{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+  .menu-ajout button{text-align:left;padding:10px;border:1px solid var(--ligne);border-radius:10px;background:var(--panneau);cursor:pointer}
+  .menu-ajout b{display:block}
+  .menu-ajout small{color:var(--doux)}
+  .nav-cartes{display:flex;align-items:center;justify-content:center;gap:12px;margin:8px 0}
+  .bloc{border:1px solid var(--ligne);border-radius:12px;padding:12px;margin:0 0 12px;background:var(--bg)}
+  .bloc.masque{opacity:.6}
+  .bloc-tete{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+  .bloc-tete b{flex:1}
+  .actions{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+  .actions .esp{flex:1}
+  .item{border:1px dashed var(--ligne);border-radius:10px;padding:8px;margin:0 0 8px;background:var(--panneau)}
+  .item .actions{margin-top:4px}
+  .lien-choix{display:flex;gap:6px}
+  .lien-choix select{flex:0 0 46%}
+  .vign{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px}
+  .vign .ph{border:1px solid var(--ligne);border-radius:10px;overflow:hidden;background:var(--panneau);font-size:.8rem}
+  .vign img{width:100%;aspect-ratio:1;object-fit:cover;display:block}
+  .vign .ph>div{padding:6px;display:flex;flex-direction:column;gap:4px}
+  .vign input,.vign select{padding:5px 6px;font-size:.8rem}
+  .img-champ{display:flex;gap:10px;align-items:center;margin:0 0 12px;flex-wrap:wrap}
+  .img-champ img{width:96px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--ligne);background:#fff}
+  .outil-lien{position:relative;margin:-6px 0 12px}
+  .menu-lien{margin-top:6px;padding:10px;border:1px solid var(--ligne);border-radius:10px;background:var(--panneau);display:flex;flex-direction:column;gap:6px}
+  .menu-lien .pages{display:flex;flex-wrap:wrap;gap:6px}
+  .trad-ligne{margin:0 0 12px}
+  .trad-ligne .fr{font-size:.8rem;color:var(--doux);margin:0 0 4px;white-space:pre-wrap}
+  .badge{display:inline-block;padding:2px 8px;border-radius:99px;font-size:.78rem;font-weight:700;background:var(--bg);border:1px solid var(--ligne)}
+  .badge.ok{color:var(--ok)} .badge.ko{color:var(--accent)}
+  #toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--prim);color:var(--prim-txt);padding:10px 16px;border-radius:12px;font-weight:600;z-index:99;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+</style>
+</head>
+<body>
+<div id="connexion">
+  <h1>Constructeur du site</h1>
+  <p class="aide" style="margin:0 0 14px">qrbc.app — même mot de passe que /gestion.</p>
+  <form id="f-cnx">
+    <label class="champ"><span>Mot de passe de gestion</span><input type="password" id="jeton" autocomplete="current-password" required></label>
+    <button class="btn btn-prim" style="width:100%">Entrer</button>
+    <div class="msg" id="msg-cnx"></div>
+  </form>
+</div>
+
+<div id="editeur" hidden>
+  <div class="barre">
+    <div class="marque">qrbc<span>.</span> constructeur</div>
+    <div class="langues" id="langues" title="Langue modifiée">
+      <button type="button" data-l="fr" class="actif">FR</button><button type="button" data-l="en">EN</button><button type="button" data-l="ru">RU</button>
+    </div>
+    <div class="langues onglets-mobile" id="onglets"><button type="button" data-v="modif" class="actif">Modifier</button><button type="button" data-v="apercu">Aperçu</button></div>
+    <span class="esp"></span>
+    <span id="etat">Brouillon enregistré</span>
+    <button type="button" class="btn" id="btn-enr">Enregistrer</button>
+    <button type="button" class="btn btn-accent" id="btn-pub">Publier</button>
+    <a class="btn" href="/" target="_blank" rel="noopener" id="lien-site">↗ Site</a>
+    <a class="btn" href="/gestion">Gestion</a>
+  </div>
+  <div class="corps">
+    <div class="col-gauche" id="gauche"></div>
+    <div class="col-droite">
+      <div class="apercu-barre">
+        <b>Aperçu</b><span id="apercu-page"></span><span class="esp" style="flex:1"></span>
+        <button type="button" class="btn btn-mini" id="taille-apercu">📱 Téléphone</button>
+      </div>
+      <div class="apercu-cadre" id="cadre"><iframe id="apercu" title="Aperçu"></iframe></div>
+    </div>
+  </div>
+</div>
+<div id="toast" hidden></div>
+
+<script>
+(function () {
+  'use strict';
+  var $ = function (s) { return document.querySelector(s); };
+  function el(tag, attrs, enfants) {
+    var e = document.createElement(tag);
+    if (attrs) Object.keys(attrs).forEach(function (k) {
+      var v = attrs[k];
+      if (v === null || v === undefined || v === false) return;
+      if (k === 'text') e.textContent = v;
+      else if (k === 'html') e.innerHTML = v;
+      else if (k.slice(0, 2) === 'on') e.addEventListener(k.slice(2), v);
+      else if (k === 'value') e.value = v;
+      else if (k === 'checked') e.checked = !!v;
+      else e.setAttribute(k, v === true ? '' : v);
+    });
+    (enfants || []).forEach(function (c) { if (c === null || c === undefined || c === false) return; e.appendChild(typeof c === 'string' ? document.createTextNode(c) : c); });
+    return e;
+  }
+  var jeton = '';
+  try { jeton = sessionStorage.getItem('qrbc-gestion') || ''; } catch (e) {}
+  var cfg = null, actif = false, dejaPublie = false, reserves = [];
+  var pageSel = null, langue = 'fr', modifie = false, articleApercu = '';
+  var carteSel = {};                       // section / article affiché par page (carrousel)
+
+  function toast(t) { var z = $('#toast'); z.textContent = t; z.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(function () { z.hidden = true; }, 2600); }
+  async function api(action, corps, methode) {
+    var r = await fetch('/api/gestion/' + action, { method: methode || (corps ? 'POST' : 'GET'), headers: Object.assign({ authorization: 'Bearer ' + jeton }, corps ? { 'content-type': 'application/json' } : {}), body: corps ? JSON.stringify(corps) : undefined });
+    var j = null; try { j = await r.json(); } catch (e) {}
+    if (r.status === 401) { deconnecter(); throw new Error('Mot de passe refusé.'); }
+    if (!r.ok) throw new Error((j && j.erreur) || ('Erreur ' + r.status));
+    return j;
+  }
+  function deconnecter() { try { sessionStorage.removeItem('qrbc-gestion'); } catch (e) {} $('#editeur').hidden = true; $('#connexion').hidden = false; }
+
+  /* ---------- Textes à traduire (même calcul que worker/site.js) ---------- */
+  var CLES_TEXTE = { titre: 1, texte: 1, note: 1, legende: 1, alt: 1, intro: 1, description: 1, nomMenu: 1 };
+  var CLES_IGNOREES = { id: 1, type: 1, genre: 1, chemin: 1, src: 1, mini: 1, image: 1, lien: 1, slug: 1, date: 1, source: 1, position: 1, masque: 1, menu: 1, avecInscription: 1, actif: 1, fichiers: 1, l: 1, h: 1 };
+  function textesPage(page) {
+    var out = {};
+    (function parcourir(o, ch) {
+      if (Array.isArray(o)) { o.forEach(function (x, i) { parcourir(x, ch + i + '.'); }); return; }
+      if (!o || typeof o !== 'object') return;
+      Object.keys(o).forEach(function (k) {
+        var v = o[k];
+        if (CLES_IGNOREES[k]) return;
+        if (typeof v === 'string') { if (CLES_TEXTE[k] && v.trim()) out[ch + k] = v; }
+        else parcourir(v, ch + k + '.');
+      });
+    })(page, '');
+    return out;
+  }
+  function empreinte(s) { var h = 2166136261; for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); }
+  function lireChemin(o, cle) { return cle.split('.').reduce(function (a, k) { return a == null ? a : a[/^\d+$/.test(k) ? Number(k) : k]; }, o); }
+  function ecrireChemin(o, cle, v) { var p = cle.split('.'); for (var i = 0; i < p.length - 1; i++) { var k = /^\d+$/.test(p[i]) ? Number(p[i]) : p[i]; if (o[k] == null) o[k] = /^\d+$/.test(p[i + 1]) ? [] : {}; o = o[k]; } o[p[p.length - 1]] = v; }
+
+  /* ---------- Connexion ---------- */
+  $('#f-cnx').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    jeton = $('#jeton').value.trim();
+    try { await charger(); try { sessionStorage.setItem('qrbc-gestion', jeton); } catch (x) {} }
+    catch (er) { $('#msg-cnx').className = 'msg err'; $('#msg-cnx').textContent = er.message; }
+  });
+  async function charger() {
+    var j = await api('site');
+    cfg = j.cfg; actif = j.actif; dejaPublie = j.publie; reserves = j.reserves || [];
+    $('#connexion').hidden = true; $('#editeur').hidden = false;
+    pageSel = cfg.pages[0].id;
+    majBoutons(); dessiner(); apercu();
+  }
+  if (jeton) charger().catch(function () { $('#connexion').hidden = false; });
+
+  function changement(sansRedessiner) {
+    modifie = true; majBoutons();
+    if (!sansRedessiner) dessiner();
+    clearTimeout(changement.t); changement.t = setTimeout(apercu, 700);
+  }
+  function majBoutons() {
+    var e = $('#etat');
+    e.className = modifie ? 'modif' : '';
+    e.textContent = modifie ? 'Modifications non enregistrées' : (actif ? 'En ligne' : 'Brouillon (pas encore en ligne)');
+    $('#btn-pub').textContent = actif ? 'Publier' : 'Mettre en ligne';
+  }
+  window.addEventListener('beforeunload', function (e) { if (modifie) { e.preventDefault(); e.returnValue = ''; } });
+  async function enregistrer() {
+    var j = await api('site', { cfg: cfg });
+    cfg = j.cfg; modifie = false; majBoutons(); dessiner();
+  }
+  $('#btn-enr').addEventListener('click', async function () {
+    var b = this; b.disabled = true;
+    try { await enregistrer(); toast('Brouillon enregistré'); } catch (e) { alert(e.message); }
+    b.disabled = false;
+  });
+  $('#btn-pub').addEventListener('click', async function () {
+    if (!actif && !confirm('Le site construit va remplacer l’accueil actuel de qrbc.app (les adresses /cgv, /generateur-qr-code, /app… ne changent pas). Mettre en ligne ?')) return;
+    var b = this; b.disabled = true;
+    try { var j = await api('site-publier', { cfg: cfg }); cfg = j.cfg; actif = true; modifie = false; majBoutons(); dessiner(); toast('Site publié sur qrbc.app'); }
+    catch (e) { alert(e.message); }
+    b.disabled = false;
+  });
+
+  /* ---------- Langue modifiée / onglets mobile / taille de l'aperçu ---------- */
+  $('#langues').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    langue = b.dataset.l;
+    [].forEach.call(this.children, function (x) { x.classList.toggle('actif', x === b); });
+    dessiner(); apercu();
+  });
+  $('#onglets').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    [].forEach.call(this.children, function (x) { x.classList.toggle('actif', x === b); });
+    document.body.classList.toggle('vue-apercu', b.dataset.v === 'apercu');
+    if (b.dataset.v === 'apercu') apercu();
+  });
+  $('#taille-apercu').addEventListener('click', function () {
+    var c = $('#cadre'); c.classList.toggle('mobile');
+    this.textContent = c.classList.contains('mobile') ? '🖥 Ordinateur' : '📱 Téléphone';
+  });
+
+  /* ---------- Aperçu ---------- */
+  var numApercu = 0;
+  async function apercu() {
+    if (!cfg) return;
+    var n = ++numApercu;
+    var p = page();
+    $('#apercu-page').textContent = ' · ' + (p.chemin ? '/' + p.chemin : '/') + (articleApercu ? '/' + articleApercu : '') + (langue !== 'fr' ? ' (' + langue.toUpperCase() + ')' : '');
+    try {
+      var j = await api('site-apercu', { cfg: cfg, page: p.id, lang: langue, article: articleApercu });
+      if (n === numApercu) $('#apercu').srcdoc = j.html;
+    } catch (e) { if (n === numApercu) $('#apercu').srcdoc = '<p style="font:15px system-ui;padding:20px;color:#cf222e">' + e.message + '</p>'; }
+  }
+  window.addEventListener('message', function (e) {
+    var d = e.data; if (!d || !d.qrbcApercu) return;
+    if (d.externe) { window.open(d.externe, '_blank', 'noopener'); return; }
+    if (d.page) { pageSel = d.page; articleApercu = d.article || ''; dessiner(); apercu(); }
+  });
+
+  /* ---------- Outils ---------- */
+  function page() { return cfg.pages.find(function (p) { return p.id === pageSel; }) || cfg.pages[0]; }
+  function idNeuf() { return Math.random().toString(36).slice(2, 8); }
+  var ICONES = { articles: '📝', galerie: '📷', blog: '📰', contact: '✉️' };
+  var NOMS_TYPES = { articles: 'Articles', galerie: 'Galerie', blog: 'Blog', contact: 'Contact' };
+  function champ(lib, obj, cle, opts) {
+    opts = opts || {};
+    var inp = opts.multi ? el('textarea', { rows: opts.rows || 4, placeholder: opts.ph || '' }) : el('input', { type: 'text', placeholder: opts.ph || '' });
+    inp.value = obj[cle] || '';
+    inp.addEventListener('input', function () { obj[cle] = inp.value; changement(true); });
+    var l = el('label', { class: 'champ' }, [el('span', { text: lib }), inp]);
+    if (!opts.liens) return l;
+    return el('div', {}, [l, outilLien(inp)]);
+  }
+  function caseACocher(lib, obj, cle, inverse, apres) {
+    var c = el('input', { type: 'checkbox' });
+    c.checked = inverse ? !obj[cle] : !!obj[cle];
+    c.addEventListener('change', function () { obj[cle] = inverse ? !c.checked : c.checked; changement(!apres); if (apres) apres(); });
+    return el('label', { class: 'case' }, [c, lib]);
+  }
+  // cibles de lien : formulaire, pages, articles du blog, pages fixes de qrbc.app, adresse externe
+  function ciblesLien() {
+    var o = [['#inscription', 'Formulaire d’inscription']];
+    cfg.pages.forEach(function (p) { o.push(['page:' + p.id, ICONES[p.type] + ' ' + (p.nomMenu || p.titre)]); });
+    cfg.pages.forEach(function (p) { if (p.type === 'blog') (p.articles || []).forEach(function (a) { o.push(['article:' + a.id, '📰 ' + (a.titre || 'Article')]); }); });
+    o.push(['/generateur-qr-code', 'Générateur de QR code'], ['/app', 'Appli (connexion)'], ['/cgv', 'CGV']);
+    return o;
+  }
+  function choixLien(obj, cle) {
+    var cibles = ciblesLien(), v = obj[cle] || '';
+    var connue = cibles.some(function (c) { return c[0] === v; });
+    var sel = el('select', {}, [el('option', { value: '', text: '— aucun —' })].concat(cibles.map(function (c) { return el('option', { value: c[0], text: c[1] }); }), [el('option', { value: '*', text: 'Adresse externe…' })]));
+    var ext = el('input', { type: 'text', placeholder: 'https://…', value: connue ? '' : v });
+    sel.value = connue ? v : (v ? '*' : '');
+    ext.hidden = sel.value !== '*';
+    sel.addEventListener('change', function () { ext.hidden = sel.value !== '*'; obj[cle] = sel.value === '*' ? ext.value.trim() : sel.value; changement(true); });
+    ext.addEventListener('input', function () { var x = ext.value.trim(); if (x && !/^(https?:|mailto:|tel:|\/|#)/i.test(x)) x = 'https://' + x; obj[cle] = x; changement(true); });
+    return el('div', { class: 'lien-choix' }, [sel, ext]);
+  }
+  // 🔗 Lien : la sélection d'un texte devient [mots](cible)
+  function outilLien(champ) {
+    var menu = el('div', { class: 'menu-lien', hidden: true });
+    var b = el('button', { type: 'button', class: 'btn btn-mini', text: '🔗 Lien' });
+    b.addEventListener('mousedown', function (e) { e.preventDefault(); });
+    b.addEventListener('click', function () {
+      if (!menu.hidden) { menu.hidden = true; return; }
+      var a = champ.selectionStart, z = champ.selectionEnd, mots = champ.value.slice(a, z);
+      menu.innerHTML = '';
+      if (!mots.trim() || /[\n\[\]]/.test(mots)) { menu.append(el('span', { text: 'Sélectionnez d’abord quelques mots (sur une ligne).' })); menu.hidden = false; return; }
+      var appliquer = function (c) {
+        if (!c) return;
+        var t = mots.trim(), d = a + (mots.length - mots.trimStart().length), f = z - (mots.length - mots.trimEnd().length);
+        champ.value = champ.value.slice(0, d) + '[' + t + '](' + c + ')' + champ.value.slice(f);
+        champ.dispatchEvent(new Event('input')); menu.hidden = true; champ.focus();
+      };
+      var pages = el('div', { class: 'pages' });
+      ciblesLien().forEach(function (c) { pages.append(el('button', { type: 'button', class: 'btn btn-mini', text: c[1], onclick: function () { appliquer(c[0]); } })); });
+      var ext = el('input', { type: 'text', placeholder: 'https://… , e-mail ou téléphone' });
+      var ok = el('button', { type: 'button', class: 'btn btn-mini', text: 'OK', onclick: function () {
+        var v = ext.value.trim(); if (!v) return;
+        if (/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(v)) v = 'mailto:' + v;
+        else if (/^\+?[\d\s().-]{6,}$/.test(v)) v = 'tel:' + v.replace(/[^\d+]/g, '');
+        else if (!/^(https?:|mailto:|tel:|\/)/i.test(v)) v = 'https://' + v;
+        appliquer(v.replace(/[\s)]/g, ''));
+      } });
+      menu.append(el('b', { text: '« ' + mots.trim().slice(0, 40) + ' » →' }), pages, el('div', { class: 'lien-choix' }, [ext, ok]));
+      menu.hidden = false;
+    });
+    return el('div', { class: 'outil-lien' }, [b, el('span', { class: 'aide', style: 'margin:0 0 0 8px', text: '*mots* = en couleur' }), menu]);
+  }
+  // image : réduite dans le navigateur (JPEG), envoyée tout de suite (médias du site)
+  function reduire(fichier, max, qualite) {
+    return new Promise(function (ok, ko) {
+      var url = URL.createObjectURL(fichier), im = new Image();
+      im.onload = function () {
+        var k = Math.min(1, max / Math.max(im.naturalWidth, im.naturalHeight));
+        var c = document.createElement('canvas'); c.width = Math.round(im.naturalWidth * k); c.height = Math.round(im.naturalHeight * k);
+        c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url);
+        c.toBlob(function (b) { b ? ok({ blob: b, l: c.width, h: c.height }) : ko(new Error('Image illisible.')); }, 'image/jpeg', qualite || 0.82);
+      };
+      im.onerror = function () { URL.revokeObjectURL(url); ko(new Error('Image illisible.')); };
+      im.src = url;
+    });
+  }
+  async function envoyerMedia(blob, type) {
+    var r = await fetch('/api/gestion/site-media', { method: 'PUT', headers: { authorization: 'Bearer ' + jeton, 'content-type': type || blob.type }, body: blob });
+    var j = null; try { j = await r.json(); } catch (e) {}
+    if (!r.ok) throw new Error((j && j.erreur) || 'Envoi impossible.');
+    return j.src;
+  }
+  async function envoyerImage(f, max, maxMini) {
+    var g = await reduire(f, max || 1600, 0.82);
+    var src = await envoyerMedia(g.blob, 'image/jpeg'), mini = '';
+    if (maxMini) { var m = await reduire(f, maxMini, 0.75); mini = await envoyerMedia(m.blob, 'image/jpeg'); }
+    return { src: src, mini: mini, l: g.l, h: g.h };
+  }
+  function champImage(lib, obj, cle, opts) {
+    opts = opts || {};
+    var z = el('div', { class: 'img-champ' });
+    var f = el('input', { type: 'file', accept: 'image/*', hidden: true });
+    function maj() {
+      z.innerHTML = '';
+      if (obj[cle]) z.append(el('img', { src: obj[cle], alt: '' }));
+      z.append(el('button', { type: 'button', class: 'btn btn-mini', text: obj[cle] ? 'Changer' : '＋ Image', onclick: function () { f.click(); } }));
+      if (obj[cle]) z.append(el('button', { type: 'button', class: 'btn btn-mini btn-danger', text: 'Retirer', onclick: function () { obj[cle] = ''; if (opts.mini) obj[opts.mini] = ''; maj(); changement(true); } }));
+      z.append(f);
+    }
+    f.addEventListener('change', async function () {
+      var x = f.files[0]; f.value = ''; if (!x) return;
+      z.append(el('span', { class: 'aide', style: 'margin:0', text: 'Envoi…' }));
+      try { var r = await envoyerImage(x, opts.max || 1600, opts.mini ? (opts.maxMini || 640) : 0); obj[cle] = r.src; if (opts.mini) obj[opts.mini] = r.mini; maj(); changement(true); }
+      catch (e) { alert(e.message); maj(); }
+    });
+    maj();
+    return el('div', {}, [el('span', { class: 'etiq', text: lib }), z]);
+  }
+  // liste d'éléments (étapes, cartes, questions…)
+  function editeurItems(s, libTitre, libTexte, avecTexte) {
+    var z = el('div');
+    function maj() {
+      z.innerHTML = '';
+      s.items.forEach(function (it, i) {
+        z.append(el('div', { class: 'item' }, [
+          champ(libTitre, it, 'titre', { liens: false }),
+          avecTexte ? champ(libTexte, it, 'texte', { multi: true, rows: 3, liens: true }) : null,
+          el('div', { class: 'actions' }, [
+            el('button', { type: 'button', class: 'btn btn-mini', text: '↑', disabled: i === 0, onclick: function () { s.items.splice(i - 1, 0, s.items.splice(i, 1)[0]); maj(); changement(true); } }),
+            el('button', { type: 'button', class: 'btn btn-mini', text: '↓', disabled: i === s.items.length - 1, onclick: function () { s.items.splice(i + 1, 0, s.items.splice(i, 1)[0]); maj(); changement(true); } }),
+            el('span', { class: 'esp' }),
+            el('button', { type: 'button', class: 'btn btn-mini btn-danger', text: '✕', onclick: function () { s.items.splice(i, 1); maj(); changement(true); } })])
+        ]));
+      });
+      z.append(el('button', { type: 'button', class: 'btn btn-mini', text: '＋ Ajouter', onclick: function () { s.items.push({ titre: '', texte: '' }); maj(); changement(true); } }));
+    }
+    maj();
+    return el('div', {}, [el('span', { class: 'etiq', text: 'Éléments' }), z]);
+  }
+  function editeurBouton(s, lib) {
+    s.bouton = s.bouton || { texte: '', lien: '' };
+    return el('div', { class: 'item' }, [el('span', { class: 'etiq', text: lib || 'Bouton (facultatif)' }), champ('Texte du bouton', s.bouton, 'texte'), el('span', { class: 'etiq', text: 'Il ouvre' }), choixLien(s.bouton, 'lien')]);
+  }
+
+  /* ---------- Dessin de la colonne de gauche ---------- */
+  function dessiner() {
+    var g = $('#gauche'), haut = g.scrollTop;
+    g.innerHTML = '';
+    g.append(cartePages());
+    var p = page();
+    if (langue === 'fr') g.append(carteReglagesPage(p), editeurPage(p));
+    else g.append(carteTraduction(p));
+    g.scrollTop = haut;
+    $('#lien-site').href = '/' + (p.chemin || '') + (langue !== 'fr' ? '?lang=' + langue : '');
+  }
+  function cartePages() {
+    var liste = el('div', { class: 'liste-pages' });
+    cfg.pages.forEach(function (p, i) {
+      var accueil = p.chemin === '';
+      var trad = langue !== 'fr' ? etatTraduction(p) : null;
+      liste.append(el('div', { class: 'lp' + (p.id === pageSel ? ' actif' : ''), onclick: function (e) { if (e.target.closest('button')) return; pageSel = p.id; articleApercu = ''; dessiner(); apercu(); } }, [
+        el('span', { class: 'ico', text: ICONES[p.type] }),
+        el('span', { class: 'nom', text: p.titre }),
+        el('span', { class: 'chemin', text: '/' + p.chemin + (p.menu === false ? ' · hors menu' : '') }),
+        trad ? el('span', { class: 'badge ' + (trad.ok ? 'ok' : 'ko'), text: trad.texte }) : null,
+        el('button', { type: 'button', class: 'btn btn-mini', text: '↑', title: 'Monter (ordre du menu)', disabled: i === 0, onclick: function () { cfg.pages.splice(i - 1, 0, cfg.pages.splice(i, 1)[0]); changement(); } }),
+        el('button', { type: 'button', class: 'btn btn-mini', text: '↓', title: 'Descendre', disabled: i === cfg.pages.length - 1, onclick: function () { cfg.pages.splice(i + 1, 0, cfg.pages.splice(i, 1)[0]); changement(); } }),
+        accueil ? null : el('button', { type: 'button', class: 'btn btn-mini btn-danger', text: '🗑', title: 'Supprimer la page', onclick: function () {
+          if (!confirm('Supprimer la page « ' + p.titre + ' » ?')) return;
+          cfg.pages.splice(i, 1); if (pageSel === p.id) pageSel = cfg.pages[0].id; changement(); apercu();
+        } })
+      ]));
+    });
+    var menu = el('div', { class: 'menu-ajout', hidden: true }, [
+      ['articles', 'Articles', 'Sections qui défilent, vidéo'], ['galerie', 'Galerie', 'Photos avec lien'], ['blog', 'Blog', 'Articles avec une adresse chacun'], ['contact', 'Contact', 'Page contact d’un de vos sites']
+    ].map(function (t) {
+      return el('button', { type: 'button', onclick: function () { ajouterPage(t[0]); } }, [el('b', { text: ICONES[t[0]] + ' ' + t[1] }), el('small', { text: t[2] })]);
+    }));
+    return el('div', { class: 'carte' }, [el('h2', { text: 'Pages du site' }), liste,
+      langue === 'fr' ? el('button', { type: 'button', class: 'btn', style: 'margin-top:10px;width:100%', text: '＋ Ajouter une page', onclick: function () { menu.hidden = !menu.hidden; } }) : null,
+      menu]);
+  }
+  function ajouterPage(type) {
+    var nom = { articles: 'Nouvelle page', galerie: 'Galerie', blog: 'Blog', contact: 'Contact' }[type];
+    var p = { id: idNeuf(), type: type, titre: nom, nomMenu: '', chemin: '', menu: true, seo: { titre: '', description: '' } };
+    var base = nom.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''), c = base, n = 2;
+    while (cfg.pages.some(function (x) { return x.chemin === c; }) || reserves.indexOf(c) >= 0) c = base + '-' + (n++);
+    p.chemin = c;
+    if (type === 'articles') { p.video = { actif: false, src: {} }; p.sections = [{ id: idNeuf(), genre: 'texte', titre: 'Titre de la section', texte: '', bouton: { texte: '', lien: '' }, items: [], encart: {} }]; }
+    if (type === 'galerie') { p.intro = ''; p.photos = []; }
+    if (type === 'blog') { p.intro = ''; p.articles = []; }
+    if (type === 'contact') { p.source = 'qrbc01'; p.intro = ''; }
+    cfg.pages.push(p); pageSel = p.id; articleApercu = '';
+    changement(); apercu();
+  }
+  function carteReglagesPage(p) {
+    var accueil = p.chemin === '';
+    var chemin = el('input', { type: 'text', value: p.chemin, disabled: accueil, placeholder: 'adresse' });
+    chemin.addEventListener('change', function () {
+      var c = chemin.value.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      if (!c || reserves.indexOf(c) >= 0 || cfg.pages.some(function (x) { return x !== p && x.chemin === c; })) { alert('Adresse vide, déjà prise ou réservée.'); chemin.value = p.chemin; return; }
+      p.chemin = c; chemin.value = c; changement();
+    });
+    return el('div', { class: 'carte' }, [
+      el('h2', { text: ICONES[p.type] + ' ' + NOMS_TYPES[p.type] + (accueil ? ' — page d’accueil' : '') }),
+      champ('Titre de la page', p, 'titre'),
+      champ('Nom dans le menu (facultatif)', p, 'nomMenu', { ph: p.titre }),
+      el('label', { class: 'champ' }, [el('span', { text: 'Adresse' }), el('div', { style: 'display:flex;align-items:center;gap:4px' }, ['qrbc.app/', chemin])]),
+      caseACocher('Dans le menu du site', p, 'menu', false, dessiner),
+      el('details', {}, [el('summary', { text: 'Google : titre et description', style: 'cursor:pointer;font-weight:600;margin:0 0 10px' }),
+        champ('Titre pour Google (vide = titre de la page)', p.seo, 'titre'), champ('Description pour Google', p.seo, 'description', { multi: true, rows: 3 })])
+    ]);
+  }
+  function editeurPage(p) {
+    if (p.type === 'articles') return editeurArticles(p);
+    if (p.type === 'galerie') return editeurGalerie(p);
+    if (p.type === 'blog') return editeurBlog(p);
+    return editeurContact(p);
+  }
+  // carrousel : une carte affichée à la fois, ◀ n / N ▶, glisser à gauche / droite
+  function carrousel(p, liste, rendu, nom) {
+    var n = liste.length, k = Math.min(carteSel[p.id] || 0, Math.max(0, n - 1));
+    carteSel[p.id] = k;
+    var z = el('div');
+    if (!n) return z;
+    var zone = el('div');
+    zone.append(rendu(liste[k], k));
+    var x0 = null;
+    zone.addEventListener('touchstart', function (e) { x0 = e.target.closest('input,textarea,select') ? null : e.touches[0].clientX; }, { passive: true });
+    zone.addEventListener('touchend', function (e) { if (x0 === null) return; var d = e.changedTouches[0].clientX - x0; x0 = null; if (Math.abs(d) > 60) aller(k + (d < 0 ? 1 : -1)); }, { passive: true });
+    function aller(j) { if (j < 0 || j >= n) return; carteSel[p.id] = j; if (p.type === 'blog') articleApercu = ''; dessiner(); }
+    z.append(el('div', { class: 'nav-cartes' }, [el('button', { type: 'button', class: 'btn btn-mini', text: '◀', disabled: k === 0, onclick: function () { aller(k - 1); } }),
+      el('span', { text: nom + ' ' + (k + 1) + ' / ' + n }), el('button', { type: 'button', class: 'btn btn-mini', text: '▶', disabled: k === n - 1, onclick: function () { aller(k + 1); } })]), zone);
+    return z;
+  }
+  function actionsCarte(p, liste, i, nom) {
+    return el('div', { class: 'actions', style: 'margin-top:8px' }, [
+      el('button', { type: 'button', class: 'btn btn-mini', text: '←', title: 'Déplacer avant', disabled: i === 0, onclick: function () { liste.splice(i - 1, 0, liste.splice(i, 1)[0]); carteSel[p.id] = i - 1; changement(); } }),
+      el('button', { type: 'button', class: 'btn btn-mini', text: '→', title: 'Déplacer après', disabled: i === liste.length - 1, onclick: function () { liste.splice(i + 1, 0, liste.splice(i, 1)[0]); carteSel[p.id] = i + 1; changement(); } }),
+      caseACocher('Masquer', liste[i], 'masque', false, dessiner),
+      el('span', { class: 'esp' }),
+      el('button', { type: 'button', class: 'btn btn-mini btn-danger', text: '🗑 Supprimer', onclick: function () { if (!confirm('Supprimer ' + nom + ' ?')) return; liste.splice(i, 1); carteSel[p.id] = Math.max(0, i - 1); changement(); } })
+    ]);
+  }
+
+  /* --- Articles (sections) --- */
+  var GENRES = [['accroche', 'Accroche (grand titre)'], ['texte', 'Texte (+ image)'], ['cartes', 'Cartes (atouts)'], ['etiquettes', 'Étiquettes'], ['faq', 'Questions / réponses'],
+    ['inscription', 'Formulaire d’inscription'], ['bouton', 'Bouton seul'], ['image', 'Image pleine largeur']];
+  function editeurArticles(p) {
+    p.video = p.video || { actif: false, src: {} };
+    var vid = el('div', { class: 'carte' }, [el('h2', { text: '🎬 Vidéo flottante' }),
+      caseACocher('Afficher une vidéo sur cette page', p.video, 'actif', false, dessiner)]);
+    if (p.video.actif) {
+      ['fr', 'en', 'ru'].forEach(function (l) {
+        var f = el('input', { type: 'file', accept: 'video/mp4', hidden: true });
+        var src = p.video.src[l];
+        f.addEventListener('change', async function () {
+          var x = f.files[0]; f.value = ''; if (!x) return;
+          if (x.size > 24 * 1024 * 1024) { alert('Vidéo trop lourde (24 Mo au plus).'); return; }
+          toast('Envoi de la vidéo…');
+          try { p.video.src[l] = await envoyerMedia(x, 'video/mp4'); changement(); toast('Vidéo chargée'); } catch (e) { alert(e.message); }
+        });
+        vid.append(el('div', { class: 'actions', style: 'margin:0 0 8px' }, [el('b', { text: l.toUpperCase(), style: 'width:30px' }),
+          el('span', { style: 'flex:1;font-size:.85rem;color:var(--doux)', text: src ? 'Vidéo chargée (' + src.split('/').pop() + ')' : (l === 'fr' ? 'Vidéo de présentation qrbc (par défaut)' : 'Comme le français') }),
+          el('button', { type: 'button', class: 'btn btn-mini', text: src ? 'Remplacer' : 'Charger…', onclick: function () { f.click(); } }),
+          src ? el('button', { type: 'button', class: 'btn btn-mini btn-danger', text: 'Retirer', onclick: function () { delete p.video.src[l]; changement(); } }) : null, f]));
+      });
+      vid.append(el('p', { class: 'aide', style: 'margin:4px 0 0', text: 'MP4 vertical conseillé, 24 Mo au plus, sans le son. Elle se réduit en vignette quand on fait défiler la page.' }));
+    }
+    var c = el('div', { class: 'carte' }, [el('h2', { text: 'Sections' })]);
+    c.append(carrousel(p, p.sections, function (s, i) { return carteSection(p, s, i); }, 'Section'));
+    var choix = el('select', {}, GENRES.map(function (g) { return el('option', { value: g[0], text: g[1] }); }));
+    choix.value = 'texte';
+    c.append(el('div', { class: 'actions', style: 'margin-top:10px' }, [choix, el('button', { type: 'button', class: 'btn', text: '＋ Ajouter une section', onclick: function () {
+      var k = Math.min((carteSel[p.id] || 0) + 1, p.sections.length);
+      p.sections.splice(k, 0, { id: idNeuf(), genre: choix.value, titre: '', texte: '', note: '', bouton: { texte: choix.value === 'bouton' ? 'Essayer gratuitement' : '', lien: '#inscription' }, items: [], encart: {} });
+      carteSel[p.id] = k; changement();
+    } })]));
+    return el('div', {}, [vid, c]);
+  }
+  function carteSection(p, s, i) {
+    s.bouton = s.bouton || { texte: '', lien: '' }; s.items = s.items || []; s.encart = s.encart || {};
+    var genre = el('select', {}, GENRES.map(function (g) { return el('option', { value: g[0], text: g[1] }); }));
+    genre.value = s.genre;
+    genre.addEventListener('change', function () { s.genre = genre.value; changement(); });
+    var f = [];
+    var G = s.genre;
+    if (G === 'accroche') {
+      f.push(champ('Grand titre', s, 'titre', { multi: true, rows: 2, ph: 'Votre site web mobile en 5 minutes, *pour 1,99 €/mois.*' }),
+        el('p', { class: 'aide', text: 'Mots entre *astérisques* : en couleur.' }),
+        editeurBouton(s, 'Bouton sous le titre'), champ('Texte de présentation', s, 'texte', { multi: true, liens: true }), champ('Petite note', s, 'note', { multi: true, rows: 2, liens: true }),
+        el('span', { class: 'etiq', text: 'Étapes numérotées' }), editeurItems(s, 'Étape', 'Détail', true),
+        el('div', { class: 'item' }, [el('span', { class: 'etiq', text: 'Encart (facultatif)' }), champ('En gras', s.encart, 'titre'), champ('Texte', s.encart, 'texte', { multi: true, rows: 2 }), champImage('Petite image', s.encart, 'image', { max: 256 })]),
+        caseACocher('Formulaire d’inscription à côté (sur ordinateur)', s, 'avecInscription'));
+    } else if (G === 'texte') {
+      f.push(champ('Titre', s, 'titre'), champ('Texte', s, 'texte', { multi: true, rows: 6, liens: true }), champImage('Image (facultative)', s, 'image'));
+      if (s.image) {
+        var pos = el('select', {}, [['droite', 'À droite du texte'], ['gauche', 'À gauche du texte'], ['dessus', 'Au-dessus du texte']].map(function (o) { return el('option', { value: o[0], text: o[1] }); }));
+        pos.value = s.position || 'droite'; pos.addEventListener('change', function () { s.position = pos.value; changement(true); });
+        f.push(el('label', { class: 'champ' }, [el('span', { text: 'Position de l’image (sur ordinateur)' }), pos]), champ('Description de l’image (Google, malvoyants)', s, 'alt'));
+      }
+      f.push(editeurBouton(s));
+    } else if (G === 'cartes') {
+      f.push(champ('Titre', s, 'titre'), champ('Introduction', s, 'texte', { multi: true, rows: 2, liens: true }), editeurItems(s, 'Titre de la carte', 'Texte', true), editeurBouton(s));
+    } else if (G === 'etiquettes') {
+      f.push(champ('Titre', s, 'titre'), champ('Introduction', s, 'texte', { multi: true, rows: 2, liens: true }), editeurItems(s, 'Étiquette', '', false));
+    } else if (G === 'faq') {
+      f.push(champ('Titre', s, 'titre'), editeurItems(s, 'Question', 'Réponse', true));
+    } else if (G === 'inscription') {
+      f.push(champ('Titre (facultatif)', s, 'titre'), champ('Texte (facultatif)', s, 'texte', { multi: true, rows: 2, liens: true }),
+        el('p', { class: 'aide', text: 'Le formulaire d’essai gratuit (activité + e-mail). Un seul par page.' }));
+    } else if (G === 'bouton') {
+      f.push(editeurBouton(s, 'Bouton'));
+    } else if (G === 'image') {
+      f.push(champImage('Image', s, 'image'), champ('Description de l’image (Google, malvoyants)', s, 'alt'), champ('Légende (facultative)', s, 'texte', { liens: true }));
+    }
+    return el('div', { class: 'bloc' + (s.masque ? ' masque' : '') }, [
+      el('div', { class: 'bloc-tete' }, [el('b', { text: 'Section ' + (i + 1) }), genre])
+    ].concat(f, [actionsCarte(p, p.sections, i, 'cette section')]));
+  }
+
+  /* --- Galerie --- */
+  function editeurGalerie(p) {
+    var c = el('div', { class: 'carte' }, [el('h2', { text: '📷 Photos (' + p.photos.length + ')' }), champ('Introduction (facultative)', p, 'intro', { multi: true, rows: 2, liens: true })]);
+    var f = el('input', { type: 'file', accept: 'image/*', multiple: true, hidden: true });
+    var etat = el('p', { class: 'aide', style: 'margin:6px 0' });
+    f.addEventListener('change', async function () {
+      var l = [].slice.call(f.files); f.value = '';
+      for (var i = 0; i < l.length; i++) {
+        etat.textContent = 'Envoi ' + (i + 1) + ' / ' + l.length + '…';
+        try { var r = await envoyerImage(l[i], 1600, 480); p.photos.push({ src: r.src, mini: r.mini, l: r.l, h: r.h, legende: '', lien: '' }); }
+        catch (e) { etat.textContent = e.message; }
+      }
+      changement();
+    });
+    c.append(el('button', { type: 'button', class: 'btn', text: '＋ Ajouter des photos', onclick: function () { f.click(); } }), f, etat);
+    var g = el('div', { class: 'vign' });
+    p.photos.forEach(function (ph, i) {
+      g.append(el('div', { class: 'ph' }, [el('img', { src: ph.mini || ph.src, alt: '' }), el('div', {}, [
+        (function () { var x = el('input', { type: 'text', placeholder: 'Légende', value: ph.legende || '' }); x.addEventListener('input', function () { ph.legende = x.value; changement(true); }); return x; })(),
+        el('span', { class: 'etiq', style: 'margin:2px 0 0', text: 'Lien au clic' }), choixLien(ph, 'lien'),
+        el('div', { class: 'actions' }, [
+          el('button', { type: 'button', class: 'btn btn-mini', text: '←', disabled: i === 0, onclick: function () { p.photos.splice(i - 1, 0, p.photos.splice(i, 1)[0]); changement(); } }),
+          el('button', { type: 'button', class: 'btn btn-mini', text: '→', disabled: i === p.photos.length - 1, onclick: function () { p.photos.splice(i + 1, 0, p.photos.splice(i, 1)[0]); changement(); } }),
+          el('span', { class: 'esp' }),
+          el('button', { type: 'button', class: 'btn btn-mini btn-danger', text: '✕', onclick: function () { p.photos.splice(i, 1); changement(); } })])
+      ])]));
+    });
+    c.append(g, el('p', { class: 'aide', style: 'margin:10px 0 0', text: 'Sans lien, la photo s’ouvre en grand (glisser pour la suivante). Avec un lien, elle mène à la page ou à l’adresse choisie.' }));
+    return c;
+  }
+
+  /* --- Blog --- */
+  function editeurBlog(p) {
+    var c = el('div', { class: 'carte' }, [el('h2', { text: '📰 Articles (' + p.articles.length + ')' }), champ('Introduction (facultative)', p, 'intro', { multi: true, rows: 2, liens: true }),
+      el('button', { type: 'button', class: 'btn', text: '＋ Nouvel article', onclick: function () {
+        p.articles.unshift({ id: idNeuf(), slug: '', titre: 'Nouvel article', date: new Date().toISOString().slice(0, 10), image: '', mini: '', texte: '', description: '' });
+        carteSel[p.id] = 0; changement();
+      } })]);
+    c.append(carrousel(p, p.articles, function (a, i) {
+      var date = el('input', { type: 'date', value: a.date });
+      date.addEventListener('change', function () { a.date = date.value; changement(true); });
+      return el('div', { class: 'bloc' + (a.masque ? ' masque' : '') }, [
+        champ('Titre', a, 'titre'),
+        el('label', { class: 'champ' }, [el('span', { text: 'Date' }), date]),
+        champ('Adresse (vide = d’après le titre)', a, 'slug', { ph: 'ex. qr-code-avis-google' }),
+        el('p', { class: 'aide', text: 'qrbc.app/' + p.chemin + '/' + (a.slug || '…') + ' — l’adresse se met à jour à l’enregistrement.' }),
+        champ('Description pour Google', a, 'description', { multi: true, rows: 2 }),
+        champImage('Photo', a, 'image', { mini: 'mini', maxMini: 640 }),
+        champ('Texte', a, 'texte', { multi: true, rows: 12, liens: true }),
+        el('button', { type: 'button', class: 'btn btn-mini', text: '👁 Voir dans l’aperçu', onclick: function () { articleApercu = a.slug; apercu(); } }),
+        actionsCarte(p, p.articles, i, 'cet article')]);
+    }, 'Article'));
+    return c;
+  }
+
+  /* --- Contact --- */
+  function editeurContact(p) {
+    return el('div', { class: 'carte' }, [el('h2', { text: '✉️ Page contact' }),
+      champ('Adresse du site client à afficher', p, 'source', { ph: 'qrbc01' }),
+      el('p', { class: 'aide', text: 'Nom d’un de vos sites qrbc (ex. qrbc01 pour qrbc01.qrbc.app) : sa page contact s’affiche ici telle quelle. Modifiez-la dans son éditeur habituel.' }),
+      champ('Texte au-dessus (facultatif)', p, 'intro', { multi: true, rows: 2, liens: true })]);
+  }
+
+  /* ---------- Traductions (EN / RU) ---------- */
+  function etatTraduction(p) {
+    var t = cfg.traductions[langue] && cfg.traductions[langue][p.id];
+    if (!t) return { ok: false, texte: 'à traduire' };
+    return empreinte(JSON.stringify(textesPage(p))) === t.source ? { ok: true, texte: 'à jour' } : { ok: false, texte: 'à retraduire' };
+  }
+  function nomCle(cle) {
+    return cle.replace(/^sections\.(\d+)\./, function (x, n) { return 'Section ' + (Number(n) + 1) + ' · '; })
+      .replace(/^articles\.(\d+)\./, function (x, n) { return 'Article ' + (Number(n) + 1) + ' · '; })
+      .replace(/^photos\.(\d+)\./, function (x, n) { return 'Photo ' + (Number(n) + 1) + ' · '; })
+      .replace(/items\.(\d+)\./, function (x, n) { return 'élément ' + (Number(n) + 1) + ' · '; })
+      .replace(/encart\./, 'encart · ').replace(/bouton\./, 'bouton · ').replace(/seo\./, 'Google · ');
+  }
+  function carteTraduction(p) {
+    cfg.traductions[langue] = cfg.traductions[langue] || {};
+    var t = cfg.traductions[langue][p.id], et = etatTraduction(p);
+    var c = el('div', { class: 'carte' }, [el('h2', {}, [ICONES[p.type] + ' ' + p.titre + ' — ' + langue.toUpperCase() + ' ', el('span', { class: 'badge ' + (et.ok ? 'ok' : 'ko'), text: et.texte })])]);
+    var msg = el('div', { class: 'msg' });
+    var btn = el('button', { type: 'button', class: 'btn btn-accent', text: t ? '✨ Retraduire depuis le français' : '✨ Traduire depuis le français', onclick: async function () {
+      if (t && !confirm('Remplacer la traduction actuelle (et vos retouches) ?')) return;
+      btn.disabled = true; msg.className = 'msg'; msg.textContent = 'Traduction en cours…';
+      try {
+        var j = await api('site-traduire', { page: p, lang: langue });
+        cfg.traductions[langue][p.id] = { page: j.page, source: j.source, le: j.le };
+        changement(); toast('Traduction prête : relisez-la');
+      } catch (e) { msg.className = 'msg err'; msg.textContent = e.message; btn.disabled = false; }
+    } });
+    c.append(el('p', { class: 'aide', style: 'margin:0 0 10px', text: 'La structure (sections, images, liens) vient de la page française. Ici, vous retouchez seulement les textes. Sans traduction, la page s’affiche en français.' }), btn, msg);
+    if (!t) return c;
+    var fr = textesPage(p);
+    Object.keys(fr).forEach(function (cle) {
+      var long = fr[cle].length > 70 || /\n/.test(fr[cle]);
+      var inp = long ? el('textarea', { rows: Math.min(10, Math.max(2, Math.ceil(fr[cle].length / 60))) }) : el('input', { type: 'text' });
+      var v = lireChemin(t.page, cle);
+      inp.value = typeof v === 'string' ? v : '';
+      inp.addEventListener('input', function () { ecrireChemin(t.page, cle, inp.value); changement(true); });
+      c.append(el('div', { class: 'trad-ligne' }, [el('span', { class: 'etiq', text: nomCle(cle) }), el('p', { class: 'fr', text: 'FR : ' + fr[cle] }), inp]));
+    });
+    return c;
+  }
+})();
+</script>
+</body>
+</html>
