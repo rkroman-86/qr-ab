@@ -96,6 +96,26 @@ function nettoyerSection(s) {
     code: s.genre === 'code' ? LANGUES_TOUTES.reduce((o, l) => { o[l] = typeof (s.code && s.code[l]) === 'string' ? s.code[l].slice(0, MAX_CODE) : ''; return o; }, {}) : undefined
   };
 }
+/* Pied de page commun à toutes les pages (la ligne CGV / mentions légales / support reste fixe) */
+export const RESEAUX_PIED = {
+  facebook: ['Facebook', '#1877F2'], instagram: ['Instagram', '#E4405F'], youtube: ['YouTube', '#FF0000'], tiktok: ['TikTok', '#000000'],
+  linkedin: ['LinkedIn', '#0A66C2'], x: ['X', '#000000'], threads: ['Threads', '#000000'], pinterest: ['Pinterest', '#BD081C'],
+  snapchat: ['Snapchat', '#FFFC00'], telegram: ['Telegram', '#26A5E4'], whatsapp: ['WhatsApp', '#25D366'], site: ['Site web', '#4B5563']
+};
+const PIED_DEFAUT = {
+  note: 'Après l’essai : 1,99 € TTC par mois sans engagement, ou 19,99 € TTC par an.',
+  texte: 'qrbc.app — sites web mobiles et cartes de visite QR',
+  reseaux: [{ type: 'facebook', lien: 'https://www.facebook.com/61596401707316', titre: 'Suivez-nous sur Facebook' }],
+  liens: [{ titre: 'Générateur de QR code gratuit', lien: '/generateur-qr-code' }]
+};
+function nettoyerPied(x) {
+  x = x && typeof x === 'object' ? x : PIED_DEFAUT;
+  return {
+    id: 'pied', type: 'pied', note: ch(x.note, 400), texte: ch(x.texte, 1000),
+    reseaux: (Array.isArray(x.reseaux) ? x.reseaux : []).slice(0, 15).map(r => ({ type: RESEAUX_PIED[r && r.type] ? r.type : 'site', lien: nettoyerLien(r && r.lien), titre: ch(r && r.titre, 80) })).filter(r => r.lien),
+    liens: (Array.isArray(x.liens) ? x.liens : []).slice(0, 15).map(l => ({ titre: ch(l && l.titre, 80), lien: nettoyerLien(l && l.lien) })).filter(l => l.titre && l.lien)
+  };
+}
 function nettoyerPage(p, deja) {
   p = p && typeof p === 'object' ? p : {};
   const type = TYPES.includes(p.type) ? p.type : 'articles';
@@ -146,6 +166,7 @@ export function nettoyerConfig(cfg) {
   pages = nettoyees.filter(Boolean);
   if (!pages.length) pages = [nettoyerPage({ type: 'articles', titre: 'Accueil', chemin: '', sections: [] }, { ids: new Set(), chemins: new Set(), accueil: false })];
   if (!pages.some(p => p.chemin === '')) pages[0].chemin = '';
+  const pied = nettoyerPied(cfg.pied);
   const langues = Array.isArray(cfg.langues) ? [...new Set(cfg.langues.filter(l => LANGUES_DISPO[l]))] : ['en', 'ru'];
   const trad = {};
   for (const l of langues) {
@@ -157,8 +178,10 @@ export function nettoyerConfig(cfg) {
       // la traduction garde la structure de la page française (mêmes ids, images, liens) ; seuls les textes viennent de la traduction
       trad[l][p.id] = { page: appliquerTextes(p, textesPage(nettoyerPage(Object.assign({}, t.page, { id: p.id, type: p.type, chemin: p.chemin }), { ids: new Set(), chemins: new Set(), accueil: true }))), source: ch(t.source, 20), le: ch(t.le, 30) };
     }
+    const tp = src.pied;
+    if (tp && tp.page) trad[l].pied = { page: appliquerTextes(pied, textesPage(nettoyerPied(tp.page))), source: ch(tp.source, 20), le: ch(tp.le, 30) };
   }
-  return { v: 1, pages, langues, traductions: trad, maj: new Date().toISOString() };
+  return { v: 1, pages, pied, langues, traductions: trad, maj: new Date().toISOString() };
 }
 
 /* ---------------- Lecture ---------------- */
@@ -383,6 +406,10 @@ const CSS_SITE = `<style>
   .s-photo,.s-image img{width:100%;border-radius:16px;display:block}
   .s-image{margin:0}
   .s-code{margin:0 0 28px}
+  footer .reseaux{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center}
+  .rs-pied{display:inline-flex;align-items:center;gap:8px;text-decoration:none;font-weight:600}
+  .rs-ico{width:30px;height:30px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;flex:none}
+  .rs-ico img.blanc{filter:invert(1)}
   .s-image figcaption{color:var(--doux);font-size:.9rem;margin-top:8px}
   .bloc-inscription-seul{max-width:520px}
   .galerie-site{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
@@ -433,6 +460,22 @@ const JS_SITE = `<script>
 })();
 </script>`;
 
+function piedHtml(cfg, ctx) {
+  const v = pageEnLangue(cfg, cfg.pied || nettoyerPied(null), ctx.lang);
+  const lien = (c, contenu, extra) => { const h = cibleLien(c, ctx); return h ? '<a href="' + esc(h) + '"' + attrsLien(h) + (extra || '') + '>' + contenu + '</a>' : contenu; };
+  const reseaux = (v.reseaux || []).map(r => {
+    const def = RESEAUX_PIED[r.type] || RESEAUX_PIED.site;
+    const ico = r.type === 'site' ? '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#fff" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>'
+      : '<img src="https://cdn.jsdelivr.net/npm/simple-icons@16/icons/' + r.type + '.svg" alt="" width="16" height="16"' + (r.type === 'snapchat' ? '' : ' class="blanc"') + '>';
+    const h = cibleLien(r.lien, ctx);
+    return '<a class="rs-pied" href="' + esc(h) + '" target="_blank" rel="noopener me"' + (r.titre ? '' : ' aria-label="' + esc(def[0]) + '"') + '><span class="rs-ico" style="background:' + def[1] + '">' + ico + '</span>' + (r.titre ? '<span>' + esc(r.titre) + '</span>' : '') + '</a>';
+  }).join('');
+  const liens = (v.liens || []).map(l => lien(l.lien, esc(l.titre), l.lien === '/generateur-qr-code' ? ' id="lien-outil-qr"' : '')).join(' · ');
+  // ligne obligatoire : CGV, mentions légales, support (reprise de l'accueil historique)
+  const legal = (ctx.g.pied.match(/<p class="liens"><a href="\/cgv">[\s\S]*?<\/p>/) || [''])[0];
+  return '<footer>' + (v.note ? '<p class="prix">' + enLigne(v.note, ctx) + '</p>' : '') + (v.texte ? '<p>' + enLigne(v.texte, ctx) + '</p>' : '') +
+    (reseaux ? '<p class="reseaux">' + reseaux + '</p>' : '') + (liens ? '<p class="liens">' + liens + '</p>' : '') + legal + '</footer>';
+}
 /* Document HTML complet d'une page du site (ou d'un article du blog) */
 /* Page française ouverte sans ?lang : on recharge dans la langue retenue ou celle du téléphone (comme l'ancien accueil),
    la page étant traduite par le serveur. Les robots gardent la version française. */
@@ -496,7 +539,7 @@ export async function rendrePageSite(env, request, cfg, page, lang, opts) {
     '<link rel="manifest" href="/manifest.webmanifest">\n<meta name="theme-color" content="#1b1a17">\n<link rel="icon" href="/favicon.png">\n<link rel="apple-touch-icon" href="/apple-touch-icon.png">\n' +
     '<meta name="apple-mobile-web-app-capable" content="yes">\n<meta name="apple-mobile-web-app-title" content="qrbc">\n' + jsonld + '\n' + g.style + '\n' + CSS_SITE + '\n</head>\n<body>\n' +
     (opts.apercu ? '<div class="apercu-bandeau">Aperçu — ' + esc(opts.apercu) + '</div>' : '') +
-    '<div class="page">\n  ' + entete + '\n  ' + video + '\n' + corps + '\n  ' + g.pied + '\n</div>\n' +
+    '<div class="page">\n  ' + entete + '\n  ' + video + '\n' + corps + '\n  ' + piedHtml(cfg, ctx) + '\n</div>\n' +
     // langues du sélecteur (i18n.js) et textes fixes d'une langue ajoutée
     '<script>window.QRBC_LANGUES=' + JSON.stringify(Object.fromEntries(langues.map(l => [l, l.toUpperCase()]))) + (fx ? ';window.QRBC_DICO=' + JSON.stringify(fx).replace(/</g, '\\u003c') : '') + ';</script>\n' + g.scripts + JS_SITE + fin + '\n</body>\n</html>\n';
   return html;
@@ -578,7 +621,8 @@ export async function adressesSite(env) {
 export async function apiSite(request, env, action, d, O) {
   if (action === 'site' && request.method === 'GET') {
     const brouillon = (await lire(env, 'brouillon')) || await brouillonInitial(env, request, O);
-    return O.json({ cfg: brouillon, publie: !!(await lire(env, 'publie')), actif: await siteActif(env), reserves: [...RESERVES], languesDispo: LANGUES_DISPO });
+    if (!brouillon.pied) brouillon.pied = nettoyerPied(null);            // brouillon d'avant le pied modifiable
+    return O.json({ cfg: brouillon, publie: !!(await lire(env, 'publie')), actif: await siteActif(env), reserves: [...RESERVES], languesDispo: LANGUES_DISPO, reseauxPied: RESEAUX_PIED });
   }
   if (action === 'site' && request.method === 'POST') {
     const cfg = nettoyerConfig(d.cfg);
@@ -629,8 +673,9 @@ export async function apiSite(request, env, action, d, O) {
   if (action === 'site-traduire' && request.method === 'POST') {
     const lang = LANGUES_DISPO[d.lang] ? d.lang : null;
     if (!lang) throw new O.ErreurAPI(400, 'Langue invalide.');
-    const page = nettoyerPage(d.page, { ids: new Set(), chemins: new Set(), accueil: d.page && d.page.chemin === '' ? false : true });
-    if (d.page && d.page.id) page.id = d.page.id;
+    const estPied = d.page && d.page.type === 'pied';
+    const page = estPied ? nettoyerPied(d.page) : nettoyerPage(d.page, { ids: new Set(), chemins: new Set(), accueil: d.page && d.page.chemin === '' ? false : true });
+    if (d.page && d.page.id && !estPied) page.id = d.page.id;
     const textes = textesPage(page);
     const source = empreinte(JSON.stringify(textes));
     // par paquets (gros blogs) : la réponse de l'IA reste courte

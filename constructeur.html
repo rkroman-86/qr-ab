@@ -165,7 +165,7 @@
   }
   var jeton = '';
   try { jeton = sessionStorage.getItem('qrbc-gestion') || ''; } catch (e) {}
-  var cfg = null, actif = false, dejaPublie = false, reserves = [], languesDispo = {};
+  var cfg = null, actif = false, dejaPublie = false, reserves = [], languesDispo = {}, reseauxPied = {};
   var pageSel = null, langue = 'fr', modifie = false, articleApercu = '';
   var carteSel = {};                       // section / article affiché par page (carrousel)
 
@@ -209,7 +209,7 @@
   });
   async function charger() {
     var j = await api('site');
-    cfg = j.cfg; actif = j.actif; dejaPublie = j.publie; reserves = j.reserves || []; languesDispo = j.languesDispo || {};
+    cfg = j.cfg; actif = j.actif; dejaPublie = j.publie; reserves = j.reserves || []; languesDispo = j.languesDispo || {}; reseauxPied = j.reseauxPied || {};
     $('#connexion').hidden = true; $('#editeur').hidden = false;
     pageSel = cfg.pages[0].id;
     majBoutons(); dessiner(); apercu();
@@ -320,7 +320,8 @@
   /* ---------- Outils ---------- */
   function page() { return cfg.pages.find(function (p) { return p.id === pageSel; }) || cfg.pages[0]; }
   function idNeuf() { return Math.random().toString(36).slice(2, 8); }
-  var ICONES = { articles: '📝', galerie: '📷', blog: '📰', contact: '✉️' };
+  var ICONES = { articles: '📝', galerie: '📷', blog: '📰', contact: '✉️', pied: '🦶' };
+  var vuePied = false;                     // pied de page affiché à la place des réglages de la page
   var NOMS_TYPES = { articles: 'Articles', galerie: 'Galerie', blog: 'Blog', contact: 'Contact' };
   function champ(lib, obj, cle, opts) {
     opts = opts || {};
@@ -467,7 +468,8 @@
     g.innerHTML = '';
     g.append(cartePages());
     var p = page();
-    if (langue === 'fr') g.append(carteReglagesPage(p), editeurPage(p));
+    if (vuePied) g.append(langue === 'fr' ? cartePied() : carteTraduction(cfg.pied));
+    else if (langue === 'fr') g.append(carteReglagesPage(p), editeurPage(p));
     else g.append(carteTraduction(p));
     g.scrollTop = haut;
     $('#lien-site').href = '/' + (p.chemin || '') + (langue !== 'fr' ? '?lang=' + langue : '');
@@ -477,7 +479,7 @@
     cfg.pages.forEach(function (p, i) {
       var accueil = p.chemin === '';
       var trad = langue !== 'fr' ? etatTraduction(p) : null;
-      liste.append(el('div', { class: 'lp' + (p.id === pageSel ? ' actif' : ''), onclick: function (e) { if (e.target.closest('button')) return; pageSel = p.id; articleApercu = ''; dessiner(); apercu(); } }, [
+      liste.append(el('div', { class: 'lp' + (p.id === pageSel && !vuePied ? ' actif' : ''), onclick: function (e) { if (e.target.closest('button')) return; pageSel = p.id; vuePied = false; articleApercu = ''; dessiner(); apercu(); } }, [
         el('span', { class: 'ico', text: ICONES[p.type] }),
         el('span', { class: 'nom', text: p.titre }),
         el('span', { class: 'chemin', text: '/' + p.chemin + (p.menu === false ? ' · hors menu' : '') }),
@@ -495,6 +497,10 @@
     ].map(function (t) {
       return el('button', { type: 'button', onclick: function () { ajouterPage(t[0]); } }, [el('b', { text: ICONES[t[0]] + ' ' + t[1] }), el('small', { text: t[2] })]);
     }));
+    var tradPied = langue !== 'fr' ? etatTraduction(cfg.pied) : null;
+    liste.append(el('div', { class: 'lp lp-pied' + (vuePied ? ' actif' : ''), onclick: function () { vuePied = true; dessiner(); } }, [
+      el('span', { class: 'ico', text: '🦶' }), el('span', { class: 'nom', text: 'Pied de page' }), el('span', { class: 'chemin', text: 'toutes les pages' }),
+      tradPied ? el('span', { class: 'badge ' + (tradPied.ok ? 'ok' : 'ko'), text: tradPied.texte }) : null]));
     return el('div', { class: 'carte' }, [el('h2', { text: 'Pages du site' }), liste,
       langue === 'fr' ? el('button', { type: 'button', class: 'btn', style: 'margin-top:10px;width:100%', text: '＋ Ajouter une page', onclick: function () { menu.hidden = !menu.hidden; } }) : null,
       menu]);
@@ -509,7 +515,7 @@
     if (type === 'galerie') { p.intro = ''; p.photos = []; }
     if (type === 'blog') { p.intro = ''; p.articles = []; }
     if (type === 'contact') { p.source = 'qrbc01'; p.intro = ''; }
-    cfg.pages.push(p); pageSel = p.id; articleApercu = '';
+    cfg.pages.push(p); pageSel = p.id; vuePied = false; articleApercu = '';
     changement(); apercu();
   }
   function carteReglagesPage(p) {
@@ -715,6 +721,47 @@
       champ('Texte au-dessus (facultatif)', p, 'intro', { multi: true, rows: 2, liens: true })]);
   }
 
+  /* ---------- Pied de page (commun à toutes les pages) ---------- */
+  function cartePied() {
+    var d = cfg.pied;
+    d.reseaux = d.reseaux || []; d.liens = d.liens || [];
+    var c = el('div', { class: 'carte' }, [el('h2', { text: '🦶 Pied de page' }),
+      el('p', { class: 'aide', style: 'margin:0 0 12px', text: 'Le même sur toutes les pages du site. La dernière ligne (CGV, mentions légales, support@qrbc.app) est obligatoire : elle reste toujours affichée.' }),
+      champ('Ligne en gras', d, 'note', { multi: true, rows: 2, liens: true }),
+      champ('Ligne de présentation', d, 'texte', { multi: true, rows: 2, liens: true })]);
+    // réseaux sociaux
+    var zr = el('div');
+    d.reseaux.forEach(function (r, i) {
+      var type = el('select', {}, Object.keys(reseauxPied).map(function (k) { return el('option', { value: k, text: reseauxPied[k][0] }); }));
+      type.value = r.type; type.addEventListener('change', function () { r.type = type.value; changement(true); });
+      var url = el('input', { type: 'text', placeholder: 'https://…', value: r.lien || '' });
+      url.addEventListener('input', function () { var x = url.value.trim(); if (x && !/^(https?:|mailto:|tel:|\/)/i.test(x)) x = 'https://' + x; r.lien = x; changement(true); });
+      var tit = el('input', { type: 'text', placeholder: 'Texte à côté (vide = icône seule)', value: r.titre || '' });
+      tit.addEventListener('input', function () { r.titre = tit.value; changement(true); });
+      zr.append(el('div', { class: 'item' }, [el('div', { class: 'actions', style: 'margin:0 0 6px' }, [type]), url, el('div', { style: 'height:6px' }), tit,
+        el('div', { class: 'actions' }, [
+          el('button', { type: 'button', class: 'btn btn-mini', text: '↑', disabled: i === 0, onclick: function () { d.reseaux.splice(i - 1, 0, d.reseaux.splice(i, 1)[0]); changement(); } }),
+          el('button', { type: 'button', class: 'btn btn-mini', text: '↓', disabled: i === d.reseaux.length - 1, onclick: function () { d.reseaux.splice(i + 1, 0, d.reseaux.splice(i, 1)[0]); changement(); } }),
+          el('span', { class: 'esp' }),
+          el('button', { type: 'button', class: 'btn btn-mini btn-danger', text: '✕', onclick: function () { d.reseaux.splice(i, 1); changement(); } })])]));
+    });
+    zr.append(el('button', { type: 'button', class: 'btn btn-mini', text: '＋ Ajouter un réseau', onclick: function () { d.reseaux.push({ type: 'instagram', lien: '', titre: '' }); changement(); } }));
+    c.append(el('span', { class: 'etiq', text: 'Réseaux sociaux' }), zr);
+    // liens
+    var zl = el('div');
+    d.liens.forEach(function (l, i) {
+      zl.append(el('div', { class: 'item' }, [champ('Texte du lien', l, 'titre'), el('span', { class: 'etiq', text: 'Il ouvre' }), choixLien(l, 'lien'),
+        el('div', { class: 'actions' }, [
+          el('button', { type: 'button', class: 'btn btn-mini', text: '↑', disabled: i === 0, onclick: function () { d.liens.splice(i - 1, 0, d.liens.splice(i, 1)[0]); changement(); } }),
+          el('button', { type: 'button', class: 'btn btn-mini', text: '↓', disabled: i === d.liens.length - 1, onclick: function () { d.liens.splice(i + 1, 0, d.liens.splice(i, 1)[0]); changement(); } }),
+          el('span', { class: 'esp' }),
+          el('button', { type: 'button', class: 'btn btn-mini btn-danger', text: '✕', onclick: function () { d.liens.splice(i, 1); changement(); } })])]));
+    });
+    zl.append(el('button', { type: 'button', class: 'btn btn-mini', text: '＋ Ajouter un lien', onclick: function () { d.liens.push({ titre: '', lien: '' }); changement(); } }));
+    c.append(el('span', { class: 'etiq', style: 'margin-top:14px', text: 'Liens (séparés par « · »)' }), zl);
+    return c;
+  }
+
   /* ---------- Traductions (EN / RU) ---------- */
   function etatTraduction(p) {
     var t = cfg.traductions[langue] && cfg.traductions[langue][p.id];
@@ -726,12 +773,16 @@
       .replace(/^articles\.(\d+)\./, function (x, n) { return 'Article ' + (Number(n) + 1) + ' · '; })
       .replace(/^photos\.(\d+)\./, function (x, n) { return 'Photo ' + (Number(n) + 1) + ' · '; })
       .replace(/items\.(\d+)\./, function (x, n) { return 'élément ' + (Number(n) + 1) + ' · '; })
+      .replace(/^reseaux\.(\d+)\.titre/, function (x, n) { return 'Réseau ' + (Number(n) + 1); })
+      .replace(/^liens\.(\d+)\.titre/, function (x, n) { return 'Lien ' + (Number(n) + 1); })
+      .replace(/^note$/, 'Ligne en gras').replace(/^texte$/, 'Ligne de présentation')
       .replace(/encart\./, 'encart · ').replace(/bouton\./, 'bouton · ').replace(/seo\./, 'Google · ');
   }
   function carteTraduction(p) {
     cfg.traductions[langue] = cfg.traductions[langue] || {};
     var t = cfg.traductions[langue][p.id], et = etatTraduction(p);
-    var c = el('div', { class: 'carte' }, [el('h2', {}, [ICONES[p.type] + ' ' + p.titre + ' — ' + langue.toUpperCase() + ' ', el('span', { class: 'badge ' + (et.ok ? 'ok' : 'ko'), text: et.texte })])]);
+    var estPied = p.type === 'pied';
+    var c = el('div', { class: 'carte' }, [el('h2', {}, [ICONES[p.type] + ' ' + (estPied ? 'Pied de page' : p.titre) + ' — ' + langue.toUpperCase() + ' ', el('span', { class: 'badge ' + (et.ok ? 'ok' : 'ko'), text: et.texte })])]);
     var msg = el('div', { class: 'msg' });
     var btn = el('button', { type: 'button', class: 'btn btn-accent', text: t ? '✨ Retraduire depuis le français' : '✨ Traduire depuis le français', onclick: async function () {
       if (t && !confirm('Remplacer la traduction actuelle (et vos retouches) ?')) return;
@@ -753,7 +804,7 @@
       if (!t) { t = cfg.traductions[langue][p.id] = { page: JSON.parse(JSON.stringify(p)), source: '', le: new Date().toISOString() }; }
       return t;
     }
-    [['titre', 'Titre de la page', p.titre], ['nomMenu', 'Nom dans le menu', p.nomMenu || p.titre]].forEach(function (x) {
+    (estPied ? [] : [['titre', 'Titre de la page', p.titre], ['nomMenu', 'Nom dans le menu', p.nomMenu || p.titre]]).forEach(function (x) {
       var inp = el('input', { type: 'text', placeholder: x[2] });
       inp.value = t && t.page && typeof t.page[x[0]] === 'string' && (x[0] !== 'titre' || t.source) ? t.page[x[0]] : '';
       inp.addEventListener('input', function () {
