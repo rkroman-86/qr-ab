@@ -234,8 +234,15 @@ function adresse(page, lang, slug) {
   const base = '/' + (page.chemin ? page.chemin + (slug ? '/' + slug : '') : '');
   return base + (lang && lang !== 'fr' ? '?lang=' + lang : '');
 }
+// la page contient-elle le formulaire d'inscription (accroche avec formulaire ou section « Formulaire ») ?
+const aFormulaire = p => p && p.type === 'articles' && (p.sections || []).some(s => !s.masque && ((s.genre === 'accroche' && s.avecInscription) || s.genre === 'inscription'));
 function cibleLien(c, ctx) {
   if (!c) return '';
+  // « Formulaire d'inscription » depuis une page qui ne l'a pas : vers la page qui l'a (l'accueil d'habitude)
+  if (c === '#inscription' && ctx.page && !aFormulaire(ctx.page)) {
+    const p = ctx.cfg.pages.find(x => x.chemin === '' && aFormulaire(x)) || ctx.cfg.pages.find(aFormulaire);
+    return p ? adresse(p, ctx.lang) + '#inscription' : '/app' + (ctx.lang !== 'fr' ? '?lang=' + ctx.lang : '');
+  }
   if (/^page:/.test(c)) { const p = ctx.cfg.pages.find(x => x.id === c.slice(5)); return p ? adresse(p, ctx.lang) : ''; }
   if (/^article:/.test(c)) {
     const id = c.slice(8);
@@ -491,7 +498,7 @@ export async function rendrePageSite(env, request, cfg, page, lang, opts) {
   const vue = pageEnLangue(cfg, page, lang);
   const langues = languesDe(cfg);
   const fx = lang === 'fr' || lang === 'en' || lang === 'ru' ? null : await lireFixes(env, lang);
-  const ctx = { cfg, lang, g, fx, formulaireMis: false };
+  const ctx = { cfg, lang, g, fx, page, formulaireMis: false };
   const article = opts.article ? (vue.articles || []).find(a => a.slug === opts.article && !a.masque) : null;
   if (opts.article && !article) return null;
   const titre = article ? article.titre + ' | qrbc' : (vue.seo && vue.seo.titre) || (vue.titre + ' | qrbc');
