@@ -2681,11 +2681,34 @@
     return '+' + n;
   }
 
+  /* Textes fixes imprimés sur les cartes : dans la langue de la page (cfg.langue, version traduite comprise), pas celle de l'éditeur */
+  const TEXTES_CARTE = {
+    'Scannez pour réserver, appeler ou laisser un avis': { en: 'Scan to book, call or leave a review', ru: 'Сканируйте, чтобы забронировать, позвонить или оставить отзыв',
+      es: 'Escanee para reservar, llamar o dejar una reseña', de: 'Scannen zum Buchen, Anrufen oder Bewerten', it: 'Scansiona per prenotare, chiamare o lasciare una recensione',
+      pt: 'Digitalize para reservar, ligar ou deixar uma avaliação', nl: 'Scan om te boeken, te bellen of een review te geven', uk: 'Скануйте, щоб забронювати, зателефонувати або залишити відгук',
+      pl: 'Zeskanuj, aby zarezerwować, zadzwonić lub wystawić opinię', ro: 'Scanați pentru a rezerva, a suna sau a lăsa o recenzie', tr: 'Rezervasyon, arama veya yorum için tarayın',
+      zh: '扫码预约、致电或留下评价', ja: 'スキャンして予約・電話・レビュー' },
+    'Scannez-moi': { en: 'Scan me', ru: 'Сканируйте', es: 'Escanéame', de: 'Scan mich', it: 'Scansionami', pt: 'Digitalize-me', nl: 'Scan mij', uk: 'Скануйте',
+      pl: 'Zeskanuj mnie', ro: 'Scanează-mă', tr: 'Beni tara', zh: '扫一扫', ja: 'スキャン' },
+    'Scannez': { en: 'Scan', ru: 'Сканируйте', es: 'Escanear', de: 'Scannen', it: 'Scansiona', pt: 'Digitalize', nl: 'Scannen', uk: 'Скануйте',
+      pl: 'Skanuj', ro: 'Scanați', tr: 'Tarayın', zh: '扫码', ja: 'スキャン' },
+    'Tél.': { en: 'Phone', ru: 'Тел.', es: 'Tel.', de: 'Tel.', it: 'Tel.', pt: 'Tel.', nl: 'Tel.', uk: 'Тел.', pl: 'Tel.', ro: 'Tel.', tr: 'Tel.', zh: '电话', ja: '電話' },
+    'E-mail': { en: 'Email', de: 'E-Mail', es: 'Email', it: 'Email', tr: 'E-posta', zh: '邮箱', ja: 'メール' },
+    'Web': { zh: '网站', ja: 'ウェブ' }
+  };
+  function tc(texte) {
+    const l = cfg && /^[a-z]{2}$/.test(cfg.langue || '') ? cfg.langue : 'fr';
+    if (l === 'fr' || !texte) return texte;
+    const m = texte.match(/^(.*?)( →| \/ WhatsApp)?$/);
+    const t = TEXTES_CARTE[m[1]];
+    return (t && t[l] ? t[l] : m[1]) + (m[2] === ' / WhatsApp' ? ' / WhatsApp' : m[2] || '');
+  }
+
   // Coordonnées à imprimer, tirées des boutons visibles
   function coordonnees() {
     const lignes = [];
     const vus = {};
-    const ajout = (etiq, val) => { if (val && !vus[val]) { vus[val] = 1; lignes.push([etiq, val]); } };
+    const ajout = (etiq, val) => { if (val && !vus[val]) { vus[val] = 1; lignes.push([tc(etiq), val]); } };
     const btns = cfg.boutons.filter(b => b && !b.masque && b.type !== 'reseaux' && String(b.valeur || '').trim());
     const tel = btns.find(b => b.type === 'tel') || btns.find(b => b.type === 'sms'), wa = btns.find(b => b.type === 'whatsapp');
     if (tel && wa && numeroInternational(tel.valeur) === numeroInternational(wa.valeur)) ajout('Tél. / WhatsApp', formaterNumero(tel.valeur));
@@ -2804,7 +2827,7 @@
     if (legende) {
       ctx.fillStyle = '#111'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
       ctx.font = '700 ' + Math.round(taille * 0.075) + 'px ' + D.fam;
-      ctx.fillText(legende, x + taille / 2, y + h - Math.round(taille * 0.065));
+      ctx.fillText(tc(legende), x + taille / 2, y + h - Math.round(taille * 0.065));
       ctx.textAlign = 'left';
     }
     return h;
@@ -2903,7 +2926,7 @@
   function aleatoire(graine) { let x = graine >>> 0 || 1; return () => ((x = (x * 1664525 + 1013904223) >>> 0) / 4294967296); }
   function legendeQR(ctx, D, texte, cx, y, couleur, taille) {
     ctx.save(); ctx.fillStyle = couleur; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-    ctx.font = '700 ' + (taille || 40) + 'px ' + D.fam; ctx.fillText(texte, cx, y); ctx.restore();
+    ctx.font = '700 ' + (taille || 40) + 'px ' + D.fam; ctx.fillText(tc(texte), cx, y); ctx.restore();
   }
 
   const DESSINS_CARTE = {
@@ -2945,7 +2968,7 @@
       y += 40;
       dessinerCoords(ctx, Object.assign({}, D, { coords: D.coords.slice(0, 3) }), 100, y, L, { texte: '#111', accent, etiq: 32, val: 44, pas: 98 }, 'left');
       ctx.fillStyle = accent; ctx.textBaseline = 'alphabetic'; ctx.font = '800 48px ' + D.fam;
-      ctx.fillText('Scannez-moi →', 100, H - 95);
+      ctx.fillText(tc('Scannez-moi →'), 100, H - 95);
     },
     /* Vague : bas de carte ondulé aux couleurs du thème */
     vague(ctx, D) {
@@ -3090,7 +3113,7 @@
       coupeLignes(ctx, cfg.titre || '', L, 2).forEach(l => { ctx.fillText(l, x, y); y += parseInt(ctx.font.match(/(\d+)px/)[1], 10) * 1.12; });
       y += 30; ctx.fillRect(x, y, 120, 8); y += 50;
       ctx.font = '500 48px ' + D.fam; ctx.globalAlpha = 0.9;
-      coupeLignes(ctx, 'Scannez pour réserver, appeler ou laisser un avis', L, 3).forEach(l => { ctx.fillText(l, x, y); y += 62; });
+      coupeLignes(ctx, tc('Scannez pour réserver, appeler ou laisser un avis'), L, 3).forEach(l => { ctx.fillText(l, x, y); y += 62; });
       ctx.globalAlpha = 1;
     },
 
@@ -3111,7 +3134,7 @@
       const q = 520, bx = W - P - q;
       dessinerQR(ctx, URL_QR, bx, (H - q) / 2 - 30, q, '#111');
       ctx.fillStyle = '#777'; ctx.textAlign = 'center'; ctx.font = '600 40px ' + D.fam; ctx.textBaseline = 'top';
-      ctx.fillText('Scannez-moi', bx + q / 2, (H + q) / 2 - 10); ctx.textAlign = 'left';
+      ctx.fillText(tc('Scannez-moi'), bx + q / 2, (H + q) / 2 - 10); ctx.textAlign = 'left';
       let y = P + (D.logo ? dessinerLogo(ctx, D, P, P, 200) + 56 : 40);
       dessinerTextes(ctx, D, P, y, bx - P - 110, { texte: '#1a1a1a', accent }, 'left');
       dessinerPied(ctx, D, P, H - P + 20, '#1a1a1a');
@@ -3199,7 +3222,7 @@
       const q = 480, bx = W - P - q;
       dessinerQR(ctx, URL_QR, bx, (H - q) / 2 - 24, q, '#111');
       ctx.fillStyle = '#666'; ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.font = '600 38px ' + D.fam;
-      ctx.fillText('Scannez-moi', bx + q / 2, (H + q) / 2 - 4); ctx.textAlign = 'left';
+      ctx.fillText(tc('Scannez-moi'), bx + q / 2, (H + q) / 2 - 4); ctx.textAlign = 'left';
       const accent = luminance(D.d.accent) > 0.6 ? '#1a1a1a' : D.d.accent;
       let y = P - 10 + (D.logo ? dessinerLogo(ctx, D, P, P - 10, 170) + 44 : 20);
       dessinerTextes(ctx, D, P, y, bx - P - 90, { texte: '#1a1a1a', accent, titre: 100, sous: 46 }, 'left');
@@ -3262,7 +3285,7 @@
       ctx.font = policeAjustee(ctx, cfg.titre || '', '800', 96, 50, W - 300, D.fam);
       ctx.fillText(cfg.titre || '', W / 2, 110 + q + 70);
       ctx.font = '500 50px ' + D.fam; ctx.globalAlpha = .8;
-      ctx.fillText('Scannez pour réserver, appeler ou laisser un avis', W / 2, 110 + q + 190);
+      ctx.fillText(tc('Scannez pour réserver, appeler ou laisser un avis'), W / 2, 110 + q + 190);
       ctx.globalAlpha = 1; ctx.textAlign = 'left';
     }
   };
@@ -3368,7 +3391,7 @@
   // appli sur sa propre adresse (nom--carte.qrbc.app) : elle ne remplace jamais l'appli de la page
   function lienAppliCarte() { return URL_PUBLIQUE.replace(/^(https?:\/\/)([^./]+)\./, '$1$2--carte.').replace(/^(https?:\/\/[^/]+).*$/, '$1/'); }
   function cleCarteApp() {
-    return JSON.stringify([cfg.carteApp && cfg.carteApp.modeles, cfg.design, cfg.logo, cfg.titre, cfg.sousTitre, cfg.pied, coordonnees(), URL_PUBLIQUE]);
+    return JSON.stringify([cfg.carteApp && cfg.carteApp.modeles, cfg.design, cfg.logo, cfg.titre, cfg.sousTitre, cfg.pied, coordonnees(), URL_PUBLIQUE, cfg.langue || 'fr', 2]);
   }
   async function preparerCarteApp(forcer) {
     const ca = cfg.carteApp;
