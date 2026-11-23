@@ -25,7 +25,7 @@ const IA_PAR_JOUR = 30;                       // garde-fou anti-abus, par client
 const MODELES_IA = ['claude-sonnet-5-5', 'claude-haiku-5-5'];
 // Le serveur choisit le modèle selon le travail : rédaction soignée → Sonnet, pictogrammes SVG → Haiku (le moins coûteux)
 import { GUIDE } from './guide.js';
-import { routeSite, apiSite, adressesSite } from './site.js';
+import { routeSite, apiSite, adressesSite, adresseGenerateur } from './site.js';
 const AIDE_PAR_JOUR = 50;             // questions à l'assistant « ❓ Aide » par compte et par jour (gratuites)
 const MODELE_PAR_TYPE = { texte: 'claude-sonnet-5-5', picto: 'claude-haiku-5-5' };
 const DUREE_EXPRESS = 30 * 60 * 1000;
@@ -207,9 +207,10 @@ async function racine(request, env, url) {
   if (rs) return rs;
   if (p === '/constructeur' || p === '/constructeur.html') return statique(env, request, '/constructeur.html', true);
   if (p === '/' || p === '/index.html') { compterVisiteSite(request, env, url, 'accueil'); return accueilLangue(env, request, url); }
-  // Générateur de QR code gratuit (attire des visiteurs depuis Google, invite à créer une page)
-  if (p === '/generateur-qr-code') { compterVisiteSite(request, env, url, 'generateur-qr'); return pageSiteTraduite(env, request, url, '/outil-qr.html', META_OUTIL, '/generateur-qr-code'); }
-  if (p === '/generateur-qr-code/' || p === '/generateur-qr' || p === '/qr-code-gratuit') return Response.redirect(url.origin + '/generateur-qr-code' + url.search, 301);
+  // Générateur de QR code : l'ancienne page statique (outil-qr.html) est archivée (23/11) ; le générateur est une page du constructeur.
+  // Si cette page a pour adresse /generateur-qr-code, routeSite l'a déjà servie ; sinon renvoi temporaire vers elle (ou l'accueil).
+  if (p === '/generateur-qr-code') return Response.redirect(url.origin + ((await adresseGenerateur(env)) || '/') + url.search, 302);
+  if (p === '/generateur-qr-code/' || p === '/generateur-qr' || p === '/qr-code-gratuit' || p === '/outil-qr.html') return Response.redirect(url.origin + '/generateur-qr-code' + url.search, 301);
   // Référencement : robots.txt du site principal, plan du site global (toutes les pages clients actives)
   if (p === '/robots.txt') return texte('User-agent: *\nAllow: /\nDisallow: /gestion\nDisallow: /app/\nDisallow: /api/\n\nSitemap: https://' + DOMAINE + '/sitemap.xml\n');
   if (p === '/sitemap.xml') return planGlobal(env, url.searchParams.has('frais'));
@@ -4385,7 +4386,8 @@ async function purgerStats(env) {
 const DUREE_CACHE_PLAN = 6 * 3600;
 function planSitePrincipal(construit) {
   const jour = new Date().toISOString().slice(0, 10);
-  const fixes = ['/generateur-qr-code', '/generateur-qr-code?lang=en', '/generateur-qr-code?lang=ru', '/cgv', '/cgv?lang=en', '/cgv?lang=ru', '/mentions-legales', '/mentions-legales?lang=en', '/mentions-legales?lang=ru'];
+  // (le générateur de QR est désormais une page du site construit : il est dans « construit »)
+  const fixes = ['/cgv', '/cgv?lang=en', '/cgv?lang=ru', '/mentions-legales', '/mentions-legales?lang=en', '/mentions-legales?lang=ru'];
   // site construit dans /constructeur (pages + articles du blog), sinon l'accueil historique
   const adresses = (construit || ['/', '/?lang=en', '/?lang=ru'].map(loc => ({ loc, lastmod: jour }))).concat(fixes.map(loc => ({ loc, lastmod: jour })));
   return '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +

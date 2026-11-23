@@ -20,7 +20,7 @@ const TYPES = ['articles', 'galerie', 'blog', 'contact'];
 const GENRES = ['accroche', 'texte', 'cartes', 'etiquettes', 'faq', 'inscription', 'bouton', 'image', 'code'];
 const MAX_CODE = 200000;   // section « Code HTML » : par langue
 // adresses déjà prises sur qrbc.app : une page du site ne peut pas les utiliser
-const RESERVES = new Set(['app', 'gestion', 'api', 'cgv', 'mentions-legales', 'generateur-qr-code', 'generateur-qr', 'qr-code-gratuit', 'constructeur',
+const RESERVES = new Set(['app', 'gestion', 'api', 'cgv', 'mentions-legales', 'generateur-qr', 'qr-code-gratuit', 'constructeur',
   'media', 'videos', 'images', 'impression', 'sitemap', 'robots', 'index', 'favicon', 'sw', 'manifest', 'commun', 'i18n', 'qrcode', 'inscription',
   'admin', 'icon-192', 'icon-512', 'apple-touch-icon', 'og-qrbc', 'www', 'qrbc']);
 const MAX = { pages: 40, sections: 200, items: 60, photos: 300, articles: 500, texte: 20000, court: 300 };
@@ -584,7 +584,8 @@ export async function routeSite(request, env, url, O) {
   if (segs.length === 2 && page.type !== 'blog') return null;
   const l = url.searchParams.get('lang');
   const lang = languesDe(cfg).includes(l) ? l : 'fr';
-  O.compterVisiteSite(request, env, url, page.chemin === '' ? 'accueil' : page.chemin.slice(0, 30));
+  // le générateur de QR (désormais une page du constructeur) garde sa ligne de statistiques « Générateur de QR code »
+  O.compterVisiteSite(request, env, url, page.chemin === '' ? 'accueil' : page.chemin === 'generateur-qr-code' ? 'generateur-qr' : page.chemin.slice(0, 30));
   const html = await rendrePageSite(env, request, cfg, page, lang, { article: segs.length === 2 ? segs[1] : '' });
   if (!html) return null;
   const r = traduireFixes(html, lang, await O.dictionnaire(env, request), await lireFixes(env, lang));
@@ -603,6 +604,15 @@ async function servirMedia(env, request, nom) {
   if (debut >= total || debut > fin) { h.set('content-range', 'bytes */' + total); return new Response(null, { status: 416, headers: h }); }
   h.set('content-range', 'bytes ' + debut + '-' + fin + '/' + total); h.set('content-length', String(fin - debut + 1));
   return new Response(request.method === 'HEAD' ? null : value.slice(debut, fin + 1), { status: 206, headers: h });
+}
+// ancienne adresse du générateur de QR (page statique archivée) : page du site construit qui porte le générateur
+export async function adresseGenerateur(env) {
+  if (!(await siteActif(env))) return '';
+  const cfg = await publie(env);
+  if (!cfg) return '';
+  const p = cfg.pages.find(x => x.chemin === 'generateur-qr-code') ||
+    cfg.pages.find(x => x.type === 'articles' && (x.sections || []).some(s => s.genre === 'code' && !s.masque && /qrcode\.js/.test((s.code && s.code.fr) || '')));
+  return p ? '/' + p.chemin : '';
 }
 // adresses du site construit pour le plan du site (sitemap-site.xml)
 export async function adressesSite(env) {
