@@ -21,6 +21,9 @@
   .btn-danger{color:var(--err)}
   input[type=text],input[type=url],input[type=date],input[type=password],select,textarea{width:100%;padding:9px 10px;border:1px solid var(--ligne);border-radius:9px;background:var(--bg);outline:none}
   textarea{resize:vertical;min-height:70px}
+  textarea.code{font:13px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:pre;overflow:auto;tab-size:2;background:#1e1e1e;color:#e6e6e6;border-color:#1e1e1e}
+  .langues-code{display:flex;gap:6px;margin:0 0 8px}
+  .langues-code .actif{background:var(--prim);color:var(--prim-txt)}
   input:focus,textarea:focus,select:focus{border-color:var(--accent)}
   label.champ{display:block;margin:0 0 12px}
   label.champ>span,.etiq{display:block;font-size:.78rem;font-weight:700;color:var(--doux);margin:0 0 4px;text-transform:uppercase;letter-spacing:.03em}
@@ -519,7 +522,7 @@
 
   /* --- Articles (sections) --- */
   var GENRES = [['accroche', 'Accroche (grand titre)'], ['texte', 'Texte (+ image)'], ['cartes', 'Cartes (atouts)'], ['etiquettes', 'Étiquettes'], ['faq', 'Questions / réponses'],
-    ['inscription', 'Formulaire d’inscription'], ['bouton', 'Bouton seul'], ['image', 'Image pleine largeur']];
+    ['inscription', 'Formulaire d’inscription'], ['bouton', 'Bouton seul'], ['image', 'Image pleine largeur'], ['code', '</> Code HTML (libre)']];
   function editeurArticles(p) {
     p.video = p.video || { actif: false, src: {} };
     var vid = el('div', { class: 'carte' }, [el('h2', { text: '🎬 Vidéo flottante' }),
@@ -585,6 +588,20 @@
         el('p', { class: 'aide', text: 'Le formulaire d’essai gratuit (activité + e-mail). Un seul par page.' }));
     } else if (G === 'bouton') {
       f.push(editeurBouton(s, 'Bouton'));
+    } else if (G === 'code') {
+      s.code = s.code || { fr: '', en: '', ru: '' };
+      var lc = carteSel['code-' + s.id] || 'fr';
+      var zone = el('textarea', { class: 'code', rows: 22, spellcheck: 'false', placeholder: lc === 'fr' ? '<section>\n  <h2>Mon outil</h2>\n  …\n</section>\n<script>…<\/script>' : 'Vide = le code français est utilisé' });
+      zone.value = s.code[lc] || '';
+      zone.addEventListener('input', function () { s.code[lc] = zone.value; changement(true); });
+      zone.addEventListener('keydown', function (e) {               // Tab = indentation
+        if (e.key !== 'Tab') return; e.preventDefault();
+        var a = zone.selectionStart; zone.setRangeText('  ', a, zone.selectionEnd, 'end'); zone.dispatchEvent(new Event('input'));
+      });
+      f.push(el('div', { class: 'langues-code' }, ['fr', 'en', 'ru'].map(function (l) {
+        return el('button', { type: 'button', class: 'btn btn-mini' + (l === lc ? ' actif' : ''), text: l.toUpperCase() + (l !== 'fr' && !(s.code[l] || '').trim() ? ' (= FR)' : ''), onclick: function () { carteSel['code-' + s.id] = l; dessiner(); } });
+      })), zone,
+        el('p', { class: 'aide', text: 'HTML, <style> et <script> collés tels quels, entre l’en-tête et le pied de page du site. Une seule section « Code » = une page entièrement libre. EN / RU vides : le code français est affiché (il peut lire document.documentElement.lang). Ce code n’est pas traduit par l’IA. Scripts utiles déjà en ligne : /qrcode.js.' }));
     } else if (G === 'image') {
       f.push(champImage('Image', s, 'image'), champ('Description de l’image (Google, malvoyants)', s, 'alt'), champ('Légende (facultative)', s, 'texte', { liens: true }));
     }

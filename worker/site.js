@@ -11,7 +11,8 @@ const CLES = { brouillon: 'principal:brouillon', publie: 'principal:publie', act
 const PREFIXE_MEDIA = 'principal:media:';
 export const LANGUES_SITE = ['fr', 'en', 'ru'];
 const TYPES = ['articles', 'galerie', 'blog', 'contact'];
-const GENRES = ['accroche', 'texte', 'cartes', 'etiquettes', 'faq', 'inscription', 'bouton', 'image'];
+const GENRES = ['accroche', 'texte', 'cartes', 'etiquettes', 'faq', 'inscription', 'bouton', 'image', 'code'];
+const MAX_CODE = 200000;   // section « Code HTML » : par langue
 // adresses déjà prises sur qrbc.app : une page du site ne peut pas les utiliser
 const RESERVES = new Set(['app', 'gestion', 'api', 'cgv', 'mentions-legales', 'generateur-qr-code', 'generateur-qr', 'qr-code-gratuit', 'constructeur',
   'media', 'videos', 'images', 'impression', 'sitemap', 'robots', 'index', 'favicon', 'sw', 'manifest', 'commun', 'i18n', 'qrcode', 'inscription',
@@ -84,7 +85,9 @@ function nettoyerSection(s) {
     bouton: { texte: ch(s.bouton && s.bouton.texte, 120), lien: nettoyerLien(s.bouton && s.bouton.lien) },
     items: nettoyerItems(s.items),
     encart: { titre: ch(s.encart && s.encart.titre, 300), texte: ch(s.encart && s.encart.texte, 1000), image: media(s.encart && s.encart.image) },
-    avecInscription: !!s.avecInscription
+    avecInscription: !!s.avecInscription,
+    // Code HTML libre (Roman seul y a accès) : une version par langue, le français sert par défaut
+    code: s.genre === 'code' ? ['fr', 'en', 'ru'].reduce((o, l) => { o[l] = typeof (s.code && s.code[l]) === 'string' ? s.code[l].slice(0, MAX_CODE) : ''; return o; }, {}) : undefined
   };
 }
 function nettoyerPage(p, deja) {
@@ -268,6 +271,11 @@ function section(s, ctx) {
       return '<section' + id + '>' + h2 + (s.texte ? paragraphes(s.texte, ctx, 'intro') : '') + '<ul class="metiers">' + s.items.map(x => '<li>' + enLigne(x.titre, ctx) + '</li>').join('') + '</ul></section>';
     case 'faq':
       return '<section class="faq"' + id + '>' + h2 + s.items.map(x => '<details><summary>' + enLigne(x.titre, ctx) + '</summary>' + paragraphes(x.texte, ctx) + '</details>').join('') + '</section>';
+    case 'code': {
+      const c = s.code || {};
+      const html = (c[ctx.lang] && c[ctx.lang].trim()) ? c[ctx.lang] : (c.fr || '');
+      return html.trim() ? '<div class="s-code"' + id + ' data-no-i18n>' + html + '</div>' : '';
+    }
     case 'bouton':
       return '<p class="s-bouton"' + id + '>' + bouton(s.bouton, ctx) + '</p>';
     case 'image':
@@ -359,6 +367,7 @@ const CSS_SITE = `<style>
   @media (min-width:760px){.s-img-dessus{grid-template-columns:1fr}}
   .s-photo,.s-image img{width:100%;border-radius:16px;display:block}
   .s-image{margin:0}
+  .s-code{margin:0 0 28px}
   .s-image figcaption{color:var(--doux);font-size:.9rem;margin-top:8px}
   .bloc-inscription-seul{max-width:520px}
   .galerie-site{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
@@ -474,14 +483,15 @@ export async function rendrePageSite(env, request, cfg, page, lang, opts) {
 function traduireFixes(html, lang, dico) {
   if (lang === 'fr') return new Response(html, { headers: { 'content-type': 'text/html; charset=utf-8' } });
   const i = lang === 'en' ? 0 : 1;
-  let tampon = '', dansScript = false;
+  let tampon = '', dansScript = false, dansCode = 0;
   return new HTMLRewriter()
     .on('script', { element(e) { dansScript = true; e.onEndTag(() => { dansScript = false; }); } })
+    .on('div.s-code', { element(e) { dansCode++; e.onEndTag(() => { dansCode--; }); } })
     .onDocument({ text(t) {
       tampon += t.text;
       if (!t.lastInTextNode) { t.remove(); return; }
       const brut = tampon; tampon = '';
-      const cle = brut.trim(), v = !dansScript && cle && dico.get(cle);
+      const cle = brut.trim(), v = !dansScript && !dansCode && cle && dico.get(cle);
       if (!v || !v[i]) { t.replace(brut, { html: true }); return; }
       const d = brut.indexOf(cle);
       t.replace(brut.slice(0, d) + esc(v[i]) + brut.slice(d + cle.length), { html: true });
