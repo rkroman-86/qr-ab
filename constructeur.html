@@ -738,16 +738,35 @@
       btn.disabled = true; msg.className = 'msg'; msg.textContent = 'Traduction en cours…';
       try {
         var j = await api('site-traduire', { page: p, lang: langue });
+        // nom dans le menu saisi à la main (vide en français) : gardé
+        if (t && t.page && t.page.nomMenu && !j.page.nomMenu) j.page.nomMenu = t.page.nomMenu;
         cfg.traductions[langue][p.id] = { page: j.page, source: j.source, le: j.le };
         changement(); toast('Traduction prête : relisez-la');
       } catch (e) { msg.className = 'msg err'; msg.textContent = e.message; btn.disabled = false; }
     } });
     c.append(el('div', { class: 'actions', style: 'margin:0 0 10px' }, [el('span', { class: 'aide', style: 'margin:0;flex:1', text: nomLangue(langue) }),
       el('button', { type: 'button', class: 'btn btn-mini btn-danger', text: '🗑 Retirer cette langue', onclick: function () { retirerLangue(langue); } })]));
-    c.append(el('p', { class: 'aide', style: 'margin:0 0 10px', text: 'La structure (sections, images, liens) vient de la page française. Ici, vous retouchez seulement les textes. Sans traduction, la page s’affiche en français.' }), btn, msg);
-    if (!t) return c;
+    // titre et nom dans le menu : modifiables à la main, même sans traduction IA (pages en code)
     var fr = textesPage(p);
+    var seulNom = Object.keys(fr).every(function (k) { return k === 'titre' || k === 'nomMenu'; });
+    function entree() {
+      if (!t) { t = cfg.traductions[langue][p.id] = { page: JSON.parse(JSON.stringify(p)), source: '', le: new Date().toISOString() }; }
+      return t;
+    }
+    [['titre', 'Titre de la page', p.titre], ['nomMenu', 'Nom dans le menu', p.nomMenu || p.titre]].forEach(function (x) {
+      var inp = el('input', { type: 'text', placeholder: x[2] });
+      inp.value = t && t.page && typeof t.page[x[0]] === 'string' && (x[0] !== 'titre' || t.source) ? t.page[x[0]] : '';
+      inp.addEventListener('input', function () {
+        var e = entree(); e.page[x[0]] = inp.value || (x[0] === 'titre' ? p.titre : '');
+        if (seulNom) e.source = empreinte(JSON.stringify(fr));    // page sans autre texte (code) : traduction à jour
+        changement(true);
+      });
+      c.append(el('div', { class: 'trad-ligne trad-nom' }, [el('span', { class: 'etiq', text: x[1] + ' (' + langue.toUpperCase() + ')' }), el('p', { class: 'fr', text: 'FR : ' + x[2] }), inp]));
+    });
+    c.append(el('p', { class: 'aide', style: 'margin:10px 0 10px', text: 'La structure (sections, images, liens) vient de la page française. Ici, vous retouchez seulement les textes. Sans traduction, la page s’affiche en français.' }), btn, msg);
+    if (!t) return c;
     Object.keys(fr).forEach(function (cle) {
+      if (cle === 'titre' || cle === 'nomMenu') return;          // déjà en haut
       var long = fr[cle].length > 70 || /\n/.test(fr[cle]);
       var inp = long ? el('textarea', { rows: Math.min(10, Math.max(2, Math.ceil(fr[cle].length / 60))) }) : el('input', { type: 'text' });
       var v = lireChemin(t.page, cle);
