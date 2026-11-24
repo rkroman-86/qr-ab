@@ -597,7 +597,8 @@ const CSS_PAGE = `
 .qp-dispo-hautbas .qp-zone-a{order:-1}
 .qp-dispo-hautbas .qp-entete{margin:auto 0}
 .qp-dispo-hautbas .qp-rs{display:flex;flex-wrap:wrap;justify-content:center;gap:14px 22px}
-.qp .qp-rs-libre{display:flex;flex-wrap:wrap;justify-content:center;gap:14px 22px}
+.qp .qp-rs-libre{display:flex;flex-wrap:wrap;justify-content:center;gap:16px 20px;margin-left:auto;margin-right:auto}
+.qp .qp-rs-libre .qp-rs-item{width:70px;text-align:center}
 .qp-dispo-hautbas .qp-zone-b{margin-top:24px}
 .qp-dispo-cotes{align-items:stretch}
 .qp-dispo-cotes .qp-contenu{display:grid;grid-template-columns:66px 1fr 66px;grid-template-areas:"a entete b" "a pied b";
@@ -845,7 +846,7 @@ function rendrePage(cfgBrut, racine, opts) {
     if (b.type === 'reseaux') {
       const items = cfg.reseaux.filter(r => r.actif && (opts.apercu || String(r.valeur || '').trim()));
       if (!items.length) return;
-      if (!ronds || !grille) nouvelleGrille();
+      if (!grille) { nouvelleGrille(); if (!ronds) grille.classList.add('qp-rs-libre'); }   // même rangée que les icônes voisines
       items.forEach(r => {
         const R = RESEAUX[r.id];
         grille.appendChild(creerRond(doc, {
@@ -854,7 +855,6 @@ function rendrePage(cfgBrut, racine, opts) {
           nomVisible: d.nomsReseaux, apercu: opts.apercu
         }));
       });
-      if (!ronds) grille = null;
       nbAffiches++;
       return;
     }
@@ -896,6 +896,11 @@ function rendrePage(cfgBrut, racine, opts) {
     v.textContent = 'Aucun bouton pour l’instant';
     zone.appendChild(v);
   }
+  if (dispo === 'centre' || dispo === 'haut' || dispo === 'bas') zone.querySelectorAll('.qp-rs').forEach(g => g.classList.add('qp-rs-libre'));
+  zone.querySelectorAll('.qp-rs-libre').forEach(g => {
+    const n = g.children.length, par = n <= 4 ? n : (n === 5 || n === 6 || n === 9) ? 3 : 4;
+    g.style.maxWidth = (par * 70 + (par - 1) * 20) + 'px';
+  });
   if (DISPOSITIONS[dispo].scinde) {
     // Répartit les icônes en deux groupes : première moitié / seconde moitié (ordre des flèches)
     const items = [...zone.querySelectorAll('.qp-rs-item')];

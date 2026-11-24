@@ -148,7 +148,7 @@
 
     /* ---------- Éditeur ---------- */
     #editeur{min-height:100dvh;display:flex;flex-direction:column}
-    .barre{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:10px;padding:10px 16px;
+    .barre{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:10px;padding:10px 16px;
       background:var(--panneau);border-bottom:1px solid var(--ligne)}
     .barre h1{font-size:1rem;margin:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .onglets{display:flex;background:var(--bg);border-radius:10px;padding:3px}
@@ -418,7 +418,7 @@
     .choix-police{position:relative}
     .cp-bouton{width:100%;text-align:left;border:1px solid var(--ligne);border-radius:12px;background:var(--bg);padding:12px 40px 12px 14px;font-size:1.05rem;cursor:pointer;position:relative;min-height:46px}
     .cp-bouton::after{content:'';position:absolute;right:16px;top:50%;width:8px;height:8px;border:solid currentColor;border-width:0 2px 2px 0;transform:translateY(-70%) rotate(45deg);opacity:.6}
-    .cp-liste{position:absolute;z-index:40;left:0;right:0;top:calc(100% + 4px);background:var(--panneau, #fff);border:1px solid var(--ligne);border-radius:14px;box-shadow:0 14px 34px rgba(0,0,0,.18);overflow:hidden;min-width:220px}
+    .cp-liste{position:absolute;z-index:25;left:0;right:0;top:calc(100% + 4px);background:var(--panneau, #fff);border:1px solid var(--ligne);border-radius:14px;box-shadow:0 14px 34px rgba(0,0,0,.18);overflow:hidden;min-width:220px}
     .cp-option{display:flex;width:100%;align-items:baseline;justify-content:space-between;gap:10px;border:0;border-top:1px solid var(--ligne);background:none;padding:12px 14px;cursor:pointer;text-align:left}
     .cp-option:first-child{border-top:0}
     .cp-option:hover,.cp-option.actif{background:color-mix(in srgb,var(--prim) 10%,transparent)}
