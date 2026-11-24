@@ -44,6 +44,7 @@
   .langues button{border:0;background:none;padding:7px 12px;font-weight:700;cursor:pointer}
   .langues button.actif{background:var(--prim);color:var(--prim-txt)}
   .langues button.plus{color:var(--accent);font-size:1.05rem;padding:7px 11px}
+  .ordre-entete{display:flex;align-items:center;gap:6px}
   .menu-langues{position:fixed;z-index:60;background:#fff;border:1px solid var(--ligne);border-radius:12px;box-shadow:0 12px 30px rgba(0,0,0,.18);padding:6px;display:grid;grid-template-columns:1fr 1fr;gap:2px;width:280px}
   .menu-langues button{border:0;background:none;text-align:left;padding:8px 10px;border-radius:8px;cursor:pointer;font-weight:600}
   .menu-langues button:hover{background:var(--bg)}
@@ -322,6 +323,7 @@
   function idNeuf() { return Math.random().toString(36).slice(2, 8); }
   var ICONES = { articles: '📝', galerie: '📷', blog: '📰', contact: '✉️', pied: '🦶' };
   var vuePied = false;                     // pied de page affiché à la place des réglages de la page
+  var vueEntete = false;                   // en-tête (logo, ordre, figé) : idem
   var NOMS_TYPES = { articles: 'Articles', galerie: 'Galerie', blog: 'Blog', contact: 'Contact' };
   function champ(lib, obj, cle, opts) {
     opts = opts || {};
@@ -464,7 +466,12 @@
     f.addEventListener('change', async function () {
       var x = f.files[0]; f.value = ''; if (!x) return;
       z.append(el('span', { class: 'aide', style: 'margin:0', text: 'Envoi…' }));
-      try { var r = await envoyerImage(x, opts.max || 1600, opts.mini ? (opts.maxMini || 640) : 0); obj[cle] = r.src; if (opts.mini) obj[opts.mini] = r.mini; maj(); changement(true); }
+      try {
+        var r = opts.original && /^image\/(png|svg\+xml|webp)$/.test(x.type) && x.size <= 2 * 1024 * 1024
+          ? { src: await envoyerMedia(x, x.type) }                     // logo : transparence gardée
+          : await envoyerImage(x, opts.max || 1600, opts.mini ? (opts.maxMini || 640) : 0);
+        obj[cle] = r.src; if (opts.mini) obj[opts.mini] = r.mini; maj(); changement(true);
+      }
       catch (e) { alert(e.message); maj(); }
     });
     maj();
@@ -503,7 +510,8 @@
     g.innerHTML = '';
     g.append(cartePages());
     var p = page();
-    if (vuePied) g.append(langue === 'fr' ? cartePied() : carteTraduction(cfg.pied));
+    if (vueEntete) g.append(carteEntete());
+    else if (vuePied) g.append(langue === 'fr' ? cartePied() : carteTraduction(cfg.pied));
     else if (langue === 'fr') g.append(carteReglagesPage(p), editeurPage(p));
     else g.append(carteTraduction(p));
     g.scrollTop = haut;
@@ -514,7 +522,7 @@
     cfg.pages.forEach(function (p, i) {
       var accueil = p.chemin === '';
       var trad = langue !== 'fr' ? etatTraduction(p) : null;
-      liste.append(el('div', { class: 'lp' + (p.id === pageSel && !vuePied ? ' actif' : ''), onclick: function (e) { if (e.target.closest('button')) return; pageSel = p.id; vuePied = false; articleApercu = ''; dessiner(); apercu(); } }, [
+      liste.append(el('div', { class: 'lp' + (p.id === pageSel && !vuePied && !vueEntete ? ' actif' : ''), onclick: function (e) { if (e.target.closest('button')) return; pageSel = p.id; vuePied = false; vueEntete = false; articleApercu = ''; dessiner(); apercu(); } }, [
         el('span', { class: 'ico', text: ICONES[p.type] }),
         el('span', { class: 'nom', text: p.titre }),
         el('span', { class: 'chemin', text: '/' + p.chemin + (p.menu === false ? ' · hors menu' : '') }),
@@ -532,8 +540,10 @@
     ].map(function (t) {
       return el('button', { type: 'button', onclick: function () { ajouterPage(t[0]); } }, [el('b', { text: ICONES[t[0]] + ' ' + t[1] }), el('small', { text: t[2] })]);
     }));
+    liste.insertBefore(el('div', { class: 'lp lp-pied' + (vueEntete ? ' actif' : ''), onclick: function () { vueEntete = true; vuePied = false; dessiner(); } }, [
+      el('span', { class: 'ico', text: '🔝' }), el('span', { class: 'nom', text: 'En-tête' }), el('span', { class: 'chemin', text: 'logo, menu, langues' })]), liste.firstChild);
     var tradPied = langue !== 'fr' ? etatTraduction(cfg.pied) : null;
-    liste.append(el('div', { class: 'lp lp-pied' + (vuePied ? ' actif' : ''), onclick: function () { vuePied = true; dessiner(); } }, [
+    liste.append(el('div', { class: 'lp lp-pied' + (vuePied ? ' actif' : ''), onclick: function () { vuePied = true; vueEntete = false; dessiner(); } }, [
       el('span', { class: 'ico', text: '🦶' }), el('span', { class: 'nom', text: 'Pied de page' }), el('span', { class: 'chemin', text: 'toutes les pages' }),
       tradPied ? el('span', { class: 'badge ' + (tradPied.ok ? 'ok' : 'ko'), text: tradPied.texte }) : null]));
     return el('div', { class: 'carte' }, [el('h2', { text: 'Pages du site' }), liste,
@@ -550,7 +560,7 @@
     if (type === 'galerie') { p.intro = ''; p.photos = []; }
     if (type === 'blog') { p.intro = ''; p.articles = []; }
     if (type === 'contact') { p.source = 'qrbc01'; p.intro = ''; }
-    cfg.pages.push(p); pageSel = p.id; vuePied = false; articleApercu = '';
+    cfg.pages.push(p); pageSel = p.id; vuePied = false; vueEntete = false; articleApercu = '';
     changement(); apercu();
   }
   function carteReglagesPage(p) {
@@ -754,6 +764,41 @@
       champ('Adresse du site client à afficher', p, 'source', { ph: 'qrbc01' }),
       el('p', { class: 'aide', text: 'Nom d’un de vos sites qrbc (ex. qrbc01 pour qrbc01.qrbc.app) : sa page contact s’affiche ici telle quelle. Modifiez-la dans son éditeur habituel.' }),
       champ('Texte au-dessus (facultatif)', p, 'intro', { multi: true, rows: 2, liens: true })]);
+  }
+
+  /* ---------- En-tête (commun à toutes les pages) : figé, logo, ordre ---------- */
+  var NOMS_ENTETE = { logo: 'Logo', langue: 'Choix de la langue', menu: 'Menu des pages' };
+  function carteEntete() {
+    var e = cfg.entete = cfg.entete || {};
+    e.logo = e.logo || {}; e.logo.taille = e.logo.taille || 'm';
+    e.ordre = (e.ordre || []).filter(function (k) { return NOMS_ENTETE[k]; });
+    ['logo', 'langue', 'menu'].forEach(function (k) { if (e.ordre.indexOf(k) < 0) e.ordre.push(k); });
+    var c = el('div', { class: 'carte' }, [el('h2', { text: '🔝 En-tête' }),
+      el('p', { class: 'aide', style: 'margin:0 0 12px', text: 'Le même sur toutes les pages, dans toutes les langues. « Se connecter » reste toujours à la fin (dessous sur téléphone).' })]);
+    var fige = el('input', { type: 'checkbox' }); fige.checked = !!e.fige;
+    fige.addEventListener('change', function () { e.fige = fige.checked; changement(true); });
+    c.append(el('label', { class: 'case' }, [fige, el('span', { text: 'Figer l’en-tête en haut de l’écran (reste visible quand on fait défiler)' })]));
+    // logo
+    c.append(el('span', { class: 'etiq', style: 'margin-top:14px', text: 'Logo' }),
+      el('p', { class: 'aide', style: 'margin:0 0 6px', text: 'Sans image : le texte « qrbc. QR Business Card ». PNG ou SVG transparent conseillé (gardé tel quel jusqu’à 2 Mo).' }),
+      champImage('Image du logo', e.logo, 'image', { original: true, max: 800 }));
+    var taille = el('select', {}, [['s', 'Petit'], ['m', 'Moyen'], ['l', 'Grand']].map(function (o) { return el('option', { value: o[0], text: o[1] }); }));
+    taille.value = e.logo.taille; taille.addEventListener('change', function () { e.logo.taille = taille.value; changement(true); });
+    var texte = el('input', { type: 'checkbox' }); texte.checked = !!e.logo.texte;
+    texte.addEventListener('change', function () { e.logo.texte = texte.checked; changement(true); });
+    c.append(el('label', { class: 'champ' }, [el('span', { text: 'Taille de l’image' }), taille]),
+      el('label', { class: 'case' }, [texte, el('span', { text: 'Afficher aussi le texte « qrbc. » à côté de l’image' })]),
+      champ('Texte alternatif de l’image (pour Google et l’accessibilité)', e.logo, 'alt'));
+    // ordre
+    c.append(el('span', { class: 'etiq', style: 'margin-top:14px', text: 'Ordre (de gauche à droite)' }));
+    var zo = el('div');
+    e.ordre.forEach(function (k, i) {
+      zo.append(el('div', { class: 'item ordre-entete' }, [el('b', { text: (i + 1) + '. ' + NOMS_ENTETE[k] }), el('span', { class: 'esp' }),
+        el('button', { type: 'button', class: 'btn btn-mini', text: '↑', disabled: i === 0, onclick: function () { e.ordre.splice(i - 1, 0, e.ordre.splice(i, 1)[0]); changement(); } }),
+        el('button', { type: 'button', class: 'btn btn-mini', text: '↓', disabled: i === e.ordre.length - 1, onclick: function () { e.ordre.splice(i + 1, 0, e.ordre.splice(i, 1)[0]); changement(); } })]));
+    });
+    c.append(zo, el('p', { class: 'aide', style: 'margin:6px 0 0', text: 'Le premier élément est calé à gauche, les suivants à droite. Le menu n’apparaît qu’à partir de 2 pages (picto ☰ sur téléphone).' }));
+    return c;
   }
 
   /* ---------- Pied de page (commun à toutes les pages) ---------- */

@@ -108,6 +108,18 @@ const PIED_DEFAUT = {
   reseaux: [{ type: 'facebook', lien: 'https://www.facebook.com/61596401707316', titre: 'Suivez-nous sur Facebook' }],
   liens: [{ titre: 'Générateur de QR code gratuit', lien: '/generateur-qr-code' }]
 };
+/* En-tête du site : figé en haut (non par défaut), logo (image chargée ou texte qrbc), ordre logo / langue / menu */
+const ORDRE_ENTETE = ['logo', 'langue', 'menu'];
+function entete_(cfg) {
+  const x = (cfg && cfg.entete) || {};
+  const l = x.logo || {};
+  const ordre = Array.isArray(x.ordre) ? x.ordre.filter(k => ORDRE_ENTETE.includes(k)) : [];
+  return {
+    fige: !!x.fige,
+    ordre: [...new Set(ordre.concat(ORDRE_ENTETE))],
+    logo: { image: media(l.image), taille: ['s', 'm', 'l'].includes(l.taille) ? l.taille : 'm', texte: !!l.texte, alt: ch(l.alt, 80) }
+  };
+}
 function nettoyerPied(x) {
   x = x && typeof x === 'object' ? x : PIED_DEFAUT;
   return {
@@ -181,7 +193,7 @@ export function nettoyerConfig(cfg) {
     const tp = src.pied;
     if (tp && tp.page) trad[l].pied = { page: appliquerTextes(pied, textesPage(nettoyerPied(tp.page))), source: ch(tp.source, 20), le: ch(tp.le, 30) };
   }
-  return { v: 1, pages, pied, langues, traductions: trad, maj: new Date().toISOString() };
+  return { v: 1, pages, pied, entete: entete_(cfg), langues, traductions: trad, maj: new Date().toISOString() };
 }
 
 /* ---------------- Lecture ---------------- */
@@ -378,6 +390,16 @@ async function configContact(env, page, lang) {
 }
 
 const CSS_SITE = `<style>
+  header.hd{display:flex;align-items:center;gap:16px;position:relative}
+  .hd-ligne{display:flex;align-items:center;gap:18px;flex:1 1 auto;min-width:0}
+  .hd-ligne>:first-child{margin-right:auto}
+  .hd-el{display:flex;align-items:center;min-width:0}
+  a.hd-logo{color:inherit;text-decoration:none;gap:10px}
+  .hd-logo-img{display:block;width:auto;max-width:220px;object-fit:contain}
+  .hd-logo-img.t-s{height:32px}.hd-logo-img.t-m{height:44px}.hd-logo-img.t-l{height:60px}
+  header.hd .hd-actions{display:flex;align-items:center;gap:14px;flex:none}
+  header.hd-fige{position:sticky;top:0;z-index:30;background:var(--bg);margin:-20px -16px 40px;padding:12px 16px;border-bottom:1px solid transparent;transition:border-color .2s,box-shadow .2s}
+  header.hd-fige.defile{border-bottom-color:var(--ligne);box-shadow:0 6px 18px rgba(0,0,0,.06)}
   .nav-site{display:flex;align-items:center;gap:18px}
   .nav-site>a{color:var(--txt);font-weight:600;font-size:.92rem;text-decoration:none;padding:4px 0;border-bottom:2px solid transparent}
   .nav-site>a.ici{border-bottom-color:var(--accent)}
@@ -385,12 +407,10 @@ const CSS_SITE = `<style>
   header{gap:14px;flex-wrap:wrap;position:relative}
   @media (max-width:859px){
     .nav-bouton{display:inline-block}
-    /* téléphone : logo | langue ☰, « Se connecter » juste dessous à droite */
-    .hd-actions.avec-menu{display:grid;grid-template-columns:auto auto;justify-items:end;align-items:center;column-gap:10px;row-gap:4px}
-    .hd-actions.avec-menu>[data-langue]{order:1}
-    .hd-actions.avec-menu>.nav-bouton{order:2}
-    .hd-actions.avec-menu>a{order:3;grid-column:1 / -1;font-size:.9rem}
-    .hd-actions.avec-menu>.installer{order:4;grid-column:1 / -1}
+    header.hd{flex-wrap:wrap;row-gap:2px}
+    .hd-ligne{flex-basis:100%;gap:10px}
+    header.hd .hd-actions{margin-left:auto;font-size:.9rem}
+    .hd-logo-img.t-l{height:48px}
     .nav-site{display:none;position:absolute;left:0;right:0;top:calc(100% + 6px);z-index:15;flex-direction:column;align-items:stretch;gap:0;padding:8px;background:var(--panneau);border:1px solid var(--ligne);border-radius:14px;box-shadow:0 12px 30px rgba(0,0,0,.18)}
     .nav-site.ouvert{display:flex}
     .nav-site>a{padding:12px 10px;border-bottom:1px solid var(--ligne)}
@@ -450,6 +470,8 @@ const CSS_SITE = `<style>
 
 const JS_SITE = `<script>
 (function(){
+  var hf=document.querySelector('header.hd-fige');
+  if(hf){var df=function(){hf.classList.toggle('defile',(window.scrollY||0)>8);};window.addEventListener('scroll',df,{passive:true});df();}
   var b=document.querySelector('.nav-bouton'),n=document.querySelector('.nav-site');
   if(b&&n){b.addEventListener('click',function(e){e.stopPropagation();var o=n.classList.toggle('ouvert');b.setAttribute('aria-expanded',o);});
     document.addEventListener('click',function(e){if(!n.contains(e.target))n.classList.remove('ouvert');});}
@@ -517,10 +539,20 @@ export async function rendrePageSite(env, request, cfg, page, lang, opts) {
     const v = pageEnLangue(cfg, p, lang);
     return '<a href="' + esc(adresse(p, lang)) + '"' + (p.id === page.id ? ' class="ici" aria-current="page"' : '') + '>' + esc(v.nomMenu || v.titre) + '</a>';
   }).join('');
-  const entete = g.entete.replace('<div class="marque">', '<a href="' + esc(adresse(cfg.pages.find(p => p.chemin === '') || page, lang)) + '" style="color:inherit;text-decoration:none"><div class="marque">')
-    .replace('</small></div>', '</small></div></a>')
-    .replace('<div class="hd-actions">', (menu ? '<nav class="nav-site" aria-label="' + nomF('menu', lang, fx) + '">' + menu + '</nav>' : '') + '<div class="hd-actions' + (menu ? ' avec-menu' : '') + '">' +
-      (menu ? '<button type="button" class="nav-bouton" aria-label="' + nomF('menu', lang, fx) + '" aria-expanded="false">☰</button>' : ''));
+  // en-tête (24/11) : logo (texte qrbc ou image), menu et choix de langue dans l'ordre réglé ; « Se connecter » à la fin
+  // (dessous sur téléphone) ; option « figé en haut »
+  const E = entete_(cfg);
+  const marqueTpl = (g.entete.match(/<div class="marque">[\s\S]*?<\/small><\/div>/) || [''])[0];
+  const actionsTpl = (g.entete.match(/<a href="\/app">[\s\S]*?<\/button>/) || [''])[0];
+  const logo = E.logo.image ? '<img class="hd-logo-img t-' + E.logo.taille + '" src="' + esc(E.logo.image) + '" alt="' + esc(E.logo.alt || 'qrbc') + '">' + (E.logo.texte ? marqueTpl : '') : marqueTpl;
+  const blocs = {
+    logo: '<a class="hd-el hd-logo" href="' + esc(adresse(cfg.pages.find(p => p.chemin === '') || page, lang)) + '">' + logo + '</a>',
+    menu: menu ? '<div class="hd-el hd-menu"><nav class="nav-site" aria-label="' + nomF('menu', lang, fx) + '">' + menu + '</nav>' +
+      '<button type="button" class="nav-bouton" aria-label="' + nomF('menu', lang, fx) + '" aria-expanded="false">☰</button></div>' : '',
+    langue: '<div class="hd-el hd-langue"><span class="langue" data-langue></span></div>'
+  };
+  const entete = '<header class="hd' + (E.fige ? ' hd-fige' : '') + '"><div class="hd-ligne">' + E.ordre.map(k => blocs[k]).join('') + '</div>' +
+    '<div class="hd-actions">' + actionsTpl + '</div></header>';
   // vidéo de la page (articles) : vidéo choisie dans le constructeur, sinon la vidéo de présentation qrbc
   let video = '';
   if (page.type === 'articles' && page.video && page.video.actif && !article) {
