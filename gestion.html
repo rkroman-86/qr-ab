@@ -87,6 +87,10 @@
   .outils input{flex:1 1 220px}
   .outils select{flex:0 1 200px}
   .cartes{display:grid;gap:12px;grid-template-columns:1fr}
+  .supprimes{margin-top:18px;border:1px solid var(--ligne);border-radius:14px;padding:10px 14px}
+  .supprimes summary{cursor:pointer;font-weight:700}
+  .ligne-supprime{border-top:1px solid var(--ligne);padding:10px 0}
+  .ligne-supprime:first-child{border-top:0}
   @media (min-width:720px){.cartes{grid-template-columns:1fr 1fr}}
   .carte{background:var(--panneau);border:1px solid var(--ligne);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px}
   .carte.demande-attente{border-color:var(--alerte)}
@@ -174,6 +178,7 @@
       </div>
       <div class="msg" id="m-liste"></div>
       <div class="cartes" id="liste"></div>
+      <details class="supprimes" id="supprimes"><summary>🗑 Comptes supprimés (<span id="nb-supprimes">…</span>)</summary><div id="liste-supprimes"></div></details>
     </section>
 
     <section id="onglet-stats" class="cache"><div id="stats-site"></div></section>
@@ -875,6 +880,24 @@
   });
 
   let tousComptes = [];
+  /* Historique des comptes supprimés (24/11) : ils restent comptés dans « Inscriptions » des statistiques */
+  let supprimes = [];
+  async function chargerSupprimes() {
+    supprimes = (await api('supprimes')).liste || [];
+    $('#nb-supprimes').textContent = supprimes.length;
+    const z = $('#liste-supprimes'); z.textContent = '';
+    if (!supprimes.length) { z.append(el('p', { class: 'infos', text: 'Aucun compte supprimé depuis le 24 novembre 2026.' })); return; }
+    const date = x => x ? new Date(x).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+    supprimes.slice().reverse().forEach(c => {
+      z.append(el('div', { class: 'ligne-supprime' }, [
+        el('div', {}, [el('b', { text: c.slug + '.qrbc.app' }), el('span', { class: 'infos', text: ' · ' + (c.titre || '(sans nom)') +
+          (c.parent ? ' · page rattachée à ' + c.parent : '') + (c.anciens && c.anciens.length ? ' · ex-' + c.anciens.join(', ex-') : '') })]),
+        el('div', { class: 'infos', text: (c.email || '—') + ' · ' + ({ essai: 'essai', gratuit: 'offert', payant: 'abonné' }[c.plan] || c.plan || '—') + (c.provenance ? ' · ' + c.provenance : '') + (c.paye ? ' · encaissé ' + c.paye.toFixed(2).replace('.', ',') + ' € HT' : '') }),
+        el('div', { class: 'infos', text: 'Créé le ' + date(c.cree) + ' · supprimé le ' + date(c.supprime) })
+      ]));
+    });
+  }
+
   async function charger() {
     const { comptes, stats30 } = await api('liste');
     chargerStripe().catch(() => {});
@@ -887,6 +910,7 @@
     $('#f-connexion').classList.add('cache'); $('#zone').classList.remove('cache');
     fetch('/api/moi', { credentials: 'include' }).catch(() => {});   // tes visites ne sont pas comptées
     if (!$('#onglet-stats').classList.contains('cache')) chargerStatsSite();
+    chargerSupprimes().catch(() => {});
     tousComptes = comptes;
     const n = p => comptes.filter(c => c.plan === p).length;
     const demandes = comptes.filter(c => c.demande).length;
@@ -1122,6 +1146,7 @@
     return b;
   }
   async function chargerStatsSite() {
+    try { await chargerSupprimes(); } catch (e) {}
     const z = $('#stats-site'); z.innerHTML = '';
     z.append(el('h2', { text: 'Statistiques de qrbc.app', style: 'margin:0 0 10px;font-size:1.15rem' }),
       el('div', { class: 'st-periode' }, [7, 30, 90, 365].map(n => el('button', { type: 'button', class: n === periodeSite ? 'actif' : '', text: n === 365 ? '1 an' : n + ' jours', onclick: () => { periodeSite = n; chargerStatsSite(); } }))));
@@ -1135,7 +1160,11 @@
     z.append(
       el('div', { class: 'st-tuiles' }, [
         el('div', { class: 'st-tuile' }, [el('div', { class: 'v', text: nombre(s.visites) }), el('div', { class: 'l', text: 'Visites' })]),
-        el('div', { class: 'st-tuile' }, [el('div', { class: 'v', text: nombre(s.inscriptions) }), el('div', { class: 'l', text: 'Inscriptions' })]),
+        el('div', { class: 'st-tuile' }, [el('div', { class: 'v', text: nombre(s.inscriptions) }), el('div', { class: 'l', text: 'Inscriptions' }),
+          (() => {                                       // comptes créés dans la période puis supprimés (toujours comptés)
+            const n = supprimes.filter(c => !c.parent && c.cree && c.cree.slice(0, 10) >= s.debut && c.cree.slice(0, 10) <= s.fin).length;
+            return n ? el('div', { class: 'l', text: 'dont ' + n + ' supprimé' + (n > 1 ? 's' : '') + ' depuis' }) : '';
+          })()]),
         el('div', { class: 'st-tuile' }, [el('div', { class: 'v', text: taux }), el('div', { class: 'l', text: 'Visites → inscription' })])]),
       grapheSite(s),
       listeSite('Provenance', s.source, k => SOURCES_SITE[k] || (k.indexOf('campagne:') === 0 ? 'Campagne : ' + k.slice(9) : k)),

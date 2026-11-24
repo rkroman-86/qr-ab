@@ -2279,6 +2279,9 @@ async function gestion(request, env, action) {
     return json(await importer(env, slug, String(d.source || '')));
   }
 
+  if (action === 'supprimes') {                     // historique des comptes supprimés (24/11)
+    return json({ liste: JSON.parse(await env.CLIENTS.get('historique:supprimes') || '[]') });
+  }
   if (action === 'supprimer') {
     const slug = String(d.nom || '');
     if (d.confirmation !== slug) throw new ErreurAPI(400, 'Confirmation incorrecte.');
@@ -2305,6 +2308,7 @@ async function gestion(request, env, action) {
         if (src) { src.traductions = (src.traductions || []).filter(l => l !== cible.traduction.langue); await ecrireCompte(env, src); }
       }
     }
+    if (cible) await noterSuppression(env, cible);    // avant d'effacer les fichiers (le nom de l'activité est dans config.json)
     for (const prefix of ['site:' + slug + ':', 'img:' + slug + ':']) {
       let curseur;
       do {
@@ -2321,6 +2325,24 @@ async function gestion(request, env, action) {
   }
 
   throw new ErreurAPI(404, 'Action inconnue.');
+}
+
+/* Historique des comptes supprimés (24/11) : les inscriptions restent comptées dans les statistiques,
+   on garde donc qui c'était (adresse, nom, e-mail, dates, formule) pour ne pas perdre le fil. 2 000 derniers. */
+async function noterSuppression(env, c) {
+  let email = c.email || '';
+  if (!email && c.parent) { const t = await lireCompte(env, c.parent); email = (t && t.email) || ''; }
+  let titre = c.titre || '';
+  try { titre = (JSON.parse(await env.CLIENTS.get('site:' + c.slug + ':config.json') || '{}').titre) || titre; } catch (e) {}
+  const ligne = {
+    slug: c.slug, titre: String(titre || '').slice(0, 80), email, parent: c.parent || '', langue: c.traduction ? c.traduction.langue : '',
+    plan: c.plan || '', cree: c.cree || '', supprime: new Date().toISOString(),
+    provenance: c.provenance || (c.promo && c.promo.code) || '', anciens: (c.historiqueNoms || []).map(h => h.de),
+    paye: (c.paiements || []).reduce((t, p) => t + (Number(p.montant) || 0), 0)
+  };
+  const l = JSON.parse(await env.CLIENTS.get('historique:supprimes') || '[]');
+  l.push(ligne);
+  await env.CLIENTS.put('historique:supprimes', JSON.stringify(l.slice(-2000)));
 }
 
 /* Copie une page GitHub Pages existante (config + images) dans KV */
