@@ -50,6 +50,12 @@
   .adresse input{border:0;border-radius:0;background:transparent;min-width:0;flex:1}
   .adresse em{font-style:normal;display:flex;align-items:center;padding:0 14px;color:var(--doux);white-space:nowrap}
   .dispo{font-size:.82rem;margin-top:6px;min-height:1.2em;color:var(--doux)}
+  .suggestions{margin-top:6px;border:1px solid var(--ligne);border-radius:12px;background:var(--champ, rgba(127,127,127,.08));overflow:hidden}
+  .suggestions .tete{font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--doux);padding:8px 14px 4px}
+  .suggestions button{display:flex;width:100%;align-items:baseline;gap:2px;border:0;border-top:1px solid var(--ligne);background:none;color:inherit;font:inherit;text-align:left;padding:11px 14px;cursor:pointer;min-height:0}
+  .suggestions button:first-of-type{border-top:0}
+  .suggestions button:hover,.suggestions button:focus{background:rgba(127,127,127,.12)}
+  .suggestions button span{color:var(--doux);font-size:.9em}
   .dispo.ok{color:var(--ok)} .dispo.ko{color:var(--err)}
   .case{display:flex;gap:10px;align-items:flex-start;font-size:.9rem;color:var(--doux)}
   .case a{color:var(--txt);white-space:nowrap}
@@ -126,8 +132,8 @@
       <div class="ou" id="ou" hidden>ou un autre site</div>
 
       <form id="f-cx" autocomplete="on">
-        <label><span>Adresse du site</span>
-          <div class="adresse"><input type="text" id="cx-nom" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="30" placeholder="nom-du-site" required><em>.qrbc.app</em></div>
+        <label><span>Adresse du site ou e-mail</span>
+          <div class="adresse"><input type="text" id="cx-nom" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="120" placeholder="nom-du-site ou e-mail" required><em id="cx-suffixe">.qrbc.app</em></div>
         </label>
         <label><span>Mot de passe</span><input type="password" id="cx-mdp" autocomplete="current-password" required></label>
         <button class="prim" id="cx-btn">Se connecter</button>
@@ -163,7 +169,7 @@
         <li>Textes et logo avec l’aide de l’IA</li>
       </ul>
       <form id="f-in" autocomplete="on" novalidate>
-        <label><span>Votre activité</span><input type="text" id="in-activite" maxlength="80" autocomplete="organization" placeholder="Ex. Plombier à Nice" required></label>
+        <label><span>Nom de l’entreprise ou activité (facultatif)</span><input type="text" id="in-activite" maxlength="80" autocomplete="organization" placeholder="Ex. Plomberie Martin, Nice"></label>
         <label><span>Votre e-mail</span><input type="email" id="in-email" autocomplete="email" inputmode="email" required></label>
         <p class="promo-ligne" id="in-promo-ligne" hidden></p>
         <button type="button" class="lien lien-promo" id="in-promo-lien">J’ai un code promo</button>
@@ -196,12 +202,13 @@
     <h1 id="fin-titre">Finalisez votre site</h1>
     <p class="sous" id="fin-sous">Vérification du lien…</p>
     <form id="f-fin" autocomplete="on" novalidate hidden>
+      <label><span>Nom de l’entreprise ou activité (facultatif)</span><input type="text" id="fin-titre-page" maxlength="80" autocomplete="organization" placeholder="Ex. Plomberie Martin, Nice"></label>
       <label><span>Adresse de votre site</span>
         <div class="adresse"><input type="text" id="fin-nom" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="30" placeholder="nom-du-site" required><em>.qrbc.app</em></div>
+        <div class="suggestions" id="fin-idees" hidden></div>
         <div class="dispo" id="fin-dispo"></div>
         <p class="aide">C’est l’adresse de votre QR code : choisissez-la bien, elle ne pourra plus changer une fois vos cartes imprimées.</p>
       </label>
-      <label><span>Nom de votre activité</span><input type="text" id="fin-titre-page" maxlength="80" autocomplete="organization"></label>
       <label><span>Mot de passe (10 caractères minimum)</span>
         <div class="mdp"><input type="password" id="fin-mdp" name="password" autocomplete="new-password" minlength="10" required><button type="button" id="fin-voir" aria-label="Afficher le mot de passe" aria-pressed="false">👁</button></div>
       </label>
@@ -239,7 +246,7 @@
 </nav>
 
 <script src="/i18n.js"></script>
-<script src="/inscription.js?v=3"></script>
+<script src="/inscription.js?v=4"></script>
 <script>
 (function () {
   const $ = s => document.querySelector(s);
@@ -314,11 +321,32 @@
   }
 
   const cxNom = $('#cx-nom');
-  cxNom.addEventListener('input', () => { const v = nettoyer(cxNom.value); if (v !== cxNom.value) cxNom.value = v; });
+  // adresse du site (nettoyée) ou e-mail (24/11 : connexion possible avec l'e-mail, utile après un changement d'adresse)
+  cxNom.addEventListener('input', () => {
+    const mail = cxNom.value.indexOf('@') >= 0;
+    $('#cx-suffixe').hidden = mail;
+    if (!mail) { const v = nettoyer(cxNom.value); if (v !== cxNom.value) cxNom.value = v; }
+  });
   $('#f-cx').addEventListener('submit', async e => {
     e.preventDefault();
     const slug = cxNom.value.trim(), msg = $('#cx-msg'), btn = $('#cx-btn');
     msg.textContent = '';
+    if (slug.indexOf('@') >= 0) {
+      btn.disabled = true; btn.textContent = 'Connexion…';
+      try {
+        const r = await fetch('/api/connexion-email', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: slug.toLowerCase(), mdp: $('#cx-mdp').value, rester: true }) });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) { const er = new Error(j.erreur || 'Connexion impossible.'); er.code = j.code; er.slug = j.slug; throw er; }
+        try { localStorage.setItem('qp-jeton:' + j.slug, j.jeton); sessionStorage.setItem('qp-jeton:' + j.slug, j.jeton); } catch (x) {}
+        memoriser(j.slug);
+        location.href = '/app/' + j.slug + '/';
+      } catch (err) {
+        msg.textContent = err.message === 'Failed to fetch' ? 'Pas de connexion internet.' : err.message;
+        if (err.code === 'email_non_confirme' && err.slug) msg.appendChild(boutonRenvoi(err.slug, $('#cx-mdp').value, msg));
+        btn.disabled = false; btn.textContent = 'Se connecter';
+      }
+      return;
+    }
     if (slug.length < 3) { msg.textContent = 'Adresse trop courte.'; return; }
     btn.disabled = true; btn.textContent = 'Connexion…';
     try {
@@ -492,7 +520,38 @@
         } catch (er) {}
       }, 350);
     }
-    finNom.addEventListener('input', verifierNom);
+    finNom.addEventListener('input', () => { verifierNom(); montrerIdees(); });
+    /* Idées d'adresses (liste sous le champ) d'après le nom de l'entreprise ou l'activité : rien n'est prérempli */
+    const finIdees = $('#fin-idees');
+    let idees = [], minuIdees = null;
+    function montrerIdees() {
+      const v = finNom.value;
+      const l = idees.filter(x => !v || x.indexOf(v) === 0 || v.length < 3);
+      finIdees.innerHTML = '';
+      if (!l.length || document.activeElement !== finNom || l.indexOf(v) >= 0 && l.length === 1) { finIdees.hidden = true; return; }
+      const tete = document.createElement('div'); tete.className = 'tete'; tete.textContent = t('Idées d’adresse');
+      finIdees.appendChild(tete);
+      l.forEach(x => {
+        const b = document.createElement('button'); b.type = 'button'; b.setAttribute('data-no-i18n', '');
+        const n = document.createElement('b'); n.textContent = x; const e = document.createElement('span'); e.textContent = '.qrbc.app';
+        b.append(n, e);
+        b.addEventListener('mousedown', ev => ev.preventDefault());       // le champ garde le focus jusqu'au choix
+        b.addEventListener('click', () => { finNom.value = x; finIdees.hidden = true; verifierNom(); $('#fin-mdp').focus(); });
+        finIdees.appendChild(b);
+      });
+      finIdees.hidden = false;
+    }
+    function chargerIdees(texte) {
+      clearTimeout(minuIdees);
+      minuIdees = setTimeout(async () => {
+        if (!texte.trim()) { idees = []; montrerIdees(); return; }
+        try { idees = (await (await fetch('/api/suggestions?texte=' + encodeURIComponent(texte))).json()).suggestions || []; } catch (er) { idees = []; }
+        montrerIdees();
+      }, 350);
+    }
+    finNom.addEventListener('focus', montrerIdees);
+    finNom.addEventListener('blur', () => setTimeout(() => { finIdees.hidden = true; }, 150));
+    $('#fin-titre-page').addEventListener('input', () => chargerIdees($('#fin-titre-page').value));
     $('#fin-voir').addEventListener('click', () => {
       const m = $('#fin-mdp'), voir = m.type === 'password';
       m.type = voir ? 'text' : 'password';
@@ -519,28 +578,28 @@
       const ok = document.createElement('span'); ok.textContent = '✓ ' + t('E-mail confirmé :') + ' ';
       const em = document.createElement('b'); em.textContent = j.email; em.setAttribute('data-no-i18n', '');
       $('#fin-sous').append(ok, em);
-      finNom.value = j.nom || '';
+      finNom.value = '';
       $('#fin-titre-page').value = j.activite || '';
+      idees = j.suggestions || [];
       $('#fin-essai').textContent = j.essaiJours === 30 ? t('Votre essai gratuit d’un mois commence dès que vous créez votre page.')
         : t('Votre essai gratuit de ' + j.essaiJours + ' jours commence dès que vous créez votre page.');
       $('#f-fin').hidden = false;
       verifierNom();
-      (j.nom ? $('#fin-mdp') : finNom).focus();
+      ($('#fin-titre-page').value ? finNom : $('#fin-titre-page')).focus();
     }).catch(() => { $('#fin-sous').textContent = 'Pas de connexion internet.'; });
 
     $('#f-fin').addEventListener('submit', async e => {
       e.preventDefault();
       finMsg.className = 'msg'; finMsg.textContent = '';
       const nom = nettoyer(finNom.value), mdp = $('#fin-mdp').value;
-      if (nom.length < 3) { finMsg.textContent = t('Choisissez l’adresse de votre page (3 caractères minimum).'); finNom.focus(); return; }
+      if (nom.length < 3) { finMsg.textContent = t('Choisissez l’adresse de votre site (3 caractères minimum).'); finNom.focus(); return; }
       if (mdp.length < 10) { finMsg.textContent = 'Mot de passe : 10 caractères minimum.'; $('#fin-mdp').focus(); return; }
       const btn = $('#fin-btn'); btn.disabled = true; btn.textContent = t('Création de votre page…');
       try {
         const { r, j } = await appel('/api/inscription/finaliser', { jeton: jetonFin, nom, titre: $('#fin-titre-page').value, mdp });
         if (!r.ok) {
-          if (j.code === 'nom_pris') {                        // pris entre-temps : nouvelle proposition, le reste est gardé
-            if (j.nom) finNom.value = j.nom;
-            verifierNom();
+          if (j.code === 'nom_pris') {                        // pris entre-temps : d'autres idées, le reste est gardé
+            idees = j.suggestions || []; verifierNom(); finNom.focus(); montrerIdees();
             throw new Error(j.erreur);
           }
           if (j.code === 'deja_utilise') { if (j.slug) memoriser(j.slug); location.href = j.slug ? '/app/' + j.slug + '/' : '/app?choisir#connexion'; return; }

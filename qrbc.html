@@ -173,7 +173,7 @@
     <form id="inscription" novalidate>
       <h2>Votre site en 5 minutes</h2>
       <p class="sous" id="essai-sous">1 mois gratuit sans carte bancaire, puis 1,99 € TTC/mois sans engagement, ou 19,99 € TTC/an.</p>
-      <label><span>Votre activité</span><input type="text" id="activite" maxlength="80" autocomplete="organization" placeholder="Ex. Plombier à Nice" required></label>
+      <label><span>Nom de l’entreprise ou activité (facultatif)</span><input type="text" id="activite" maxlength="80" autocomplete="organization" placeholder="Ex. Plomberie Martin, Nice"></label>
       <label><span>Votre e-mail</span><input type="email" id="email" autocomplete="email" inputmode="email" required></label>
       <p class="promo-ligne" id="promo-ligne" hidden></p>
       <button type="button" class="lien lien-promo" id="promo-lien">J’ai un code promo</button>
@@ -241,7 +241,7 @@
   </footer>
 </div>
 <script src="/i18n.js"></script>
-<script src="/inscription.js?v=3"></script>
+<script src="/inscription.js?v=4"></script>
 <script>
   // titre de l'onglet dans la langue choisie
   (function () { const fr = document.title; const maj = () => { if (window.t) document.title = window.t(fr); }; maj(); document.addEventListener('change', e => { if (e.target.classList && e.target.classList.contains('choix-langue')) setTimeout(maj, 0); }); })();

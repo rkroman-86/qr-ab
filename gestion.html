@@ -921,7 +921,8 @@
       if (f === 'impaye' && !(ab && ab.statut === 'past_due' && !c.parent)) return false;
       if (!q) return true;
       const tit = c.parent ? parSlug[c.parent] : null;      // page rattachée : on cherche aussi par l'e-mail du compte
-      return [c.slug, c.titre, c.email, tit && tit.email, c.parent, c.note, c.promo && 'code:' + c.promo.code].some(x => String(x || '').toLowerCase().includes(q));
+      return [c.slug, c.titre, c.email, tit && tit.email, c.parent, c.note, c.promo && 'code:' + c.promo.code].concat((c.historiqueNoms || []).map(h => h.de))   // anciennes adresses aussi
+        .some(x => String(x || '').toLowerCase().includes(q));
     });
     // Regroupement par compte : la page principale, puis ses pages rattachées et ses versions traduites
     const tri = (a, b) => (b.demande ? 1 : 0) - (a.demande ? 1 : 0) || String(b.cree).localeCompare(String(a.cree));
@@ -1186,7 +1187,7 @@
 
     // En-tête
     d.append(el('div', { class: 'carte-tete' }, [
-      el('div', {}, [el('div', { class: 'slug', text: site.replace(/^https:\/\//, '').replace(/\/$/, '') }), el('div', { class: 'titre', text: c.titre || '(activité non renseignée)' })]),
+      el('div', {}, [el('div', { class: 'slug', text: site.replace(/^https:\/\//, '').replace(/\/$/, '') }), el('div', { class: 'titre', text: (c.titre || '(activité non renseignée)') + ((c.historiqueNoms || []).length ? ' · ↺ ex-' + c.historiqueNoms[c.historiqueNoms.length - 1].de : '') })]),
       el('span', { class: 'badge b-' + (c.actif ? c.plan : 'inactif'), text: c.actif ? etat : etat + ' · inactif' })
     ]));
 
@@ -1196,6 +1197,8 @@
     if (c.parent) ligneDonnee('Compte', (c.traduction ? 'Version ' + c.traduction.langue.toUpperCase() + ' de ' + c.traduction.source + ' · ' : 'Page ') + 'rattachée à ' + c.parent + ' (mot de passe, e-mail et échéance de la page principale)');
     if (c.pages && c.pages.length) ligneDonnee('Pages rattachées', c.pages.join(', ') + (c.renouvellement ? ' · renouvellement groupé ' + euros(c.renouvellement.prix) + ' HT/an' : ' · lignes « page » de l’abonnement'));
     if (!c.parent) ligneDonnee('E-mail', (c.email || '—') + (c.emailAVerifier ? ' · ⚠️ non confirmé (page pas encore en ligne)' : ''));
+    if ((c.historiqueNoms || []).length)                  // changements d'adresse (24/11) : l'e-mail reste l'identifiant du client
+      ligneDonnee('Anciennes adresses', c.historiqueNoms.slice().reverse().map(h => h.de + ' → ' + h.vers + ' (' + new Date(h.le).toLocaleDateString('fr-FR') + (h.par === 'gestion' ? ', par vous' : '') + ')').join(' · '));
     ligneDonnee('Créé le', date(c.cree));
     if (c.plan === 'essai') ligneDonnee('Fin d’essai', date(c.finEssai));
     if (!c.parent) {

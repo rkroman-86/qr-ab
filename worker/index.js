@@ -182,6 +182,11 @@ async function racine(request, env, url) {
   if (p === '/api/inscription/renvoyer' && request.method === 'POST') return inscriptionRenvoyer(request, env);
   if (p === '/api/inscription/relancer' && request.method === 'POST') return inscriptionRelancer(request, env);
   if (p === '/api/inscription/finaliser' && request.method === 'POST') return inscriptionFinaliser(request, env);
+  if (p === '/api/connexion-email' && request.method === 'POST') return connexionEmail(request, env);
+  if (p === '/api/suggestions' && request.method === 'GET') {          // idées d'adresses d'après le nom saisi (inscription, changement d'adresse)
+    await limiter(env, 'sugg:' + ip(request) + ':' + new Date().toISOString().slice(0, 13), 120, 7200, 'Trop de demandes. Réessayez dans une heure.');
+    return json({ suggestions: await suggestionsSlug(env, String(url.searchParams.get('texte') || '').slice(0, 80)) });
+  }
   if (p === '/api/promo' && request.method === 'GET') return verifierPromo(request, env);
   if (p === '/api/stripe/webhook' && request.method === 'POST') return webhookStripe(request, env);
   if (p.startsWith('/api/gestion/')) return gestion(request, env, p.slice('/api/gestion/'.length));
@@ -825,6 +830,20 @@ async function apiClient(request, env, slug, route) {
     await ecrireCompte(env, tit);
     const jeton = await signerSession(env, { s: slug, v: tit.version, e: Math.floor(Date.now() / 1000) + 30 * 86400 });
     return json({ ok: true, jeton });
+  }
+
+  /* Changer l'adresse du site (24/11) : mot de passe exigé ; les versions traduites suivent ; e-mail d'explication au titulaire */
+  if (route === 'renommer' && m === 'POST') {
+    const d = await corpsJSON(request);
+    const tit = await titulaireDe(env, compte);
+    if (!(await verifierMdp(tit, String(d.mdp || '')))) throw new ErreurAPI(401, 'Mot de passe incorrect.');
+    await limiter(env, 'renommer:' + tit.slug + ':' + new Date().toISOString().slice(0, 10), 3, 86400 * 2, 'Trois changements d’adresse par jour au plus. Réessayez demain.');
+    const r = await renommerSite(env, compte, String(d.nom || '').trim().toLowerCase(), 'client');
+    const frais = (await lireCompte(env, r.nouveau)) || compte;
+    const titF = await titulaireDe(env, frais);
+    const jeton = await signerSession(env, { s: r.nouveau, v: titF.version || 1, e: Math.floor(Date.now() / 1000) + 30 * 86400 });
+    await emailRenommage(env, titF, r.ancien, r.nouveau).catch(e => console.error('e-mail renommage', e.message));
+    return json({ ok: true, slug: r.nouveau, ancien: r.ancien, jeton, adresse: 'https://' + r.nouveau + '.' + DOMAINE + '/' });
   }
 
   /* Espace « Mon compte » : infos de facturation et factures (portés par la page principale) */
@@ -1619,6 +1638,21 @@ function baseSlug(texte) {
 async function nomLibre(env, slug) {
   return !erreurSlug(slug) && !(await env.CLIENTS.get('compte:' + slug)) && !(await env.CLIENTS.get('reserve:' + slug));
 }
+/* Idées d'adresses libres d'après le nom de l'entreprise ou l'activité (24/11 : l'adresse n'est plus préremplie,
+   le client la tape ou choisit une idée) : « Plomberie Martin Nice » → plomberie-martin-nice, plomberie-martin, plomberie,
+   plomberiemartin, martin-plomberie… puis variantes -2, -3 s'il en manque */
+async function suggestionsSlug(env, texte, max) {
+  max = max || 5;
+  const mots = baseSlug(texte).split('-').filter(Boolean);
+  if (!mots.length) return [];
+  const coupe = x => String(x || '').slice(0, 26).replace(/-+$/, '');
+  const idees = [mots.join('-'), mots.slice(0, 2).join('-'), mots[0], mots.slice(0, 2).join(''), mots.length > 1 ? mots[1] + '-' + mots[0] : '',
+    mots.length > 2 ? mots[0] + '-' + mots[mots.length - 1] : '', mots.join('')].map(coupe).filter(x => x.length >= 3);
+  const out = [];
+  for (const x of [...new Set(idees)]) { if (out.length >= max) break; if (await nomLibre(env, x)) out.push(x); }
+  for (let i = 2; out.length < Math.min(max, 3) && i <= 9; i++) { const x = coupe(mots.slice(0, 2).join('-')) + '-' + i; if (await nomLibre(env, x)) out.push(x); }
+  return out;
+}
 /* Première adresse libre : base, base-2, base-3… (chaîne vide si l'activité ne donne rien d'utilisable) */
 async function proposerSlug(env, base) {
   base = String(base || '').slice(0, 26).replace(/-+$/, '');
@@ -1676,11 +1710,11 @@ async function envoyerLienInscription(env, conf, jeton, d) {
   const url = 'https://' + DOMAINE + '/app?finaliser=' + jeton + (L !== 'fr' ? '&lang=' + L : '');
   const act = esc(d.activite || '');
   const T = {
-    fr: { sujet: 'Finalisez votre site qrbc', bonjour: 'Bonjour,', corps: 'Merci ! Il ne reste qu’une étape pour créer votre site' + (act ? ' « <b>' + act + '</b> »' : '') + ' : choisissez son adresse (nous vous en proposons une) et votre mot de passe.',
+    fr: { sujet: 'Finalisez votre site qrbc', bonjour: 'Bonjour,', corps: 'Merci ! Il ne reste qu’une étape pour créer votre site' + (act ? ' « <b>' + act + '</b> »' : '') + ' : choisissez son adresse et votre mot de passe.',
       bouton: 'Créer mon site', fin: 'Ce lien est valable 7 jours. Votre essai gratuit commence quand vous créez votre site. Si vous n’êtes pas à l’origine de cette demande, ignorez simplement cet e-mail.' },
-    en: { sujet: 'Finish your qrbc website', bonjour: 'Hello,', corps: 'Thank you! Just one step left to create your website' + (act ? ' “<b>' + act + '</b>”' : '') + ': choose its address (we suggest one) and your password.',
+    en: { sujet: 'Finish your qrbc website', bonjour: 'Hello,', corps: 'Thank you! Just one step left to create your website' + (act ? ' “<b>' + act + '</b>”' : '') + ': choose its address and your password.',
       bouton: 'Create my website', fin: 'This link is valid for 7 days. Your free trial starts when you create your website. If you did not request this, simply ignore this email.' },
-    ru: { sujet: 'Завершите создание сайта qrbc', bonjour: 'Здравствуйте!', corps: 'Спасибо! Остался один шаг, чтобы создать ваш сайт' + (act ? ' «<b>' + act + '</b>»' : '') + ': выберите его адрес (мы предложим вариант) и пароль.',
+    ru: { sujet: 'Завершите создание сайта qrbc', bonjour: 'Здравствуйте!', corps: 'Спасибо! Остался один шаг, чтобы создать ваш сайт' + (act ? ' «<b>' + act + '</b>»' : '') + ': выберите его адрес и пароль.',
       bouton: 'Создать сайт', fin: 'Ссылка действительна 7 дней. Бесплатный пробный период начнётся, когда вы создадите сайт. Если вы ничего не запрашивали, просто проигнорируйте это письмо.' }
   }[L];
   const html = '<div style="font:16px/1.5 system-ui,sans-serif;color:#1b1a17;max-width:480px">' +
@@ -1703,9 +1737,8 @@ function langueMail(l) { return LANGUES_MAIL.includes(l) ? l : 'fr'; }
 async function inscriptionLien(request, env) {
   await limiter(env, 'insc:' + ip(request) + ':' + new Date().toISOString().slice(0, 10), 10, 86400 * 2, 'Trop de demandes depuis cette connexion aujourd’hui.');
   const d = await corpsJSON(request);
-  const activite = String(d.activite || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+  const activite = String(d.activite || '').replace(/\s+/g, ' ').trim().slice(0, 80);   // facultatif depuis le 24/11
   const email = String(d.email || '').trim().toLowerCase();
-  if (activite.length < 2) throw new ErreurAPI(400, 'Décrivez votre activité en quelques mots.', 'activite');
   if (!emailValide(email)) throw new ErreurAPI(400, 'Adresse e-mail invalide.', 'email');
   if (d.cgu !== true) throw new ErreurAPI(400, 'Merci d’accepter les conditions d’utilisation.', 'cgu');
   await verifierTurnstile(env, request, d.turnstile);
@@ -1779,15 +1812,18 @@ async function inscriptionFinaliser(request, env) {
       await env.CLIENTS.put('inscription:' + h, JSON.stringify(data), data.exp ? { expiration: data.exp } : { expirationTtl: DUREE_INSCRIPTION });
       if (data.humain !== false && visiteurHumain(request)) ecrireStats(env, PAGE_SITE, lignesEtape('confirme', provenance(data.promo && data.promo.code, data.depuis)));
     }
-    return json({ ok: true, email: data.email, activite: data.activite || '', nom: await proposerSlug(env, baseSlug(data.activite)),
+    // l'adresse n'est plus préremplie (adresses « mon-magasin-je-ne-sais-quoi » acceptées sans y penser) : des idées à choisir
+    return json({ ok: true, email: data.email, activite: data.activite || '', nom: '', suggestions: await suggestionsSlug(env, data.activite),
       essaiJours, promo: data.promo ? data.promo.code : null });
   }
   const slug = String(d.nom || '').trim().toLowerCase();
   const err = erreurSlug(slug);
   if (err) throw new ErreurAPI(400, err, 'nom_invalide');
   verifierForceMdp(d.mdp);
-  const titre = String(d.titre || '').replace(/\s+/g, ' ').trim().slice(0, 80) || String(data.activite || '').slice(0, 80);
-  const nomPris = async () => new ErreurAPI(409, 'Cette adresse vient d’être prise. Nous vous en proposons une autre.', 'nom_pris', { nom: await proposerSlug(env, slug.slice(0, 26)) });
+  const titre = String(d.titre || '').replace(/\s+/g, ' ').trim().slice(0, 80) || String(data.activite || '').slice(0, 80) ||
+    slug.replace(/-/g, ' ').replace(/^./, c => c.toUpperCase());                 // sans nom d'activité : l'adresse en clair
+  const nomPris = async () => new ErreurAPI(409, 'Cette adresse vient d’être prise. Choisissez-en une autre.', 'nom_pris',
+    { suggestions: await suggestionsSlug(env, d.titre || data.activite || slug.replace(/-/g, ' ')) });
   if (!(await nomLibre(env, slug))) throw await nomPris();
   const maintenant = new Date().toISOString();
   const humain = data.humain !== false && visiteurHumain(request);
@@ -2078,7 +2114,7 @@ async function gestion(request, env, action) {
         if ((c.pages || []).length) res.renouvellement = await prixGroupe(env, c);   // abonnement + pages rattachées
         if (c.parent && c.plan !== 'gratuit') res.ia = { commune: c.parent };      // IA comptée sur la réserve de la page principale
         comptes.push(Object.assign(res, { paiements: c.paiements || [], titre, depenseIA: (c.ia && c.ia.depense) || 0, adresse: adressePage(c),
-          rappels: c.rappels || {}, langue: c.langue || 'fr', aSupprimer: aSupprimer(c),
+          rappels: c.rappels || {}, langue: c.langue || 'fr', aSupprimer: aSupprimer(c), historiqueNoms: c.historiqueNoms || [],
           finConservation: echeanceCompte(c) ? new Date(Date.parse(echeanceCompte(c)) + JOURS_CONSERVATION * 86400000).toISOString() : null }));
       }
       curseur = l.list_complete ? null : l.cursor;
@@ -2262,6 +2298,26 @@ async function importer(env, slug, source) {
   // Les pages pré-rendues seront régénérées au prochain « Enregistrer » ; d'ici là, page de démarrage
   for (const n of ['index.html', 'accueil.html', 'blog.html', 'page.html', 'sitemap.xml']) await env.CLIENTS.delete('site:' + slug + ':' + n);
   return { ok: true, images: copiees, echecs: ratees };
+}
+
+/* Connexion avec l'e-mail au lieu de l'adresse du site (24/11, utile après un changement d'adresse) :
+   l'e-mail désigne la page principale du compte (une adresse e-mail = un compte) */
+async function connexionEmail(request, env) {
+  await limiter(env, 'cxm:' + ip(request) + ':' + new Date().toISOString().slice(0, 13), 20, 7200, 'Trop d’essais. Réessayez dans une heure.');
+  const d = await corpsJSON(request);
+  const email = String(d.email || '').trim().toLowerCase();
+  if (!emailValide(email)) throw new ErreurAPI(400, 'Adresse e-mail invalide.');
+  await limiter(env, 'cxm-mail:' + email + ':' + new Date().toISOString().slice(0, 13), 10, 7200, 'Trop d’essais. Réessayez dans une heure.');
+  for (const sl of (await slugsParEmail(env, email)).slice(0, 10)) {
+    const c = await lireCompte(env, sl);
+    if (!c || c.parent || String(c.email || '').toLowerCase() !== email) continue;
+    if (!(await verifierMdp(c, String(d.mdp || '')))) break;
+    if (c.emailAVerifier) throw new ErreurAPI(403, 'Confirmez d’abord votre adresse e-mail : cliquez sur le lien envoyé à ' + c.email + ' (pensez aux indésirables).', 'email_non_confirme', { slug: c.slug });
+    const duree = d.rester ? 30 * 86400 : 12 * 3600;
+    const jeton = await signerSession(env, { s: c.slug, v: c.version || 1, e: Math.floor(Date.now() / 1000) + duree });
+    return json({ ok: true, slug: c.slug, jeton });
+  }
+  throw new ErreurAPI(401, 'E-mail ou mot de passe incorrect.');
 }
 
 /* ===================== Mot de passe oublié ===================== */
@@ -3504,8 +3560,12 @@ function enregistrerFactureAbo(tit, inv) {
   return true;
 }
 async function compteDeAbo(env, sub) {
-  const slug = (sub.metadata && sub.metadata.slug) || await env.CLIENTS.get('abo:' + sub.id);
-  return slug ? lireCompte(env, slug) : null;
+  let slug = await env.CLIENTS.get('abo:' + sub.id) || (sub.metadata && sub.metadata.slug);
+  if (!slug) return null;
+  const c = await lireCompte(env, slug);
+  if (c) return c;
+  const nouveau = await env.CLIENTS.get('renomme:' + slug);                 // adresse changée depuis (24/11)
+  return nouveau ? lireCompte(env, nouveau) : null;
 }
 /* Événement Stripe sur un abonnement (création, changement, résiliation, facture payée) */
 async function majAbonnement(env, idSub, facture, objet) {
@@ -3856,6 +3916,133 @@ async function creerPageSup(env, tit, a) {
   tit.pages = (tit.pages || []).filter(x => x !== a.cible).concat([a.cible]);
   await env.CLIENTS.delete('reserve:' + a.cible);
   return page;
+}
+/* ===================== Changement d'adresse d'un site (24/11) =====================
+   Pour qui s'est trompé à l'inscription. La page (principale ou rattachée, pas une version traduite) et ses versions
+   traduites (nom.xx → nouveau.xx) changent de nom : comptes, fichiers du site, images, statistiques, liens entre pages,
+   index e-mail, abonnement Stripe. L'ancienne adresse cesse de fonctionner et redevient libre (les QR imprimés ne marchent plus).
+   L'historique est gardé sur la page (`historiqueNoms`) et dans son journal ; renomme:<ancien> → nouveau sert aux événements
+   Stripe qui portent encore l'ancien nom. Le titulaire reste défini par son e-mail. */
+const RE_TEXTE_KV = /(config\.json|\.(html?|json|xml|txt|webmanifest|js|css|svg))$|:(medias|fonds-ia)$/;
+async function deplacerPrefixe(env, de, vers, remplacer) {
+  const cles = [];
+  let curseur;
+  do {
+    const l = await env.CLIENTS.list({ prefix: de, cursor: curseur });
+    for (const k of l.keys) cles.push(k);
+    curseur = l.list_complete ? null : l.cursor;
+  } while (curseur);
+  for (const k of cles) {
+    const { value, metadata } = await env.CLIENTS.getWithMetadata(k.name, { type: 'arrayBuffer' });
+    if (value === null) continue;
+    let v = value;
+    if (remplacer && RE_TEXTE_KV.test(k.name)) v = remplacer(new TextDecoder().decode(value));
+    const opts = {};
+    if (metadata) opts.metadata = metadata;
+    if (k.expiration) opts.expiration = k.expiration;
+    await env.CLIENTS.put(vers + k.name.slice(de.length), v, opts);
+  }
+  return cles.map(k => k.name);
+}
+async function renommerSite(env, page, nouveau, par) {
+  if (!page) throw new ErreurAPI(404, 'Page introuvable.');
+  if (page.traduction) throw new ErreurAPI(400, 'Une version traduite suit l’adresse de sa page d’origine : changez l’adresse de la page d’origine.');
+  const ancien = page.slug;
+  if (nouveau === ancien) throw new ErreurAPI(400, 'C’est déjà l’adresse de votre site.');
+  const err = erreurSlug(nouveau);
+  if (err) throw new ErreurAPI(400, err, 'nom_invalide');
+  // versions traduites : listées sur la page (après leur 1re traduction) ou seulement dans les pages du compte (nom.xx)
+  const titP = page.parent ? await lireCompte(env, page.parent) : page;
+  const langues = new Set(page.traductions || []);
+  for (const sl of (titP && titP.pages) || []) { const m = sl.match(/^(.+)\.([a-z]{2})$/); if (m && m[1] === ancien) langues.add(m[2]); }
+  const paires = [[ancien, nouveau]].concat([...langues].map(l => [ancien + '.' + l, nouveau + '.' + l]));
+  for (const [, n] of paires) if (await env.CLIENTS.get('compte:' + n) || await env.CLIENTS.get('reserve:' + n))
+    throw new ErreurAPI(409, 'Cette adresse est déjà prise. Choisissez-en une autre.', 'nom_pris');
+  await env.CLIENTS.put('reserve:' + nouveau, ancien, { expirationTtl: 600 });          // personne ne la prend pendant le déplacement
+  const echappe = x => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const reHote = new RegExp('(^|[^a-z0-9-])' + echappe(ancien) + '(--carte)?\\.' + echappe(DOMAINE), 'g');
+  const reApp = new RegExp('/app/' + echappe(ancien) + '(\\.[a-z]{2})?/', 'g');
+  const remplacer = t => t.replace(reHote, '$1' + nouveau + '$2.' + DOMAINE).replace(reApp, '/app/' + nouveau + '$1/');
+  const maintenant = new Date().toISOString();
+  const aEffacer = [];
+  // 1. fichiers du site et images (copiés, l'ancien effacé à la fin)
+  for (const [a, n] of paires) {
+    aEffacer.push(...await deplacerPrefixe(env, 'site:' + a + ':', 'site:' + n + ':', remplacer));
+    aEffacer.push(...await deplacerPrefixe(env, 'img:' + a + ':', 'img:' + n + ':', null));
+  }
+  // 2. comptes
+  const comptes = [];
+  for (const [a, n] of paires) {
+    const c = a === ancien ? page : await lireCompte(env, a);
+    if (!c) continue;
+    c.slug = n;
+    if (c.traduction && c.traduction.source === ancien) c.traduction.source = nouveau;
+    if (c.parent === ancien) c.parent = nouveau;
+    comptes.push([a, c]);
+  }
+  page.historiqueNoms = (page.historiqueNoms || []).concat([{ de: ancien, vers: nouveau, le: maintenant, par: par || 'client' }]).slice(-20);
+  journaliser(page, 'adresse', 0, 'adresse changée : ' + ancien + '.' + DOMAINE + ' → ' + nouveau + '.' + DOMAINE + (par === 'gestion' ? ' (par la gestion)' : ''));
+  for (const [, c] of comptes) await ecrireCompte(env, c);
+  // 3. liens entre pages du compte : pages rattachées (parent) et liste de la principale
+  const tit = page.parent ? await lireCompte(env, page.parent) : page;
+  const renomme = x => { const p = paires.find(q => q[0] === x); return p ? p[1] : x; };
+  if (tit) {
+    if (tit !== page) { tit.pages = (tit.pages || []).map(renomme); await ecrireCompte(env, tit); }
+    else if (tit.pages && tit.pages.length) { tit.pages = tit.pages.map(renomme); await ecrireCompte(env, tit); }
+    for (const sl of tit.pages || []) {
+      if (paires.some(q => q[1] === sl)) continue;
+      const c = await lireCompte(env, sl);
+      if (c && c.parent === ancien) { c.parent = nouveau; await ecrireCompte(env, c); }
+    }
+  }
+  // 4. index e-mail, abonnement Stripe, statistiques
+  for (const [a, c] of comptes) if (c.email) { await indexerEmail(env, c.email, a, false); await indexerEmail(env, c.email, c.slug, true); }
+  if (!page.parent) {
+    const st = await lireStripe(env).catch(() => null);
+    for (const ab of [page.abo, page.aboSuivant]) if (ab && ab.id) {
+      await env.CLIENTS.put('abo:' + ab.id, nouveau);
+      if (st) { try { await stripe(env, st, 'POST', '/subscriptions/' + ab.id, { metadata: { slug: nouveau } }); } catch (e) { console.error('métadonnée Stripe', e.message); } }
+    }
+  }
+  await env.CLIENTS.put('renomme:' + ancien, nouveau, { expirationTtl: 400 * 86400 });
+  if (env.STATS) await env.STATS.prepare('UPDATE stats SET page = ? WHERE page = ?').bind(nouveau, ancien).run().catch(e => console.error('stats renommage', e.message));
+  // 5. ancien nom libéré
+  for (const k of aEffacer) await env.CLIENTS.delete(k);
+  for (const [a] of paires) await env.CLIENTS.delete('compte:' + a);
+  await env.CLIENTS.delete('reserve:' + nouveau);
+  await env.CLIENTS.delete('cache:plan-global');
+  return { ancien, nouveau };
+}
+async function emailRenommage(env, tit, ancien, nouveau) {
+  const conf = await lireEmail(env);
+  if (!conf || !tit || !tit.email) return;
+  const L = LANGUES_MAIL.includes(tit.langue) ? tit.langue : 'fr';
+  const A = esc(ancien + '.' + DOMAINE), N = esc(nouveau + '.' + DOMAINE), url = 'https://' + nouveau + '.' + DOMAINE + '/';
+  const T = {
+    fr: { sujet: 'Votre site qrbc a changé d’adresse', bonjour: 'Bonjour,',
+      p: ['L’adresse de votre site vient d’être changée :', '<b>' + A + '</b> → <b>' + N + '</b>',
+        'Votre site, vos textes, vos images et vos statistiques ont été conservés. Le nom de votre activité ne change pas.',
+        '<b>Connexion</b> : utilisez la nouvelle adresse (<b>' + esc(nouveau) + '</b>) ou votre e-mail. Votre mot de passe ne change pas.',
+        '<b>⚠️ Attention</b> : l’ancienne adresse <b>' + A + '</b> ne fonctionne plus et peut être reprise par quelqu’un d’autre. Les QR codes, cartes de visite, autocollants et liens déjà partagés qui la contiennent ne mènent plus à votre site : téléchargez votre nouveau QR code et vos nouvelles cartes dans le constructeur, et mettez à jour vos liens (Google, réseaux sociaux, signature d’e-mail).'],
+      bouton: 'Voir mon site', fin: 'Si vous n’êtes pas à l’origine de ce changement, répondez à cet e-mail ou écrivez à support@qrbc.app.' },
+    en: { sujet: 'Your qrbc website has a new address', bonjour: 'Hello,',
+      p: ['The address of your website has just been changed:', '<b>' + A + '</b> → <b>' + N + '</b>',
+        'Your website, texts, images and statistics have been kept. Your business name does not change.',
+        '<b>Signing in</b>: use the new address (<b>' + esc(nouveau) + '</b>) or your email. Your password does not change.',
+        '<b>⚠️ Warning</b>: the old address <b>' + A + '</b> no longer works and may be taken by someone else. QR codes, business cards, stickers and links already shared with it no longer lead to your website: download your new QR code and cards in the builder, and update your links (Google, social networks, email signature).'],
+      bouton: 'View my website', fin: 'If you did not make this change, reply to this email or write to support@qrbc.app.' },
+    ru: { sujet: 'Адрес вашего сайта qrbc изменён', bonjour: 'Здравствуйте!',
+      p: ['Адрес вашего сайта изменён:', '<b>' + A + '</b> → <b>' + N + '</b>',
+        'Сайт, тексты, изображения и статистика сохранены. Название вашей деятельности не меняется.',
+        '<b>Вход</b>: используйте новый адрес (<b>' + esc(nouveau) + '</b>) или ваш e-mail. Пароль не меняется.',
+        '<b>⚠️ Внимание</b>: старый адрес <b>' + A + '</b> больше не работает и может быть занят кем-то другим. QR-коды, визитки, наклейки и ссылки со старым адресом больше не ведут на ваш сайт: скачайте новый QR-код и визитки в конструкторе и обновите ссылки (Google, соцсети, подпись в почте).'],
+      bouton: 'Открыть сайт', fin: 'Если вы не меняли адрес, ответьте на это письмо или напишите на support@qrbc.app.' }
+  }[L];
+  const html = '<div style="font:16px/1.5 system-ui,sans-serif;color:#1b1a17;max-width:520px"><p>' + T.bonjour + '</p>' + T.p.map(x => '<p>' + x + '</p>').join('') +
+    '<p style="margin:24px 0"><a href="' + url + '" style="display:inline-block;background:#d9572b;color:#fff;text-decoration:none;padding:14px 22px;border-radius:12px;font-weight:700">' + T.bouton + '</a></p>' +
+    '<p style="color:#6a665d;font-size:14px">' + T.fin + '</p></div>';
+  const brut = T.bonjour + '\n\n' + T.p.map(x => x.replace(/<[^>]+>/g, '')).join('\n\n') + '\n\n' + T.bouton + ' : ' + url + '\n\n' + T.fin;
+  await envoyerEmail(env, conf, tit.email, T.sujet, html, brut);
 }
 function adressePage(c) {
   return c.traduction ? 'https://' + c.traduction.source + '.' + DOMAINE + '/' + c.traduction.langue + '/' : 'https://' + c.slug + '.' + DOMAINE + '/';

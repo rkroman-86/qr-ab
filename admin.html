@@ -125,6 +125,18 @@
     .cpt-section:first-child{border-top:0;margin-top:0;padding-top:0}
     .cpt-section h3{font-size:1rem;margin:0 0 4px}
     .cpt-aide{font-size:.85rem;color:var(--doux);margin:0 0 12px}
+    .adresse-adr{display:flex;align-items:center;gap:4px}
+    .adresse-adr input{flex:1;min-width:0}
+    .adresse-adr em{color:var(--doux);font-style:normal}
+    .dispo-adr{font-size:.85rem;margin:2px 0 4px;color:var(--doux);min-height:1.1em}
+    .dispo-adr.ok{color:#2e9d5b}
+    .dispo-adr.ko{color:#c62828}
+    .idees-adresse{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:6px 0 10px}
+    .idees-adresse .cpt-aide{margin:0}
+    .avert-adresse{border:1px solid #e0a03c;background:rgba(224,160,60,.12);border-radius:12px;padding:12px 14px;margin:10px 0;font-size:.9rem}
+    .avert-adresse p{margin:6px 0}
+    .case-adresse{display:flex;gap:8px;align-items:flex-start;margin-top:8px;font-weight:600;cursor:pointer}
+    .case-adresse input{margin-top:3px;flex:none}
     .cpt-deux{display:flex;gap:10px} .cpt-deux > *{flex:1;min-width:0}
     .cpt-facture{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--ligne)}
     .cpt-facture:last-child{border-bottom:0}
@@ -683,6 +695,9 @@
       el('p', { class: 'cpt-aide' }, [el('span', { text: 'Page principale : ' }), el('b', { 'data-no-i18n': '', text: p.page + '.qrbc.app' })])
     ]);
 
+    // 1 ter. Adresse du site (24/11) : pour qui s'est trompé à l'inscription ; une version traduite suit sa page d'origine
+    const sectAdr = sectionAdresse(fermer);
+
     // 1 bis. Solde et créations IA restantes
     const c = compteCF || {};
     const ligneC = (lib, val) => el('div', { class: 'compteur' }, [el('span', { text: lib }), el('b', { 'data-no-i18n': '', text: val })]);
@@ -798,7 +813,103 @@
     // 5. Déconnexion (le bouton « Quitter » de la barre est masqué sur petit écran)
     const sortie = el('div', { class: 'cpt-section' }, [el('button', { type: 'button', class: 'btn', text: 'Se déconnecter', onclick: () => { fermer(); $('#btn-deconnexion').click(); } })]);
 
-    corps.textContent = ''; corps.append(ident, solde, formF, sectF, formM, sortie);
+    corps.textContent = ''; corps.append(ident, sectAdr, solde, formF, sectF, formM, sortie);
+  }
+
+  /* « Adresse du site » dans Mon compte : nouveau nom (idées d'après le nom de l'activité), mot de passe, mise en garde, confirmation */
+  function sectionAdresse(fermer) {
+    const c = compteCF || {};
+    const actuel = c.slug || APP || '';
+    const sect = el('div', { class: 'cpt-section' }, [el('h3', { text: 'Adresse du site' }),
+      el('p', { class: 'cpt-aide' }, [el('b', { 'data-no-i18n': '', text: actuel + '.qrbc.app' })])]);
+    if (c.traduction) {
+      sect.append(el('p', { class: 'cpt-aide', text: 'Cette version traduite suit l’adresse de sa page d’origine.' }));
+      return sect;
+    }
+    const zone = el('div', { hidden: true });
+    const ouvrir = el('button', { type: 'button', class: 'btn btn-mini', text: 'Changer l’adresse du site…', onclick: () => { zone.hidden = false; ouvrir.style.display = 'none'; nom.focus(); chargerIdees(); } });
+    sect.append(ouvrir, zone);
+    const nom = el('input', { type: 'text', maxLength: 30, placeholder: 'nouveau-nom', autocapitalize: 'none', spellcheck: 'false', autocomplete: 'off' });
+    const dispo = el('div', { class: 'dispo-adr' });
+    const idees = el('div', { class: 'idees-adresse' });
+    const mdp = el('input', { type: 'password', autocomplete: 'current-password' });
+    const avert = el('div', { class: 'avert-adresse', hidden: true });
+    const compris = el('input', { type: 'checkbox' });
+    const msg = el('div', { class: 'msg' });
+    const btn = el('button', { type: 'submit', class: 'btn btn-prim', text: 'Changer l’adresse' });
+    let libre = false, minu = null;
+    function verifier() {
+      const v = nom.value.toLowerCase().replace(/[^a-z0-9-]/g, '');
+      if (v !== nom.value) nom.value = v;
+      libre = false; dispo.className = 'dispo-adr'; dispo.textContent = v ? v + '.qrbc.app' : '';
+      avert.hidden = true; compris.checked = false;
+      clearTimeout(minu);
+      if (v.length < 3 || v === actuel) return;
+      minu = setTimeout(async () => {
+        try {
+          const j = await (await appelAPI('pages/disponible?nom=' + encodeURIComponent(v), jetonCF)).json();
+          if (nom.value !== v) return;
+          libre = !!j.disponible;
+          dispo.className = 'dispo-adr ' + (libre ? 'ok' : 'ko');
+          dispo.textContent = libre ? '✓ ' + v + '.qrbc.app ' + t('est disponible') : (j.raison || t('Ce nom est déjà pris.'));
+          if (libre) montrerAvert(v);
+        } catch (e) {}
+      }, 350);
+    }
+    function montrerAvert(v) {
+      avert.textContent = '';
+      avert.append(
+        el('b', { text: '⚠️ ' + t('Avant de confirmer') }),
+        el('p', {}, [el('span', { text: t('Nouvelle adresse :') + ' ' }), el('b', { 'data-no-i18n': '', text: v + '.qrbc.app' })]),
+        el('p', {}, [el('span', { text: t('L’ancienne adresse') + ' ' }), el('b', { 'data-no-i18n': '', text: actuel + '.qrbc.app' }),
+          el('span', { text: ' ' + t('ne fonctionnera plus et pourra être prise par quelqu’un d’autre. Les QR codes, cartes de visite et liens déjà partagés qui la contiennent ne mèneront plus à votre site : il faudra les refaire.') })]),
+        el('p', { text: t('Vous vous connecterez ensuite avec la nouvelle adresse ou votre e-mail. Votre mot de passe ne change pas. Un e-mail récapitulatif vous sera envoyé.') }),
+        el('label', { class: 'case-adresse' }, [compris, el('span', { text: t('J’ai compris : l’ancienne adresse ne sera plus disponible.') })]));
+      avert.hidden = false;
+    }
+    async function chargerIdees() {
+      idees.textContent = '';
+      const texte = (cfg && cfg.titre) || '';
+      if (!texte.trim()) return;
+      try {
+        if (!APP) return;                                   // idées servies par qrbc.app (éditeur ouvert dans l'appli)
+        const l = (await (await fetch('/api/suggestions?texte=' + encodeURIComponent(sansLiens(texte)))).json()).suggestions || [];
+        if (!l.length) return;
+        idees.append(el('span', { class: 'cpt-aide', text: t('Idées :') + ' ' }));
+        l.forEach(x => idees.append(el('button', { type: 'button', class: 'btn btn-mini', 'data-no-i18n': '', text: x, onclick: () => { nom.value = x; verifier(); } })));
+      } catch (e) {}
+    }
+    nom.addEventListener('input', verifier);
+    const form = el('form', {}, [
+      el('p', { class: 'cpt-aide', text: 'Vous vous êtes trompé d’adresse à l’inscription ? Choisissez-en une nouvelle. Votre site, vos images et vos statistiques sont conservés.' }),
+      el('label', { class: 'opt' }, [el('span', { class: 'etiq', text: 'Nouvelle adresse' }), el('div', { class: 'adresse-adr' }, [nom, el('em', { text: '.qrbc.app' })])]),
+      dispo, idees,
+      el('label', { class: 'opt' }, [el('span', { class: 'etiq', text: 'Votre mot de passe' }), mdp]),
+      avert, btn, msg
+    ]);
+    zone.append(form);
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      msg.className = 'msg err';
+      const v = nom.value;
+      if (!libre) { msg.textContent = t('Choisissez une adresse disponible.'); nom.focus(); return; }
+      if (!mdp.value) { msg.textContent = t('Indiquez votre mot de passe.'); mdp.focus(); return; }
+      if (!compris.checked) { msg.textContent = t('Cochez « J’ai compris » pour confirmer.'); return; }
+      btn.disabled = true; msg.className = 'msg'; msg.textContent = t('Changement de l’adresse…');
+      try {
+        const j = await (await appelAPI('renommer', jetonCF, { method: 'POST', body: JSON.stringify({ nom: v, mdp: mdp.value }) })).json();
+        try {
+          ['localStorage', 'sessionStorage'].forEach(st => { const S = window[st]; S.removeItem('qp-jeton:' + actuel); S.removeItem('qp-jeton'); S.setItem('qp-jeton:' + j.slug, j.jeton); });
+          const l = (JSON.parse(localStorage.getItem('qrbc-pages')) || []).map(x => x === actuel ? j.slug : x);
+          if (l.indexOf(j.slug) < 0) l.unshift(j.slug);
+          localStorage.setItem('qrbc-pages', JSON.stringify(l.slice(0, 10)));
+        } catch (e2) {}
+        msg.className = 'msg ok'; msg.textContent = '✓ ' + t('Adresse changée :') + ' ' + j.slug + '.qrbc.app';
+        const base = APP ? '' : 'https://' + location.hostname.split('.').slice(1).join('.');
+        setTimeout(() => { location.href = base + '/app/' + j.slug + '/'; }, 1500);
+      } catch (err) { msg.className = 'msg err'; msg.textContent = err.message; btn.disabled = false; }
+    });
+    return sect;
   }
 
   /* Retour de la page de paiement Stripe : ?paiement=ok&session_id=… ou ?paiement=annule */

@@ -1,6 +1,6 @@
 /* =========================================================
    inscription.js — étape 1 de l'inscription (accueil et appli)
-   Activité + e-mail + CGV → lien par e-mail (POST /api/inscription/lien), puis écran « Vérifiez votre boîte mail ».
+   Nom d'entreprise ou activité (facultatif) + e-mail + CGV → lien par e-mail (POST /api/inscription/lien), puis écran « Vérifiez votre boîte mail ».
    Code promo du lien (?promo=) : pas de champ, seulement la ligne « ✓ … jours offerts ».
    Anti-robots Cloudflare Turnstile (invisible), chargé seulement quand le formulaire sert.
    Pas de lookbehind ni d'opérateur ?? (anciens Safari).
@@ -163,6 +163,7 @@
     } else robot.demarrer();
     o.form.addEventListener('focusin', () => robot.demarrer());
     o.activite.addEventListener('input', () => etape('saisie'));
+    o.email.addEventListener('input', () => etape('saisie'));          // le nom d'activité est facultatif (24/11)
 
     function erreur(texte, champ) {
       o.msg.className = 'msg err'; o.msg.textContent = texte;
@@ -210,7 +211,6 @@
       e.preventDefault();
       o.msg.className = 'msg'; o.msg.textContent = '';
       const activite = o.activite.value.replace(/\s+/g, ' ').trim(), email = o.email.value.trim();
-      if (activite.length < 2) return erreur('Décrivez votre activité en quelques mots.', o.activite);
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return erreur('Adresse e-mail invalide.', o.email);
       if (!o.cgu.checked) return erreur('Merci d’accepter les conditions d’utilisation.');
       const texteBouton = o.bouton.textContent;
