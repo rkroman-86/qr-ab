@@ -414,6 +414,16 @@
     .btn-typo.regle{background:var(--accent,#2563eb);color:#fff;border-color:transparent}
     .rangee-typo{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 0}
     .rangee-typo select{flex:1 1 120px;min-width:0}
+    .rangee-typo .choix-police{flex:1 1 140px;min-width:0}
+    .choix-police{position:relative}
+    .cp-bouton{width:100%;text-align:left;border:1px solid var(--ligne);border-radius:12px;background:var(--bg);padding:12px 40px 12px 14px;font-size:1.05rem;cursor:pointer;position:relative;min-height:46px}
+    .cp-bouton::after{content:'';position:absolute;right:16px;top:50%;width:8px;height:8px;border:solid currentColor;border-width:0 2px 2px 0;transform:translateY(-70%) rotate(45deg);opacity:.6}
+    .cp-liste{position:absolute;z-index:40;left:0;right:0;top:calc(100% + 4px);background:var(--panneau, #fff);border:1px solid var(--ligne);border-radius:14px;box-shadow:0 14px 34px rgba(0,0,0,.18);overflow:hidden;min-width:220px}
+    .cp-option{display:flex;width:100%;align-items:baseline;justify-content:space-between;gap:10px;border:0;border-top:1px solid var(--ligne);background:none;padding:12px 14px;cursor:pointer;text-align:left}
+    .cp-option:first-child{border-top:0}
+    .cp-option:hover,.cp-option.actif{background:color-mix(in srgb,var(--prim) 10%,transparent)}
+    .cp-nom{font-size:1.2rem}
+    .cp-ex{font-size:.95rem;opacity:.55;white-space:nowrap}
     .liens-aide{font-size:.75rem;color:var(--doux)}
     .menu-liens{box-sizing:border-box;width:100%;max-width:100%;margin-top:8px;padding:12px;border:1px solid var(--ligne);border-radius:12px;
       background:var(--panneau);box-shadow:0 6px 18px rgba(0,0,0,.12);display:flex;flex-direction:column;gap:8px}
@@ -1430,12 +1440,13 @@
       s.addEventListener('change', () => ecrire(k, s.value));
       return s;
     };
-    const polices = { '': t('Police du design') };
-    Object.keys(FONTS).forEach(k => { polices[k] = FONTS[k].nom; });
-    const rangee = el('div', { class: 'rangee-typo cache' }, [choix('p', polices), choix('g', STYLES_TEXTE), choix('t', TAILLES_CHOIX),
+    const polices = [['', t('Police du design'), '']].concat(Object.keys(FONTS).map(k => [k, FONTS[k].nom, FONTS[k].css]));
+    const choixP = choixPolice(polices, lire().p || '', v => ecrire('p', v));
+    const rangee = el('div', { class: 'rangee-typo cache' }, [choixP, choix('g', STYLES_TEXTE), choix('t', TAILLES_CHOIX),
       el('button', { type: 'button', class: 'btn btn-mini', text: 'Par défaut', onclick: () => {
         if (obj.typo) { delete obj.typo[cle]; if (!Object.keys(obj.typo).length) delete obj.typo; }
         rangee.querySelectorAll('select').forEach(x => { x.value = ''; });
+        choixP.fixer('');
         majBouton(); changement();
       } })]);
     bouton.addEventListener('click', () => rangee.classList.toggle('cache'));
@@ -1530,6 +1541,36 @@
     bouton.addEventListener('click', () => { if (menu.classList.contains('cache')) ouvrir(); else fermer(); });
     return barre;
   }
+  /* Liste des polices où chaque nom est écrit dans sa police (24/11) : la liste native du téléphone ne montre pas le rendu.
+     options : [[valeur, libellé, css ou ''], …] ; renvoie un bloc avec .fixer(valeur) */
+  function choixPolice(options, valeur, auChoix) {
+    const bloc = el('div', { class: 'choix-police' });
+    const bouton = el('button', { type: 'button', class: 'cp-bouton', 'aria-haspopup': 'listbox', 'aria-expanded': 'false' });
+    const liste = el('div', { class: 'cp-liste', role: 'listbox', hidden: true });
+    let courant = valeur || '';
+    const ecrire = (n, o) => { n.textContent = o[1]; n.style.fontFamily = o[2] || ''; };
+    function majBouton() { const o = options.find(x => x[0] === courant) || options[0]; ecrire(bouton, o); }
+    function fermer() { liste.hidden = true; bouton.setAttribute('aria-expanded', 'false'); document.removeEventListener('click', dehors, true); }
+    function dehors(e) { if (!bloc.contains(e.target)) fermer(); }
+    options.forEach(o => {
+      const b = el('button', { type: 'button', role: 'option', class: 'cp-option' });
+      const nom = el('span', { class: 'cp-nom' }); ecrire(nom, o);
+      b.append(nom, el('span', { class: 'cp-ex', 'data-no-i18n': '', text: 'Aa Bb 123', style: o[2] ? 'font-family:' + o[2] : '' }));
+      b.addEventListener('click', () => { courant = o[0]; majBouton(); fermer(); auChoix(courant); });
+      liste.appendChild(b);
+    });
+    bouton.addEventListener('click', () => {
+      if (!liste.hidden) { fermer(); return; }
+      liste.querySelectorAll('.cp-option').forEach((b, i) => b.classList.toggle('actif', options[i][0] === courant));
+      liste.hidden = false; bouton.setAttribute('aria-expanded', 'true');
+      setTimeout(() => document.addEventListener('click', dehors, true), 0);
+    });
+    bloc.fixer = v => { courant = v || ''; majBouton(); };
+    majBouton();
+    bloc.append(bouton, liste);
+    return bloc;
+  }
+
   function segments(etiquette, options, obj, cle) {
     const box = el('div', { class: 'segments' });
     Object.keys(options).forEach(v => {
@@ -2538,8 +2579,7 @@
     });
     const plusDeTheme = () => { d.theme = ''; themes.querySelectorAll('.theme').forEach(x => x.classList.remove('actif')); };
 
-    const policeSel = el('select', {}, Object.keys(FONTS).map(k => el('option', { value: k, text: FONTS[k].nom, selected: d.police === k })));
-    policeSel.addEventListener('change', () => { d.police = policeSel.value; changement(); });
+    const policeSel = choixPolice(Object.keys(FONTS).map(k => [k, FONTS[k].nom, FONTS[k].css]), d.police || 'moderne', v => { d.police = v; changement(); });
 
     const voile = el('input', { type: 'range', min: 0, max: 80, value: d.voile || 0 });
     voile.addEventListener('input', () => { d.voile = Number(voile.value); changement(); });
@@ -2553,7 +2593,7 @@
         couleur('Texte', d, 'texte', plusDeTheme),
         couleur('Boutons', d, 'accent', plusDeTheme)
       ]),
-      el('label', { class: 'champ' }, [el('span', { text: 'Police' }), policeSel]),
+      el('div', { class: 'champ' }, [el('span', { text: 'Police' }), policeSel]),
       ...([
         segments('Texte sur l’image de fond', { auto: 'Auto', blanc: 'Blanc', theme: 'Couleur choisie' }, d, 'texteImage'),
         (() => { const sel = el('select', {}, [['auto', 'Ombre légère (conseillé)'], ['aucun', 'Aucun'], ['ombre', 'Ombre forte'], ['contour', 'Contour'], ['bandeau', 'Bandeau derrière le texte']]
@@ -2898,7 +2938,11 @@
     const res = p => imagesLocales[p] || p;
     return {
       W: 2008, H: 1300, P: 110, d,
-      fam: (FONTS[d.police] || FONTS.moderne).css,
+      fam: await (async () => {                          // polices hébergées (Playfair, Lora, Nunito) chargées avant de dessiner
+        const fam = (FONTS[d.police] || FONTS.moderne).css;
+        try { if (document.fonts) await Promise.all(['400', '700'].map(w => document.fonts.load(w + ' 40px ' + fam))); } catch (e) {}
+        return fam;
+      })(),
       fondImg: await chargerImage(d.imageFond ? res(d.imageFond) : ''),
       logo: await chargerImage(cfg.logo ? res(cfg.logo) : ''),
       coords: coordonnees()

@@ -11,16 +11,39 @@ const THEMES = {
   olive:   { nom: 'Olive',    fond: '#f2f2e6', fond2: '#dfe3c8', texte: '#2f3a1f', accent: '#5b6b2f' },
   corail:  { nom: 'Corail',   fond: '#fff4ef', fond2: '#ffd9cc', texte: '#4a1f14', accent: '#e0603f' },
   luxe:    { nom: 'Luxe',     fond: '#111111', fond2: '#111111', texte: '#f5efe0', accent: '#c9a45c' },
-  blanc:   { nom: 'Blanc',    fond: '#ffffff', fond2: '#ffffff', texte: '#111111', accent: '#111111' }
+  blanc:   { nom: 'Blanc',    fond: '#ffffff', fond2: '#ffffff', texte: '#111111', accent: '#111111' },
+  lavande: { nom: 'Lavande', fond: '#f5f2fb', fond2: '#e2d9f3', texte: '#2e2445', accent: '#6b4fa0' },
+  menthe: { nom: 'Menthe', fond: '#effaf5', fond2: '#cbeedd', texte: '#123f33', accent: '#1f8a68' },
+  terracotta: { nom: 'Terracotta', fond: '#fbf1ea', fond2: '#efd3bf', texte: '#4a2416', accent: '#b5502d' },
+  ocean: { nom: 'Océan', fond: '#0b1d2e', fond2: '#14406a', texte: '#eaf4fb', accent: '#4fb3e8' },
+  ardoise: { nom: 'Ardoise', fond: '#eef1f4', fond2: '#d3dbe4', texte: '#1f2a36', accent: '#3d5a80' },
+  bordeaux: { nom: 'Bordeaux', fond: '#1c0c10', fond2: '#3d1522', texte: '#f6e9ec', accent: '#d4a24c' },
+  foret: { nom: 'Forêt', fond: '#0f1f17', fond2: '#1f3d2c', texte: '#eef5ef', accent: '#8cc084' },
+  rose: { nom: 'Rose poudré', fond: '#fff3f6', fond2: '#fbd5e1', texte: '#4a1830', accent: '#d63a78' },
+  soleil: { nom: 'Soleil', fond: '#fffaeb', fond2: '#ffe7a3', texte: '#3d2f00', accent: '#e08e00' },
+  glacier: { nom: 'Glacier', fond: '#f4fbff', fond2: '#d6ecfa', texte: '#0f2b40', accent: '#2b7bb9' },
+  chocolat: { nom: 'Chocolat', fond: '#2a1d17', fond2: '#47302a', texte: '#f7eee6', accent: '#e3a873' },
+  ciel: { nom: 'Nuit étoilée', fond: '#121433', fond2: '#2b2d6b', texte: '#f1f2ff', accent: '#9fa8ff' }
 };
 
 const FONTS = {
   moderne: { nom: 'Moderne',  css: 'system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' },
   elegant: { nom: 'Élégante', css: '"Didot", "Bodoni MT", "Playfair Display", Georgia, "Times New Roman", serif' },
-  classique:{ nom: 'Classique', css: 'Georgia, "Iowan Old Style", "Palatino Linotype", serif' },
+  classique:{ nom: 'Classique', css: 'Georgia, "Iowan Old Style", "Palatino Linotype", "Lora", serif' },
   arrondi: { nom: 'Arrondie', css: 'ui-rounded, "SF Pro Rounded", "Nunito", "Varela Round", system-ui, sans-serif' },
   mono:    { nom: 'Technique', css: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace' }
 };
+
+/* Polices libres hébergées sur qrbc.app (Playfair Display, Lora, Nunito : /polices/polices.css) : sans elles, Android affiche
+   « Élégante » et « Classique » dans la même police, « Moderne » et « Arrondie » aussi. Chargées seulement si la page s'en sert. */
+(function () {
+  try {
+    if (typeof document === 'undefined' || document.querySelector('link[data-polices]')) return;
+    const l = document.createElement('link');
+    l.rel = 'stylesheet'; l.href = '/polices/polices.css'; l.setAttribute('data-polices', '1');
+    (document.head || document.documentElement).appendChild(l);
+  } catch (e) {}
+})();
 
 const TYPES = {
   avis:     { nom: 'Avis Google',  aide: 'Lien « Demander des avis » de la fiche Google, ou son Place ID' },

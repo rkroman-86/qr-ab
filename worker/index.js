@@ -123,6 +123,8 @@ const RESERVES = new Set(['www', 'api', 'admin', 'app', 'mail', 'smtp', 'gestion
   'support', 'aide', 'help', 'blog', 'docs', 'status', 'billing', 'paiement', 'compte', 'login', 'inscription',
   'demo', 'dev', 'staging', 'test', 'ns1', 'ns2', 'ftp', 'webmail', 'contact']);
 const FICHIERS_STATIQUES = new Set(['/admin.html', '/commun.js', '/i18n.js', '/qrcode.js', '/inscription.js']);
+// polices libres hébergées (commun.js) : servies sur qrbc.app, les sous-domaines clients et dans l'appli
+const estStatique = p => FICHIERS_STATIQUES.has(p) || /^\/polices\/[a-z0-9-]+\.(woff2|css)$/.test(p);
 // Appli installable (PWA) servie depuis qrbc.app
 const FICHIERS_PWA = new Set(['/og-qrbc.jpg', '/og-qrbc-en.jpg', '/og-qrbc-ru.jpg', '/manifest.webmanifest', '/sw.js', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/apple-touch-icon.png', '/favicon.png']);
 const FICHIERS_SITE = new Set(['config.json', 'index.html', 'accueil.html', 'blog.html', 'page.html', 'sitemap.xml']);
@@ -248,7 +250,7 @@ async function racine(request, env, url) {
     const h = new Headers(r.headers); h.set('cache-control', 'no-cache');
     return new Response(r.body, { status: r.status, headers: h });
   }
-  if (FICHIERS_PWA.has(p) || FICHIERS_STATIQUES.has(p)) return statique(env, request, p);
+  if (FICHIERS_PWA.has(p) || estStatique(p)) return statique(env, request, p);
   if (/^\/videos\/qrbc-(fr|en|ru)\.mp4$/.test(p)) return servirVideo(env, request, p);   // vidéos de présentation de l'accueil
 
   // Éditeur dans l'appli : /app/<page>/…  (même origine que l'appli installée)
@@ -258,7 +260,7 @@ async function racine(request, env, url) {
     if (!reste) return Response.redirect(url.origin + '/app/' + slug + '/', 301);
     if (reste.startsWith('/api/')) return apiClient(request, env, slug, reste.slice(5));
     if (reste === '/' || reste === '/admin.html') return statique(env, request, '/admin.html', true);
-    if (FICHIERS_STATIQUES.has(reste)) return statique(env, request, reste);
+    if (estStatique(reste)) return statique(env, request, reste);
     if (reste.startsWith('/images/')) return imageClient(env, slug, reste.slice('/images/'.length), await lireCompte(env, slug));
   }
   return texte('Page introuvable', 404);
@@ -274,7 +276,7 @@ async function siteClient(request, env, url, slug) {
   if (p === '/api/clic' && request.method === 'POST') return compterClic(request, env, slug);
   if (p.startsWith('/api/')) return apiClient(request, env, slug, p.slice(5));
   if (p === '/admin' || p === '/admin/' || p === '/admin.html') return statique(env, request, '/admin.html', true);
-  if (FICHIERS_STATIQUES.has(p)) return statique(env, request, p);
+  if (estStatique(p)) return statique(env, request, p);
   if (p === '/robots.txt') {
     const c = await lireCompte(env, slug);
     // page absente, en pause ou non référencée : pas de plan du site annoncé (les pages répondent « noindex »)
@@ -359,7 +361,7 @@ async function lienQRPerso(env, slug) {
 
 /* ---------- Pages traduites et sélecteur de langues ---------- */
 async function pageTraduite(request, env, url, slug, tc, reste) {
-  if (FICHIERS_STATIQUES.has(reste)) return statique(env, request, reste);
+  if (estStatique(reste)) return statique(env, request, reste);
   const source = await lireCompte(env, slug);
   if (!source || !actif(tc)) return pageInfo('Page en pause', 'Cette page est momentanément indisponible.', 200);
   if (reste === '/manifest.webmanifest') return manifestePage(env, slug);
@@ -1853,26 +1855,77 @@ const THEMES_INIT = {
   olive:   ['#f2f2e6', '#dfe3c8', '#2f3a1f', '#5b6b2f'],
   corail:  ['#fff4ef', '#ffd9cc', '#4a1f14', '#e0603f'],
   luxe:    ['#111111', '#111111', '#f5efe0', '#c9a45c'],
-  blanc:   ['#ffffff', '#ffffff', '#111111', '#111111']
+  blanc:   ['#ffffff', '#ffffff', '#111111', '#111111'],
+  lavande: ['#f5f2fb', '#e2d9f3', '#2e2445', '#6b4fa0'],
+  menthe: ['#effaf5', '#cbeedd', '#123f33', '#1f8a68'],
+  terracotta: ['#fbf1ea', '#efd3bf', '#4a2416', '#b5502d'],
+  ocean: ['#0b1d2e', '#14406a', '#eaf4fb', '#4fb3e8'],
+  ardoise: ['#eef1f4', '#d3dbe4', '#1f2a36', '#3d5a80'],
+  bordeaux: ['#1c0c10', '#3d1522', '#f6e9ec', '#d4a24c'],
+  foret: ['#0f1f17', '#1f3d2c', '#eef5ef', '#8cc084'],
+  rose: ['#fff3f6', '#fbd5e1', '#4a1830', '#d63a78'],
+  soleil: ['#fffaeb', '#ffe7a3', '#3d2f00', '#e08e00'],
+  glacier: ['#f4fbff', '#d6ecfa', '#0f2b40', '#2b7bb9'],
+  chocolat: ['#2a1d17', '#47302a', '#f7eee6', '#e3a873'],
+  ciel: ['#121433', '#2b2d6b', '#f1f2ff', '#9fa8ff']
 };
 const ACTIVITES_DESIGN = [
-  { re: /vtc|chauffeur|taxi|limo|prestige|luxe|luxury|yacht|concierg|jet|drive|transfert|шофер|такси|водител|трансфер|люкс/, themes: ['luxe', 'nuit'], polices: ['elegant', 'classique'] },
-  { re: /restau|caf[eé]|bar\b|pizz|bistro|brasser|traiteur|boulang|p[aâ]tiss|cuisine|food|burger|sushi|cr[eê]pe|glac|chocolat|ресторан|каф|пицц|кухн|пекар/, themes: ['corail', 'sable'], polices: ['classique', 'arrondi'] },
-  { re: /spa|sauna|massag|beaut|coiff|esth[eé]ti|ongl|nail|yoga|bien[- ]?[eê]tre|wellness|barb|maquill|soin|салон|массаж|красот|сауна|баня|маникюр|парикмах/, themes: ['sable', 'olive'], polices: ['elegant', 'arrondi'] },
-  { re: /plage|mer\b|nautiq|bateau|boat|voile|surf|plong|dive|kayak|villa|location|vacan|h[oô]tel|g[iî]te|riviera|azur|camping|море|яхт|отел|вилл|аренд/, themes: ['riviera', 'blanc'], polices: ['moderne', 'elegant'] },
-  { re: /jardin|paysag|garden|bio\b|ferme|farm|vin\b|vins|cave|domaine|wine|fleur|flor|mara[iî]ch|olive|сад|ферм|вин|цвет/, themes: ['olive', 'sable'], polices: ['classique', 'elegant'] },
-  { re: /informati|tech|web|digital|d[eé]pann|plomb|[eé]lectric|artisan|b[aâ]timent|r[eé]nov|ma[cç]on|menuis|serrur|garage|m[eé]cani|auto\b|clim|chauff|компьют|ремонт|сантех|электр|строит/, themes: ['blanc', 'nuit'], polices: ['moderne', 'mono'] },
-  { re: /enfant|kids|cr[eè]che|nounou|anim(al|aux)|chien|chat\b|toilett|v[eé]t[eé]rin|f[eê]te|party|jouet|dessin|дет|собак|кош|праздн/, themes: ['corail', 'riviera'], polices: ['arrondi', 'moderne'] }
+  { re: /vtc|chauffeur|taxi|limo|prestige|luxe|luxury|yacht|concierg|jet|drive|transfert|шофер|такси|водител|трансфер|люкс/, themes: ['luxe', 'nuit', 'bordeaux', 'chocolat', 'ciel'], polices: ['elegant', 'classique'] },
+  { re: /restau|caf[eé]|bar\b|pizz|bistro|brasser|traiteur|boulang|p[aâ]tiss|cuisine|food|burger|sushi|cr[eê]pe|glac|chocolat|ресторан|каф|пицц|кухн|пекар/, themes: ['corail', 'sable', 'terracotta', 'soleil', 'chocolat'], polices: ['classique', 'arrondi'] },
+  { re: /spa|sauna|massag|beaut|coiff|esth[eé]ti|ongl|nail|yoga|bien[- ]?[eê]tre|wellness|barb|maquill|soin|салон|массаж|красот|сауна|баня|маникюр|парикмах/, themes: ['sable', 'olive', 'lavande', 'rose', 'menthe'], polices: ['elegant', 'arrondi'] },
+  { re: /plage|mer\b|nautiq|bateau|boat|voile|surf|plong|dive|kayak|villa|location|vacan|h[oô]tel|g[iî]te|riviera|azur|camping|море|яхт|отел|вилл|аренд/, themes: ['riviera', 'blanc', 'ocean', 'glacier', 'menthe'], polices: ['moderne', 'elegant'] },
+  { re: /jardin|paysag|garden|bio\b|ferme|farm|vin\b|vins|cave|domaine|wine|fleur|flor|mara[iî]ch|olive|сад|ферм|вин|цвет/, themes: ['olive', 'sable', 'foret', 'menthe', 'terracotta'], polices: ['classique', 'elegant'] },
+  { re: /informati|tech|web|digital|d[eé]pann|plomb|[eé]lectric|artisan|b[aâ]timent|r[eé]nov|ma[cç]on|menuis|serrur|garage|m[eé]cani|auto\b|clim|chauff|компьют|ремонт|сантех|электр|строит/, themes: ['blanc', 'nuit', 'ardoise', 'glacier', 'ocean'], polices: ['moderne', 'mono'] },
+  { re: /enfant|kids|cr[eè]che|nounou|anim(al|aux)|chien|chat\b|toilett|v[eé]t[eé]rin|f[eê]te|party|jouet|dessin|дет|собак|кош|праздн/, themes: ['corail', 'riviera', 'soleil', 'rose', 'lavande'], polices: ['arrondi', 'moderne'] }
 ];
+/* Couleurs : petites variations autour du thème choisi (24/11 : les nouveaux sites se ressemblaient trop) */
+function hexVersHsl(h) {
+  const n = parseInt(h.slice(1), 16), r = (n >> 16) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2, d = max - min;
+  if (!d) return [0, 0, l];
+  const s = d / (1 - Math.abs(2 * l - 1));
+  const hh = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [(hh * 60 + 360) % 360, s, l];
+}
+function hslVersHex(h, s, l) {
+  const c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m = l - c / 2;
+  const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+  return '#' + [r, g, b].map(v => Math.round((v + m) * 255).toString(16).padStart(2, '0')).join('');
+}
+const tourner = (hex, deg) => { const [h, s, l] = hexVersHsl(hex); return hslVersHex((h + deg + 360) % 360, s, l); };
+function luminanceHex(h) {
+  const n = parseInt(h.slice(1), 16);
+  const c = [n >> 16, (n >> 8) & 255, n & 255].map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+  return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+}
+const contrasteCouleurs = (a, b) => { const x = luminanceHex(a), y = luminanceHex(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+const ACCENTS_VIFS = ['#d9572b', '#1f8a68', '#3d5a80', '#b5502d', '#6b4fa0', '#d63a78', '#0d6e8c', '#c9a45c', '#2b7bb9', '#e08e00'];
 function designInitial(titre) {
   const hasard = l => l[Math.floor(Math.random() * l.length)];
   const t = String(titre || '').toLowerCase();
   const act = ACTIVITES_DESIGN.find(a => a.re.test(t));
-  const theme = act ? hasard(act.themes) : hasard(Object.keys(THEMES_INIT));
-  const [fond, fond2, texte, accent] = THEMES_INIT[theme];
+  // thème : le plus souvent l'un de ceux qui vont à l'activité, sinon n'importe lequel
+  const theme = act && Math.random() < 0.65 ? hasard(act.themes) : hasard(Object.keys(THEMES_INIT));
+  let [fond, fond2, texte, accent] = THEMES_INIT[theme];
+  let varie = false;
+  const sat = hexVersHsl(accent)[1];
+  if (sat < 0.15 && Math.random() < 0.6) {                     // thème neutre (Sable, Blanc) : une couleur de boutons
+    const l = ACCENTS_VIFS.filter(x => contrasteCouleurs(x, fond) >= 2.6);
+    if (l.length) { accent = hasard(l); varie = true; }
+  }      // thème neutre (Sable, Blanc) : une couleur de boutons
+  else if (sat >= 0.15 && Math.random() < 0.6) {                                              // teinte décalée, boutons bien visibles sur le fond
+    for (let essai = 0; essai < 6; essai++) {
+      const deg = (Math.random() < 0.5 ? -1 : 1) * (15 + Math.random() * 35);
+      const a = tourner(accent, deg);
+      if (contrasteCouleurs(a, fond) < 2.6) continue;            // un jaune pâle sur fond crème, par exemple : refusé
+      accent = a;
+      if (hexVersHsl(fond2)[1] > 0.1) fond2 = tourner(fond2, deg);
+      varie = true; break;
+    }
+  }
   return {
-    theme, fond, fond2, texte, accent,
-    police: act ? hasard(act.polices) : hasard(['moderne', 'elegant', 'classique', 'arrondi']),
+    theme: varie ? '' : theme, fond, fond2, texte, accent,
+    police: act && Math.random() < 0.6 ? hasard(act.polices) : hasard(['moderne', 'elegant', 'classique', 'arrondi', 'moderne', 'elegant', 'classique', 'arrondi', 'mono']),
     forme: hasard(['arrondi', 'arrondi', 'pilule', 'carre']),
     style: hasard(['plein', 'plein', 'doux', 'contour']),
     disposition: hasard(['centre', 'centre', 'haut', 'bas', 'carte'])
