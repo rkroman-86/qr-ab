@@ -50,8 +50,8 @@ qrbc.app (QR-BC, édité par KPS) permet de créer en quelques minutes, depuis u
 - « Logo rond (photo) » pour afficher une photo dans un cercle.
 
 ## Design
-- Thème : Sable, Nuit, Riviera, Olive, Corail, Luxe, Blanc (applique d'un coup les 4 couleurs). Les couleurs peuvent ensuite être changées une par une : Fond, Fond (dégradé), Texte, Boutons.
-- Police : Moderne, Élégante, Classique, Arrondie, Technique.
+- Thème : Sable, Nuit, Riviera, Olive, Corail, Luxe, Blanc, Lavande, Menthe, Terracotta, Océan, Ardoise, Bordeaux, Forêt, Rose poudré, Soleil, Glacier, Chocolat, Nuit étoilée (applique d'un coup les 4 couleurs). À la création, le design de départ est tiré au hasard (thème adapté à l'activité, couleur des boutons variée), pour que les sites ne se ressemblent pas. Les couleurs peuvent ensuite être changées une par une : Fond, Fond (dégradé), Texte, Boutons.
+- Police : Moderne, Élégante, Classique, Arrondie, Technique. Dans la liste, chaque nom est écrit dans sa police ; Élégante, Classique et Arrondie utilisent des polices hébergées par qrbc (rendu identique sur Android, iPhone et ordinateur).
 - Texte sur l'image de fond : Auto (un texte foncé passe en blanc sur la photo), Blanc, ou Couleur choisie.
 - Effet pour lire le texte sur l'image : Ombre légère (conseillé), Aucun, Ombre forte, Contour, Bandeau derrière le texte. Si le titre se lit mal sur la photo : essayer « Blanc » + « Bandeau », ou assombrir l'image (voir Recadrage).
 - Forme des boutons (Carré, Arrondi, Pilule), style (Plein, Contour, Doux), ombre sous les boutons, encadrer le contenu (carte), tous les boutons en icônes rondes, noms sous les icônes, icônes aux couleurs du thème.
