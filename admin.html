@@ -357,6 +357,14 @@
     .app-carte .num{position:absolute;top:10px;left:10px;min-width:26px;height:26px;border-radius:13px;background:var(--prim);color:#fff;font:700 .85rem/26px system-ui,sans-serif;text-align:center;display:none}
     .app-carte.actif .num{display:block}
     .app-lien{font-size:.85rem;word-break:break-all;color:var(--doux);margin:8px 0}
+    .infos-carte{margin:0 0 14px}
+    .info-carte{display:grid;grid-template-columns:150px 1fr;gap:4px 10px;align-items:center;margin:0 0 8px}
+    .info-carte .case-info{display:flex;align-items:center;gap:8px;font-size:.88rem;font-weight:600;cursor:pointer}
+    .info-carte .case-info input{width:18px;height:18px;margin:0;flex:none}
+    .info-carte>input{width:100%;min-width:0}
+    .info-carte.off>input{opacity:.45}
+    .info-carte .btn-mini{grid-column:2;justify-self:start}
+    @media (max-width:520px){.info-carte{grid-template-columns:1fr}.info-carte .btn-mini{grid-column:1}}
     .modele-carte{border:2px solid var(--ligne);border-radius:12px;padding:6px;background:var(--bg);cursor:pointer;color:var(--txt);display:flex;flex-direction:column;gap:6px}
     .modele-carte img{width:100%;aspect-ratio:2008/1300;object-fit:contain;border-radius:6px;display:block;background:color-mix(in srgb,var(--txt) 6%,transparent)}
     .modele-carte b{font-size:.8rem}
@@ -2855,24 +2863,84 @@
     return (t && t[l] ? t[l] : m[1]) + (m[2] === ' / WhatsApp' ? ' / WhatsApp' : m[2] || '');
   }
 
-  // Coordonnées à imprimer, tirées des boutons visibles
-  function coordonnees() {
-    const lignes = [];
-    const vus = {};
-    const ajout = (etiq, val) => { if (val && !vus[val]) { vus[val] = 1; lignes.push([tc(etiq), val]); } };
-    const btns = cfg.boutons.filter(b => b && !b.masque && b.type !== 'reseaux' && String(b.valeur || '').trim());
-    const tel = btns.find(b => b.type === 'tel') || btns.find(b => b.type === 'sms'), wa = btns.find(b => b.type === 'whatsapp');
-    if (tel && wa && numeroInternational(tel.valeur) === numeroInternational(wa.valeur)) ajout('Tél. / WhatsApp', formaterNumero(tel.valeur));
-    else { if (tel) ajout('Tél.', formaterNumero(tel.valeur)); if (wa) ajout('WhatsApp', formaterNumero(wa.valeur)); }
-    btns.filter(b => b.type === 'email').forEach(b => ajout('E-mail', b.valeur.trim()));
-    const mail = cfg.reseaux.find(r => r.id === 'email' && r.actif && String(r.valeur || '').trim());
-    if (mail) ajout('E-mail', String(mail.valeur).trim().replace(/^mailto:/i, ''));
+  /* Informations imprimées sur la carte (25/11) : le client en choisit 4 au plus parmi nom, slogan, téléphone, e-mail, site.
+     Valeur vide = reprise de la page (titre, accroche, boutons) ; cfg.carteInfos = { choix: [...], nom, slogan, tel, email, site } */
+  const CHAMPS_CARTE = [['nom', 'Nom de l’entreprise'], ['slogan', 'Slogan'], ['tel', 'Téléphone'], ['email', 'E-mail'], ['site', 'Site web']];
+  const MAX_INFOS_CARTE = 4;
+  function boutonsCarte() { return cfg.boutons.filter(b => b && !b.masque && b.type !== 'reseaux' && String(b.valeur || '').trim()); }
+  function defautsCarte() {
+    const btns = boutonsCarte();
+    const tel = btns.find(b => b.type === 'tel') || btns.find(b => b.type === 'sms') || btns.find(b => b.type === 'whatsapp');
+    const mailB = btns.find(b => b.type === 'email');
+    const mailR = cfg.reseaux.find(r => r.id === 'email' && r.actif && String(r.valeur || '').trim());
     const site = cfg.reseaux.find(r => r.id === 'site' && r.actif && String(r.valeur || '').trim());
-    const lienWeb = site ? site.valeur : (btns.find(b => b.type === 'lien') || {}).valeur;
-    if (lienWeb) ajout('Web', String(lienWeb).trim().replace(/^https?:\/\//i, '').replace(/\/$/, ''));
-    const insta = cfg.reseaux.find(r => r.id === 'instagram' && r.actif && String(r.valeur || '').trim());
-    if (insta && lignes.length < 4) ajout('Instagram', '@' + String(insta.valeur).trim().replace(/^https?:\/\/(www\.)?instagram\.com\//i, '').replace(/^@/, '').replace(/\/.*$/, ''));
-    return lignes.slice(0, 4);
+    const web = (site ? site.valeur : (btns.find(b => b.type === 'lien') || {}).valeur) || URL_PUBLIQUE;   // sinon l'adresse de la page elle-même
+    return {
+      nom: cfg.titre || '',
+      slogan: sansLiens(cfg.sousTitre || '').split('\n')[0].trim(),
+      tel: tel ? formaterNumero(tel.valeur) : '',
+      email: mailB ? mailB.valeur.trim() : mailR ? String(mailR.valeur).trim().replace(/^mailto:/i, '') : '',
+      site: String(web || '').trim().replace(/^https?:\/\//i, '').replace(/\/$/, '')
+    };
+  }
+  function reglagesCarte() { return cfg.carteInfos && typeof cfg.carteInfos === 'object' ? cfg.carteInfos : {}; }
+  function valeursCarte() {
+    const d = defautsCarte(), r = reglagesCarte(), v = {};
+    CHAMPS_CARTE.forEach(([k]) => { v[k] = String(r[k] || '').trim() || d[k]; });
+    return v;
+  }
+  function choixCarte(v) {
+    const r = reglagesCarte();
+    if (Array.isArray(r.choix)) return CHAMPS_CARTE.map(c => c[0]).filter(k => r.choix.includes(k)).slice(0, MAX_INFOS_CARTE);
+    v = v || valeursCarte();
+    return ['nom', 'tel', 'email', 'site', 'slogan'].filter(k => v[k]).slice(0, MAX_INFOS_CARTE);   // par défaut : les 4 premiers remplis
+  }
+  function infosCarte() {
+    const v = valeursCarte(), ch = choixCarte(v), coords = [];
+    if (ch.includes('tel') && v.tel) {
+      const n = numeroInternational(v.tel), wa = boutonsCarte().find(b => b.type === 'whatsapp');
+      const etiq = wa && n && numeroInternational(wa.valeur) === n ? 'Tél. / WhatsApp' : 'Tél.';
+      coords.push([tc(etiq), String(v.tel).replace(/\D/g, '').length >= 6 ? formaterNumero(v.tel) : v.tel]);
+    }
+    if (ch.includes('email') && v.email) coords.push([tc('E-mail'), v.email]);
+    if (ch.includes('site') && v.site) coords.push([tc('Web'), v.site.replace(/^https?:\/\//i, '').replace(/\/$/, '')]);
+    return { nom: ch.includes('nom') ? v.nom : '', slogan: ch.includes('slogan') ? v.slogan : '', coords };
+  }
+  // Réglage dans la section « QR code et carte de visite »
+  function blocInfosCarte(rafraichir) {
+    const bloc = el('div', { class: 'infos-carte' });
+    const dessiner = () => {
+      bloc.innerHTML = '';
+      const d = defautsCarte(), r = reglagesCarte(), ch = choixCarte();
+      const plein = ch.length >= MAX_INFOS_CARTE;
+      bloc.append(el('span', { class: 'etiq', text: 'Informations sur la carte' }),
+        el('div', { class: 'aide', style: 'margin:0 0 8px', text: 'Cochez jusqu’à 4 informations. Elles sont reprises de votre page ; modifiez-les ici si vous voulez imprimer un autre numéro ou un autre e-mail (votre page ne change pas).' }));
+      CHAMPS_CARTE.forEach(([k, lib]) => {
+        const coche = ch.includes(k);
+        const caseC = el('input', { type: 'checkbox' }); caseC.checked = coche; caseC.disabled = !coche && plein;
+        const input = el('input', { type: k === 'email' ? 'email' : k === 'tel' ? 'tel' : 'text', value: String(r[k] || '').trim() || d[k], placeholder: d[k] || (k === 'slogan' ? 'Ex. : Votre chauffeur privé à Nice' : '') });
+        input.disabled = !coche;
+        caseC.addEventListener('change', () => {
+          const c = choixCarte().filter(x => x !== k); if (caseC.checked) c.push(k);
+          cfg.carteInfos = Object.assign({}, reglagesCarte(), { choix: CHAMPS_CARTE.map(x => x[0]).filter(x => c.includes(x)).slice(0, MAX_INFOS_CARTE) });
+          changement(); dessiner(); rafraichir();
+        });
+        input.addEventListener('input', () => {
+          const val = input.value.trim();
+          cfg.carteInfos = Object.assign({}, reglagesCarte(), { choix: choixCarte() });
+          if (!val || val === d[k]) delete cfg.carteInfos[k]; else cfg.carteInfos[k] = input.value;   // identique à la page : suit la page
+          changement();
+        });
+        input.addEventListener('change', rafraichir);
+        const perso = String(r[k] || '').trim() && String(r[k]).trim() !== d[k];
+        bloc.append(el('div', { class: 'info-carte' + (coche ? '' : ' off') }, [
+          el('label', { class: 'case-info' }, [caseC, el('span', { text: lib })]), input,
+          perso ? el('button', { type: 'button', class: 'btn btn-mini', title: d[k], text: '↺ ' + t('Reprendre la page'), onclick: () => { delete cfg.carteInfos[k]; changement(); dessiner(); rafraichir(); } }) : null]));
+      });
+      bloc.append(el('div', { class: 'aide', style: 'margin:2px 0 0', text: plein ? '4 informations au maximum : décochez-en une pour en choisir une autre.' : ch.length + ' / 4' }));
+    };
+    dessiner();
+    return bloc;
   }
 
   // Ajuste la taille de police pour tenir dans une largeur
@@ -2945,7 +3013,7 @@
       })(),
       fondImg: await chargerImage(d.imageFond ? res(d.imageFond) : ''),
       logo: await chargerImage(cfg.logo ? res(cfg.logo) : ''),
-      coords: coordonnees()
+      ...infosCarte()
     };
   }
 
@@ -2990,7 +3058,7 @@
 
   // Titre + sous-titre + trait + coordonnées ; align 'left' ou 'center'
   function dessinerTextes(ctx, D, x, y, largeur, c, align) {
-    const cfgT = cfg, fam = D.fam;
+    const cfgT = { titre: D.nom, sousTitre: D.slogan }, fam = D.fam;
     const ax = align === 'center' ? x + largeur / 2 : x;
     ctx.textAlign = align; ctx.textBaseline = 'top';
     if (cfgT.titre) {
@@ -3114,11 +3182,11 @@
       let y = 100;
       if (D.logo) { dessinerLogo(ctx, D, 100, y, 170); y += 170 + 46; } else y += 30;
       ctx.textBaseline = 'top'; ctx.fillStyle = '#111';
-      ctx.font = policeAjustee(ctx, cfg.titre || '', '800', 92, 44, L, D.fam);
-      coupeLignes(ctx, cfg.titre || '', L, 2).forEach(l => { ctx.fillText(l, 100, y); y += parseInt(ctx.font.match(/(\d+)px/)[1], 10) * 1.12; });
-      if (cfg.sousTitre) {
+      ctx.font = policeAjustee(ctx, D.nom || '', '800', 92, 44, L, D.fam);
+      coupeLignes(ctx, D.nom || '', L, 2).forEach(l => { ctx.fillText(l, 100, y); y += parseInt(ctx.font.match(/(\d+)px/)[1], 10) * 1.12; });
+      if (D.slogan) {
         ctx.font = '400 42px ' + D.fam; ctx.fillStyle = '#555';
-        coupeLignes(ctx, sansLiens(cfg.sousTitre), L, 2).forEach(l => { ctx.fillText(l, 100, y + 6); y += 54; });
+        coupeLignes(ctx, sansLiens(D.slogan), L, 2).forEach(l => { ctx.fillText(l, 100, y + 6); y += 54; });
       }
       y += 40;
       dessinerCoords(ctx, Object.assign({}, D, { coords: D.coords.slice(0, 3) }), 100, y, L, { texte: '#111', accent, etiq: 32, val: 44, pas: 98 }, 'left');
@@ -3183,7 +3251,7 @@
     monogramme(ctx, D) {
       const { W, H, P } = D;
       const texte = fondPage(ctx, D, 0, 0, W, H, 0.5);
-      const mono = initiales(cfg.titre);
+      const mono = initiales(D.nom || D.nom);
       ctx.save(); ctx.globalAlpha = D.fondImg ? 0.18 : 0.13; ctx.fillStyle = D.fondImg ? '#ffffff' : D.d.accent;
       ctx.textBaseline = 'alphabetic'; ctx.font = policeAjustee(ctx, mono, '900', 980, 300, W * 0.72, D.fam);
       ctx.fillText(mono, -30, H + 150); ctx.restore();
@@ -3264,8 +3332,8 @@
       let y = 260;
       if (D.logo) { dessinerLogo(ctx, D, x, y - 60, 170); y += 170; }
       ctx.fillStyle = texte; ctx.textBaseline = 'top';
-      ctx.font = policeAjustee(ctx, cfg.titre || '', '800', 96, 46, L, D.fam);
-      coupeLignes(ctx, cfg.titre || '', L, 2).forEach(l => { ctx.fillText(l, x, y); y += parseInt(ctx.font.match(/(\d+)px/)[1], 10) * 1.12; });
+      ctx.font = policeAjustee(ctx, D.nom || '', '800', 96, 46, L, D.fam);
+      coupeLignes(ctx, D.nom || '', L, 2).forEach(l => { ctx.fillText(l, x, y); y += parseInt(ctx.font.match(/(\d+)px/)[1], 10) * 1.12; });
       y += 30; ctx.fillRect(x, y, 120, 8); y += 50;
       ctx.font = '500 48px ' + D.fam; ctx.globalAlpha = 0.9;
       coupeLignes(ctx, tc('Scannez pour réserver, appeler ou laisser un avis'), L, 3).forEach(l => { ctx.fillText(l, x, y); y += 62; });
@@ -3393,11 +3461,11 @@
       if (D.logo) { dessinerLogo(ctx, D, P, Hh - 250, 200); x = P + 250; }
       const Lt = qx - x - 50;
       ctx.fillStyle = blanc; ctx.textBaseline = 'alphabetic';
-      ctx.font = policeAjustee(ctx, cfg.titre || '', '800', 112, 52, Lt, D.fam);
-      ctx.fillText(cfg.titre || '', x, Hh - (cfg.sousTitre ? 130 : 70));
-      if (cfg.sousTitre) {
-        ctx.font = policeAjustee(ctx, sansLiens(cfg.sousTitre), '400', 50, 28, Lt, D.fam); ctx.globalAlpha = .85;
-        ctx.fillText(sansLiens(cfg.sousTitre), x, Hh - 64); ctx.globalAlpha = 1;
+      ctx.font = policeAjustee(ctx, D.nom || '', '800', 112, 52, Lt, D.fam);
+      ctx.fillText(D.nom || '', x, Hh - (D.slogan ? 130 : 70));
+      if (D.slogan) {
+        ctx.font = policeAjustee(ctx, sansLiens(D.slogan), '400', 50, 28, Lt, D.fam); ctx.globalAlpha = .85;
+        ctx.fillText(sansLiens(D.slogan), x, Hh - 64); ctx.globalAlpha = 1;
       }
       const accent = luminance(D.d.accent) > 0.6 ? '#1a1a1a' : D.d.accent;
       dessinerBlocQR(ctx, D, qx, qy, q, '', true);
@@ -3412,8 +3480,8 @@
       let y = 110;
       if (D.logo) { dessinerLogo(ctx, D, (W - 170) / 2, y, 170); y += 170 + 40; } else y += 60;
       ctx.fillStyle = '#111'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-      ctx.font = policeAjustee(ctx, cfg.titre || '', '300', 104, 56, W - 300, D.fam);
-      ctx.fillText(cfg.titre || '', W / 2, y); y += 130;
+      ctx.font = policeAjustee(ctx, D.nom || '', '300', 104, 56, W - 300, D.fam);
+      ctx.fillText(D.nom || '', W / 2, y); y += 130;
       ctx.fillStyle = accent; ctx.fillRect(W / 2 - 50, y, 100, 5); y += 40;
       const ligne = D.coords.slice(0, 2).map(l => l[1]).join('   ·   ');
       ctx.fillStyle = '#444'; ctx.font = policeAjustee(ctx, ligne, '500', 48, 30, W - 300, D.fam);
@@ -3437,8 +3505,8 @@
       const q = 760;
       dessinerBlocQR(ctx, D, (W - q) / 2, 110, q, '', true);
       ctx.fillStyle = texte; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-      ctx.font = policeAjustee(ctx, cfg.titre || '', '800', 96, 50, W - 300, D.fam);
-      ctx.fillText(cfg.titre || '', W / 2, 110 + q + 70);
+      ctx.font = policeAjustee(ctx, D.nom || '', '800', 96, 50, W - 300, D.fam);
+      ctx.fillText(D.nom || '', W / 2, 110 + q + 70);
       ctx.font = '500 50px ' + D.fam; ctx.globalAlpha = .8;
       ctx.fillText(tc('Scannez pour réserver, appeler ou laisser un avis'), W / 2, 110 + q + 190);
       ctx.globalAlpha = 1; ctx.textAlign = 'left';
@@ -3530,7 +3598,8 @@
       blocQRPartage,
       el('div', { style: 'height:16px' }),
       el('span', { class: 'etiq', text: 'Carte de visite' }),
-      el('div', { class: 'aide', style: 'margin:0 0 10px', text: 'Créée à partir de la page telle qu’elle est affichée : fond, logo, nom, coordonnées des boutons et QR code.' }),
+      el('div', { class: 'aide', style: 'margin:0 0 10px', text: 'Créée à partir de la page telle qu’elle est affichée : fond, logo, QR code et les informations choisies ci-dessous.' }),
+      blocInfosCarte(() => { if (grilleModeles.childElementCount) btnCarte.click(); }),
       btnCarte, grilleModeles, zoneCarte, btnAppli, aideAppli, btnCommande, aideCommande
     ]);
   }
@@ -3546,7 +3615,7 @@
   // appli sur sa propre adresse (nom--carte.qrbc.app) : elle ne remplace jamais l'appli de la page
   function lienAppliCarte() { return URL_PUBLIQUE.replace(/^(https?:\/\/)([^./]+)\./, '$1$2--carte.').replace(/^(https?:\/\/[^/]+).*$/, '$1/'); }
   function cleCarteApp() {
-    return JSON.stringify([cfg.carteApp && cfg.carteApp.modeles, cfg.design, cfg.logo, cfg.titre, cfg.sousTitre, cfg.pied, coordonnees(), URL_PUBLIQUE, cfg.langue || 'fr', 2]);
+    return JSON.stringify([cfg.carteApp && cfg.carteApp.modeles, cfg.design, cfg.logo, cfg.titre, cfg.sousTitre, cfg.pied, infosCarte(), URL_PUBLIQUE, cfg.langue || 'fr', 3]);
   }
   async function preparerCarteApp(forcer) {
     const ca = cfg.carteApp;
