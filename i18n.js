@@ -732,6 +732,8 @@
     'Pictos': ['Icons', 'Иконки'],
     'appel, WhatsApp, avis, réseaux…': ['call, WhatsApp, reviews, social…', 'звонок, WhatsApp, отзывы, соцсети…'],
     'Cochez les pictos à afficher et remplissez-les. Seuls ceux qui sont remplis apparaissent sur la page. Flèches ↑ ↓ : ordre d’affichage.': ['Tick the icons to show and fill them in. Only filled ones appear on the page. Arrows ↑ ↓: display order.', 'Отметьте нужные иконки и заполните их. На странице появляются только заполненные. Стрелки ↑ ↓: порядок.'],
+    'Opacité du fond': ['Background opacity', 'Непрозрачность фона'],
+    'Opacité de la bordure': ['Border opacity', 'Непрозрачность рамки'],
     'Forme des pictos': ['Icon shape', 'Форма иконок'],
     'Ajouter un bouton personnalisé…': ['Add a custom button…', 'Добавить свою кнопку…'],
     'Bouton personnalisé : grand bouton avec texte, pour un lien de paiement (SumUp, Stripe, PayPal…), une réservation, un menu… ou pour mettre en avant une action (ex. « Réserver sur WhatsApp » avec un message pré-rempli).': ['Custom button: a large button with text, for a payment link (SumUp, Stripe, PayPal…), a booking, a menu… or to highlight an action (e.g. “Book on WhatsApp” with a pre-filled message).', 'Своя кнопка: большая кнопка с текстом — для ссылки на оплату (SumUp, Stripe, PayPal…), бронирования, меню… или чтобы выделить действие (напр. «Забронировать в WhatsApp» с готовым сообщением).'],

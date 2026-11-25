@@ -33,7 +33,7 @@ qrbc.app (QR-BC, édité par KPS) permet de créer en quelques minutes, depuis u
   - Avis Google : le lien « Demander des avis » de la fiche Google Business (ou son Place ID) ;
   - Itinéraire : l'adresse ou un lien Google Maps ;
   - réseaux : le nom d'utilisateur ou le lien.
-- « Forme des pictos » : Rond ou Carré arrondi (vaut pour tous les pictos de la page). Flèches ↑ ↓ : ordre des pictos. Le bloc entier peut être monté ou descendu (« ↑ Bloc », « ↓ Bloc »).
+- « Forme des pictos » : Rond ou Carré arrondi (vaut pour tous les pictos de la page). Dessous, deux curseurs : « Opacité du fond » (100 % = fond plein, 0 % = sans fond : le picto prend alors sa couleur) et « Opacité de la bordure » (0 % = sans bordure, 100 % = contour plein). Ex. fond 0 % + bordure 100 % = pictos en contour. Flèches ↑ ↓ : ordre des pictos. Le bloc entier peut être monté ou descendu (« ↑ Bloc », « ↓ Bloc »).
 - Les anciens boutons Appeler / SMS / WhatsApp / E-mail / Avis / Itinéraire ont été transformés automatiquement en pictos.
 - « Ajouter un bouton personnalisé… » : grand bouton avec texte, pour un lien (Payer en ligne, Réserver en ligne, Notre site, Voir la carte) ou pour mettre une action en avant (Laisser un avis Google, Réserver sur WhatsApp avec message pré-rempli, Appeler, Itinéraire, Nous écrire), ou « Bouton vide ». Action « Lien web » : n'importe quelle adresse (lien de paiement SumUp, Stripe, PayPal, réservation en ligne, menu…).
 - Texte du bouton : s'il est vide, le bouton devient un picto. Couleur : celle du thème ou une couleur propre au bouton.

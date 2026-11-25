@@ -383,6 +383,7 @@
     .rs-ligne{padding:10px 0;border-top:1px solid var(--ligne)}
     .rs-ligne.off input[type=text],.rs-ligne.off .rs-msg{display:none}
     .rs-msg{margin-top:6px;width:100%}
+    .curseur-picto{margin:10px 0 4px}.curseur-picto input{width:100%}.curseur-val{font-weight:600;margin-left:4px}
     .rs-ligne.off .rs-ico,.rs-ligne.off b{opacity:.45}
     .rs-tete{display:flex;align-items:center;gap:10px;margin-bottom:8px}
     .rs-ligne.off .rs-tete{margin-bottom:0}
@@ -2682,6 +2683,15 @@
   }
 
   /* Bloc d'icônes rondes (réseaux sociaux) */
+  // Curseur 0–100 % des pictos (fond, bordure)
+  function curseurPicto(etiq, cle, defaut) {
+    const d = cfg.design;
+    const v = d[cle] == null ? defaut : d[cle];
+    const val = el('b', { class: 'curseur-val', text: v + ' %' });
+    const r = el('input', { type: 'range', min: 0, max: 100, step: 5, value: v, 'aria-label': t(etiq) });
+    r.addEventListener('input', () => { d[cle] = Number(r.value); val.textContent = r.value + ' %'; changement(); });
+    return el('label', { class: 'champ curseur-picto' }, [el('span', {}, [t(etiq) + ' ', val]), r]);
+  }
   function carteReseaux(b, i) {
     const n = cfg.boutons.length;
     const carte = el('div', { class: 'bouton-carte bloc-rs' + (b.masque ? ' masque' : '') });
@@ -2717,6 +2727,8 @@
       el('div', { class: 'rs-titre' }, [el('b', { text: 'Pictos' }), el('span', { class: 'aide-inline', text: 'appel, WhatsApp, avis, réseaux…' })]),
       el('div', { class: 'aide', style: 'margin:4px 0 10px', text: 'Cochez les pictos à afficher et remplissez-les. Seuls ceux qui sont remplis apparaissent sur la page. Flèches ↑ ↓ : ordre d’affichage.' }),
       segments('Forme des pictos', { rond: 'Rond', carre: 'Carré arrondi' }, cfg.design, 'formePictos', () => construireFormulaire()),
+      curseurPicto('Opacité du fond', 'pictosFond', 100),
+      curseurPicto('Opacité de la bordure', 'pictosBord', 0),
       lignes,
       el('div', { class: 'bc-actions' }, [
         el('button', { type: 'button', class: 'btn btn-mini', text: '↑ Bloc', disabled: i === 0, onclick: () => deplacerBouton(i, -1) }),

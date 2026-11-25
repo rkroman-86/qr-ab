@@ -370,7 +370,7 @@ const CONFIG_DEFAUT = {
   logo: '',
   pied: '',
   design: {
-    theme: 'sable', formePictos: 'rond', fond: '#f5f1ea', fond2: '#e9e0d2', texte: '#2b2620', accent: '#2b2620',
+    theme: 'sable', formePictos: 'rond', pictosFond: 100, pictosBord: 0, fond: '#f5f1ea', fond2: '#e9e0d2', texte: '#2b2620', accent: '#2b2620',
     imageFond: '', voile: 40, police: 'moderne', forme: 'arrondi', style: 'plein',
     texteImage: 'auto', effetTexte: 'auto', ombre: true, carte: false, logoRond: false, nomsReseaux: false, reseauxTheme: false, tousRonds: false, disposition: 'centre',
     installer: true
@@ -491,6 +491,10 @@ function texteContraste(hex) {
 }
 
 /* Icône blanche sur les couleurs de marque, noire seulement sur fond très clair (Snapchat, blanc) */
+function rgbaDe(hex, a) {
+  const rgb = hexVersRgb(hex);
+  return rgb ? 'rgba(' + rgb.join(',') + ',' + a + ')' : hex;
+}
 function couleurIcone(hex) {
   const rgb = hexVersRgb(hex);
   if (!rgb) return '#ffffff';
@@ -786,11 +790,15 @@ function creerRond(doc, o) {
   if (o.apercu) a.addEventListener('click', e => e.preventDefault());
   const rond = doc.createElement('span');
   rond.className = 'qp-rs-rond';
-  rond.style.background = o.fond;
+  // opacité du fond et de la bordure (design.pictosFond / pictosBord, 0–100) ; fond pâle : picto dessiné dans sa couleur
+  const opF = o.opFond == null ? 1 : Math.max(0, Math.min(1, o.opFond)), opB = Math.max(0, Math.min(1, o.opBord || 0));
+  rond.style.background = opF >= 1 ? o.fond : rgbaDe(o.fond, opF);
+  if (opB > 0) { rond.style.boxSizing = 'border-box'; rond.style.border = '2px solid ' + rgbaDe(o.fond, opB); }
+  if (opF < 0.35) rond.style.boxShadow = 'none';
   const ico = doc.createElement('span');
   ico.className = 'qp-rs-ico';
   ico.style.setProperty('--ico', 'url("' + o.icone + '")');
-  ico.style.background = couleurIcone(o.fond);
+  ico.style.background = opF >= 0.5 ? couleurIcone(o.fond) : o.fond;
   rond.appendChild(ico);
   a.appendChild(rond);
   if (o.nomVisible) { const n = doc.createElement('span'); n.textContent = o.nom; a.appendChild(n); }
@@ -895,7 +903,7 @@ function rendrePage(cfgBrut, racine, opts) {
         grille.appendChild(creerRond(doc, {
           href: lienReseau(r.id, r.valeur, r.message), nom: R.nom, icone: iconeReseau(r.id),
           fond: d.reseauxTheme ? d.accent : R.coul, vide: !String(r.valeur || '').trim(),
-          nomVisible: d.nomsReseaux, apercu: opts.apercu
+          nomVisible: d.nomsReseaux, apercu: opts.apercu, opFond: (d.pictosFond == null ? 100 : d.pictosFond) / 100, opBord: (d.pictosBord || 0) / 100
         }));
       });
       nbAffiches++;
@@ -909,7 +917,8 @@ function rendrePage(cfgBrut, racine, opts) {
       grille.appendChild(creerRond(doc, {
         href: construireLien(b), nom: b.texte || (TYPES[b.type] || TYPES.lien).nom, icone: iconeAction(b.type),
         fond: b.couleur || (d.reseauxTheme ? d.accent : (COULEURS_ACTIONS[b.type] || d.accent)),
-        vide: !String(b.valeur || '').trim(), nomVisible: d.nomsReseaux, apercu: opts.apercu
+        vide: !String(b.valeur || '').trim(), nomVisible: d.nomsReseaux, apercu: opts.apercu,
+        opFond: (d.pictosFond == null ? 100 : d.pictosFond) / 100, opBord: (d.pictosBord || 0) / 100
       }));
       return;
     }
