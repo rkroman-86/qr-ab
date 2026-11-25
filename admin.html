@@ -3600,7 +3600,7 @@
     });
 
     // Appli « carte de visite » sur l'écran d'accueil (pages Cloudflare, pas les versions traduites)
-    const btnAppli = el('button', { type: 'button', class: 'btn btn-plein', style: 'margin-top:12px', text: '📲 Ma carte sur l’écran d’accueil', onclick: () => ouvrirAppliCarte(choisi) });
+    const btnAppli = el('button', { type: 'button', class: 'btn btn-prim btn-plein', style: 'margin-top:12px', text: '📲 Ma carte sur l’écran d’accueil', onclick: () => ouvrirAppliCarte(choisi) });
     const aideAppli = el('div', { class: 'aide', style: 'margin:4px 0 0', text: 'Une appli qui montre votre carte en plein écran, pour la faire scanner sans l’imprimer.' });
     if (!CF || !/^https?:\/\/[^/]+\/$/.test(URL_PUBLIQUE)) { btnAppli.classList.add('cache'); aideAppli.classList.add('cache'); }
 
