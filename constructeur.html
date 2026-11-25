@@ -166,7 +166,7 @@
   }
   var jeton = '';
   try { jeton = sessionStorage.getItem('qrbc-gestion') || ''; } catch (e) {}
-  var cfg = null, actif = false, dejaPublie = false, reserves = [], languesDispo = {}, reseauxPied = {};
+  var cfg = null, actif = false, dejaPublie = false, reserves = [], languesDispo = {}, reseauxPied = {}, formulaireDefaut = {};
   var pageSel = null, langue = 'fr', modifie = false, articleApercu = '';
   var carteSel = {};                       // section / article affiché par page (carrousel)
 
@@ -181,7 +181,7 @@
   function deconnecter() { try { sessionStorage.removeItem('qrbc-gestion'); } catch (e) {} $('#editeur').hidden = true; $('#connexion').hidden = false; }
 
   /* ---------- Textes à traduire (même calcul que worker/site.js) ---------- */
-  var CLES_TEXTE = { titre: 1, texte: 1, note: 1, legende: 1, alt: 1, intro: 1, description: 1, nomMenu: 1 };
+  var CLES_TEXTE = { titre: 1, texte: 1, note: 1, legende: 1, alt: 1, intro: 1, description: 1, nomMenu: 1, sousTitre: 1, libActivite: 1, exemple: 1, libEmail: 1, libPromo: 1, cgu: 1, lienCgv: 1, btn: 1 };
   var CLES_IGNOREES = { id: 1, type: 1, genre: 1, chemin: 1, src: 1, mini: 1, image: 1, lien: 1, slug: 1, date: 1, source: 1, position: 1, masque: 1, menu: 1, avecInscription: 1, actif: 1, fichiers: 1, l: 1, h: 1 };
   function textesPage(page) {
     var out = {};
@@ -210,7 +210,7 @@
   });
   async function charger() {
     var j = await api('site');
-    cfg = j.cfg; actif = j.actif; dejaPublie = j.publie; reserves = j.reserves || []; languesDispo = j.languesDispo || {}; reseauxPied = j.reseauxPied || {};
+    cfg = j.cfg; actif = j.actif; dejaPublie = j.publie; reserves = j.reserves || []; languesDispo = j.languesDispo || {}; reseauxPied = j.reseauxPied || {}; formulaireDefaut = j.formulaireDefaut || {};
     $('#connexion').hidden = true; $('#editeur').hidden = false;
     pageSel = cfg.pages[0].id;
     majBoutons(); dessiner(); apercu();
@@ -322,6 +322,7 @@
   function page() { return cfg.pages.find(function (p) { return p.id === pageSel; }) || cfg.pages[0]; }
   function idNeuf() { return Math.random().toString(36).slice(2, 8); }
   var ICONES = { articles: '📝', galerie: '📷', blog: '📰', contact: '✉️', pied: '🦶' };
+  var vueForm = false;                     // formulaire d'inscription affiché à la place des réglages de la page
   var vuePied = false;                     // pied de page affiché à la place des réglages de la page
   var vueEntete = false;                   // en-tête (logo, ordre, figé) : idem
   var NOMS_TYPES = { articles: 'Articles', galerie: 'Galerie', blog: 'Blog', contact: 'Contact' };
@@ -512,6 +513,7 @@
     var p = page();
     if (vueEntete) g.append(carteEntete());
     else if (vuePied) g.append(langue === 'fr' ? cartePied() : carteTraduction(cfg.pied));
+    else if (vueForm) g.append(langue === 'fr' ? carteFormulaire() : carteTraduction(cfg.formulaire));
     else if (langue === 'fr') g.append(carteReglagesPage(p), editeurPage(p));
     else g.append(carteTraduction(p));
     g.scrollTop = haut;
@@ -522,7 +524,7 @@
     cfg.pages.forEach(function (p, i) {
       var accueil = p.chemin === '';
       var trad = langue !== 'fr' ? etatTraduction(p) : null;
-      liste.append(el('div', { class: 'lp' + (p.id === pageSel && !vuePied && !vueEntete ? ' actif' : ''), onclick: function (e) { if (e.target.closest('button')) return; pageSel = p.id; vuePied = false; vueEntete = false; articleApercu = ''; dessiner(); apercu(); } }, [
+      liste.append(el('div', { class: 'lp' + (p.id === pageSel && !vuePied && !vueEntete && !vueForm ? ' actif' : ''), onclick: function (e) { if (e.target.closest('button')) return; pageSel = p.id; vuePied = false; vueEntete = false; vueForm = false; articleApercu = ''; dessiner(); apercu(); } }, [
         el('span', { class: 'ico', text: ICONES[p.type] }),
         el('span', { class: 'nom', text: p.titre }),
         el('span', { class: 'chemin', text: '/' + p.chemin + (p.menu === false ? ' · hors menu' : '') }),
@@ -540,10 +542,14 @@
     ].map(function (t) {
       return el('button', { type: 'button', onclick: function () { ajouterPage(t[0]); } }, [el('b', { text: ICONES[t[0]] + ' ' + t[1] }), el('small', { text: t[2] })]);
     }));
-    liste.insertBefore(el('div', { class: 'lp lp-pied' + (vueEntete ? ' actif' : ''), onclick: function () { vueEntete = true; vuePied = false; dessiner(); } }, [
+    liste.insertBefore(el('div', { class: 'lp lp-pied' + (vueEntete ? ' actif' : ''), onclick: function () { vueEntete = true; vuePied = false; vueForm = false; dessiner(); } }, [
       el('span', { class: 'ico', text: '🔝' }), el('span', { class: 'nom', text: 'En-tête' }), el('span', { class: 'chemin', text: 'logo, menu, langues' })]), liste.firstChild);
+    var tradForm = langue !== 'fr' ? etatTraduction(cfg.formulaire) : null;
+    liste.append(el('div', { class: 'lp lp-pied lp-form' + (vueForm ? ' actif' : ''), onclick: function () { vueForm = true; vuePied = false; vueEntete = false; dessiner(); apercuFormulaire(); } }, [
+      el('span', { class: 'ico', text: '📝' }), el('span', { class: 'nom', text: 'Formulaire d’inscription' }), el('span', { class: 'chemin', text: 'textes et prix' }),
+      tradForm ? el('span', { class: 'badge ' + (tradForm.ok ? 'ok' : 'ko'), text: tradForm.texte }) : null]));
     var tradPied = langue !== 'fr' ? etatTraduction(cfg.pied) : null;
-    liste.append(el('div', { class: 'lp lp-pied' + (vuePied ? ' actif' : ''), onclick: function () { vuePied = true; vueEntete = false; dessiner(); } }, [
+    liste.append(el('div', { class: 'lp lp-pied' + (vuePied ? ' actif' : ''), onclick: function () { vuePied = true; vueEntete = false; vueForm = false; dessiner(); } }, [
       el('span', { class: 'ico', text: '🦶' }), el('span', { class: 'nom', text: 'Pied de page' }), el('span', { class: 'chemin', text: 'toutes les pages' }),
       tradPied ? el('span', { class: 'badge ' + (tradPied.ok ? 'ok' : 'ko'), text: tradPied.texte }) : null]));
     return el('div', { class: 'carte' }, [el('h2', { text: 'Pages du site' }), liste,
@@ -560,7 +566,7 @@
     if (type === 'galerie') { p.intro = ''; p.photos = []; }
     if (type === 'blog') { p.intro = ''; p.articles = []; }
     if (type === 'contact') { p.source = 'qrbc01'; p.intro = ''; }
-    cfg.pages.push(p); pageSel = p.id; vuePied = false; vueEntete = false; articleApercu = '';
+    cfg.pages.push(p); pageSel = p.id; vuePied = false; vueEntete = false; vueForm = false; articleApercu = '';
     changement(); apercu();
   }
   function carteReglagesPage(p) {
@@ -801,6 +807,30 @@
     return c;
   }
 
+  /* ---------- Formulaire d'inscription (commun à tout le site) ---------- */
+  var CHAMPS_FORM = [['titre', 'Titre'], ['sousTitre', 'Ligne sous le titre (prix, essai)', 1], ['libActivite', 'Libellé du champ « entreprise »'], ['exemple', 'Exemple affiché dans ce champ'],
+    ['libEmail', 'Libellé du champ e-mail'], ['libPromo', 'Lien « code promo »'], ['cgu', 'Case à cocher (conditions)', 1], ['lienCgv', 'Lien vers les CGV'], ['btn', 'Texte du bouton'], ['note', 'Note sous le bouton', 1]];
+  function formulaireAJour(p) {                // aucun texte changé : traduit automatiquement dans toutes les langues
+    return CHAMPS_FORM.every(function (x) { return !formulaireDefaut[x[0]] || p[x[0]] === formulaireDefaut[x[0]]; });
+  }
+  function apercuFormulaire() {                // aperçu : une page qui contient le formulaire
+    var p = cfg.pages.find(function (x) { return (x.sections || []).some(function (s) { return s.genre === 'inscription' || s.avecInscription; }); });
+    if (p && p.id !== pageSel) { pageSel = p.id; articleApercu = ''; apercu(); }
+  }
+  function carteFormulaire() {
+    var d = cfg.formulaire;
+    var c = el('div', { class: 'carte' }, [el('h2', { text: '📝 Formulaire d’inscription' }),
+      el('p', { class: 'aide', style: 'margin:0 0 12px', text: 'Le même partout où le formulaire apparaît (accroche « avec formulaire » ou section « Formulaire d’inscription »). Pensez à mettre à jour la ligne des prix si les tarifs changent. Un texte laissé tel quel est traduit automatiquement ; un texte changé se traduit langue par langue, comme une page.' })]);
+    CHAMPS_FORM.forEach(function (x) {
+      var o = x[2] ? { multi: true, rows: 2 } : {};
+      var ch_ = champ(x[1], d, x[0], o);
+      var reset = d[x[0]] !== formulaireDefaut[x[0]] ? el('button', { type: 'button', class: 'btn btn-mini', style: 'margin:-4px 0 10px', text: '↺ Texte d’origine', title: formulaireDefaut[x[0]], onclick: function () { d[x[0]] = formulaireDefaut[x[0]]; changement(); } }) : null;
+      c.append(ch_); if (reset) c.append(reset);
+    });
+    c.append(el('p', { class: 'aide', style: 'margin:6px 0 0', text: 'Avec un code promo, la ligne d’origine affiche la durée réelle de l’essai (ex. « 32 jours gratuits »). Une ligne modifiée reste telle quelle ; le code promo apparaît alors juste en dessous (« ✓ … jours offerts »).' }));
+    return c;
+  }
+
   /* ---------- Pied de page (commun à toutes les pages) ---------- */
   function cartePied() {
     var d = cfg.pied;
@@ -845,6 +875,7 @@
   /* ---------- Traductions (EN / RU) ---------- */
   function etatTraduction(p) {
     var t = cfg.traductions[langue] && cfg.traductions[langue][p.id];
+    if (!t && p.type === 'formulaire' && formulaireAJour(p)) return { ok: true, texte: 'auto' };
     if (!t) return { ok: false, texte: 'à traduire' };
     return empreinte(JSON.stringify(textesPage(p))) === t.source ? { ok: true, texte: 'à jour' } : { ok: false, texte: 'à retraduire' };
   }
@@ -855,14 +886,17 @@
       .replace(/items\.(\d+)\./, function (x, n) { return 'élément ' + (Number(n) + 1) + ' · '; })
       .replace(/^reseaux\.(\d+)\.titre/, function (x, n) { return 'Réseau ' + (Number(n) + 1); })
       .replace(/^liens\.(\d+)\.titre/, function (x, n) { return 'Lien ' + (Number(n) + 1); })
+      .replace(/^(\w+)$/, function (x, k) { return cleFormulaire && CHAMPS_FORM.some(function (c) { return c[0] === k; }) ? CHAMPS_FORM.find(function (c) { return c[0] === k; })[1] : x; })
       .replace(/^note$/, 'Ligne en gras').replace(/^texte$/, 'Ligne de présentation')
       .replace(/encart\./, 'encart · ').replace(/bouton\./, 'bouton · ').replace(/seo\./, 'Google · ');
   }
+  var cleFormulaire = false;
   function carteTraduction(p) {
     cfg.traductions[langue] = cfg.traductions[langue] || {};
     var t = cfg.traductions[langue][p.id], et = etatTraduction(p);
-    var estPied = p.type === 'pied';
-    var c = el('div', { class: 'carte' }, [el('h2', {}, [ICONES[p.type] + ' ' + (estPied ? 'Pied de page' : p.titre) + ' — ' + langue.toUpperCase() + ' ', el('span', { class: 'badge ' + (et.ok ? 'ok' : 'ko'), text: et.texte })])]);
+    var estPied = p.type === 'pied' || p.type === 'formulaire';
+    cleFormulaire = p.type === 'formulaire';
+    var c = el('div', { class: 'carte' }, [el('h2', {}, [(p.type === 'formulaire' ? '📝 Formulaire d’inscription' : ICONES[p.type] + ' ' + (estPied ? 'Pied de page' : p.titre)) + ' — ' + langue.toUpperCase() + ' ', el('span', { class: 'badge ' + (et.ok ? 'ok' : 'ko'), text: et.texte })])]);
     var msg = el('div', { class: 'msg' });
     var btn = el('button', { type: 'button', class: 'btn btn-accent', text: t ? '✨ Retraduire depuis le français' : '✨ Traduire depuis le français', onclick: async function () {
       if (t && !confirm('Remplacer la traduction actuelle (et vos retouches) ?')) return;
@@ -897,7 +931,7 @@
     c.append(el('p', { class: 'aide', style: 'margin:10px 0 10px', text: 'La structure (sections, images, liens) vient de la page française. Ici, vous retouchez seulement les textes. Sans traduction, la page s’affiche en français.' }), btn, msg);
     if (!t) return c;
     Object.keys(fr).forEach(function (cle) {
-      if (cle === 'titre' || cle === 'nomMenu') return;          // déjà en haut
+      if (!estPied && (cle === 'titre' || cle === 'nomMenu')) return;          // déjà en haut
       var long = fr[cle].length > 70 || /\n/.test(fr[cle]);
       var inp = long ? el('textarea', { rows: Math.min(10, Math.max(2, Math.ceil(fr[cle].length / 60))) }) : el('input', { type: 'text' });
       var v = lireChemin(t.page, cle);

@@ -40,7 +40,7 @@ export function empreinte(s) {
   return (h >>> 0).toString(36);
 }
 // clés dont la valeur (texte) se traduit ; tout le reste (images, liens, adresses…) est recopié tel quel
-const CLES_TEXTE = new Set(['titre', 'texte', 'note', 'legende', 'alt', 'intro', 'description', 'nomMenu']);
+const CLES_TEXTE = new Set(['titre', 'texte', 'note', 'legende', 'alt', 'intro', 'description', 'nomMenu', 'sousTitre', 'libActivite', 'exemple', 'libEmail', 'libPromo', 'cgu', 'lienCgv', 'btn']);
 const CLES_IGNOREES = new Set(['id', 'type', 'genre', 'chemin', 'src', 'mini', 'image', 'lien', 'slug', 'date', 'source', 'position', 'masque', 'menu', 'avecInscription', 'actif', 'fichiers', 'l', 'h']);
 export function textesPage(page) {
   const out = {};
@@ -120,6 +120,40 @@ function entete_(cfg) {
     logo: { image: media(l.image), taille: ['s', 'm', 'l'].includes(l.taille) ? l.taille : 'm', texte: !!l.texte, alt: ch(l.alt, 80) }
   };
 }
+/* Formulaire d'inscription (commun à tout le site) : textes modifiables ; valeurs par défaut = textes historiques de qrbc.html,
+   traduits automatiquement (dictionnaire i18n.js / textes fixes) tant qu'ils ne sont pas changés */
+export const FORM_DEFAUT = {
+  titre: 'Votre site en 5 minutes',
+  sousTitre: '1 mois gratuit sans carte bancaire, puis 1,99 € TTC/mois sans engagement, ou 19,99 € TTC/an.',
+  libActivite: 'Nom de l’entreprise ou activité (facultatif)',
+  exemple: 'Ex. Plomberie Martin, Nice',
+  libEmail: 'Votre e-mail',
+  libPromo: 'J’ai un code promo',
+  cgu: 'J’accepte les conditions d’utilisation du service.',
+  lienCgv: 'Lire les CGV',
+  btn: 'Recevoir mon lien',
+  note: 'Vous recevez un lien pour choisir l’adresse de votre site et votre mot de passe.'
+};
+function nettoyerFormulaire(x) {
+  x = x && typeof x === 'object' ? x : {};
+  const r = { id: 'formulaire', type: 'formulaire' };
+  for (const k of Object.keys(FORM_DEFAUT)) { const v = ch(x[k], k === 'sousTitre' || k === 'note' ? 400 : 120); r[k] = v || FORM_DEFAUT[k]; }
+  return r;
+}
+function formulaireHtml(cfg, ctx) {
+  const fr = cfg.formulaire || nettoyerFormulaire(null);
+  const t = ctx.lang !== 'fr' && cfg.traductions && cfg.traductions[ctx.lang] && cfg.traductions[ctx.lang].formulaire;
+  const v = t && t.page ? t.page : fr;      // sans traduction : texte français (le texte d'origine reste traduit par le dictionnaire)
+  let h = ctx.g.formulaire;
+  for (const k of Object.keys(FORM_DEFAUT)) {
+    if (v[k] === FORM_DEFAUT[k]) continue;
+    const d = esc(FORM_DEFAUT[k]), n = esc(v[k]);
+    h = k === 'exemple' ? h.split('placeholder="' + d + '"').join('placeholder="' + n + '"') : h.split('>' + FORM_DEFAUT[k] + '<').join('>' + n + '<').split('>' + d + '<').join('>' + n + '<');
+  }
+  // ligne des prix personnalisée (ou langue sans phrase toute faite) : le script ne la remplace plus selon le code promo
+  if (v.sousTitre !== FORM_DEFAUT.sousTitre || !['fr', 'en', 'ru'].includes(ctx.lang)) h = h.replace('id="essai-sous"', 'id="essai-sous" data-perso');
+  return h;
+}
 function nettoyerPied(x) {
   x = x && typeof x === 'object' ? x : PIED_DEFAUT;
   return {
@@ -179,6 +213,7 @@ export function nettoyerConfig(cfg) {
   if (!pages.length) pages = [nettoyerPage({ type: 'articles', titre: 'Accueil', chemin: '', sections: [] }, { ids: new Set(), chemins: new Set(), accueil: false })];
   if (!pages.some(p => p.chemin === '')) pages[0].chemin = '';
   const pied = nettoyerPied(cfg.pied);
+  const formulaire = nettoyerFormulaire(cfg.formulaire);
   const langues = Array.isArray(cfg.langues) ? [...new Set(cfg.langues.filter(l => LANGUES_DISPO[l]))] : ['en', 'ru'];
   const trad = {};
   for (const l of langues) {
@@ -192,8 +227,10 @@ export function nettoyerConfig(cfg) {
     }
     const tp = src.pied;
     if (tp && tp.page) trad[l].pied = { page: appliquerTextes(pied, textesPage(nettoyerPied(tp.page))), source: ch(tp.source, 20), le: ch(tp.le, 30) };
+    const tf = src.formulaire;
+    if (tf && tf.page) trad[l].formulaire = { page: appliquerTextes(formulaire, textesPage(nettoyerFormulaire(tf.page))), source: ch(tf.source, 20), le: ch(tf.le, 30) };
   }
-  return { v: 1, pages, pied, entete: entete_(cfg), langues, traductions: trad, maj: new Date().toISOString() };
+  return { v: 1, pages, pied, formulaire, entete: entete_(cfg), langues, traductions: trad, maj: new Date().toISOString() };
 }
 
 /* ---------------- Lecture ---------------- */
@@ -305,13 +342,13 @@ function section(s, ctx) {
         (s.items.length ? '<ul class="points">' + s.items.map((x, i) => '<li><div class="num">' + (i + 1) + '</div><div><b>' + enLigne(x.titre, ctx) + '</b><span>' + enLigne(x.texte, ctx) + '</span></div></li>').join('') + '</ul>' : '') +
         (s.encart && (s.encart.titre || s.encart.texte) ? '<div class="appli">' + image(s.encart.image || '/icon-192.png', '', '', false) + '<p><b>' + enLigne(s.encart.titre, ctx) + '</b> ' + enLigne(s.encart.texte, ctx) + '</p></div>' : '') +
         '</section>';
-      if (s.avecInscription && !ctx.formulaireMis) { ctx.formulaireMis = true; return '<div class="grille"' + id + '>' + gauche + ctx.g.formulaire + '</div>'; }
+      if (s.avecInscription && !ctx.formulaireMis) { ctx.formulaireMis = true; return '<div class="grille"' + id + '>' + gauche + formulaireHtml(ctx.cfg, ctx) + '</div>'; }
       return '<div class="grille grille-seule"' + id + '>' + gauche + '</div>';
     }
     case 'inscription':
       if (ctx.formulaireMis) return '';
       ctx.formulaireMis = true;
-      return '<section class="bloc-inscription-seul"' + id + '>' + h2 + (s.texte ? paragraphes(s.texte, ctx, 'intro') : '') + ctx.g.formulaire + '</section>';
+      return '<section class="bloc-inscription-seul"' + id + '>' + h2 + (s.texte ? paragraphes(s.texte, ctx, 'intro') : '') + formulaireHtml(ctx.cfg, ctx) + '</section>';
     case 'cartes':
       return '<section' + id + '>' + h2 + (s.texte ? paragraphes(s.texte, ctx, 'intro') : '') + '<div class="atouts">' +
         s.items.map(x => '<article><h3>' + enLigne(x.titre, ctx) + '</h3>' + paragraphes(x.texte, ctx) + '</article>').join('') + '</div>' +
@@ -671,7 +708,8 @@ export async function apiSite(request, env, action, d, O) {
   if (action === 'site' && request.method === 'GET') {
     const brouillon = (await lire(env, 'brouillon')) || await brouillonInitial(env, request, O);
     if (!brouillon.pied) brouillon.pied = nettoyerPied(null);            // brouillon d'avant le pied modifiable
-    return O.json({ cfg: brouillon, publie: !!(await lire(env, 'publie')), actif: await siteActif(env), reserves: [...RESERVES], languesDispo: LANGUES_DISPO, reseauxPied: RESEAUX_PIED });
+    if (!brouillon.formulaire) brouillon.formulaire = nettoyerFormulaire(null);
+    return O.json({ cfg: brouillon, publie: !!(await lire(env, 'publie')), actif: await siteActif(env), reserves: [...RESERVES], languesDispo: LANGUES_DISPO, reseauxPied: RESEAUX_PIED, formulaireDefaut: FORM_DEFAUT });
   }
   if (action === 'site' && request.method === 'POST') {
     const cfg = nettoyerConfig(d.cfg);
@@ -722,8 +760,8 @@ export async function apiSite(request, env, action, d, O) {
   if (action === 'site-traduire' && request.method === 'POST') {
     const lang = LANGUES_DISPO[d.lang] ? d.lang : null;
     if (!lang) throw new O.ErreurAPI(400, 'Langue invalide.');
-    const estPied = d.page && d.page.type === 'pied';
-    const page = estPied ? nettoyerPied(d.page) : nettoyerPage(d.page, { ids: new Set(), chemins: new Set(), accueil: d.page && d.page.chemin === '' ? false : true });
+    const estPied = d.page && (d.page.type === 'pied' || d.page.type === 'formulaire');
+    const page = d.page && d.page.type === 'formulaire' ? nettoyerFormulaire(d.page) : estPied ? nettoyerPied(d.page) : nettoyerPage(d.page, { ids: new Set(), chemins: new Set(), accueil: d.page && d.page.chemin === '' ? false : true });
     if (d.page && d.page.id && !estPied) page.id = d.page.id;
     const textes = textesPage(page);
     const source = empreinte(JSON.stringify(textes));

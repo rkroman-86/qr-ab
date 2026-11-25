@@ -276,7 +276,7 @@
 
   /* Sous-titre du formulaire : durée réelle de l'essai (1 mois + jours offerts par le code promo) */
   function majEssai(n) {
-    const z = document.getElementById('essai-sous'); if (!z) return;
+    const z = document.getElementById('essai-sous'); if (!z || z.hasAttribute('data-perso')) return;   // ligne réglée dans le constructeur : on n'y touche pas
     const l = String(document.documentElement.lang || 'fr').slice(0, 2);
     const mois = n === 30;
     const t = {
