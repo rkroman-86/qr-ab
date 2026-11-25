@@ -370,7 +370,7 @@ const CONFIG_DEFAUT = {
   logo: '',
   pied: '',
   design: {
-    theme: 'sable', formePictos: 'rond', pictosFond: 100, pictosBord: 0, fond: '#f5f1ea', fond2: '#e9e0d2', texte: '#2b2620', accent: '#2b2620',
+    theme: 'sable', formePictos: 'rond', pictosFond: 100, pictosBord: 0, gammePictos: '', couleursLogo: [], fond: '#f5f1ea', fond2: '#e9e0d2', texte: '#2b2620', accent: '#2b2620',
     imageFond: '', voile: 40, police: 'moderne', forme: 'arrondi', style: 'plein',
     texteImage: 'auto', effetTexte: 'auto', ombre: true, carte: false, logoRond: false, nomsReseaux: false, reseauxTheme: false, tousRonds: false, disposition: 'centre',
     installer: true
@@ -781,6 +781,24 @@ function injecterCSS(doc) {
   doc.head.appendChild(s);
 }
 
+/* Couleur d'un picto selon la gamme choisie (design.gammePictos) : 'defaut' = couleur de la marque, 'theme' = couleur des boutons du site,
+   'logo' = couleurs tirées du logo (design.couleursLogo, une par picto à tour de rôle). i = rang du picto parmi ceux cochés. */
+function gammePictos(d) { return d.gammePictos || (d.reseauxTheme ? 'theme' : 'defaut'); }
+function couleurPicto(d, coul, i) {
+  const g = gammePictos(d);
+  if (g === 'theme') return d.accent;
+  if (g === 'logo' && Array.isArray(d.couleursLogo) && d.couleursLogo.length) return d.couleursLogo[(i || 0) % d.couleursLogo.length];
+  return coul;
+}
+// Opacité du fond et de la bordure (0–1) ; fond pâle : icône dessinée dans la couleur du picto. Sert aussi à la liste de l'éditeur.
+function peindrePicto(rond, ico, fond, opFond, opBord) {
+  const opF = opFond == null ? 1 : Math.max(0, Math.min(1, opFond)), opB = Math.max(0, Math.min(1, opBord || 0));
+  rond.style.background = opF >= 1 ? fond : rgbaDe(fond, opF);
+  rond.style.boxSizing = 'border-box';
+  rond.style.border = opB > 0 ? '2px solid ' + rgbaDe(fond, opB) : '';
+  rond.style.boxShadow = opF < 0.35 ? 'none' : '';
+  ico.style.background = opF >= 0.5 ? couleurIcone(fond) : fond;
+}
 function creerRond(doc, o) {
   const a = doc.createElement('a');
   a.className = 'qp-rs-item' + (o.vide ? ' vide' : '');
@@ -790,15 +808,10 @@ function creerRond(doc, o) {
   if (o.apercu) a.addEventListener('click', e => e.preventDefault());
   const rond = doc.createElement('span');
   rond.className = 'qp-rs-rond';
-  // opacité du fond et de la bordure (design.pictosFond / pictosBord, 0–100) ; fond pâle : picto dessiné dans sa couleur
-  const opF = o.opFond == null ? 1 : Math.max(0, Math.min(1, o.opFond)), opB = Math.max(0, Math.min(1, o.opBord || 0));
-  rond.style.background = opF >= 1 ? o.fond : rgbaDe(o.fond, opF);
-  if (opB > 0) { rond.style.boxSizing = 'border-box'; rond.style.border = '2px solid ' + rgbaDe(o.fond, opB); }
-  if (opF < 0.35) rond.style.boxShadow = 'none';
   const ico = doc.createElement('span');
   ico.className = 'qp-rs-ico';
   ico.style.setProperty('--ico', 'url("' + o.icone + '")');
-  ico.style.background = opF >= 0.5 ? couleurIcone(o.fond) : o.fond;
+  peindrePicto(rond, ico, o.fond, o.opFond, o.opBord);
   rond.appendChild(ico);
   a.appendChild(rond);
   if (o.nomVisible) { const n = doc.createElement('span'); n.textContent = o.nom; a.appendChild(n); }
@@ -898,11 +911,12 @@ function rendrePage(cfgBrut, racine, opts) {
       const items = cfg.reseaux.filter(r => r.actif && (opts.apercu || String(r.valeur || '').trim()));
       if (!items.length) return;
       if (!grille) { nouvelleGrille(); if (!ronds) grille.classList.add('qp-rs-libre'); }   // même rangée que les icônes voisines
+      const coches = cfg.reseaux.filter(r => r.actif);
       items.forEach(r => {
         const R = RESEAUX[r.id];
         grille.appendChild(creerRond(doc, {
           href: lienReseau(r.id, r.valeur, r.message), nom: R.nom, icone: iconeReseau(r.id),
-          fond: d.reseauxTheme ? d.accent : R.coul, vide: !String(r.valeur || '').trim(),
+          fond: couleurPicto(d, R.coul, coches.indexOf(r)), vide: !String(r.valeur || '').trim(),
           nomVisible: d.nomsReseaux, apercu: opts.apercu, opFond: (d.pictosFond == null ? 100 : d.pictosFond) / 100, opBord: (d.pictosBord || 0) / 100
         }));
       });
@@ -916,7 +930,7 @@ function rendrePage(cfgBrut, racine, opts) {
       if (!grille) { nouvelleGrille(); if (!ronds) grille.classList.add('qp-rs-libre'); }
       grille.appendChild(creerRond(doc, {
         href: construireLien(b), nom: b.texte || (TYPES[b.type] || TYPES.lien).nom, icone: iconeAction(b.type),
-        fond: b.couleur || (d.reseauxTheme ? d.accent : (COULEURS_ACTIONS[b.type] || d.accent)),
+        fond: b.couleur || couleurPicto(d, COULEURS_ACTIONS[b.type] || d.accent, 0),
         vide: !String(b.valeur || '').trim(), nomVisible: d.nomsReseaux, apercu: opts.apercu,
         opFond: (d.pictosFond == null ? 100 : d.pictosFond) / 100, opBord: (d.pictosBord || 0) / 100
       }));

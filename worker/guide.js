@@ -33,7 +33,7 @@ qrbc.app (QR-BC, édité par KPS) permet de créer en quelques minutes, depuis u
   - Avis Google : le lien « Demander des avis » de la fiche Google Business (ou son Place ID) ;
   - Itinéraire : l'adresse ou un lien Google Maps ;
   - réseaux : le nom d'utilisateur ou le lien.
-- « Forme des pictos » : Rond ou Carré arrondi (vaut pour tous les pictos de la page). Dessous, deux curseurs : « Opacité du fond » (100 % = fond plein, 0 % = sans fond : le picto prend alors sa couleur) et « Opacité de la bordure » (0 % = sans bordure, 100 % = contour plein). Ex. fond 0 % + bordure 100 % = pictos en contour. Flèches ↑ ↓ : ordre des pictos. Le bloc entier peut être monté ou descendu (« ↑ Bloc », « ↓ Bloc »).
+- « Forme des pictos » : Rond ou Carré arrondi (vaut pour tous les pictos de la page). Dessous, deux curseurs : « Opacité du fond » (100 % = fond plein, 0 % = sans fond : le picto prend alors sa couleur) et « Opacité de la bordure » (0 % = sans bordure, 100 % = contour plein). Ex. fond 0 % + bordure 100 % = pictos en contour. « Couleurs des pictos » : Par défaut (couleur de chaque marque), Couleurs du site (couleur des boutons du design) ou Couleurs du logo (couleurs principales du logo, une par picto à tour de rôle ; il faut un logo). Les pictos de la liste de l'éditeur montrent le résultat en direct. Flèches ↑ ↓ : ordre des pictos. Le bloc entier peut être monté ou descendu (« ↑ Bloc », « ↓ Bloc »).
 - Les anciens boutons Appeler / SMS / WhatsApp / E-mail / Avis / Itinéraire ont été transformés automatiquement en pictos.
 - « Ajouter un bouton personnalisé… » : grand bouton avec texte, pour un lien (Payer en ligne, Réserver en ligne, Notre site, Voir la carte) ou pour mettre une action en avant (Laisser un avis Google, Réserver sur WhatsApp avec message pré-rempli, Appeler, Itinéraire, Nous écrire), ou « Bouton vide ». Action « Lien web » : n'importe quelle adresse (lien de paiement SumUp, Stripe, PayPal, réservation en ligne, menu…).
 - Texte du bouton : s'il est vide, le bouton devient un picto. Couleur : celle du thème ou une couleur propre au bouton.
@@ -52,7 +52,7 @@ qrbc.app (QR-BC, édité par KPS) permet de créer en quelques minutes, depuis u
 - Police : Moderne, Élégante, Classique, Arrondie, Technique. Dans la liste, chaque nom est écrit dans sa police ; Élégante, Classique et Arrondie utilisent des polices hébergées par qrbc (rendu identique sur Android, iPhone et ordinateur).
 - Texte sur l'image de fond : Auto (un texte foncé passe en blanc sur la photo), Blanc, ou Couleur choisie.
 - Effet pour lire le texte sur l'image : Ombre légère (conseillé), Aucun, Ombre forte, Contour, Bandeau derrière le texte. Si le titre se lit mal sur la photo : essayer « Blanc » + « Bandeau », ou assombrir l'image (voir Recadrage).
-- Forme des boutons (Carré, Arrondi, Pilule), style (Plein, Contour, Doux), ombre sous les boutons, encadrer le contenu (carte), tous les boutons en pictos, noms sous les icônes, icônes aux couleurs du thème.
+- Forme des boutons (Carré, Arrondi, Pilule), style (Plein, Contour, Doux), ombre sous les boutons, encadrer le contenu (carte), tous les boutons en pictos, noms sous les icônes (les couleurs des pictos se règlent dans le bloc Pictos).
 - Bouton « Installer l'appli » en haut de la page (activé par défaut) et nom affiché sous l'icône de l'appli (15 caractères maximum).
 
 ## Image de fond
