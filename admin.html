@@ -2863,10 +2863,10 @@
     return (t && t[l] ? t[l] : m[1]) + (m[2] === ' / WhatsApp' ? ' / WhatsApp' : m[2] || '');
   }
 
-  /* Informations imprimées sur la carte (25/11) : le client en choisit 4 au plus parmi nom, slogan, téléphone, e-mail, site.
+  /* Informations imprimées sur la carte (25/11) : le client choisit parmi nom, slogan, téléphone, e-mail, site.
      Valeur vide = reprise de la page (titre, accroche, boutons) ; cfg.carteInfos = { choix: [...], nom, slogan, tel, email, site } */
   const CHAMPS_CARTE = [['nom', 'Nom de l’entreprise'], ['slogan', 'Slogan'], ['tel', 'Téléphone'], ['email', 'E-mail'], ['site', 'Site web']];
-  const MAX_INFOS_CARTE = 4;
+  const MAX_INFOS_CARTE = 5;
   function boutonsCarte() { return cfg.boutons.filter(b => b && !b.masque && b.type !== 'reseaux' && String(b.valeur || '').trim()); }
   function defautsCarte() {
     const btns = boutonsCarte();
@@ -2893,7 +2893,7 @@
     const r = reglagesCarte();
     if (Array.isArray(r.choix)) return CHAMPS_CARTE.map(c => c[0]).filter(k => r.choix.includes(k)).slice(0, MAX_INFOS_CARTE);
     v = v || valeursCarte();
-    return ['nom', 'tel', 'email', 'site', 'slogan'].filter(k => v[k]).slice(0, MAX_INFOS_CARTE);   // par défaut : les 4 premiers remplis
+    return ['nom', 'tel', 'email', 'site', 'slogan'].filter(k => v[k]);   // par défaut : tout ce qui est rempli
   }
   function infosCarte() {
     const v = valeursCarte(), ch = choixCarte(v), coords = [];
@@ -2914,7 +2914,7 @@
       const d = defautsCarte(), r = reglagesCarte(), ch = choixCarte();
       const plein = ch.length >= MAX_INFOS_CARTE;
       bloc.append(el('span', { class: 'etiq', text: 'Informations sur la carte' }),
-        el('div', { class: 'aide', style: 'margin:0 0 8px', text: 'Cochez jusqu’à 4 informations. Elles sont reprises de votre page ; modifiez-les ici si vous voulez imprimer un autre numéro ou un autre e-mail (votre page ne change pas).' }));
+        el('div', { class: 'aide', style: 'margin:0 0 8px', text: 'Cochez les informations à imprimer. Elles sont reprises de votre page ; modifiez-les ici si vous voulez imprimer un autre numéro ou un autre e-mail (votre page ne change pas).' }));
       CHAMPS_CARTE.forEach(([k, lib]) => {
         const coche = ch.includes(k);
         const caseC = el('input', { type: 'checkbox' }); caseC.checked = coche; caseC.disabled = !coche && plein;
@@ -2937,7 +2937,6 @@
           el('label', { class: 'case-info' }, [caseC, el('span', { text: lib })]), input,
           perso ? el('button', { type: 'button', class: 'btn btn-mini', title: d[k], text: '↺ ' + t('Reprendre la page'), onclick: () => { delete cfg.carteInfos[k]; changement(); dessiner(); rafraichir(); } }) : null]));
       });
-      bloc.append(el('div', { class: 'aide', style: 'margin:2px 0 0', text: plein ? '4 informations au maximum : décochez-en une pour en choisir une autre.' : ch.length + ' / 4' }));
     };
     dessiner();
     return bloc;
@@ -3090,6 +3089,11 @@
       ctx.fillStyle = c.texte;
       ctx.fillText(ligne, ax, y);
       y += 70;
+      if (D.coords[2]) {                         // 3e coordonnée (souvent le site) sur une seconde ligne, un peu plus petite
+        const t = parseInt(ctx.font.match(/(\d+)px/)[1], 10);
+        ctx.font = policeAjustee(ctx, D.coords[2][1], '500', Math.max(30, t - 4), 28, largeur, fam);
+        ctx.fillText(D.coords[2][1], ax, y - 8); y += 62;
+      }
     } else {
       D.coords.forEach(([etiq, val]) => {
         ctx.font = '700 40px ' + fam; ctx.fillStyle = c.accent; ctx.fillText(etiq.toUpperCase(), ax, y);
@@ -3486,6 +3490,7 @@
       const ligne = D.coords.slice(0, 2).map(l => l[1]).join('   ·   ');
       ctx.fillStyle = '#444'; ctx.font = policeAjustee(ctx, ligne, '500', 48, 30, W - 300, D.fam);
       ctx.fillText(ligne, W / 2, y); y += 90;
+      if (D.coords[2]) { ctx.font = policeAjustee(ctx, D.coords[2][1], '500', 42, 28, W - 300, D.fam); ctx.fillText(D.coords[2][1], W / 2, y - 22); y += 50; }
       const q = Math.min(440, H - y - 90);
       dessinerQR(ctx, URL_QR, (W - q) / 2, y, q, '#111');
       ctx.textAlign = 'left';
