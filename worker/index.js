@@ -4130,6 +4130,7 @@ function textesATraduire(cfg) {
   const mettre = (cle, v) => { if (typeof v === 'string' && v.trim()) t[cle] = v; };
   ['titre', 'sousTitre', 'pied', 'appNom'].forEach(k => mettre(k, cfg[k]));
   (cfg.boutons || []).forEach((b, i) => { if (b) { mettre('boutons.' + i + '.texte', b.texte); mettre('boutons.' + i + '.message', b.message); } });
+  (cfg.reseaux || []).forEach((r, i) => { if (r) mettre('reseaux.' + i + '.message', r.message); });   // message pré-rempli des pictos WhatsApp, SMS, e-mail
   const h = cfg.home || {};
   mettre('home.boutonContact', h.boutonContact); mettre('home.lienTexte', h.lienTexte);
   if (cfg.galerie) mettre('galerie.titre', cfg.galerie.titre);

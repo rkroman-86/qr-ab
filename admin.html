@@ -381,7 +381,8 @@
     .rs-titre{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
     .aide-inline{font-size:.8rem;color:var(--doux)}
     .rs-ligne{padding:10px 0;border-top:1px solid var(--ligne)}
-    .rs-ligne.off input[type=text]{display:none}
+    .rs-ligne.off input[type=text],.rs-ligne.off .rs-msg{display:none}
+    .rs-msg{margin-top:6px;width:100%}
     .rs-ligne.off .rs-ico,.rs-ligne.off b{opacity:.45}
     .rs-tete{display:flex;align-items:center;gap:10px;margin-bottom:8px}
     .rs-ligne.off .rs-tete{margin-bottom:0}
@@ -1579,7 +1580,7 @@
     return bloc;
   }
 
-  function segments(etiquette, options, obj, cle) {
+  function segments(etiquette, options, obj, cle, apres) {
     const box = el('div', { class: 'segments' });
     Object.keys(options).forEach(v => {
       const b = el('button', { type: 'button', text: options[v], class: obj[cle] === v ? 'actif' : '' });
@@ -1587,6 +1588,7 @@
         obj[cle] = v;
         box.querySelectorAll('button').forEach(x => x.classList.toggle('actif', x === b));
         changement();
+        if (apres) apres();
       });
       box.appendChild(b);
     });
@@ -2212,7 +2214,7 @@
   /* 2. Formulaire : nom, activité, zone, téléphone */
   function formulaireExpress(F) {
     const ia = cfg.home.ia = Object.assign({ description: '', zone: '', nombre: 4, ton: 'pro' }, cfg.home.ia || {});
-    const telActuel = (cfg.boutons.find(b => b && (b.type === 'tel' || b.type === 'whatsapp') && String(b.valeur || '').trim()) || {}).valeur || '';
+    const telActuel = (contactPage(cfg, ['tel', 'whatsapp']) || {}).valeur || '';
     const nom = el('input', { type: 'text', value: titreParDefaut() ? '' : cfg.titre, placeholder: 'Ex. : Alex VTC', autocomplete: 'organization' });
     const desc = el('textarea', { rows: 6, value: ia.description, placeholder: t('Ex. : Chauffeur privé avec Mercedes Classe V 7 places. Transferts aéroports Orly, CDG et Beauvais, gares, Disneyland, excursions en Normandie et à Versailles. Disponible 24/24, sièges enfants, je parle français, anglais et arabe. Accueil avec pancarte à l’aéroport.') });
     const zone = el('input', { type: 'text', value: ia.zone, placeholder: 'Ex. : Nice, Monaco, Cannes et toute la Côte d’Azur' });
@@ -2249,6 +2251,8 @@
   /* Boutons de contact : complète un bouton vide existant, sinon en ajoute un */
   function contactExpress(cle, valeur) {
     if (!valeur) return;
+    const r = cfg.reseaux.find(x => x.id === cle);           // depuis le 25/11 : appel, WhatsApp, e-mail = pictos
+    if (r) { if (!String(r.valeur || '').trim()) r.valeur = valeur; r.actif = true; return; }
     const m0 = MODELES[cle];
     const b = cfg.boutons.find(x => x && x.type === m0.type);
     if (b) { if (!String(b.valeur || '').trim()) b.valeur = valeur; b.masque = false; return; }
@@ -2483,6 +2487,8 @@
 
   /* ---------------- Modèles de boutons ---------------- */
   const MODELES = {
+    paiement:  { icone: '💳', texte: 'Payer en ligne', type: 'lien', couleur: '' },
+    reserver:  { icone: '📅', texte: 'Réserver en ligne', type: 'lien', couleur: '' },
     avis:      { icone: '⭐', texte: 'Laisser un avis Google', type: 'avis', couleur: '#4285F4' },
     whatsapp:  { icone: '💬', texte: 'Réserver sur WhatsApp', type: 'whatsapp', message: 'Bonjour, je souhaite réserver', couleur: '#25D366' },
     tel:       { icone: '📞', texte: 'Appeler', type: 'tel', couleur: '' },
@@ -2523,7 +2529,7 @@
     /* Boutons */
     const liste = el('div');
     cfg.boutons.forEach((b, i) => liste.appendChild(carteBouton(b, i)));
-    const choixAjout = el('select', {}, [el('option', { value: '', text: 'Ajouter un bouton…' })]
+    const choixAjout = el('select', {}, [el('option', { value: '', text: 'Ajouter un bouton personnalisé…' })]
       .concat(Object.keys(MODELES).map(k => el('option', { value: k, text: MODELES[k].icone + ' ' + MODELES[k].texte })))
       .concat([el('option', { value: 'vide', text: '➕ Bouton vide' })]));
     choixAjout.addEventListener('change', () => {
@@ -2535,7 +2541,8 @@
       const cartes = document.querySelectorAll('.bouton-carte');
       if (cartes.length) cartes[cartes.length - 1].scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
-    f.appendChild(section('boutons', 'Boutons et réseaux', true, [liste, el('div', { class: 'ajout' }, [choixAjout])]));
+    f.appendChild(section('boutons', 'Boutons et réseaux', true, [liste, el('div', { class: 'ajout' }, [choixAjout]),
+      el('div', { class: 'aide', style: 'margin-top:6px', text: 'Bouton personnalisé : grand bouton avec texte, pour un lien de paiement (SumUp, Stripe, PayPal…), une réservation, un menu… ou pour mettre en avant une action (ex. « Réserver sur WhatsApp » avec un message pré-rempli).' })]));
 
     /* Page Home */
     f.appendChild(sectionHome());
@@ -2613,7 +2620,7 @@
       segments('Style des boutons', { plein: 'Plein', contour: 'Contour', doux: 'Doux' }, d, 'style'),
       bascule('Ombre sous les boutons', d, 'ombre'),
       bascule('Encadrer le contenu (carte)', d, 'carte'),
-      bascule('Tous les boutons en icônes rondes', d, 'tousRonds'),
+      bascule('Tous les boutons en pictos', d, 'tousRonds'),
       bascule('Noms sous les icônes', d, 'nomsReseaux'),
       bascule('Icônes aux couleurs du thème', d, 'reseauxTheme'),
       ...(CF ? [bascule('Bouton « Installer l’appli » en haut de la page', d, 'installer'),
@@ -2687,21 +2694,29 @@
       coche.addEventListener('change', () => { r.actif = coche.checked; ligne.classList.toggle('off', !r.actif); changement(); });
       const ico = el('span', { class: 'rs-ico' }, [el('i')]);
       ico.style.background = R.coul;
+      if (cfg.design.formePictos === 'carre') ico.style.borderRadius = '28%';
       ico.firstChild.style.setProperty('--ico', 'url("' + iconeReseau(r.id) + '")');
       ico.firstChild.style.background = couleurIcone(R.coul);
-      const val = el('input', { type: 'text', value: r.valeur || '', placeholder: R.aide, autocapitalize: 'off', autocorrect: 'off', spellcheck: false });
+      const val = el('input', { type: 'text', inputMode: ['tel', 'whatsapp', 'sms'].includes(r.id) ? 'tel' : r.id === 'email' ? 'email' : 'url', value: r.valeur || '', placeholder: R.aide, autocapitalize: 'off', autocorrect: 'off', spellcheck: false });
       val.addEventListener('input', () => { r.valeur = val.value; changement(); });
+      let msg = null;
+      if (R.message) {
+        msg = el('textarea', { rows: 2, class: 'rs-msg', value: r.message || '', placeholder: t('Message pré-rempli (facultatif)') + (r.id === 'whatsapp' ? ' — ' + t('ex. Bonjour, je souhaite réserver') : '') });
+        msg.addEventListener('input', () => { r.message = msg.value; changement(); });
+      }
       const bouge = dir => { const j = k + dir; if (j < 0 || j >= liste.length) return; [liste[k], liste[j]] = [liste[j], liste[k]]; construireFormulaire(); changement(); };
       ligne.append(
         el('div', { class: 'rs-tete' }, [coche, ico, el('b', { text: R.nom }), el('span', { class: 'esp' }),
           el('button', { type: 'button', class: 'btn btn-mini', text: '↑', disabled: k === 0, onclick: () => bouge(-1) }),
           el('button', { type: 'button', class: 'btn btn-mini', text: '↓', disabled: k === liste.length - 1, onclick: () => bouge(1) })]),
         val);
+      if (msg) ligne.append(msg);
       lignes.appendChild(ligne);
     });
     carte.append(
-      el('div', { class: 'rs-titre' }, [el('b', { text: 'Réseaux sociaux' }), el('span', { class: 'aide-inline', text: 'icônes rondes, 3 par ligne' })]),
-      el('div', { class: 'aide', style: 'margin:4px 0 10px', text: 'Cochez les réseaux à afficher. Seuls ceux qui ont un lien apparaissent sur la page.' }),
+      el('div', { class: 'rs-titre' }, [el('b', { text: 'Pictos' }), el('span', { class: 'aide-inline', text: 'appel, WhatsApp, avis, réseaux…' })]),
+      el('div', { class: 'aide', style: 'margin:4px 0 10px', text: 'Cochez les pictos à afficher et remplissez-les. Seuls ceux qui sont remplis apparaissent sur la page. Flèches ↑ ↓ : ordre d’affichage.' }),
+      segments('Forme des pictos', { rond: 'Rond', carre: 'Carré arrondi' }, cfg.design, 'formePictos', () => construireFormulaire()),
       lignes,
       el('div', { class: 'bc-actions' }, [
         el('button', { type: 'button', class: 'btn btn-mini', text: '↑ Bloc', disabled: i === 0, onclick: () => deplacerBouton(i, -1) }),
@@ -2870,16 +2885,15 @@
   function boutonsCarte() { return cfg.boutons.filter(b => b && !b.masque && b.type !== 'reseaux' && String(b.valeur || '').trim()); }
   function defautsCarte() {
     const btns = boutonsCarte();
-    const tel = btns.find(b => b.type === 'tel') || btns.find(b => b.type === 'sms') || btns.find(b => b.type === 'whatsapp');
-    const mailB = btns.find(b => b.type === 'email');
-    const mailR = cfg.reseaux.find(r => r.id === 'email' && r.actif && String(r.valeur || '').trim());
+    const tel = contactPage(cfg, ['tel', 'sms', 'whatsapp']);
+    const mail = contactPage(cfg, ['email']);
     const site = cfg.reseaux.find(r => r.id === 'site' && r.actif && String(r.valeur || '').trim());
     const web = (site ? site.valeur : (btns.find(b => b.type === 'lien') || {}).valeur) || URL_PUBLIQUE;   // sinon l'adresse de la page elle-même
     return {
       nom: cfg.titre || '',
       slogan: sansLiens(cfg.sousTitre || '').split('\n')[0].trim(),
       tel: tel ? formaterNumero(tel.valeur) : '',
-      email: mailB ? mailB.valeur.trim() : mailR ? String(mailR.valeur).trim().replace(/^mailto:/i, '') : '',
+      email: mail ? mail.valeur.replace(/^mailto:/i, '') : '',
       site: String(web || '').trim().replace(/^https?:\/\//i, '').replace(/\/$/, '')
     };
   }
@@ -2898,7 +2912,7 @@
   function infosCarte() {
     const v = valeursCarte(), ch = choixCarte(v), coords = [];
     if (ch.includes('tel') && v.tel) {
-      const n = numeroInternational(v.tel), wa = boutonsCarte().find(b => b.type === 'whatsapp');
+      const n = numeroInternational(v.tel), wa = contactPage(cfg, ['whatsapp']);
       const etiq = wa && n && numeroInternational(wa.valeur) === n ? 'Tél. / WhatsApp' : 'Tél.';
       coords.push([tc(etiq), String(v.tel).replace(/\D/g, '').length >= 6 ? formaterNumero(v.tel) : v.tel]);
     }

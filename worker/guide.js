@@ -28,18 +28,16 @@ qrbc.app (QR-BC, édité par KPS) permet de créer en quelques minutes, depuis u
 - Sur une image de fond, la lisibilité se règle dans Design (voir plus bas).
 
 ## Boutons et réseaux
-- « Ajouter un bouton… » propose des modèles : Laisser un avis Google, Réserver sur WhatsApp, Appeler, Notre site, Itinéraire, Nous écrire, Voir la carte, ou « Bouton vide ».
-- Chaque bouton a une action et une valeur :
+- Depuis le 25/11, tout ce qui est connu est un **picto** (icône), dans le bloc « Pictos » : Téléphone, WhatsApp, SMS, Avis Google, Itinéraire, Facebook, Instagram, X, Snapchat, TikTok, site web, YouTube, Telegram (nom, lien ou numéro), Tripadvisor, LinkedIn, E-mail. Cocher ceux à afficher et les remplir : seuls ceux qui sont remplis apparaissent sur la page. Valeurs :
+  - Téléphone, SMS : le numéro ; WhatsApp : le numéro (06 12 34 56 78 ou +33 6 12 34 56 78) ; WhatsApp, SMS et E-mail ont un message pré-rempli facultatif ;
   - Avis Google : le lien « Demander des avis » de la fiche Google Business (ou son Place ID) ;
-  - WhatsApp : le numéro (06 12 34 56 78 ou +33 6 12 34 56 78), avec un message pré-rempli facultatif ;
-  - Téléphone, SMS : le numéro ;
-  - E-mail : l'adresse ;
   - Itinéraire : l'adresse ou un lien Google Maps ;
-  - Lien web : n'importe quelle adresse (site, menu, réservation en ligne, lien de paiement SumUp, Stripe, PayPal…).
-- Texte du bouton : s'il est vide, le bouton devient une icône ronde.
-- Couleur : celle du thème ou une couleur propre au bouton.
+  - réseaux : le nom d'utilisateur ou le lien.
+- « Forme des pictos » : Rond ou Carré arrondi (vaut pour tous les pictos de la page). Flèches ↑ ↓ : ordre des pictos. Le bloc entier peut être monté ou descendu (« ↑ Bloc », « ↓ Bloc »).
+- Les anciens boutons Appeler / SMS / WhatsApp / E-mail / Avis / Itinéraire ont été transformés automatiquement en pictos.
+- « Ajouter un bouton personnalisé… » : grand bouton avec texte, pour un lien (Payer en ligne, Réserver en ligne, Notre site, Voir la carte) ou pour mettre une action en avant (Laisser un avis Google, Réserver sur WhatsApp avec message pré-rempli, Appeler, Itinéraire, Nous écrire), ou « Bouton vide ». Action « Lien web » : n'importe quelle adresse (lien de paiement SumUp, Stripe, PayPal, réservation en ligne, menu…).
+- Texte du bouton : s'il est vide, le bouton devient un picto. Couleur : celle du thème ou une couleur propre au bouton.
 - Les flèches ↑ ↓ changent l'ordre ; « 🗑 Supprimer » retire le bouton. On peut aussi masquer un bouton sans le supprimer.
-- Réseaux sociaux (icônes rondes, 3 par ligne) : Facebook, Instagram, X, Snapchat, TikTok, site web, YouTube, Telegram (nom, lien ou numéro), Tripadvisor, e-mail. Cocher ceux à afficher et saisir le nom d'utilisateur ou le lien : seuls ceux qui ont un lien apparaissent. Le bloc des réseaux peut être monté ou descendu (« ↑ Bloc », « ↓ Bloc »).
 
 ## Disposition
 - Modèles : Centré, Boutons en haut, Boutons en bas, Barre à gauche, Barre à droite, Carte de visite, Affiche, Haut + bas, Gauche + droite.
@@ -54,7 +52,7 @@ qrbc.app (QR-BC, édité par KPS) permet de créer en quelques minutes, depuis u
 - Police : Moderne, Élégante, Classique, Arrondie, Technique. Dans la liste, chaque nom est écrit dans sa police ; Élégante, Classique et Arrondie utilisent des polices hébergées par qrbc (rendu identique sur Android, iPhone et ordinateur).
 - Texte sur l'image de fond : Auto (un texte foncé passe en blanc sur la photo), Blanc, ou Couleur choisie.
 - Effet pour lire le texte sur l'image : Ombre légère (conseillé), Aucun, Ombre forte, Contour, Bandeau derrière le texte. Si le titre se lit mal sur la photo : essayer « Blanc » + « Bandeau », ou assombrir l'image (voir Recadrage).
-- Forme des boutons (Carré, Arrondi, Pilule), style (Plein, Contour, Doux), ombre sous les boutons, encadrer le contenu (carte), tous les boutons en icônes rondes, noms sous les icônes, icônes aux couleurs du thème.
+- Forme des boutons (Carré, Arrondi, Pilule), style (Plein, Contour, Doux), ombre sous les boutons, encadrer le contenu (carte), tous les boutons en pictos, noms sous les icônes, icônes aux couleurs du thème.
 - Bouton « Installer l'appli » en haut de la page (activé par défaut) et nom affiché sous l'icône de l'appli (15 caractères maximum).
 
 ## Image de fond

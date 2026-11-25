@@ -76,7 +76,14 @@ function iconeAction(type) {
   return ICONES_ACTIONS[type] || ICONES_ACTIONS.lien;
 }
 
+/* Pictos (25/11) : actions connues (appel, SMS, WhatsApp, e-mail, avis Google, itinéraire) et réseaux sociaux, tous en icônes
+   (forme : design.formePictos = 'rond' | 'carre'). action: true = lien construit comme un bouton du même type (construireLien). */
 const RESEAUX = {
+  tel:       { nom: 'Téléphone', coul: '#0A84FF', aide: 'Numéro, ex. 04 93 00 00 00', icone: ICONES_ACTIONS.tel, action: true },
+  whatsapp:  { nom: 'WhatsApp',  coul: '#25D366', aide: 'Numéro, ex. 06 12 34 56 78', action: true, message: true },
+  sms:       { nom: 'SMS',       coul: '#34C759', aide: 'Numéro mobile', icone: ICONES_ACTIONS.sms, action: true, message: true },
+  avis:      { nom: 'Avis Google', coul: '#4285F4', aide: 'Lien « Demander des avis » de la fiche Google', icone: ICONES_CDN + 'google.svg', action: true },
+  maps:      { nom: 'Itinéraire', coul: '#34A853', aide: 'Adresse ou lien Google Maps', icone: ICONES_CDN + 'googlemaps.svg', action: true },
   facebook:  { nom: 'Facebook',  coul: '#1877F2', aide: 'Nom de la page ou lien',     url: v => 'https://www.facebook.com/' + v },
   instagram: { nom: 'Instagram', coul: '#E4405F', aide: 'Nom d’utilisateur ou lien',  url: v => 'https://www.instagram.com/' + v },
   x:         { nom: 'X',         coul: '#000000', aide: 'Nom d’utilisateur ou lien',  url: v => 'https://x.com/' + v },
@@ -86,16 +93,20 @@ const RESEAUX = {
   youtube:   { nom: 'YouTube',   coul: '#FF0000', aide: 'Nom de la chaîne ou lien',   url: v => 'https://www.youtube.com/@' + v },
   telegram:  { nom: 'Telegram',  coul: '#26A5E4', aide: 'Nom d’utilisateur, lien ou numéro',  url: v => 'https://t.me/' + v },
   tripadvisor:{ nom: 'Tripadvisor', coul: '#34E0A1', aide: 'Lien de la fiche',        url: v => 'https://' + v },
-  email:     { nom: 'E-mail',    coul: '#EA4335', aide: 'Adresse e-mail',             url: v => 'mailto:' + v, icone: ICONES_ACTIONS.email }
+  linkedin:  { nom: 'LinkedIn',  coul: '#0A66C2', aide: 'Lien du profil ou de la page', url: v => 'https://www.linkedin.com/in/' + v,
+               icone: 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4.98 3.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5zM3 9.5h4V21H3zM9.5 9.5h3.8v1.6h.06c.53-1 1.83-2.06 3.77-2.06 4.03 0 4.77 2.65 4.77 6.1V21h-4v-5.1c0-1.22-.02-2.79-1.7-2.79-1.7 0-1.96 1.33-1.96 2.7V21h-4z"/></svg>') },
+  email:     { nom: 'E-mail',    coul: '#EA4335', aide: 'Adresse e-mail',             url: v => 'mailto:' + v, icone: ICONES_ACTIONS.email, message: true }
 };
-const RESEAUX_ACTIFS_DEFAUT = ['facebook', 'instagram', 'x', 'snapchat', 'tiktok', 'site'];
+const RESEAUX_ACTIFS_DEFAUT = ['tel', 'whatsapp', 'email', 'avis', 'maps', 'facebook', 'instagram', 'site'];
+const TYPES_PICTOS = ['tel', 'whatsapp', 'sms', 'email', 'avis', 'maps'];       // actions des anciens boutons, passées en pictos
 
 function iconeReseau(id) { return (RESEAUX[id] && RESEAUX[id].icone) || (ICONES_CDN + id + '.svg'); }
 
-function lienReseau(id, valeur) {
+function lienReseau(id, valeur, message) {
   let v = String(valeur || '').trim();
   if (!v || !RESEAUX[id]) return '#';
-  if (id === 'email') return lienSur('mailto:' + v.replace(/^mailto:/i, ''));
+  if (id === 'email') v = v.replace(/^mailto:/i, '');
+  if (RESEAUX[id].action || id === 'email') return construireLien({ type: id, valeur: v, message: message || '' });
   if (estURL(v)) return lienSur(v);
   if (/^(www\.|[a-z0-9-]+\.[a-z]{2,})/i.test(v) && v.includes('.') && id !== 'site') return lienSur('https://' + v);
   if (id === 'site' || id === 'tripadvisor') return lienSur('https://' + v);
@@ -111,19 +122,50 @@ function lienReseau(id, valeur) {
 
 /* Complète une configuration ancienne : liste des réseaux + bloc d'icônes dans les boutons */
 function normaliser(cfg) {
-  const liste = Array.isArray(cfg.reseaux) ? cfg.reseaux.filter(r => r && RESEAUX[r.id]) : [];
+  const nouvelle = !Array.isArray(cfg.reseaux);
+  const liste = !nouvelle ? cfg.reseaux.filter(r => r && RESEAUX[r.id]) : [];
   Object.keys(RESEAUX).forEach(id => {
-    if (!liste.some(r => r.id === id)) liste.push({ id, actif: RESEAUX_ACTIFS_DEFAUT.includes(id), valeur: '' });
+    // page ancienne : les pictos d'action apparus le 25/11 arrivent décochés (sauf conversion ci-dessous)
+    if (!liste.some(r => r.id === id)) liste.push({ id, actif: (nouvelle || !RESEAUX[id].action) && RESEAUX_ACTIFS_DEFAUT.includes(id), valeur: '' });
   });
   cfg.reseaux = liste;
   if (!Array.isArray(cfg.boutons)) cfg.boutons = [];
   if (!cfg.boutons.some(b => b && b.type === 'reseaux')) cfg.boutons.push({ type: 'reseaux' });
+  if (!cfg.pictos) convertirEnPictos(cfg);
   const h = cfg.home && typeof cfg.home === 'object' ? cfg.home : {};
   cfg.home = Object.assign({ actif: false, arrivee: 'contact', boutonContact: 'Contact', lienTexte: 'Découvrir l’entreprise' }, h);
   if (!Array.isArray(cfg.home.articles) || !cfg.home.articles.length)
     cfg.home.articles = [{ titre: 'Qui sommes-nous ?', texte: 'Présentez votre entreprise en quelques lignes.', image: '', style: 'photo' }];
   cfg.home.articles = cfg.home.articles.slice(0, HOME_MAX_ARTICLES);
   return cfg;
+}
+
+/* Conversion unique (25/11) : les boutons tel/SMS/WhatsApp/e-mail/avis/itinéraire deviennent des pictos, placés en tête de la liste
+   dans l'ordre des boutons. Faite à chaque affichage tant que la page n'est pas réenregistrée (cfg.pictos = 2 ensuite).
+   Un deuxième bouton du même type (autre numéro…) reste un bouton personnalisé pour ne rien perdre. */
+function convertirEnPictos(cfg) {
+  const enTete = [];
+  cfg.boutons = cfg.boutons.filter(b => {
+    if (!b || !TYPES_PICTOS.includes(b.type) || !String(b.valeur || '').trim()) return true;
+    const r = cfg.reseaux.find(x => x.id === b.type);
+    if (!r || enTete.includes(r) || (String(r.valeur || '').trim() && r.actif)) return true;
+    r.valeur = String(b.valeur).trim(); r.actif = !b.masque;
+    if (b.message) r.message = b.message;
+    enTete.push(r);
+    return false;
+  });
+  if (enTete.length) cfg.reseaux = enTete.concat(cfg.reseaux.filter(r => !enTete.includes(r)));
+  cfg.pictos = 2;
+}
+// Premier picto (ou ancien bouton) rempli parmi des types : [{ id, valeur, message }] — cartes de visite, fiche Google
+function contactPage(cfg, types) {
+  for (const t of types) {
+    const r = (cfg.reseaux || []).find(x => x && x.id === t && x.actif && String(x.valeur || '').trim());
+    if (r) return { type: t, valeur: String(r.valeur).trim(), message: r.message || '' };
+    const b = (cfg.boutons || []).find(x => x && !x.masque && x.type === t && String(x.valeur || '').trim());
+    if (b) return { type: t, valeur: String(b.valeur).trim(), message: b.message || '' };
+  }
+  return null;
 }
 
 const HOME_MAX_ARTICLES = 10;
@@ -328,7 +370,7 @@ const CONFIG_DEFAUT = {
   logo: '',
   pied: '',
   design: {
-    theme: 'sable', fond: '#f5f1ea', fond2: '#e9e0d2', texte: '#2b2620', accent: '#2b2620',
+    theme: 'sable', formePictos: 'rond', fond: '#f5f1ea', fond2: '#e9e0d2', texte: '#2b2620', accent: '#2b2620',
     imageFond: '', voile: 40, police: 'moderne', forme: 'arrondi', style: 'plein',
     texteImage: 'auto', effetTexte: 'auto', ombre: true, carte: false, logoRond: false, nomsReseaux: false, reseauxTheme: false, tousRonds: false, disposition: 'centre',
     installer: true
@@ -582,6 +624,7 @@ const CSS_PAGE = `
   font-size:.78rem;font-weight:600;-webkit-tap-highlight-color:transparent;transition:transform .12s}
 .qp-rs-item:active{transform:scale(.92)}
 .qp-rs-rond{width:62px;height:62px;border-radius:50%;display:flex;align-items:center;justify-content:center}
+.qp-pictos-carre .qp-rs-rond{border-radius:28%}
 .qp-ombre .qp-rs-rond{box-shadow:0 6px 16px rgba(0,0,0,.18)}
 .qp-rs-ico{width:28px;height:28px;-webkit-mask:var(--ico) center/contain no-repeat;mask:var(--ico) center/contain no-repeat}
 .qp-rs-item.vide{opacity:.4}
@@ -772,7 +815,7 @@ function rendrePage(cfgBrut, racine, opts) {
   const page = doc.createElement('div');
   const dispo = DISPOSITIONS[d.disposition] ? d.disposition : 'centre';
   const ronds = d.tousRonds || !!DISPOSITIONS[dispo].ronds;
-  page.className = 'qp qp-dispo-' + dispo + (d.carte ? ' qp-carte' : '') + (d.ombre ? ' qp-ombre' : '');
+  page.className = 'qp qp-dispo-' + dispo + (d.carte ? ' qp-carte' : '') + (d.ombre ? ' qp-ombre' : '') + (d.formePictos === 'carre' ? ' qp-pictos-carre' : '');
   const p = page.style;
   p.setProperty('--fond', d.fond);
   p.setProperty('--fond2', d.fond2 || d.fond);
@@ -850,7 +893,7 @@ function rendrePage(cfgBrut, racine, opts) {
       items.forEach(r => {
         const R = RESEAUX[r.id];
         grille.appendChild(creerRond(doc, {
-          href: lienReseau(r.id, r.valeur), nom: R.nom, icone: iconeReseau(r.id),
+          href: lienReseau(r.id, r.valeur, r.message), nom: R.nom, icone: iconeReseau(r.id),
           fond: d.reseauxTheme ? d.accent : R.coul, vide: !String(r.valeur || '').trim(),
           nomVisible: d.nomsReseaux, apercu: opts.apercu
         }));
@@ -1653,12 +1696,10 @@ function couper(t, max) {
 /* Fiche « entreprise locale » (schema.org) */
 function donneesStructurees(cfg, base) {
   const seo = cfg.seo || {};
-  const btn = t => cfg.boutons.find(b => b && !b.masque && b.type === t && String(b.valeur || '').trim());
-  const numero = btn('tel') || btn('whatsapp') || btn('sms');
-  const mailBtn = btn('email');
-  const mailRs = cfg.reseaux.find(r => r.id === 'email' && r.actif && String(r.valeur || '').trim());
+  const numero = contactPage(cfg, ['tel', 'whatsapp', 'sms']);
+  const mail = contactPage(cfg, ['email']);
   const sameAs = cfg.reseaux
-    .filter(r => r.actif && String(r.valeur || '').trim() && !['email', 'site'].includes(r.id))
+    .filter(r => r.actif && String(r.valeur || '').trim() && !['email', 'site'].includes(r.id) && !RESEAUX[r.id].action)
     .map(r => lienReseau(r.id, r.valeur)).filter(u => /^https?:/i.test(u));
   const zones = String(seo.zone || (cfg.home && cfg.home.ia && cfg.home.ia.zone) || '')
     .split(/[,;\/]| et /).map(z => z.trim()).filter(Boolean);
@@ -1671,7 +1712,7 @@ function donneesStructurees(cfg, base) {
     image: urlAbsolue(base, cfg.design.imageFond || cfg.logo) || undefined,
     logo: urlAbsolue(base, cfg.logo) || undefined,
     telephone: numero ? '+' + numeroInternational(numero.valeur) : undefined,
-    email: mailBtn ? mailBtn.valeur.trim() : (mailRs ? String(mailRs.valeur).trim().replace(/^mailto:/i, '') : undefined),
+    email: mail ? mail.valeur.replace(/^mailto:/i, '') : undefined,
     areaServed: zones.length ? zones.map(z => ({ '@type': 'Place', name: z })) : undefined,
     sameAs: sameAs.length ? sameAs : undefined
   };
