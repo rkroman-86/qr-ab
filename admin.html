@@ -253,6 +253,9 @@
     .vignette{width:64px;height:64px;border-radius:12px;border:1px dashed var(--ligne);background:var(--bg) center/cover no-repeat;flex-shrink:0;
       display:flex;align-items:center;justify-content:center;color:var(--doux);font-size:.75rem}
     .vignette img{max-width:100%;max-height:100%}
+    details.section[data-id=fond] .vignette,details.section[data-id=fond] .fond-ia.actif{position:relative;overflow:hidden}
+    details.section[data-id=fond] .vignette::after,details.section[data-id=fond] .fond-ia.actif::after{content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;background:rgba(0,0,0,var(--voile-fond,0));z-index:1}
+    details.section[data-id=fond] .fond-ia.actif>*{z-index:2}
     input[type=range]{width:100%}
 
     .bouton-carte{border:1px solid var(--ligne);border-radius:14px;padding:12px;margin-bottom:12px;background:var(--bg)}
@@ -2599,7 +2602,9 @@
     const policeSel = choixPolice(Object.keys(FONTS).map(k => [k, FONTS[k].nom, FONTS[k].css]), d.police || 'moderne', v => { d.police = v; changement(); });
 
     const voile = el('input', { type: 'range', min: 0, max: 80, value: d.voile || 0 });
-    voile.addEventListener('input', () => { d.voile = Number(voile.value); changement(); });
+    // l'image choisie (vignette + image cochée dans « Mes images ») s'assombrit en direct, comme sur la page
+    f.style.setProperty('--voile-fond', String((Number(d.voile) || 0) / 100));
+    voile.addEventListener('input', () => { d.voile = Number(voile.value); f.style.setProperty('--voile-fond', String(d.voile / 100)); changement(); });
 
     f.appendChild(section('design', 'Design', false, [
       el('span', { class: 'etiq', text: 'Thème' }), themes,
