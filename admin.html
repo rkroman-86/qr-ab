@@ -3015,6 +3015,7 @@
     };
   }
   function reglagesCarte() { return cfg.carteInfos && typeof cfg.carteInfos === 'object' ? cfg.carteInfos : {}; }
+  function logoSurCarte() { return reglagesCarte().logo !== false; }   // logo imprimé sauf case décochée (ne compte pas dans les 5)
   function persoCarte() { const p = reglagesCarte().perso; return Array.isArray(p) ? p.filter(x => x && x.id) : []; }
   function modifierCarte(f) { cfg.carteInfos = Object.assign({}, reglagesCarte(), { choix: choixCarte() }); f(cfg.carteInfos); changement(); }
   function valeursCarte() {
@@ -3060,6 +3061,12 @@
       const refaire = () => { dessiner(); rafraichir(); };
       bloc.append(el('span', { class: 'etiq', text: 'Informations sur la carte' }),
         el('div', { class: 'aide', style: 'margin:0 0 8px', text: 'Cochez les informations à imprimer (5 au plus). Elles sont reprises de votre page ; modifiez-les ici si vous voulez imprimer un autre numéro ou un autre e-mail (votre page ne change pas). Le nom et le slogan restent en haut de la carte ; ↑ ↓ changent l’ordre des coordonnées.' }));
+      // Logo : affiché ou non sur la carte
+      const caseLogo = el('input', { type: 'checkbox' }); caseLogo.checked = !!cfg.logo && logoSurCarte(); caseLogo.disabled = !cfg.logo;
+      caseLogo.addEventListener('change', () => { modifierCarte(o => { if (caseLogo.checked) delete o.logo; else o.logo = false; }); refaire(); });
+      bloc.append(el('div', { class: 'info-carte logo-carte' + (caseLogo.checked ? '' : ' off') }, [
+        el('label', { class: 'case-info' }, [caseLogo, el('span', { text: t('Logo') })]),
+        el('span', { class: 'aide', style: 'margin:0', text: cfg.logo ? t('Afficher le logo sur la carte (ne compte pas dans les 5 informations).') : t('Pas de logo : ajoutez-en un dans la section Logo.') })]));
       const caseCoche = k => {
         const c = el('input', { type: 'checkbox' }); c.checked = ch.includes(k); c.disabled = !c.checked && plein;
         c.addEventListener('change', () => {
@@ -3219,7 +3226,7 @@
       })(),
       typo: typoCarte(),
       fondImg: await chargerImage(d.imageFond ? res(d.imageFond) : ''),
-      logo: await chargerImage(cfg.logo ? res(cfg.logo) : ''),
+      logo: await chargerImage(cfg.logo && logoSurCarte() ? res(cfg.logo) : ''),
       ...infosCarte()
     };
   }
@@ -3879,7 +3886,7 @@
   // appli sur sa propre adresse (nom--carte.qrbc.app) : elle ne remplace jamais l'appli de la page
   function lienAppliCarte() { return URL_PUBLIQUE.replace(/^(https?:\/\/)([^./]+)\./, '$1$2--carte.').replace(/^(https?:\/\/[^/]+).*$/, '$1/'); }
   function cleCarteApp() {
-    return JSON.stringify([cfg.carteApp && cfg.carteApp.modeles, cfg.design, cfg.logo, cfg.titre, cfg.sousTitre, cfg.pied, infosCarte(), typoCarte(), URL_PUBLIQUE, cfg.langue || 'fr', 3]);
+    return JSON.stringify([cfg.carteApp && cfg.carteApp.modeles, cfg.design, cfg.logo, cfg.titre, cfg.sousTitre, cfg.pied, infosCarte(), typoCarte(), logoSurCarte(), URL_PUBLIQUE, cfg.langue || 'fr', 3]);
   }
   async function preparerCarteApp(forcer) {
     const ca = cfg.carteApp;
