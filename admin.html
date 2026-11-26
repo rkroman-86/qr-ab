@@ -368,6 +368,10 @@
     .info-carte.off>input{opacity:.45}
     .info-carte .outils-info{grid-column:2;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
     .info-carte .rangee-typo{grid-column:1/-1}
+    .info-carte .perso-champs{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px}
+    .info-carte .perso-champs>input:last-child{grid-column:1/-1}
+    .info-carte .perso-champs>*{width:100%;min-width:0}
+    .info-carte.off .perso-champs{opacity:.45}
     @media (max-width:520px){.info-carte{grid-template-columns:1fr}.info-carte .outils-info{grid-column:1}}
     .modele-carte{border:2px solid var(--ligne);border-radius:12px;padding:6px;background:var(--bg);cursor:pointer;color:var(--txt);display:flex;flex-direction:column;gap:6px}
     .modele-carte img{width:100%;aspect-ratio:2008/1300;object-fit:contain;border-radius:6px;display:block;background:color-mix(in srgb,var(--txt) 6%,transparent)}
@@ -2978,13 +2982,23 @@
     return (t && t[l] ? t[l] : m[1]) + (m[2] === ' / WhatsApp' ? ' / WhatsApp' : m[2] || '');
   }
 
-  /* Informations imprimées sur la carte (25/11) : le client choisit parmi nom, slogan, téléphone, e-mail, site.
-     Valeur vide = reprise de la page (titre, accroche, boutons) ; cfg.carteInfos = { choix: [...], nom, slogan, tel, email, site } */
+  /* Informations imprimées sur la carte (25–26/11) : nom, slogan, téléphone, e-mail, site + champs perso, 5 au plus.
+     Valeur vide = reprise de la page (titre, accroche, boutons).
+     cfg.carteInfos = { choix: [clés cochées], nom, slogan, tel, email, site,
+                        perso: [{ id: 'p…', type: 'tel'|'email'|'site'|'texte', etiq, valeur }], ordre: [clés des coordonnées] }
+     Le nom et le slogan restent en haut de la carte ; l'ordre (↑ ↓) vaut pour les coordonnées. */
   const CHAMPS_CARTE = [['nom', 'Nom de l’entreprise'], ['slogan', 'Slogan'], ['tel', 'Téléphone'], ['email', 'E-mail'], ['site', 'Site web']];
-  const MAX_INFOS_CARTE = 5;
-  // « Aa » des cartes : cfg.typo.carteNom… (mêmes réglages que les textes de la page : p, g, t, c)
+  const TYPES_PERSO_CARTE = { tel: 'Téléphone', email: 'E-mail', site: 'Site web', texte: 'Texte' };
+  const ETIQ_TYPE_CARTE = { tel: 'Tél.', email: 'E-mail', site: 'Web', texte: '' };
+  const MAX_INFOS_CARTE = 5, MAX_PERSO_CARTE = 5;
+  // « Aa » des cartes : cfg.typo.carteNom… et cfg.typo.carteP_<id> (mêmes réglages que les textes de la page : p, g, t, c)
   const CLES_TYPO_CARTE = { nom: 'carteNom', slogan: 'carteSlogan', tel: 'carteTel', email: 'carteEmail', site: 'carteSite' };
-  function typoCarte() { const o = {}; Object.keys(CLES_TYPO_CARTE).forEach(k => { const v = typoDe(cfg, CLES_TYPO_CARTE[k]); if (v) o[k] = v; }); return o; }
+  const cleTypoCarte = k => CLES_TYPO_CARTE[k] || 'carteP_' + k;
+  function typoCarte() {
+    const o = {};
+    ['nom', 'slogan', 'tel', 'email', 'site'].concat(persoCarte().map(p => p.id)).forEach(k => { const v = typoDe(cfg, cleTypoCarte(k)); if (v) o[k] = v; });
+    return o;
+  }
   function boutonsCarte() { return cfg.boutons.filter(b => b && !b.masque && b.type !== 'reseaux' && String(b.valeur || '').trim()); }
   function defautsCarte() {
     const btns = boutonsCarte();
@@ -3001,26 +3015,37 @@
     };
   }
   function reglagesCarte() { return cfg.carteInfos && typeof cfg.carteInfos === 'object' ? cfg.carteInfos : {}; }
+  function persoCarte() { const p = reglagesCarte().perso; return Array.isArray(p) ? p.filter(x => x && x.id) : []; }
+  function modifierCarte(f) { cfg.carteInfos = Object.assign({}, reglagesCarte(), { choix: choixCarte() }); f(cfg.carteInfos); changement(); }
   function valeursCarte() {
     const d = defautsCarte(), r = reglagesCarte(), v = {};
     CHAMPS_CARTE.forEach(([k]) => { v[k] = String(r[k] || '').trim() || d[k]; });
+    persoCarte().forEach(p => { v[p.id] = String(p.valeur || '').trim(); });
     return v;
   }
+  function ordreCoordsCarte() {
+    const toutes = ['tel', 'email', 'site'].concat(persoCarte().map(p => p.id));
+    const o = (Array.isArray(reglagesCarte().ordre) ? reglagesCarte().ordre : []).filter(k => toutes.includes(k));
+    return o.concat(toutes.filter(k => !o.includes(k)));
+  }
   function choixCarte(v) {
-    const r = reglagesCarte();
-    if (Array.isArray(r.choix)) return CHAMPS_CARTE.map(c => c[0]).filter(k => r.choix.includes(k)).slice(0, MAX_INFOS_CARTE);
+    const r = reglagesCarte(), cles = ['nom', 'slogan'].concat(ordreCoordsCarte());
+    if (Array.isArray(r.choix)) return cles.filter(k => r.choix.includes(k)).slice(0, MAX_INFOS_CARTE);
     v = v || valeursCarte();
-    return ['nom', 'tel', 'email', 'site', 'slogan'].filter(k => v[k]);   // par défaut : tout ce qui est rempli
+    return cles.filter(k => v[k]).slice(0, MAX_INFOS_CARTE);   // par défaut : tout ce qui est rempli
   }
   function infosCarte() {
     const v = valeursCarte(), ch = choixCarte(v), coords = [], coordsCles = [];
-    if (ch.includes('tel') && v.tel) {
-      const n = numeroInternational(v.tel), wa = contactPage(cfg, ['whatsapp']);
-      const etiq = wa && n && numeroInternational(wa.valeur) === n ? 'Tél. / WhatsApp' : 'Tél.';
-      coords.push([tc(etiq), String(v.tel).replace(/\D/g, '').length >= 6 ? formaterNumero(v.tel) : v.tel]); coordsCles.push('tel');
-    }
-    if (ch.includes('email') && v.email) { coords.push([tc('E-mail'), v.email]); coordsCles.push('email'); }
-    if (ch.includes('site') && v.site) { coords.push([tc('Web'), v.site.replace(/^https?:\/\//i, '').replace(/\/$/, '')]); coordsCles.push('site'); }
+    const perso = {}; persoCarte().forEach(p => { perso[p.id] = p; });
+    ordreCoordsCarte().filter(k => ch.includes(k) && v[k]).forEach(k => {
+      const p = perso[k], type = p ? p.type : k;
+      let val = v[k], etiq = p ? (String(p.etiq || '').trim() || tc(ETIQ_TYPE_CARTE[type] || '')) : tc(ETIQ_TYPE_CARTE[type]);
+      if (type === 'tel') {
+        if (!p) { const n = numeroInternational(val), wa = contactPage(cfg, ['whatsapp']); if (wa && n && numeroInternational(wa.valeur) === n) etiq = tc('Tél. / WhatsApp'); }
+        if (String(val).replace(/\D/g, '').length >= 6) val = formaterNumero(val);
+      } else if (type === 'site') val = val.replace(/^https?:\/\//i, '').replace(/\/$/, '');
+      coords.push([etiq, val]); coordsCles.push(k);
+    });
     return { nom: ch.includes('nom') ? v.nom : '', slogan: ch.includes('slogan') ? v.slogan : '', coords, coordsCles };
   }
   // Réglage dans la section « QR code et carte de visite »
@@ -3030,33 +3055,83 @@
       bloc.innerHTML = '';
       const d = defautsCarte(), r = reglagesCarte(), ch = choixCarte();
       const plein = ch.length >= MAX_INFOS_CARTE;
+      const persos = persoCarte(), ordre = ordreCoordsCarte();
+      const refaire = () => { dessiner(); rafraichir(); };
       bloc.append(el('span', { class: 'etiq', text: 'Informations sur la carte' }),
-        el('div', { class: 'aide', style: 'margin:0 0 8px', text: 'Cochez les informations à imprimer. Elles sont reprises de votre page ; modifiez-les ici si vous voulez imprimer un autre numéro ou un autre e-mail (votre page ne change pas).' }));
-      CHAMPS_CARTE.forEach(([k, lib]) => {
-        const coche = ch.includes(k);
-        const caseC = el('input', { type: 'checkbox' }); caseC.checked = coche; caseC.disabled = !coche && plein;
+        el('div', { class: 'aide', style: 'margin:0 0 8px', text: 'Cochez les informations à imprimer (5 au plus). Elles sont reprises de votre page ; modifiez-les ici si vous voulez imprimer un autre numéro ou un autre e-mail (votre page ne change pas). Le nom et le slogan restent en haut de la carte ; ↑ ↓ changent l’ordre des coordonnées.' }));
+      const caseCoche = k => {
+        const c = el('input', { type: 'checkbox' }); c.checked = ch.includes(k); c.disabled = !c.checked && plein;
+        c.addEventListener('change', () => {
+          const n = choixCarte().filter(x => x !== k); if (c.checked) n.push(k);
+          modifierCarte(o => { o.choix = n; }); refaire();
+        });
+        return c;
+      };
+      const fleches = k => {
+        const i = ordre.indexOf(k);
+        const bouger = dir => modifierCarte(o => { const n = ordre.slice(); [n[i], n[i + dir]] = [n[i + dir], n[i]]; o.ordre = n; }) || refaire();
+        return [el('button', { type: 'button', class: 'btn btn-mini', text: '↑', title: t('Monter'), disabled: i <= 0, onclick: () => bouger(-1) }),
+          el('button', { type: 'button', class: 'btn btn-mini', text: '↓', title: t('Descendre'), disabled: i >= ordre.length - 1, onclick: () => bouger(1) })];
+      };
+      const ligneStd = k => {
+        const lib = CHAMPS_CARTE.find(x => x[0] === k)[1], coche = ch.includes(k);
         const input = el('input', { type: k === 'email' ? 'email' : k === 'tel' ? 'tel' : 'text', value: String(r[k] || '').trim() || d[k], placeholder: d[k] || (k === 'slogan' ? 'Ex. : Votre chauffeur privé à Nice' : '') });
         input.disabled = !coche;
-        caseC.addEventListener('change', () => {
-          const c = choixCarte().filter(x => x !== k); if (caseC.checked) c.push(k);
-          cfg.carteInfos = Object.assign({}, reglagesCarte(), { choix: CHAMPS_CARTE.map(x => x[0]).filter(x => c.includes(x)).slice(0, MAX_INFOS_CARTE) });
-          changement(); dessiner(); rafraichir();
-        });
         input.addEventListener('input', () => {
           const val = input.value.trim();
-          cfg.carteInfos = Object.assign({}, reglagesCarte(), { choix: choixCarte() });
-          if (!val || val === d[k]) delete cfg.carteInfos[k]; else cfg.carteInfos[k] = input.value;   // identique à la page : suit la page
-          changement();
+          modifierCarte(o => { if (!val || val === d[k]) delete o[k]; else o[k] = input.value; });   // identique à la page : suit la page
         });
         input.addEventListener('change', rafraichir);
         const perso = String(r[k] || '').trim() && String(r[k]).trim() !== d[k];
-        const [btnTypo, rangeeTypo] = outilTypo(cfg, CLES_TYPO_CARTE[k], rafraichir);   // police, style, taille, couleur sur la carte
-        bloc.append(el('div', { class: 'info-carte' + (coche ? '' : ' off') }, [
-          el('label', { class: 'case-info' }, [caseC, el('span', { text: lib })]), input,
-          el('div', { class: 'outils-info' }, [btnTypo,
-            perso ? el('button', { type: 'button', class: 'btn btn-mini', title: d[k], text: '↺ ' + t('Reprendre la page'), onclick: () => { delete cfg.carteInfos[k]; changement(); dessiner(); rafraichir(); } }) : null]),
-          rangeeTypo]));
-      });
+        const [btnTypo, rangeeTypo] = outilTypo(cfg, cleTypoCarte(k), rafraichir);   // police, style, taille, couleur sur la carte
+        return el('div', { class: 'info-carte' + (coche ? '' : ' off') }, [
+          el('label', { class: 'case-info' }, [caseCoche(k), el('span', { text: lib })]), input,
+          el('div', { class: 'outils-info' }, [btnTypo].concat(k === 'nom' || k === 'slogan' ? [] : fleches(k)).concat([
+            perso ? el('button', { type: 'button', class: 'btn btn-mini', title: d[k], text: '↺ ' + t('Reprendre la page'), onclick: () => { modifierCarte(o => { delete o[k]; }); refaire(); } }) : null])),
+          rangeeTypo]);
+      };
+      const lignePerso = p => {
+        const coche = ch.includes(p.id);
+        const maj = f => modifierCarte(o => { o.perso = persoCarte().map(x => x.id === p.id ? Object.assign({}, x, f(x)) : x); });
+        const type = el('select', {}, Object.keys(TYPES_PERSO_CARTE).map(k => el('option', { value: k, text: TYPES_PERSO_CARTE[k], selected: (p.type || 'texte') === k })));
+        const etiq = el('input', { type: 'text', value: p.etiq || '', maxLength: 20, placeholder: t('Étiquette') + (ETIQ_TYPE_CARTE[p.type] ? ' (' + tc(ETIQ_TYPE_CARTE[p.type]) + ')' : '') });
+        const val = el('input', { type: p.type === 'email' ? 'email' : p.type === 'tel' ? 'tel' : 'text', value: p.valeur || '', placeholder: ({ tel: '06 12 34 56 78', email: 'contact@exemple.fr', site: 'www.exemple.fr', texte: t('Ex. : Ouvert 7j/7') })[p.type] || '' });
+        [type, etiq, val].forEach(x => { x.disabled = !coche; });
+        type.addEventListener('change', () => { maj(() => ({ type: type.value })); refaire(); });
+        etiq.addEventListener('input', () => maj(() => ({ etiq: etiq.value })));
+        val.addEventListener('input', () => maj(() => ({ valeur: val.value })));
+        [etiq, val].forEach(x => x.addEventListener('change', rafraichir));
+        const [btnTypo, rangeeTypo] = outilTypo(cfg, cleTypoCarte(p.id), rafraichir);
+        const suppr = el('button', { type: 'button', class: 'btn btn-mini', text: '🗑', title: t('Supprimer ce champ'), onclick: () => {
+          modifierCarte(o => {
+            o.perso = persoCarte().filter(x => x.id !== p.id);
+            o.choix = (o.choix || []).filter(x => x !== p.id);
+            if (Array.isArray(o.ordre)) o.ordre = o.ordre.filter(x => x !== p.id);
+            if (!o.perso.length) delete o.perso;
+          });
+          if (cfg.typo) { delete cfg.typo[cleTypoCarte(p.id)]; if (!Object.keys(cfg.typo).length) delete cfg.typo; }
+          refaire();
+        } });
+        return el('div', { class: 'info-carte perso' + (coche ? '' : ' off') }, [
+          el('label', { class: 'case-info' }, [caseCoche(p.id), el('span', { text: t('Champ perso') })]),
+          el('div', { class: 'perso-champs' }, [type, etiq, val]),
+          el('div', { class: 'outils-info' }, [btnTypo].concat(fleches(p.id), [suppr])),
+          rangeeTypo]);
+      };
+      bloc.append(ligneStd('nom'), ligneStd('slogan'));
+      ordre.forEach(k => { const p = persos.find(x => x.id === k); bloc.append(p ? lignePerso(p) : ligneStd(k)); });
+      const ajouter = el('button', { type: 'button', class: 'btn btn-mini', style: 'margin-top:4px', text: '＋ ' + t('Ajouter un champ'), disabled: persos.length >= MAX_PERSO_CARTE, onclick: () => {
+        const id = 'p' + Date.now().toString(36);
+        modifierCarte(o => {
+          o.perso = persoCarte().concat([{ id, type: 'tel', etiq: '', valeur: '' }]);
+          if (o.choix.length < MAX_INFOS_CARTE) o.choix = o.choix.concat([id]);
+          o.ordre = ordreCoordsCarte().filter(x => x !== id).concat([id]);
+        });
+        refaire();
+        const lignes = bloc.querySelectorAll('.info-carte.perso'), champ = lignes.length && lignes[lignes.length - 1].querySelector('.perso-champs input:last-child');
+        if (champ && !champ.disabled) champ.focus();
+      } });
+      bloc.append(ajouter, el('div', { class: 'aide', style: 'margin:4px 0 0', text: plein ? t('5 informations cochées : décochez-en une pour en afficher une autre.') : t('Champ perso : un 2e numéro, un autre e-mail, des horaires…') }));
     };
     dessiner();
     return bloc;
@@ -3081,6 +3156,12 @@
     return lignes;
   }
 
+  // Coordonnées « en ligne » : les 2 premières sur une ligne, les suivantes par deux sur des lignes un peu plus petites
+  function lignesCoords(coords) {
+    const l = [];
+    for (let i = 0; i < coords.length; i += 2) l.push(coords.slice(i, i + 2).map(x => x[1]).join('   ·   '));
+    return l;
+  }
   function rectArrondi(ctx, x, y, w, h, r) {
     ctx.beginPath();
     ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
@@ -3206,16 +3287,16 @@
     y += 30;
     ctx.fillStyle = c.accent; ctx.fillRect(align === 'center' ? ax - 65 : x, y, 130, 8); y += 56;
     if (c.enLigne) {
-      const ligne = D.coords.slice(0, 2).map(l => l[1]).join('   ·   ');
-      ctx.font = policeAjustee(ctx, ligne, '600', 52, 34, largeur, fam);
+      const lignes = lignesCoords(D.coords);
+      ctx.font = policeAjustee(ctx, lignes[0] || '', '600', 52, 34, largeur, fam);
       ctx.fillStyle = c.texte;
-      ctx.fillText(ligne, ax, y);
+      if (lignes[0]) ctx.fillText(lignes[0], ax, y);
       y += 70;
-      if (D.coords[2]) {                         // 3e coordonnée (souvent le site) sur une seconde ligne, un peu plus petite
-        const t = parseInt(ctx.font.match(/(\d+)px/)[1], 10);
-        ctx.font = policeAjustee(ctx, D.coords[2][1], '500', Math.max(30, t - 4), 28, largeur, fam);
-        ctx.fillText(D.coords[2][1], ax, y - 8); y += 62;
-      }
+      const t0 = parseInt(ctx.font.match(/(\d+)px/)[1], 10);
+      lignes.slice(1).forEach(l => {             // coordonnées suivantes (souvent le site) sur d'autres lignes, un peu plus petites
+        ctx.font = policeAjustee(ctx, l, '500', Math.max(30, t0 - 4), 28, largeur, fam);
+        ctx.fillText(l, ax, y - 8); y += 62;
+      });
     } else {
       D.coords.forEach(([etiq, val]) => {
         ctx.font = '700 40px ' + fam; ctx.fillStyle = c.accent; ctx.fillText(etiq.toUpperCase(), ax, y);
@@ -3252,10 +3333,12 @@
   function dessinerCoords(ctx, D, x, y, largeur, c, align) {
     const ax = align === 'center' ? x + largeur / 2 : x;
     ctx.textAlign = align || 'left'; ctx.textBaseline = 'top';
+    const k = c.hauteur && D.coords.length ? Math.max(0.62, Math.min(1, c.hauteur / (D.coords.length * (c.pas || 128)))) : 1;   // 4–5 lignes : resserré
+    const E = Math.round((c.etiq || 40) * k), V = Math.round((c.val || 56) * k), pas = Math.round((c.pas || 128) * k);
     D.coords.forEach(([etiq, val]) => {
-      ctx.font = '700 ' + (c.etiq || 40) + 'px ' + D.fam; ctx.fillStyle = c.accent; ctx.fillText(etiq.toUpperCase(), ax, y);
-      ctx.fillStyle = c.texte; ctx.font = policeAjustee(ctx, val, '600', c.val || 56, 30, largeur, D.fam);
-      ctx.fillText(val, ax, y + (c.etiq || 40) + 6); y += (c.pas || 128);
+      if (etiq) { ctx.font = '700 ' + E + 'px ' + D.fam; ctx.fillStyle = c.accent; ctx.fillText(etiq.toUpperCase(), ax, y); }
+      ctx.fillStyle = c.texte; ctx.font = policeAjustee(ctx, val, '600', V, Math.min(30, V), largeur, D.fam);
+      ctx.fillText(val, ax, y + (etiq ? E + 6 : Math.round(E / 2))); y += pas;
     });
     ctx.textAlign = 'left';
     return y;
@@ -3315,7 +3398,7 @@
         coupeLignes(ctx, sansLiens(D.slogan), L, 2).forEach(l => { ctx.fillText(l, 100, y + 6); y += 54; });
       }
       y += 40;
-      dessinerCoords(ctx, Object.assign({}, D, { coords: D.coords.slice(0, 3) }), 100, y, L, { texte: '#111', accent, etiq: 32, val: 44, pas: 98 }, 'left');
+      dessinerCoords(ctx, D, 100, y, L, { texte: '#111', accent, etiq: 32, val: 44, pas: 98, hauteur: H - 170 - y }, 'left');
       ctx.fillStyle = accent; ctx.textBaseline = 'alphabetic'; ctx.font = '800 48px ' + D.fam;
       ctx.fillText(tc('Scannez-moi →'), 100, H - 95);
     },
@@ -3595,8 +3678,7 @@
       }
       const accent = luminance(D.d.accent) > 0.6 ? '#1a1a1a' : D.d.accent;
       dessinerBlocQR(ctx, D, qx, qy, q, '', true);
-      const coords = D.coords.slice(0, 3);
-      dessinerCoords(ctx, Object.assign({}, D, { coords }), P, Hh + 80, qx - P - 80, { texte: '#1a1a1a', accent, val: 52, pas: 116 }, 'left');
+      dessinerCoords(ctx, D, P, Hh + 80, qx - P - 80, { texte: '#1a1a1a', accent, val: 52, pas: 116, hauteur: H - (cfg.pied ? 120 : 60) - Hh - 80 }, 'left');
       dessinerPied(ctx, D, P, H - 70, '#1a1a1a');
     },
     minimal(ctx, D) {
@@ -3609,10 +3691,11 @@
       ctx.font = policeAjustee(ctx, D.nom || '', '300', 104, 56, W - 300, D.fam);
       ctx.fillText(D.nom || '', W / 2, y); y += 130;
       ctx.fillStyle = accent; ctx.fillRect(W / 2 - 50, y, 100, 5); y += 40;
-      const ligne = D.coords.slice(0, 2).map(l => l[1]).join('   ·   ');
-      ctx.fillStyle = '#444'; ctx.font = policeAjustee(ctx, ligne, '500', 48, 30, W - 300, D.fam);
-      ctx.fillText(ligne, W / 2, y); y += 90;
-      if (D.coords[2]) { ctx.font = policeAjustee(ctx, D.coords[2][1], '500', 42, 28, W - 300, D.fam); ctx.fillText(D.coords[2][1], W / 2, y - 22); y += 50; }
+      const lignes = lignesCoords(D.coords);
+      ctx.fillStyle = '#444'; ctx.font = policeAjustee(ctx, lignes[0] || '', '500', 48, 30, W - 300, D.fam);
+      if (lignes[0]) ctx.fillText(lignes[0], W / 2, y);
+      y += 90;
+      lignes.slice(1).forEach(l => { ctx.font = policeAjustee(ctx, l, '500', 42, 28, W - 300, D.fam); ctx.fillText(l, W / 2, y - 22); y += 50; });
       const q = Math.min(440, H - y - 90);
       dessinerQR(ctx, URL_QR, (W - q) / 2, y, q, '#111');
       ctx.textAlign = 'left';
