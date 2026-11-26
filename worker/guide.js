@@ -67,7 +67,7 @@ qrbc.app (QR-BC, édité par KPS) permet de créer en quelques minutes, depuis u
 - L'image d'origine n'est jamais abîmée : « Recadrer » repart toujours de l'originale (avec les derniers réglages), on peut donc dézoomer ou éclaircir plus tard.
 
 ## Mes images
-- Toutes les images importées ou créées par l'IA sont gardées dans « Mes images » et réutilisables partout (fond, pancartes), sur toutes les pages du compte. Une image peut être supprimée ; si elle est utilisée sur la page, elle reste affichée tant qu'on ne la change pas.
+- Toutes les images importées ou créées par l'IA sont gardées dans « Mes images » et réutilisables partout : la même liste apparaît sous l'image de fond de la page contact et sous chaque pancarte de la page Home et de la page personnalisée (avec aussi les photos de la galerie et du blog), sur toutes les pages du compte. Les logos ont leur propre liste. Une image peut être supprimée ; si elle est utilisée sur la page, elle reste affichée tant qu'on ne la change pas.
 
 ## Page Home (mini-site à pancartes)
 - Vocabulaire : les clients appellent parfois les pancartes « cartes », « cards », « carduri », « карточки » ou « slides ». Ne pas confondre avec les cartes de visite (section QR code et carte de visite) : en cas de doute, demander de quoi il s'agit.

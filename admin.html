@@ -1622,10 +1622,19 @@
   }
   function galerieImages(genre, obj, cle, apres) {
     const box = el('div', { class: 'galerie-fonds' });
-    const l = (medias || []).filter(x => x.genre === genre);
+    // Images partagées par toutes les pages du site (26/11) : fond de la page contact, pancartes Home et page personnalisée,
+    // photos de la galerie et du blog ; seuls les logos restent à part.
+    const genres = genre === 'logo' ? ['logo'] : ['fond', 'article'];
+    const l = (medias || []).filter(x => genres.includes(x.genre));
     // photos chargées mais pas encore enregistrées : visibles tout de suite
-    const attente = Object.keys(imagesAEnvoyer).filter(p => genreImage(p) === genre && !l.some(x => x.chemin === p));
+    const attente = Object.keys(imagesAEnvoyer).filter(p => genres.includes(genreImage(p)) && !/^images\/(galerie|blog)-/.test(p) && !l.some(x => x.chemin === p));
     const tout = attente.map(p => ({ chemin: p, source: 'photo', attente: true })).concat(l);
+    if (genre !== 'logo') {                                   // photos de la galerie et du blog (gérées dans leur section : pas de ×)
+      const deja = new Set(tout.map(x => x.chemin));
+      const ajout = c => { if (c && !deja.has(c)) { deja.add(c); tout.push({ chemin: c, source: 'photo', fixe: true }); } };
+      ((cfg.galerie && cfg.galerie.photos) || []).forEach(ph => ajout(ph.src));
+      ((cfg.blog && cfg.blog.articles) || []).forEach(a => ajout(a.image));
+    }
     if (!medias) { box.appendChild(el('div', { class: 'aide', text: 'Chargement de vos images…' })); chargerMedias(); return box; }
     if (!tout.length) { box.appendChild(el('div', { class: 'aide', text: 'Vos images (photos, galerie, IA) apparaîtront ici pour être réutilisées.' })); return box; }
     tout.forEach(m => {
@@ -1635,7 +1644,7 @@
       v.addEventListener('click', () => { obj[cle] = m.chemin; if (apres) apres(); changement(); construireFormulaire(); });
       if (m.source === 'ia') v.appendChild(el('span', { class: 'fond-badge', text: 'IA' }));
       if (actif) v.appendChild(el('span', { class: 'fond-coche', text: '✓' }));
-      if (!m.attente) {
+      if (!m.attente && !m.fixe) {
         const x = el('span', { class: 'fond-suppr', role: 'button', 'aria-label': 'Supprimer de mes images', text: '×' });
         x.addEventListener('click', async e => {
           e.stopPropagation();
