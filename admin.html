@@ -429,6 +429,10 @@
     .rangee-typo{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 0}
     .rangee-typo select{flex:1 1 120px;min-width:0}
     .rangee-typo .choix-police{flex:1 1 140px;min-width:0}
+    .typo-coul{flex:1 1 100%;display:flex;align-items:center;gap:10px;font-size:.88rem;color:var(--doux)}
+    .typo-coul input[type=color]{width:46px;height:34px;padding:2px;flex:none}
+    .typo-coul input[type=color]:disabled{opacity:.4}
+    .typo-coul label{display:flex;align-items:center;gap:6px;margin-left:auto}
     .choix-police{position:relative}
     .cp-bouton{width:100%;text-align:left;border:1px solid var(--ligne);border-radius:12px;background:var(--bg);padding:12px 40px 12px 14px;font-size:1.05rem;cursor:pointer;position:relative;min-height:46px}
     .cp-bouton::after{content:'';position:absolute;right:16px;top:50%;width:8px;height:8px;border:solid currentColor;border-width:0 2px 2px 0;transform:translateY(-70%) rotate(45deg);opacity:.6}
@@ -1434,13 +1438,13 @@
     return el('div', { class: 'champ-liens' }, enfants);
   }
 
-  /* « Aa » : police, gras / italique et taille d'un texte (par défaut : ceux du design et de la mise en page) */
+  /* « Aa » : police, gras / italique, taille et couleur d'un texte (par défaut : ceux du design et de la mise en page) */
   const STYLES_TEXTE = { '': 'Style par défaut', normal: 'Normal', gras: 'Gras', italique: 'Italique', 'gras-italique': 'Gras italique' };
   const TAILLES_CHOIX = { xs: 'Très petit', s: 'Petit', '': 'Taille normale', l: 'Grand', xl: 'Très grand' };
   function outilTypo(obj, cle) {
     const lire = () => (obj.typo && obj.typo[cle]) || {};
-    const bouton = el('button', { type: 'button', class: 'btn btn-mini btn-typo', text: 'Aa', title: t('Police, style et taille'), 'aria-label': t('Police, style et taille') });
-    const majBouton = () => { const v = lire(); bouton.classList.toggle('regle', !!(v.p || v.g || v.t)); };
+    const bouton = el('button', { type: 'button', class: 'btn btn-mini btn-typo', text: 'Aa', title: t('Police, style, taille et couleur'), 'aria-label': t('Police, style, taille et couleur') });
+    const majBouton = () => { const v = lire(); bouton.classList.toggle('regle', !!(v.p || v.g || v.t || v.c)); };
     const ecrire = (k, v) => {
       obj.typo = obj.typo || {};
       const x = Object.assign({}, obj.typo[cle] || {});
@@ -1456,11 +1460,21 @@
     };
     const polices = [['', t('Police du design'), '']].concat(Object.keys(FONTS).map(k => [k, FONTS[k].nom, FONTS[k].css]));
     const choixP = choixPolice(polices, lire().p || '', v => ecrire('p', v));
-    const rangee = el('div', { class: 'rangee-typo cache' }, [choixP, choix('g', STYLES_TEXTE), choix('t', TAILLES_CHOIX),
+    // Couleur du texte : « Couleur du design » cochée = rien de réglé
+    const couleurDesign = () => /^#[0-9a-f]{6}$/i.test((cfg.design && cfg.design.texte) || '') ? cfg.design.texte : '#000000';
+    const coul = el('input', { type: 'color', value: lire().c || couleurDesign(), title: t('Couleur du texte'), 'aria-label': t('Couleur du texte') });
+    const autoC = el('input', { type: 'checkbox', checked: !lire().c });
+    coul.disabled = !lire().c;
+    autoC.addEventListener('change', () => { coul.disabled = autoC.checked; ecrire('c', autoC.checked ? '' : coul.value); });
+    coul.addEventListener('input', () => ecrire('c', coul.value));
+    const ligneC = el('div', { class: 'typo-coul' }, [el('span', { text: 'Couleur du texte' }), coul,
+      el('label', {}, [autoC, 'Couleur du design'])]);
+    const rangee = el('div', { class: 'rangee-typo cache' }, [choixP, choix('g', STYLES_TEXTE), choix('t', TAILLES_CHOIX), ligneC,
       el('button', { type: 'button', class: 'btn btn-mini', text: 'Par défaut', onclick: () => {
         if (obj.typo) { delete obj.typo[cle]; if (!Object.keys(obj.typo).length) delete obj.typo; }
         rangee.querySelectorAll('select').forEach(x => { x.value = ''; });
         choixP.fixer('');
+        autoC.checked = true; coul.disabled = true; coul.value = couleurDesign();
         majBouton(); changement();
       } })]);
     bouton.addEventListener('click', () => rangee.classList.toggle('cache'));
@@ -5647,8 +5661,10 @@
 
     const masquer = caseAfficher(b, carte);
 
+    const [btnTypo, rangeeTypo] = outilTypo(b, 'texte');
     carte.append(
-      el('div', { class: 'bc-haut' }, [ico, txt]),
+      el('div', { class: 'bc-haut' }, [ico, txt, btnTypo]),
+      rangeeTypo,
       el('div', { class: 'grille2' }, [
         el('label', { class: 'champ' }, [el('span', { text: 'Action' }), type]),
         el('label', { class: 'champ' }, [el('span', { text: 'Valeur' }), valeur])

@@ -202,11 +202,12 @@ function dateBlog(j, doc) {
 }
 
 /* ---------- Style et taille d'un texte (réglés dans l'éditeur, « Aa ») ----------
-   typo = { p: police (clé de FONTS, '' = celle du design), g: '' | 'normal' | 'gras' | 'italique' | 'gras-italique', t: '' | 'xs' | 's' | 'l' | 'xl' }
+   typo = { p: police (clé de FONTS, '' = celle du design), g: '' | 'normal' | 'gras' | 'italique' | 'gras-italique', t: '' | 'xs' | 's' | 'l' | 'xl', c: couleur '#rrggbb' ('' = celle du design) }
    Le texte est placé dans un <span> dont la taille est relative à celle prévue par la mise en page (em). Rien de réglé : texte inchangé. */
 const TAILLES_TEXTE = { xs: 0.78, s: 0.89, l: 1.15, xl: 1.32 };
 function zoneTypo(el, typo) {
-  if (!typo || !(typo.p || typo.g || typo.t)) return el;
+  const coul = typo && /^#[0-9a-f]{6}$/i.test(typo.c || '') ? typo.c : '';
+  if (!typo || !(typo.p || typo.g || typo.t || coul)) return el;
   const sp = el.ownerDocument.createElement('span');
   sp.className = 'qx-t';
   if (typo.p && FONTS[typo.p]) sp.style.fontFamily = FONTS[typo.p].css;
@@ -215,6 +216,7 @@ function zoneTypo(el, typo) {
     sp.style.fontStyle = /italique/.test(typo.g) ? 'italic' : 'normal';
   }
   if (TAILLES_TEXTE[typo.t]) sp.style.fontSize = TAILLES_TEXTE[typo.t] + 'em';
+  if (coul) sp.style.color = coul;
   el.appendChild(sp);
   return sp;
 }
@@ -952,7 +954,7 @@ function rendrePage(cfgBrut, racine, opts) {
       a.appendChild(i);
     }
     const t = doc.createElement('span');
-    t.textContent = b.texte;
+    zoneTypo(t, typoDe(b, 'texte')).textContent = b.texte;
     a.appendChild(t);
     if (opts.apercu) a.addEventListener('click', e => e.preventDefault());
     zone.appendChild(a);

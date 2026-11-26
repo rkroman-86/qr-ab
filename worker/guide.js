@@ -84,9 +84,10 @@ qrbc.app (QR-BC, édité par KPS) permet de créer en quelques minutes, depuis u
 - Sur la page, la galerie s'ouvre depuis le coin en haut à droite (voir « Passer d'une page à l'autre »). Elle montre une grille de vignettes ; toucher une photo l'affiche en grand, glisser à gauche/droite pour la suivante, vers le bas ou « × » pour revenir à la grille ; le bouton retour du téléphone ferme la photo puis la galerie. Sur ordinateur : flèches ‹ › et clavier (← → Échap).
 - Décocher « Activer la galerie » cache le bouton sans effacer les photos. Les versions traduites de la page montrent les mêmes photos (le titre du bouton est traduit).
 
-## Police, style et taille d'un texte
-- Bouton « Aa » sous chaque titre et texte modifiable (nom, sous-titre et bas de la page contact ; titre et texte des pancartes de la Home et de la page personnalisée ; titre et texte des articles du blog).
-- Il ouvre trois choix : police (« Police du design » ou Moderne, Élégante, Classique, Arrondie, Technique), style (par défaut, normal, gras, italique, gras italique), taille (très petit, petit, normale, grand, très grand — par rapport à la taille prévue par la mise en page).
+## Police, style, taille et couleur d'un texte
+- Bouton « Aa » sous chaque titre et texte modifiable (nom, sous-titre et bas de la page contact ; titre et texte des pancartes de la Home et de la page personnalisée ; titre et texte des articles du blog) et à droite du texte de chaque bouton de la page contact.
+- Il ouvre quatre choix : police (« Police du design » ou Moderne, Élégante, Classique, Arrondie, Technique), style (par défaut, normal, gras, italique, gras italique), taille (très petit, petit, normale, grand, très grand — par rapport à la taille prévue par la mise en page) et couleur du texte (décocher « Couleur du design » puis choisir la couleur dans le carré).
+- Les liens placés dans un texte prennent la même couleur (ils restent soulignés).
 - « Par défaut » remet le texte comme avant. Le bouton « Aa » est en couleur quand un réglage est actif.
 - La police générale de la page reste réglée dans « Design » ; « Aa » ne change que le texte choisi.
 
