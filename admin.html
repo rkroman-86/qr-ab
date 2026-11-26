@@ -3037,7 +3037,8 @@
   function infosCarte() {
     const v = valeursCarte(), ch = choixCarte(v), coords = [], coordsCles = [];
     const perso = {}; persoCarte().forEach(p => { perso[p.id] = p; });
-    ordreCoordsCarte().filter(k => ch.includes(k) && v[k]).forEach(k => {
+    ordreCoordsCarte().filter(k => ch.includes(k)).forEach(k => {
+      if (!String(v[k] || '').trim()) { coords.push(['', '']); coordsCles.push(k); return; }   // champ coché mais vide : un espace sur la carte
       const p = perso[k], type = p ? p.type : k;
       let val = v[k], etiq = p ? (String(p.etiq || '').trim() || tc(ETIQ_TYPE_CARTE[type] || '')) : tc(ETIQ_TYPE_CARTE[type]);
       if (type === 'tel') {
@@ -3131,7 +3132,7 @@
         const lignes = bloc.querySelectorAll('.info-carte.perso'), champ = lignes.length && lignes[lignes.length - 1].querySelector('.perso-champs input:last-child');
         if (champ && !champ.disabled) champ.focus();
       } });
-      bloc.append(ajouter, el('div', { class: 'aide', style: 'margin:4px 0 0', text: plein ? t('5 informations cochées : décochez-en une pour en afficher une autre.') : t('Champ perso : un 2e numéro, un autre e-mail, des horaires…') }));
+      bloc.append(ajouter, el('div', { class: 'aide', style: 'margin:4px 0 0', text: plein ? t('5 informations cochées : décochez-en une pour en afficher une autre.') : t('Champ perso : un 2e numéro, un autre e-mail, des horaires… Un champ coché laissé vide fait un espace sur la carte.') }));
     };
     dessiner();
     return bloc;
@@ -3158,8 +3159,12 @@
 
   // Coordonnées « en ligne » : les 2 premières sur une ligne, les suivantes par deux sur des lignes un peu plus petites
   function lignesCoords(coords) {
-    const l = [];
-    for (let i = 0; i < coords.length; i += 2) l.push(coords.slice(i, i + 2).map(x => x[1]).join('   ·   '));
+    const l = []; let c = [];
+    coords.forEach(x => {
+      if (!x[1]) { if (c.length) l.push(c.join('   ·   ')); c = []; l.push(''); return; }   // champ vide : ligne vide
+      c.push(x[1]); if (c.length === 2) { l.push(c.join('   ·   ')); c = []; }
+    });
+    if (c.length) l.push(c.join('   ·   '));
     return l;
   }
   function rectArrondi(ctx, x, y, w, h, r) {
@@ -3295,7 +3300,8 @@
       const t0 = parseInt(ctx.font.match(/(\d+)px/)[1], 10);
       lignes.slice(1).forEach(l => {             // coordonnées suivantes (souvent le site) sur d'autres lignes, un peu plus petites
         ctx.font = policeAjustee(ctx, l, '500', Math.max(30, t0 - 4), 28, largeur, fam);
-        ctx.fillText(l, ax, y - 8); y += 62;
+        if (l) ctx.fillText(l, ax, y - 8);
+        y += 62;
       });
     } else {
       D.coords.forEach(([etiq, val]) => {
@@ -3695,7 +3701,7 @@
       ctx.fillStyle = '#444'; ctx.font = policeAjustee(ctx, lignes[0] || '', '500', 48, 30, W - 300, D.fam);
       if (lignes[0]) ctx.fillText(lignes[0], W / 2, y);
       y += 90;
-      lignes.slice(1).forEach(l => { ctx.font = policeAjustee(ctx, l, '500', 42, 28, W - 300, D.fam); ctx.fillText(l, W / 2, y - 22); y += 50; });
+      lignes.slice(1).forEach(l => { ctx.font = policeAjustee(ctx, l, '500', 42, 28, W - 300, D.fam); if (l) ctx.fillText(l, W / 2, y - 22); y += 50; });
       const q = Math.min(440, H - y - 90);
       dessinerQR(ctx, URL_QR, (W - q) / 2, y, q, '#111');
       ctx.textAlign = 'left';
