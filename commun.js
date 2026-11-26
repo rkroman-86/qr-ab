@@ -168,7 +168,8 @@ function contactPage(cfg, types) {
   return null;
 }
 
-const HOME_MAX_ARTICLES = 10;
+const HOME_MAX_ARTICLES = 30;       // pancartes de la page Home et de la page personnalisée (ex. pages d'un menu de restaurant)
+const IA_MAX_PANCARTES = 10;        // rédaction IA d'un coup : 10 au plus (coût, qualité)
 const HOME_STYLES = { photo: 'Photo plein écran', image: 'Image + texte', texte: 'Texte seul' };
 
 function homeVisible(cfg) {

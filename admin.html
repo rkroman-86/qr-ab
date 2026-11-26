@@ -5354,7 +5354,7 @@
     desc.addEventListener('input', () => { ia.description = desc.value; });
     const zone = el('input', { type: 'text', value: ia.zone, placeholder: 'Ex. : Paris et Île-de-France, Normandie' });
     zone.addEventListener('input', () => { ia.zone = zone.value; });
-    const nb = el('select', {}, Array.from({ length: HOME_MAX_ARTICLES }, (_, k) => el('option', { value: k + 1, text: (k + 1) + (k ? ' pancartes' : ' pancarte'), selected: Number(ia.nombre) === k + 1 })));
+    const nb = el('select', {}, Array.from({ length: IA_MAX_PANCARTES }, (_, k) => el('option', { value: k + 1, text: (k + 1) + (k ? ' pancartes' : ' pancarte'), selected: Number(ia.nombre) === k + 1 })));
     nb.addEventListener('change', () => { ia.nombre = Number(nb.value); });
     const ton = el('select', {}, Object.keys(TONS_IA).map(k => el('option', { value: k, text: TONS_IA[k], selected: ia.ton === k })));
     ton.addEventListener('change', () => { ia.ton = ton.value; });
