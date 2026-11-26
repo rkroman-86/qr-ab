@@ -2286,11 +2286,26 @@ async function gestion(request, env, action) {
     const slug = String(d.nom || '');
     if (d.confirmation !== slug) throw new ErreurAPI(400, 'Confirmation incorrecte.');
     const cible = await lireCompte(env, slug);
-    if (cible && (cible.pages || []).length) throw new ErreurAPI(400, 'Ce compte a des pages rattachées (' + cible.pages.join(', ') + ') : supprimez-les d’abord.');
-    if (cible && cible.traductions && cible.traductions.length) throw new ErreurAPI(400, 'Cette page a des versions traduites (' + cible.traductions.map(l => slug + '.' + l).join(', ') + ') : supprimez-les d’abord.');
+    /* Suppression d'une page (26/11) : n'importe quelle page peut être supprimée. Le compte tient à l'e-mail :
+       - langue principale d'une page traduite → sa plus ancienne version traduite prend sa place à la même adresse ;
+       - page qui porte le compte (e-mail, mot de passe, abonnement) → le compte passe à la page suivante ;
+       - page payante → une page de moins sur l'abonnement, ou abonnement arrêté si c'était la seule : rien n'est prélevé à l'échéance. */
+    const titC = cible ? ((cible.parent && await lireCompte(env, cible.parent)) || cible) : null;
+    const stC = titC && (aboActif(titC) || titC.aboSuivant) ? await lireStripe(env) : null;
+    if (titC && (aboActif(titC) || titC.aboSuivant) && !stC)
+      throw new ErreurAPI(400, 'Stripe n’est pas connecté : impossible d’ajuster l’abonnement ' + ((titC.abo && titC.abo.id) || '') + '. Connectez Stripe ou arrêtez d’abord l’abonnement dans Stripe.');
+    if (cible && !cible.traduction) {
+      const versions = await versionsDe(env, titC, cible);
+      if (versions.length) {
+        const r = await promouvoirTraduction(env, titC, cible, versions, stC);
+        await env.CLIENTS.delete('cache:plan-global');
+        return json({ ok: true, promue: r });
+      }
+    }
+    let heritier = null;
+    if (cible && !cible.parent && (cible.pages || []).length) heritier = await transfererCompte(env, cible);   // cible devient une page rattachée à l'héritier
     if (cible && !cible.parent && (aboActif(cible) || cible.aboSuivant)) {   // plus de prélèvement pour une page supprimée
-      const st = await lireStripe(env);
-      if (!st) throw new ErreurAPI(400, 'Stripe n’est pas connecté : arrêtez d’abord l’abonnement ' + cible.abo.id + ' dans Stripe.');
+      const st = stC;
       for (const a of [cible.abo, cible.aboSuivant]) if (a && a.id) {
         try { await stripe(env, st, 'DELETE', '/subscriptions/' + a.id); }
         catch (e) { if (!/No such subscription|canceled/i.test(e.message)) throw new ErreurAPI(502, 'Impossible d’arrêter l’abonnement Stripe ' + a.id + ' : ' + e.message); }
@@ -2298,9 +2313,8 @@ async function gestion(request, env, action) {
     }
     if (cible && cible.parent) {                     // page rattachée : on la retire de sa page principale (les images communes restent)
       const tit = await lireCompte(env, cible.parent);
-      if (tit && aboActif(tit)) {                   // une ligne « page » de moins sur l'abonnement (sans remboursement)
-        const st = await lireStripe(env);
-        if (st) { try { await changerPagesAbo(env, st, tit, -1); } catch (e) { console.error('ligne page', e.message); } }
+      if (tit && (aboActif(tit) || tit.aboSuivant)) {   // une ligne « page » de moins sur l'abonnement (sans remboursement, rien de plus prélevé)
+        await retirerPageAbo(env, stC || await lireStripe(env), tit);
       }
       if (tit) { tit.pages = (tit.pages || []).filter(x => x !== slug); await ecrireCompte(env, tit); }
       if (cible.traduction) {
@@ -2321,7 +2335,8 @@ async function gestion(request, env, action) {
     if (ancien) await indexerEmail(env, ancien.email, slug, false);
     if (env.STATS && !slug.includes('.')) await env.STATS.prepare('DELETE FROM stats WHERE page = ?').bind(slug).run().catch(() => {});
     await env.CLIENTS.delete('compte:' + slug);
-    return json({ ok: true });
+    await env.CLIENTS.delete('cache:plan-global');
+    return json({ ok: true, heritier });
   }
 
   throw new ErreurAPI(404, 'Action inconnue.');
@@ -3770,9 +3785,9 @@ async function sessionPortail(env, st, client, retour) {
 
 /* Ajoute (+1) ou retire (-1) une page sur l'abonnement. Ajout : prorata facturé tout de suite sur la carte enregistrée ;
    si le paiement échoue, Stripe n'applique pas le changement. Retrait : sans remboursement (effet à la prochaine échéance). */
-async function changerPagesAbo(env, st, tit, delta) {
+async function changerPagesAbo(env, st, tit, delta, idSub) {
   const c = await confAbo(env, st);
-  const sub = await stripe(env, st, 'GET', '/subscriptions/' + tit.abo.id);
+  const sub = await stripe(env, st, 'GET', '/subscriptions/' + (idSub || tit.abo.id));
   const { page } = lignesAbo(sub);
   const formule = formuleAbo(sub);
   const qte = Math.max(0, ((page && page.quantity) || 0) + delta);
@@ -3991,6 +4006,132 @@ async function creerPageSup(env, tit, a) {
   tit.pages = (tit.pages || []).filter(x => x !== a.cible).concat([a.cible]);
   await env.CLIENTS.delete('reserve:' + a.cible);
   return page;
+}
+/* ===================== Suppression d'une page (26/11) =====================
+   Le compte tient à l'e-mail : la page qui porte l'e-mail, le mot de passe et l'abonnement peut être supprimée,
+   le compte passe alors à la page suivante (transfererCompte). Une langue principale supprimée laisse sa place
+   à sa plus ancienne version traduite, à la même adresse (promouvoirTraduction). */
+const PROPRES_PAGE = new Set(['slug', 'parent', 'cree', 'note', 'noindex', 'traductions', 'langueSite', 'historiqueNoms',
+  'traduction', 'aTraduire', 'pages', 'publie', 'express', 'titre']);
+const parCree = (a, b) => String(a.cree || '').localeCompare(String(b.cree || ''));
+/* Versions traduites existantes d'une page : déjà traduites d'abord, puis la plus ancienne */
+async function versionsDe(env, tit, page) {
+  const langues = new Set(page.traductions || []);
+  for (const sl of (tit && tit.pages) || []) { const m = sl.match(/^(.+)\.([a-z]{2})$/); if (m && m[1] === page.slug) langues.add(m[2]); }
+  const l = [];
+  for (const lg of langues) {
+    const c = await lireCompte(env, page.slug + '.' + lg);
+    if (c && c.traduction && c.traduction.source === page.slug) l.push(c);
+  }
+  const faite = c => (page.traductions || []).includes(c.traduction.langue) ? 0 : 1;
+  return l.sort((a, b) => faite(a) - faite(b) || parCree(a, b));
+}
+/* Une page de moins sur l'abonnement Stripe (et sur le mensuel prévu) : sans remboursement, rien de plus prélevé */
+async function retirerPageAbo(env, st, tit) {
+  if (!st) throw new ErreurAPI(400, 'Stripe n’est pas connecté : impossible de retirer la page de l’abonnement. Rien n’a été supprimé.');
+  try {
+    if (aboActif(tit)) await changerPagesAbo(env, st, tit, -1);
+    if (tit.aboSuivant && tit.aboSuivant.id) await changerPagesAbo(env, st, tit, -1, tit.aboSuivant.id);
+  } catch (e) {
+    throw new ErreurAPI(502, 'Impossible de retirer la page de l’abonnement Stripe (' + e.message + '). Rien n’a été supprimé.');
+  }
+  await ecrireCompte(env, tit);
+}
+/* Images, médiathèque et fonds IA communs au compte : rangés sous la page qui porte le compte */
+async function deplacerCommun(env, de, vers) {
+  const cles = [];
+  let curseur;
+  do {
+    const l = await env.CLIENTS.list({ prefix: 'img:' + de + ':', cursor: curseur });
+    cles.push(...l.keys);
+    curseur = l.list_complete ? null : l.cursor;
+  } while (curseur);
+  for (const k of cles) {
+    const nom = k.name.slice(('img:' + de + ':').length);
+    if (imagePropre(nom)) continue;                          // icônes, aperçus et cartes de la page supprimée
+    const dest = 'img:' + vers + ':' + nom;
+    if ((await env.CLIENTS.get(dest)) !== null) continue;
+    const { value, metadata } = await env.CLIENTS.getWithMetadata(k.name, { type: 'arrayBuffer' });
+    if (value === null) continue;
+    await env.CLIENTS.put(dest, value, metadata ? { metadata } : {});
+  }
+  for (const suffixe of ['medias', 'fonds-ia']) {
+    const v = await env.CLIENTS.get('site:' + de + ':' + suffixe);
+    if (v !== null && (await env.CLIENTS.get('site:' + vers + ':' + suffixe)) === null) await env.CLIENTS.put('site:' + vers + ':' + suffixe, v);
+  }
+}
+/* La page qui porte le compte va être supprimée : e-mail, mot de passe, abonnement, crédit, paiements et rappels
+   passent à la plus ancienne autre page (pas une version traduite). tit devient une page rattachée à l'héritier
+   (modifié sur place et écrit) : la suite de la suppression retire sa ligne « page » de l'abonnement. */
+async function transfererCompte(env, tit) {
+  await reserveIA(env, tit);                                 // compteurs IA des pages regroupés d'abord
+  const membres = [];
+  for (const s of tit.pages || []) { const c = await lireCompte(env, s); if (c && c.parent === tit.slug) membres.push(c); }
+  if (!membres.length) { tit.pages = []; await ecrireCompte(env, tit); return null; }
+  const heritier = membres.filter(c => !c.traduction).sort(parCree)[0];
+  if (!heritier) throw new ErreurAPI(400, 'Aucune autre page ne peut reprendre le compte : supprimez d’abord les versions traduites (' + membres.map(c => c.slug).join(', ') + ').');
+  const creditH = heritier.credit || 0;
+  for (const k of Object.keys(heritier)) if (!PROPRES_PAGE.has(k)) delete heritier[k];
+  for (const k of Object.keys(tit)) if (!PROPRES_PAGE.has(k)) heritier[k] = tit[k];
+  heritier.credit = (tit.credit || 0) + creditH;
+  heritier.pages = (tit.pages || []).filter(x => x !== heritier.slug);
+  delete heritier.parent;
+  journaliser(heritier, 'correction', 0, 'compte repris de ' + tit.slug + '.' + DOMAINE + ' (page supprimée)');
+  await deplacerCommun(env, tit.slug, heritier.slug);
+  const abos = [heritier.abo, heritier.aboSuivant].filter(a => a && a.id);
+  if (abos.length) {
+    const st = await lireStripe(env).catch(() => null);
+    for (const ab of abos) {
+      await env.CLIENTS.put('abo:' + ab.id, heritier.slug);
+      if (st) { try { await stripe(env, st, 'POST', '/subscriptions/' + ab.id, { metadata: { slug: heritier.slug } }); } catch (e) { console.error('métadonnée Stripe', e.message); } }
+    }
+  }
+  await ecrireCompte(env, heritier);
+  if (heritier.email) { await indexerEmail(env, heritier.email, tit.slug, false); await indexerEmail(env, heritier.email, heritier.slug, true); }
+  for (const c of membres) if (c !== heritier) { c.parent = heritier.slug; await ecrireCompte(env, c); }
+  for (const k of ['abo', 'aboSuivant', 'pages', 'iaCommune', 'demande']) delete tit[k];
+  tit.credit = 0;
+  tit.parent = heritier.slug;
+  await ecrireCompte(env, tit);
+  return heritier.slug;
+}
+/* Langue principale supprimée : sa plus ancienne version traduite prend sa place (même adresse, même compte, mêmes statistiques) */
+async function promouvoirTraduction(env, tit, page, versions, st) {
+  const v = versions[0], langue = v.traduction.langue, avant = page.langueSite || 'fr';
+  if (tit && (aboActif(tit) || tit.aboSuivant)) await retirerPageAbo(env, st, tit);   // une page (la version) de moins
+  await noterSuppression(env, Object.assign({}, page, { traduction: { source: page.slug, langue: avant } }));
+  // fichiers de la page : remplacés par ceux de la version (médiathèque et fonds IA communs gardés)
+  const anciens = [];
+  let curseur;
+  for (const prefixe of ['site:' + page.slug + ':', 'img:' + page.slug + ':']) {
+    curseur = null;
+    do {
+      const l = await env.CLIENTS.list({ prefix: prefixe, cursor: curseur });
+      for (const k of l.keys) {
+        const nom = k.name.slice(prefixe.length);
+        if (prefixe.startsWith('site:') ? !['medias', 'fonds-ia'].includes(nom) : imagePropre(nom)) anciens.push(k.name);
+      }
+      curseur = l.list_complete ? null : l.cursor;
+    } while (curseur);
+  }
+  const echappe = x => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const reApp = new RegExp('/app/' + echappe(v.slug) + '/', 'g');
+  const deplaces = (await deplacerPrefixe(env, 'site:' + v.slug + ':', 'site:' + page.slug + ':', t => t.replace(reApp, '/app/' + page.slug + '/')))
+    .concat(await deplacerPrefixe(env, 'img:' + v.slug + ':', 'img:' + page.slug + ':', null));
+  const ecrits = new Set(deplaces.map(k => k.replace(v.slug + ':', page.slug + ':')));
+  for (const k of anciens) if (!ecrits.has(k)) await env.CLIENTS.delete(k);
+  page.langueSite = langue;
+  page.traductions = (page.traductions || []).filter(l => l !== langue);
+  if (v.credit) page.credit = (page.credit || 0) + v.credit;
+  if (v.publie) page.publie = v.publie;
+  delete page.aTraduire;
+  journaliser(page, 'correction', 0, 'version ' + langue.toUpperCase() + ' devenue la langue principale (' + avant.toUpperCase() + ' supprimée)');
+  if (tit && tit.slug !== page.slug) { tit.pages = (tit.pages || []).filter(x => x !== v.slug); await ecrireCompte(env, tit); }
+  else page.pages = (page.pages || []).filter(x => x !== v.slug);
+  await ecrireCompte(env, page);
+  for (const k of deplaces) await env.CLIENTS.delete(k);
+  await env.CLIENTS.delete('compte:' + v.slug);
+  return { page: page.slug, langue, avant };
 }
 /* ===================== Changement d'adresse d'un site (24/11) =====================
    Pour qui s'est trompé à l'inscription. La page (principale ou rattachée, pas une version traduite) et ses versions

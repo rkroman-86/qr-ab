@@ -94,8 +94,23 @@
   @media (min-width:720px){.cartes{grid-template-columns:1fr 1fr}}
   .carte{background:var(--panneau);border:1px solid var(--ligne);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px}
   .carte.demande-attente{border-color:var(--alerte)}
-  .carte.rattachee{margin-left:22px;border-left:4px solid var(--accent,#2563eb);position:relative}
-  .carte.rattachee::before{content:'↳';position:absolute;left:-20px;top:14px;color:var(--doux,#888);font-size:1.1rem}
+  #liste.cartes{grid-template-columns:1fr}
+  .groupe{background:var(--panneau);border:1px solid var(--ligne);border-radius:14px}
+  .groupe>summary{cursor:pointer;list-style:none;padding:12px 14px;display:grid;gap:3px}
+  .groupe>summary::-webkit-details-marker{display:none}
+  .g-email::before{content:'▸';display:inline-block;width:1.1em;color:var(--doux);transition:transform .15s}
+  .groupe[open] .g-email::before{transform:rotate(90deg)}
+  .g-tete{display:flex;justify-content:space-between;gap:8px;align-items:center}
+  .g-email{font-weight:700;overflow-wrap:anywhere}
+  .g-sites{font-size:.85rem;color:var(--doux);overflow-wrap:anywhere}
+  .g-marques{font-size:.82rem;font-weight:600;color:var(--alerte)}
+  .groupe-corps{display:grid;gap:10px;padding:0 10px 12px}
+  .g-sous{font-size:.8rem;font-weight:700;color:var(--doux);margin-top:6px}
+  .bloc-compte{background:var(--bg);border:1px solid var(--ligne);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:10px}
+  .bloc-compte.demande-attente{border-color:var(--alerte)}
+  .bloc-compte .ia{background:var(--panneau)}
+  .carte.traduite{margin-left:22px;border-left:4px solid var(--prim);position:relative}
+  .carte.traduite::before{content:'↳';position:absolute;left:-20px;top:14px;color:var(--doux);font-size:1.1rem}
   .carte-tete{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
   .carte-tete .titre{font-size:.85rem;color:var(--doux)}
   .donnees{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:.88rem;margin:0}
@@ -929,9 +944,16 @@
     afficherListe();
   }
 
+  /* Liste regroupée par e-mail (26/11) : chaque e-mail est replié ; déplié, il montre le compte (abonnement, IA,
+     paiements) puis ses sites, chaque site suivi de ses versions traduites. */
+  let parSlug = {};
+  const ouverts = new Set();                       // e-mails dépliés, gardés après une action
+  const titDe = c => (c.parent && parSlug[c.parent]) ? parSlug[c.parent] : c;
+  const hote = c => (c.adresse || ('https://' + c.slug + '.qrbc.app/')).replace(/^https:\/\//, '').replace(/\/$/, '');
+  const parCree = (a, b) => String(a.cree || '').localeCompare(String(b.cree || ''));
   function afficherListe() {
     const q = $('#recherche').value.trim().toLowerCase(), f = $('#filtre').value;
-    const parSlug = Object.fromEntries(tousComptes.map(c => [c.slug, c]));
+    parSlug = Object.fromEntries(tousComptes.map(c => [c.slug, c]));
     const liste = $('#liste'); liste.innerHTML = '';
     const garder = tousComptes.filter(c => {
       if (f === 'demande' && !c.demande) return false;
@@ -944,34 +966,74 @@
       if (f === 'resilie' && !(ab && ab.resiliation && !c.parent)) return false;
       if (f === 'impaye' && !(ab && ab.statut === 'past_due' && !c.parent)) return false;
       if (!q) return true;
-      const tit = c.parent ? parSlug[c.parent] : null;      // page rattachée : on cherche aussi par l'e-mail du compte
+      const tit = titDe(c);                                  // page rattachée : on cherche aussi par l'e-mail du compte
       return [c.slug, c.titre, c.email, tit && tit.email, c.parent, c.note, c.promo && 'code:' + c.promo.code].concat((c.historiqueNoms || []).map(h => h.de))   // anciennes adresses aussi
         .some(x => String(x || '').toLowerCase().includes(q));
     });
-    // Regroupement par compte : la page principale, puis ses pages rattachées et ses versions traduites
-    const tri = (a, b) => (b.demande ? 1 : 0) - (a.demande ? 1 : 0) || String(b.cree).localeCompare(String(a.cree));
-    const racine = c => (c.parent && parSlug[c.parent]) ? parSlug[c.parent] : c;
-    const groupes = new Map();
-    garder.forEach(c => { const r = racine(c).slug; if (!groupes.has(r)) groupes.set(r, []); groupes.get(r).push(c); });
-    const ordreGroupes = [...groupes.keys()].sort((x, y) => tri(parSlug[x] || groupes.get(x)[0], parSlug[y] || groupes.get(y)[0]));
-    // ordre dans un compte : principale, ses langues, puis chaque page suivie de ses langues
-    const sequence = r => {
-      const t = parSlug[r], pages = (t && t.pages) || [];
-      const langues = src => pages.filter(x => x.startsWith(src + '.'));
-      const seq = [r].concat(langues(r));
-      pages.filter(x => !x.includes('.')).forEach(x => seq.push(x, ...langues(x)));
-      return seq;
-    };
-    const ordreDans = (r, c) => { const i = sequence(r).indexOf(c.slug); return i < 0 ? 999 : i; };
-    const enOrdre = [];
-    ordreGroupes.forEach(r => groupes.get(r).sort((a, b) => ordreDans(r, a) - ordreDans(r, b)).forEach(c => enOrdre.push(c)));
+    const gardes = new Set(garder.map(c => c.slug));
+    const groupes = new Map();                               // e-mail → comptes (page qui porte l'abonnement) → pages
+    tousComptes.forEach(c => {
+      const t = titDe(c), k = t.email ? String(t.email).toLowerCase() : '#' + t.slug;
+      if (!groupes.has(k)) groupes.set(k, { email: t.email || '', comptes: new Map() });
+      const g = groupes.get(k);
+      if (!g.comptes.has(t.slug)) g.comptes.set(t.slug, []);
+      g.comptes.get(t.slug).push(c);
+    });
+    const pagesDe = g => [].concat(...g.comptes.values());
+    const visibles = [...groupes.entries()].filter(([, g]) => pagesDe(g).some(c => gardes.has(c.slug)));
+    const recent = g => pagesDe(g).reduce((m, c) => String(c.cree || '') > m ? String(c.cree || '') : m, '');
+    const demande = g => pagesDe(g).some(c => c.demande) ? 1 : 0;
+    visibles.sort(([, x], [, y]) => (demande(y) - demande(x)) || recent(y).localeCompare(recent(x)));
     const nbS = tousComptes.filter(c => c.aSupprimer).length, al = $('#alerte-suppr');
     al.classList.toggle('cache', !nbS || f === 'supprimer');
     al.innerHTML = '';
     if (nbS) al.append(document.createTextNode('🗑 ' + nbS + (nbS > 1 ? ' comptes en pause depuis plus de 90 jours sont à supprimer' : ' compte en pause depuis plus de 90 jours est à supprimer') + ' (durée de conservation annoncée dans les CGV). '),
       el('button', { type: 'button', text: 'Voir', onclick: () => { $('#filtre').value = 'supprimer'; afficherListe(); } }));
-    if (!garder.length) liste.textContent = tousComptes.length ? 'Aucun client ne correspond.' : 'Aucun compte pour l’instant.';
-    enOrdre.forEach(c => liste.appendChild(carte(c)));
+    if (!visibles.length) liste.textContent = tousComptes.length ? 'Aucun client ne correspond.' : 'Aucun compte pour l’instant.';
+    visibles.forEach(([k, g]) => liste.appendChild(groupe(k, g, !!(q || f))));
+  }
+  // Sites d'un compte dans l'ordre : la page qui porte le compte, puis les autres ; chacun suivi de ses versions traduites
+  function ordonner(t, pages) {
+    const ordre = [t.slug].concat(t.pages || []);
+    const rang = c => { const i = ordre.indexOf(c.slug); return i < 0 ? 999 : i; };
+    const sites = pages.filter(c => !c.traduction || !pages.some(x => x.slug === c.traduction.source)).sort((a, b) => rang(a) - rang(b));
+    const l = [];
+    sites.forEach(s => {
+      l.push(s);
+      if (!s.traduction) pages.filter(c => c.traduction && c.traduction.source === s.slug).sort(parCree).forEach(c => l.push(c));
+    });
+    return l;
+  }
+  function groupe(k, g, deplier) {
+    const det = el('details', { class: 'groupe' });
+    det.open = deplier || ouverts.has(k);
+    det.addEventListener('toggle', () => { if (det.open) ouverts.add(k); else ouverts.delete(k); });
+    const comptes = [...g.comptes.keys()].map(s => parSlug[s]).filter(Boolean);
+    const pages = [].concat(...comptes.map(t => ordonner(t, g.comptes.get(t.slug) || [])));
+    const sites = pages.filter(c => !c.traduction), nbTr = pages.length - sites.length;
+    const t0 = comptes[0] || pages[0];
+    const etat0 = etatDe(t0);
+    const marques = [];
+    if (pages.some(c => c.demande)) marques.push('⏳ demande de paiement');
+    if (pages.some(c => c.aSupprimer)) marques.push('🗑 à supprimer');
+    if (t0.emailAVerifier) marques.push('⚠️ e-mail non confirmé');
+    det.append(el('summary', {}, [
+      el('div', { class: 'g-tete' }, [
+        el('div', { class: 'g-email', text: g.email || 'Sans e-mail (' + t0.slug + ')' }),
+        el('span', { class: 'badge b-' + (t0.actif ? t0.plan : 'inactif'), text: t0.actif ? etat0 : etat0 + ' · inactif' })
+      ]),
+      el('div', { class: 'g-sites', text: sites.length + ' site' + (sites.length > 1 ? 's' : '') + (nbTr ? ' + ' + nbTr + ' traduction' + (nbTr > 1 ? 's' : '') : '') + ' · ' + sites.map(hote).join(' · ') }),
+      marques.length ? el('div', { class: 'g-marques', text: marques.join(' · ') }) : null
+    ]));
+    const corps = el('div', { class: 'groupe-corps' });
+    comptes.forEach(t => {
+      const lesPages = g.comptes.get(t.slug) || [];
+      if (comptes.length > 1 || !lesPages.length) corps.append(el('div', { class: 'g-sous', text: 'Abonnement distinct · ' + hote(t) }));
+      corps.append(blocCompte(t, lesPages));
+      ordonner(t, lesPages).forEach(c => corps.append(carte(c)));
+    });
+    det.append(corps);
+    return det;
   }
   $('#recherche').addEventListener('input', afficherListe);
   $('#filtre').addEventListener('change', afficherListe);
@@ -1205,58 +1267,52 @@
     (enfants || []).forEach(x => x && n.append(x));
     return n;
   }
-  function carte(c) {
-    const site = c.adresse || ('https://' + c.slug + '.qrbc.app/');
+  function etatDe(c) {
     let etat = { gratuit: 'offert', essai: 'essai', payant: 'abonné', suspendu: 'suspendu' }[c.plan] || c.plan;
     if (c.plan === 'essai' && c.actif) etat = 'essai · ' + jours(c.finEssai) + ' j';
     const ab = c.abo && c.abo.actif ? c.abo : null;
     if (c.plan === 'payant' && ab) etat = (ab.formule === 'mensuel' ? 'mensuel' : 'annuel') + (ab.statut === 'trialing' ? ' · période gratuite' : ab.statut === 'past_due' ? ' · impayé' : ab.resiliation ? ' · résilié' : '');
     else if (c.plan === 'payant' && !c.parent) etat = c.abo ? 'abonnement terminé' : 'ancien abonné';
-    const d = el('article', { class: 'carte' + (c.demande ? ' demande-attente' : '') + (c.parent ? ' rattachee' : '') });
+    return etat;
+  }
+  const LANGUE = l => String(l || 'fr').toUpperCase();
 
-    // En-tête
+  /* Compte : ce qui est commun à tous les sites de l'e-mail (e-mail, mot de passe, abonnement, IA, paiements) */
+  function blocCompte(c, pages) {
+    const etat = etatDe(c);
+    const d = el('section', { class: 'bloc-compte' + (c.demande ? ' demande-attente' : '') });
+    const nbSites = pages.filter(x => !x.traduction).length, nbTr = pages.length - nbSites;
     d.append(el('div', { class: 'carte-tete' }, [
-      el('div', {}, [el('div', { class: 'slug', text: site.replace(/^https:\/\//, '').replace(/\/$/, '') }), el('div', { class: 'titre', text: (c.titre || '(activité non renseignée)') + ((c.historiqueNoms || []).length ? ' · ↺ ex-' + c.historiqueNoms[c.historiqueNoms.length - 1].de : '') })]),
+      el('div', {}, [el('div', { class: 'slug', text: '👤 Compte' }), el('div', { class: 'titre', text: nbSites + ' site' + (nbSites > 1 ? 's' : '') + (nbTr ? ' + ' + nbTr + ' traduction' + (nbTr > 1 ? 's' : '') : '') + ' · e-mail, mot de passe et abonnement communs' })]),
       el('span', { class: 'badge b-' + (c.actif ? c.plan : 'inactif'), text: c.actif ? etat : etat + ' · inactif' })
     ]));
-
-    // Données
     const dl = el('dl', { class: 'donnees' });
     const ligneDonnee = (k, v) => { dl.append(el('dt', { text: k }), el('dd', { text: v })); };
-    if (c.parent) ligneDonnee('Compte', (c.traduction ? 'Version ' + c.traduction.langue.toUpperCase() + ' de ' + c.traduction.source + ' · ' : 'Page ') + 'rattachée à ' + c.parent + ' (mot de passe, e-mail et échéance de la page principale)');
-    if (c.pages && c.pages.length) ligneDonnee('Pages rattachées', c.pages.join(', ') + (c.renouvellement ? ' · renouvellement groupé ' + euros(c.renouvellement.prix) + ' HT/an' : ' · lignes « page » de l’abonnement'));
-    if (!c.parent) ligneDonnee('E-mail', (c.email || '—') + (c.emailAVerifier ? ' · ⚠️ non confirmé (page pas encore en ligne)' : ''));
-    if ((c.historiqueNoms || []).length)                  // changements d'adresse (24/11) : l'e-mail reste l'identifiant du client
-      ligneDonnee('Anciennes adresses', c.historiqueNoms.slice().reverse().map(h => h.de + ' → ' + h.vers + ' (' + new Date(h.le).toLocaleDateString('fr-FR') + (h.par === 'gestion' ? ', par vous' : '') + ')').join(' · '));
-    ligneDonnee('Créé le', date(c.cree));
+    ligneDonnee('E-mail', (c.email || '—') + (c.emailAVerifier ? ' · ⚠️ non confirmé (page pas encore en ligne)' : ''));
     if (c.plan === 'essai') ligneDonnee('Fin d’essai', date(c.finEssai));
-    if (!c.parent) {
-      const STATUTS = { active: 'actif', trialing: 'période gratuite (1er prélèvement à venir)', past_due: 'paiement refusé (Stripe relance)', canceled: 'résilié', unpaid: 'impayé', incomplete: 'paiement en attente' };
-      const engagement = c.plan === 'gratuit' ? 'offert, sans abonnement' : c.plan === 'essai' ? 'essai gratuit, sans engagement' : c.abo ? (c.abo.formule === 'mensuel' ? 'mensuel · engagement 1 mois' : 'annuel · engagement 1 an') : c.plan === 'payant' ? 'ancien abonnement (paiement annuel unique, sans reconduction)' : '—';
-      ligneDonnee('Formule', engagement);
-      if (c.abo) {
-        ligneDonnee('Abonnement Stripe', (STATUTS[c.abo.statut] || c.abo.statut) + (c.abo.resiliation && c.abo.statut !== 'canceled' ? ' · résiliation programmée' : '') + ' · ' + euros(c.abo.montant) + ' TTC/' + (c.abo.formule === 'mensuel' ? 'mois' : 'an') + (c.abo.pages ? ' (' + (c.abo.pages + 1) + ' pages)' : ''));
-        ligneDonnee('Période', 'depuis le ' + date(c.abo.debut) + ' · ' + (c.abo.statut === 'canceled' ? 'terminé' : c.abo.resiliation ? 'fin le ' : 'prochaine échéance le ') + (c.abo.statut === 'canceled' ? '' : date(c.abo.fin)));
-        if (c.abo.suivant) ligneDonnee('Changement prévu', 'formule mensuelle à partir du ' + date(c.abo.suivant.debut));
-      }
+    const STATUTS = { active: 'actif', trialing: 'période gratuite (1er prélèvement à venir)', past_due: 'paiement refusé (Stripe relance)', canceled: 'résilié', unpaid: 'impayé', incomplete: 'paiement en attente' };
+    const engagement = c.plan === 'gratuit' ? 'offert, sans abonnement' : c.plan === 'essai' ? 'essai gratuit, sans engagement' : c.abo ? (c.abo.formule === 'mensuel' ? 'mensuel · engagement 1 mois' : 'annuel · engagement 1 an') : c.plan === 'payant' ? 'ancien abonnement (paiement annuel unique, sans reconduction)' : '—';
+    ligneDonnee('Formule', engagement);
+    if (c.abo) {
+      ligneDonnee('Abonnement Stripe', (STATUTS[c.abo.statut] || c.abo.statut) + (c.abo.resiliation && c.abo.statut !== 'canceled' ? ' · résiliation programmée' : '') + ' · ' + euros(c.abo.montant) + ' TTC/' + (c.abo.formule === 'mensuel' ? 'mois' : 'an') + (c.abo.pages ? ' (' + (c.abo.pages + 1) + ' pages)' : ''));
+      ligneDonnee('Période', 'depuis le ' + date(c.abo.debut) + ' · ' + (c.abo.statut === 'canceled' ? 'terminé' : c.abo.resiliation ? 'fin le ' : 'prochaine échéance le ') + (c.abo.statut === 'canceled' ? '' : date(c.abo.fin)));
+      if (c.abo.suivant) ligneDonnee('Changement prévu', 'formule mensuelle à partir du ' + date(c.abo.suivant.debut));
     }
     if (c.plan === 'payant' && !c.abo) ligneDonnee('Payé jusqu’au', date(c.payeJusqua));
-    if (c.depenseIA) ligneDonnee('IA payée', euros(c.depenseIA));
+    if ((c.pages || []).length && c.renouvellement && c.plan !== 'gratuit') ligneDonnee('Renouvellement', 'groupé : ' + euros(c.renouvellement.prix) + ' HT/an pour ' + (c.renouvellement.pages + 1) + ' pages');
+    const depense = pages.reduce((t, x) => t + (x.depenseIA || 0), 0);
+    if (depense) ligneDonnee('IA payée', euros(depense));
     const ETAPES = { 'J-30': 'J-30', 'J-7': 'J-7', 'J-1': 'J-1', 'J0': 'mise en pause', 'J+30': 'J+30', 'J+80': 'J+80 (suppression annoncée)', chatel: 'reconduction annuelle (Chatel)' };
     const rap = Object.entries(c.rappels || {}).sort((a, b) => String(a[1]).localeCompare(String(b[1])));
     ligneDonnee('Rappels e-mail', rap.length ? rap.slice(-4).map(([k, le]) => (k.startsWith('echec:') ? 'paiement refusé' : ETAPES[k.split(':')[1]] || k) + ' le ' + date(le)).join(' · ') + ' (' + ({ fr: 'FR', en: 'EN', ru: 'RU' }[c.langue] || 'FR') + ')' : '—');
     if (c.aSupprimer) ligneDonnee('Conservation', 'dépassée depuis le ' + date(c.finConservation) + ' : à supprimer');
     ligneDonnee('Code promo', c.promo ? c.promo.code + (c.promo.manuel ? ' (rattaché à la main le ' + date(c.promo.le) + ')' : ' · +' + c.promo.jours + ' j à l’inscription') : '—');
-    if (c.note) ligneDonnee('Note', c.note);
-    if (c.stats30) ligneDonnee('Statistiques 30 j', c.stats30.visites + ' visite' + (c.stats30.visites > 1 ? 's' : '') + ' · ' + c.stats30.clics + ' clic' + (c.stats30.clics > 1 ? 's' : '') + ' sur les boutons' + (c.traductions && c.traductions.length ? ' (toutes langues)' : ''));
-    ligneDonnee('Moteurs de recherche', c.noindex ? '🚫 exclue (hors du plan du site, noindex)' : (c.traduction ? 'référencée (sauf si la page d’origine est exclue)' : 'référencée' + (c.traductions && c.traductions.length ? ' (avec ses versions traduites)' : '')));
     d.append(dl);
 
     // IA : gratuites restantes (modifiables) et crédit (lecture seule)
     const ia = c.ia || {};
     const boiteIA = el('div', { class: 'ia' });
-    if (ia.commune) boiteIA.append(el('div', { class: 'illimite', text: '🔗 IA et crédit communs au compte : voir la page principale ' + ia.commune + '.' }));
-    else if (ia.illimite) boiteIA.append(el('div', { class: 'illimite', text: '✨ IA illimitée (compte offert)' }));
+    if (ia.illimite) boiteIA.append(el('div', { class: 'illimite', text: '✨ IA illimitée (compte offert)' }));
     else if (ia.texte && ia.texte.inclus != null) {
       const restant = x => Math.max(0, x.inclus - x.utilises);
       const champ = (lib, x) => {
@@ -1282,36 +1338,79 @@
       d.append(pz);
     }
 
-    // Actions
+    const a = el('div', { class: 'actions' });
+    const bouton = (t, f, cls) => a.append(el('button', { type: 'button', class: cls || '', text: t, onclick: () => action(f) }));
+    if (c.plan !== 'gratuit') bouton('Passer en offert', () => api('modifier', { nom: c.slug, plan: 'gratuit' }));
+    if (c.plan === 'essai') bouton('+14 j d’essai', () => api('modifier', { nom: c.slug, prolongerEssai: 14 }));
+    if (c.plan !== 'gratuit' && c.renouvellement && !(c.abo && c.abo.actif)) bouton((c.plan === 'payant' ? 'Renouveler' : 'Abonner') + ' 1 an à la main (' + euros(c.renouvellement.aPayer) + ' HT)', () => {
+      const r = c.renouvellement;
+      const txt = 'Paiement reçu hors Stripe pour ' + (c.email || c.slug) + ' ?\n\nAbonnement' + (r.pages ? ' (' + (r.pages + 1) + ' pages)' : '') + ' : ' + euros(r.prix) + ' HT' +
+        (r.deduction ? '\nCrédit non consommé déduit : −' + euros(r.deduction) : '') + '\nÀ encaisser : ' + euros(r.aPayer) + ' HT\n\nLes quotas IA repartent à zéro (' + c.offre.quotasPayant.texte + ' textes, ' + c.offre.quotasPayant.picto + ' pictos).';
+      return confirm(txt) ? api('abonner', { nom: c.slug }) : null;
+    });
+    if (c.demande) bouton('Ignorer la demande', () => api('annuler-demande', { nom: c.slug }));
+    if (c.emailAVerifier) bouton('Valider l’e-mail', () => confirm('Considérer l’adresse ' + c.email + ' comme confirmée ? Les pages de ce compte seront visibles en ligne.') ? api('modifier', { nom: c.slug, validerEmail: true }) : null);
+    if (c.plan !== 'suspendu') bouton('Suspendre', () => confirm('Suspendre le compte ' + (c.email || c.slug) + ' ' + ((c.pages || []).length ? '(tous ses sites)' : '') + ' ?') ? api('modifier', { nom: c.slug, plan: 'suspendu' }) : null);
+    bouton(c.email ? 'E-mail' : 'Ajouter un e-mail', () => {
+      const v = prompt('E-mail du compte (sert à se connecter et à récupérer le mot de passe) :', c.email || '');
+      return v === null ? null : api('modifier', { nom: c.slug, email: v.trim() });
+    });
+    bouton('Nouveau mot de passe', () => {
+      const m = prompt('Nouveau mot de passe du compte ' + (c.email || c.slug) + ' (10 caractères minimum) :');
+      return m ? api('modifier', { nom: c.slug, mdp: m }) : null;
+    });
+    bouton('Code promo', () => {
+      const v = prompt('Code promo du compte (suivi de l’apporteur ; laissez vide pour retirer).\nCela ne change pas la date de fin d’essai.', c.promo ? c.promo.code : '');
+      return v === null ? null : api('modifier', { nom: c.slug, promo: v.trim() });
+    });
+    d.append(a);
+    return d;
+  }
+
+  /* Ce que la suppression d'un site entraîne (même règle que le serveur) */
+  function messageSuppression(c) {
+    const t = titDe(c);
+    const l = ['Suppression définitive de ' + hote(c) + (c.traduction ? ' (version ' + LANGUE(c.traduction.langue) + ')' : '') + ' : textes et images propres à cette page.'];
+    let pageEnMoins = true;
+    const faite = x => (c.traductions || []).includes(x.traduction.langue) ? 0 : 1;
+    const versions = c.traduction ? [] : tousComptes.filter(x => x.traduction && x.traduction.source === c.slug).sort((a, b) => faite(a) - faite(b) || parCree(a, b));
+    if (versions.length) l.push('La version ' + LANGUE(versions[0].traduction.langue) + ' devient la langue principale, à la même adresse ' + hote(c) + ' (QR codes et liens restent valables).');
+    else if (!c.parent && (c.pages || []).length) {
+      const h = c.pages.map(s => parSlug[s]).filter(x => x && !x.traduction).sort(parCree)[0];
+      if (h) l.push('Le compte (e-mail, mot de passe, abonnement, crédit IA, paiements) passe à ' + hote(h) + '.');
+    } else if (!c.parent) pageEnMoins = false;
+    if (t.abo && t.abo.actif) l.push(pageEnMoins ? 'Abonnement Stripe : une page de moins, sans remboursement. Rien ne sera prélevé pour elle à la prochaine échéance.' : 'Abonnement Stripe arrêté tout de suite : plus aucun prélèvement.');
+    else if (pageEnMoins && t.renouvellement) l.push('Le renouvellement groupé est recalculé sans cette page.');
+    l.push('', 'Tapez « ' + c.slug + ' » pour confirmer :');
+    return l.join('\n');
+  }
+
+  /* Site (ou version traduite) : ce qui est propre à la page */
+  function carte(c) {
+    const site = c.adresse || ('https://' + c.slug + '.qrbc.app/');
+    const etat = etatDe(titDe(c));
+    const d = el('article', { class: 'carte' + (c.traduction ? ' traduite' : '') });
+    d.append(el('div', { class: 'carte-tete' }, [
+      el('div', {}, [el('div', { class: 'slug', text: hote(c) }), el('div', { class: 'titre', text: (c.titre || '(activité non renseignée)') + ((c.historiqueNoms || []).length ? ' · ↺ ex-' + c.historiqueNoms[c.historiqueNoms.length - 1].de : '') })]),
+      el('span', { class: 'badge b-' + (c.actif ? c.plan : 'inactif'), text: c.traduction ? LANGUE(c.traduction.langue) + (c.actif ? '' : ' · inactif') : (c.actif ? 'en ligne' : etat + ' · inactif') })
+    ]));
+    const dl = el('dl', { class: 'donnees' });
+    const ligneDonnee = (k, v) => { dl.append(el('dt', { text: k }), el('dd', { text: v })); };
+    if (c.traduction) ligneDonnee('Langue', 'version ' + LANGUE(c.traduction.langue) + ' de ' + c.traduction.source + (c.aTraduire ? ' · pas encore traduite' : ''));
+    else if ((c.traductions || []).length || c.langueSite) ligneDonnee('Langue', 'principale : ' + LANGUE(c.langueSite));
+    if ((c.historiqueNoms || []).length)                  // changements d'adresse (24/11) : l'e-mail reste l'identifiant du client
+      ligneDonnee('Anciennes adresses', c.historiqueNoms.slice().reverse().map(h => h.de + ' → ' + h.vers + ' (' + new Date(h.le).toLocaleDateString('fr-FR') + (h.par === 'gestion' ? ', par vous' : '') + ')').join(' · '));
+    ligneDonnee('Créé le', date(c.cree));
+    if (c.note) ligneDonnee('Note', c.note);
+    if (c.stats30) ligneDonnee('Statistiques 30 j', c.stats30.visites + ' visite' + (c.stats30.visites > 1 ? 's' : '') + ' · ' + c.stats30.clics + ' clic' + (c.stats30.clics > 1 ? 's' : '') + ' sur les boutons' + (c.traductions && c.traductions.length ? ' (toutes langues)' : ''));
+    ligneDonnee('Moteurs de recherche', c.noindex ? '🚫 exclue (hors du plan du site, noindex)' : (c.traduction ? 'référencée (sauf si la page d’origine est exclue)' : 'référencée' + (c.traductions && c.traductions.length ? ' (avec ses versions traduites)' : '')));
+    d.append(dl);
+
     const a = el('div', { class: 'actions' });
     const lien = (t, h) => a.append(el('a', { href: h, target: '_blank', rel: 'noopener', text: t }));
     const bouton = (t, f, cls) => a.append(el('button', { type: 'button', class: cls || '', text: t, onclick: () => action(f) }));
     lien('Voir la page', site);
     lien('Éditeur', '/app/' + c.slug + '/');
-    const rattachee = !!c.parent;               // page rattachée : tout se règle sur la page principale
-    if (c.plan !== 'gratuit' && !rattachee) bouton('Passer en offert', () => api('modifier', { nom: c.slug, plan: 'gratuit' }));
-    if (c.plan === 'essai' && !rattachee) bouton('+14 j d’essai', () => api('modifier', { nom: c.slug, prolongerEssai: 14 }));
-    if (c.plan !== 'gratuit' && !rattachee && c.renouvellement && !(c.abo && c.abo.actif)) bouton((c.plan === 'payant' ? 'Renouveler' : 'Abonner') + ' 1 an à la main (' + euros(c.renouvellement.aPayer) + ' HT)', () => {
-      const r = c.renouvellement;
-      const txt = 'Paiement reçu hors Stripe pour ' + c.slug + ' ?\n\nAbonnement' + (r.pages ? ' (' + (r.pages + 1) + ' pages)' : '') + ' : ' + euros(r.prix) + ' HT' +
-        (r.deduction ? '\nCrédit non consommé déduit : −' + euros(r.deduction) : '') + '\nÀ encaisser : ' + euros(r.aPayer) + ' HT\n\nLes quotas IA repartent à zéro (' + c.offre.quotasPayant.texte + ' textes, ' + c.offre.quotasPayant.picto + ' pictos).';
-      return confirm(txt) ? api('abonner', { nom: c.slug }) : null;
-    });
-    if (c.demande) bouton('Ignorer la demande', () => api('annuler-demande', { nom: c.slug }));
-    if (c.emailAVerifier) bouton('Valider l’e-mail', () => confirm('Considérer l’adresse ' + c.email + ' comme confirmée ? La page de ' + c.slug + ' sera visible en ligne.') ? api('modifier', { nom: c.slug, validerEmail: true }) : null);
-    if (c.plan !== 'suspendu') bouton('Suspendre', () => api('modifier', { nom: c.slug, plan: 'suspendu' }));
-    if (!rattachee) bouton(c.email ? 'E-mail' : 'Ajouter un e-mail', () => {
-      const v = prompt('E-mail de ' + c.slug + ' (sert à récupérer le mot de passe) :', c.email || '');
-      return v === null ? null : api('modifier', { nom: c.slug, email: v.trim() });
-    });
-    if (!rattachee) bouton('Nouveau mot de passe', () => {
-      const m = prompt('Nouveau mot de passe pour ' + c.slug + ' (10 caractères minimum) :');
-      return m ? api('modifier', { nom: c.slug, mdp: m }) : null;
-    });
-    bouton('Code promo', () => {
-      const v = prompt('Code promo de ' + c.slug + ' (suivi de l’apporteur ; laissez vide pour retirer).\nCela ne change pas la date de fin d’essai.', c.promo ? c.promo.code : '');
-      return v === null ? null : api('modifier', { nom: c.slug, promo: v.trim() });
-    });
     bouton(c.noindex ? 'Réautoriser les moteurs' : 'Exclure des moteurs', () =>
       confirm(c.noindex ? 'Laisser Google et les autres moteurs référencer ' + c.slug + ' ?' : 'Exclure ' + c.slug + (c.traduction ? '' : ' (et ses versions traduites)') + ' des moteurs de recherche ?\nLa page reste visible par son adresse et son QR code ; Google la retirera de ses résultats sous quelques jours.')
         ? api('modifier', { nom: c.slug, noindex: !c.noindex }) : null);
@@ -1320,17 +1419,26 @@
       return n === null ? null : api('modifier', { nom: c.slug, note: n });
     });
     bouton('Supprimer', () => {
-      const conf = prompt('Suppression définitive de la page et des images.\nTapez « ' + c.slug + ' » pour confirmer :');
-      return conf ? api('supprimer', { nom: c.slug, confirmation: conf }) : null;
+      const conf = prompt(messageSuppression(c));
+      if (!conf) return null;
+      return api('supprimer', { nom: c.slug, confirmation: conf }).then(r => {
+        if (r && r.promue) msgApres = 'Supprimé. La version ' + LANGUE(r.promue.langue) + ' est maintenant la langue principale de ' + r.promue.page + '.';
+        else if (r && r.heritier) msgApres = 'Supprimé. Le compte est maintenant porté par ' + r.heritier + '.';
+        else msgApres = 'Supprimé.';
+      });
     }, 'danger');
     d.append(a);
     return d;
   }
 
+  let msgApres = '';
   async function action(f) {
     const m = $('#m-liste'); m.className = 'msg'; m.textContent = '…';
-    try { const p = f(); if (!p) { m.textContent = ''; return; } await p; m.textContent = ''; await charger(); }
-    catch (e) { m.className = 'msg err'; m.textContent = e.message; }
+    try {
+      const p = f(); if (!p) { m.textContent = ''; return; } await p; m.textContent = ''; await charger();
+      if (msgApres) { m.className = 'msg ok'; m.textContent = msgApres; msgApres = ''; }
+    }
+    catch (e) { msgApres = ''; m.className = 'msg err'; m.textContent = e.message; }
   }
 
   $('#f-connexion').addEventListener('submit', async e => {
