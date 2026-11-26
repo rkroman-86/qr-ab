@@ -309,7 +309,7 @@
     .ia-actions{display:flex;gap:8px;justify-content:space-between;margin-top:8px;flex-wrap:wrap}
     .article-carte .ac-tete{display:flex;align-items:center;gap:8px;margin-bottom:10px}
     .article-carte .ac-tete b{flex:1}
-    .ajout-article{width:100%}
+    .ajout-article{width:100%;margin:0 0 14px}
     .qr-bloc{display:flex;flex-direction:column;align-items:center;gap:10px}
     .qr-apercu{width:200px;height:200px;border-radius:14px;border:1px solid var(--ligne)}
     .qr-url{font-size:.82rem;color:var(--doux);word-break:break-all;text-align:center}
@@ -349,7 +349,7 @@
     .carrousel-pancartes .article-carte.depuis-gauche{animation-name:pancarteGauche}
     @keyframes pancarteEntre{from{opacity:.3;transform:translateX(24px)}to{opacity:1;transform:none}}
     @keyframes pancarteGauche{from{opacity:.3;transform:translateX(-24px)}to{opacity:1;transform:none}}
-    .nav-pancartes{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:2px 0 12px}
+    .nav-pancartes{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:6px 0 10px}
     .nav-pancartes button{min-width:56px;font-size:1.25rem;padding:8px 14px}
     .nav-pancartes span{font-weight:600;font-variant-numeric:tabular-nums}
     .app-cartes{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:10px 0 14px}
@@ -4327,7 +4327,7 @@
     corps.append(
       champTexte('Nom de la page (menu)', P, 'titre', { ph: 'Tarifs' }),
       el('span', { class: 'etiq', text: 'Pancartes — une plein écran chacune, comme la page Home ; glissez à gauche ou à droite pour passer de l’une à l’autre' }),
-      liste, nav, ajouter,
+      nav, ajouter, liste,
       el('p', { class: 'aide', style: 'margin:10px 0 0', text: 'Page à part (adresse …/page.html), par exemple vos tarifs, vos prestations ou un menu. Les visiteurs y passent par le coin en haut à droite des autres pages.' })
     );
     return section('perso', 'Page personnalisée', false, [
@@ -4442,9 +4442,8 @@
     corps.append(
       champTexte('Titre de la page', B, 'titre', { ph: 'Blog' }),
       el('span', { class: 'etiq', text: 'Articles — du plus récent au plus ancien ; glissez à gauche ou à droite pour passer de l’un à l’autre' }),
-      ajouter,
+      nav, ajouter,
       n ? liste : el('div', { class: 'galp-vide', text: 'Aucun article pour l’instant.' }),
-      nav,
       el('p', { class: 'aide', style: 'margin:10px 0 0', text: 'Le blog a sa propre page (adresse …/blog.html) : liste des articles, puis l’article en entier. Les visiteurs y passent par le menu en haut à droite des autres pages.' })
     );
     return section('blog', 'Page Blog', false, [
@@ -4658,7 +4657,7 @@
       ]),
       blocIA(),
       el('span', { class: 'etiq', text: 'Articles — une pancarte plein écran chacun, on passe de l’une à l’autre en glissant' }),
-      liste, nav, ajouter
+      nav, ajouter, liste
     );
     return section('home', 'Page Home', false, [
       el('label', { class: 'bascule', style: 'border-top:0' }, [el('span', { text: 'Activer la page Home' }), actif]),
