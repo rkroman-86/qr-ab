@@ -402,6 +402,8 @@
     .info-carte{display:grid;grid-template-columns:150px 1fr;gap:4px 10px;align-items:center;margin:0 0 8px}
     .info-carte .case-info{display:flex;align-items:center;gap:8px;font-size:.88rem;font-weight:600;cursor:pointer}
     .info-carte .case-info input{width:18px;height:18px;margin:0;flex:none}
+    .cases-faces{display:inline-flex;gap:6px;flex:none}.case-face{display:inline-flex;align-items:center;gap:3px;font-size:.72rem;font-weight:700;color:var(--doux);cursor:pointer}
+    .case-face input{width:18px;height:18px;margin:0}
     .qr-faces{margin:12px 0 10px}.qr-faces-cases{display:flex;gap:22px;flex-wrap:wrap;margin:4px 0}
     .qr-faces .case-info{display:flex;align-items:center;gap:8px;font-size:.88rem;font-weight:600;cursor:pointer}.qr-faces .case-info input{width:18px;height:18px;margin:0;flex:none}
     .modele-carte .face-carte{font-weight:500;opacity:.75}
@@ -3152,14 +3154,16 @@
     return o.concat(coords.filter(k => !o.includes(k)));
   }
   function ordreCoordsCarte() { return ordreCompletCarte().filter(k => k !== 'nom' && k !== 'slogan'); }
-  function choixCarte(v) {
+  // Informations cochées pour une face (recto : choix ; verso : choixVerso, sinon les mêmes que le recto)
+  function choixCarte(v, face) {
     const r = reglagesCarte(), cles = ordreCompletCarte();
+    if (face === 'verso' && Array.isArray(r.choixVerso)) return cles.filter(k => r.choixVerso.includes(k)).slice(0, MAX_INFOS_CARTE);
     if (Array.isArray(r.choix)) return cles.filter(k => r.choix.includes(k)).slice(0, MAX_INFOS_CARTE);
     v = v || valeursCarte();
     return cles.filter(k => v[k]).slice(0, MAX_INFOS_CARTE);   // par défaut : tout ce qui est rempli
   }
-  function infosCarte() {
-    const v = valeursCarte(), ch = choixCarte(v), coords = [], coordsCles = [], avant = [], avantCles = [], entre = [], entreCles = [];
+  function infosCarte(face) {
+    const v = valeursCarte(), ch = choixCarte(v, face), coords = [], coordsCles = [], avant = [], avantCles = [], entre = [], entreCles = [];
     const perso = {}; persoCarte().forEach(p => { perso[p.id] = p; });
     const complet = ordreCompletCarte(), iNom = complet.indexOf('nom'), iSlogan = complet.indexOf('slogan');
     complet.filter(k => k !== 'nom' && k !== 'slogan' && ch.includes(k)).forEach(k => {
@@ -3182,21 +3186,31 @@
     const bloc = el('div', { class: 'infos-carte' });
     const dessiner = () => {
       bloc.innerHTML = '';
-      const d = defautsCarte(), r = reglagesCarte(), ch = choixCarte();
-      const plein = ch.length >= MAX_INFOS_CARTE;
+      const d = defautsCarte(), r = reglagesCarte(), ch = choixCarte(), chV = choixCarte(undefined, 'verso');
+      const choixDe = face => face === 'verso' ? chV : ch;
+      const pleinDe = face => choixDe(face).length >= MAX_INFOS_CARTE, plein = pleinDe('recto') || pleinDe('verso');
+      const coche = k => ch.includes(k) || chV.includes(k);
       const persos = persoCarte(), ordre = ordreCompletCarte(), estStd = k => ['tel', 'email', 'site'].includes(k);
       const refaire = () => { dessiner(); rafraichir(); };
       bloc.append(el('span', { class: 'etiq', text: 'Informations sur la carte' }),
-        el('div', { class: 'aide', style: 'margin:0 0 8px', text: 'Cochez les informations à imprimer (5 au plus). Elles sont reprises de votre page ; modifiez-les ici si vous voulez imprimer un autre numéro ou un autre e-mail (votre page ne change pas). ↑ ↓ changent l’ordre : un champ perso peut monter entre le nom et le slogan, ou au-dessus du nom.' }),
+        el('div', { class: 'aide', style: 'margin:0 0 8px', text: 'Cochez les informations à imprimer : R au recto, V au verso (5 au plus par face). Elles sont reprises de votre page ; modifiez-les ici si vous voulez imprimer un autre numéro ou un autre e-mail (votre page ne change pas). ↑ ↓ changent l’ordre : un champ perso peut monter entre le nom et le slogan, ou au-dessus du nom.' }),
         blocQRFaces(rafraichir));
-      const caseCoche = k => {
-        const c = el('input', { type: 'checkbox' }); c.checked = ch.includes(k); c.disabled = !c.checked && plein;
+      // une case par face (5 informations au plus sur chaque face) ; le verso suit le recto tant qu'on ne l'a pas changé
+      const caseFace = (k, face) => {
+        const c = el('input', { type: 'checkbox', title: face === 'recto' ? t('Au recto') : t('Au verso') });
+        c.checked = choixDe(face).includes(k); c.disabled = !c.checked && pleinDe(face);
         c.addEventListener('change', () => {
-          const n = choixCarte().filter(x => x !== k); if (c.checked) n.push(k);
-          modifierCarte(o => { o.choix = n; }); refaire();
+          const avantR = choixCarte(), avantV = choixCarte(undefined, 'verso');
+          const n = (face === 'verso' ? avantV : avantR).filter(x => x !== k); if (c.checked) n.push(k);
+          modifierCarte(o => {
+            if (face === 'recto') { o.choix = n; o.choixVerso = avantV; } else o.choixVerso = n;
+            if (o.choixVerso.slice().sort().join() === o.choix.slice().sort().join()) delete o.choixVerso;
+          });
+          refaire();
         });
-        return c;
+        return el('label', { class: 'case-face' }, [c, el('span', { text: face === 'recto' ? t('R') : t('V') })]);
       };
+      const caseCoche = k => el('span', { class: 'cases-faces' }, [caseFace(k, 'recto'), caseFace(k, 'verso')]);
       const fleches = k => {
         const i = ordre.indexOf(k);
         const bouger = dir => modifierCarte(o => { const n = ordre.slice(); [n[i], n[i + dir]] = [n[i + dir], n[i]]; o.ordre = n; }) || refaire();
@@ -3206,7 +3220,7 @@
           el('button', { type: 'button', class: 'btn btn-mini', text: '↓', title: t('Descendre'), disabled: i >= ordre.length - 1, onclick: () => bouger(1) })];
       };
       const ligneStd = k => {
-        const lib = CHAMPS_CARTE.find(x => x[0] === k)[1], coche = ch.includes(k);
+        const lib = CHAMPS_CARTE.find(x => x[0] === k)[1], coche = ch.includes(k) || chV.includes(k);
         const input = el('input', { type: k === 'email' ? 'email' : k === 'tel' ? 'tel' : 'text', value: String(r[k] || '').trim() || d[k], placeholder: d[k] || (k === 'slogan' ? 'Ex. : Votre chauffeur privé à Nice' : '') });
         input.disabled = !coche;
         input.addEventListener('input', () => {
@@ -3217,13 +3231,13 @@
         const perso = String(r[k] || '').trim() && String(r[k]).trim() !== d[k];
         const [btnTypo, rangeeTypo] = outilTypo(cfg, cleTypoCarte(k), rafraichir);   // police, style, taille, couleur sur la carte
         return el('div', { class: 'info-carte' + (coche ? '' : ' off') }, [
-          el('label', { class: 'case-info' }, [caseCoche(k), el('span', { text: lib })]), input,
+          el('div', { class: 'case-info' }, [caseCoche(k), el('span', { text: lib })]), input,
           el('div', { class: 'outils-info' }, [btnTypo].concat(k === 'nom' || k === 'slogan' ? [] : fleches(k)).concat([
             perso ? el('button', { type: 'button', class: 'btn btn-mini', title: d[k], text: '↺ ' + t('Reprendre la page'), onclick: () => { modifierCarte(o => { delete o[k]; }); refaire(); } }) : null])),
           rangeeTypo]);
       };
       const lignePerso = p => {
-        const coche = ch.includes(p.id);
+        const coche = ch.includes(p.id) || chV.includes(p.id);
         const maj = f => modifierCarte(o => { o.perso = persoCarte().map(x => x.id === p.id ? Object.assign({}, x, f(x)) : x); });
         const type = el('select', {}, Object.keys(TYPES_PERSO_CARTE).map(k => el('option', { value: k, text: TYPES_PERSO_CARTE[k], selected: (p.type || 'texte') === k })));
         const etiq = el('input', { type: 'text', value: p.etiq || '', maxLength: 20, placeholder: t('Étiquette') + (ETIQ_TYPE_CARTE[p.type] ? ' (' + tc(ETIQ_TYPE_CARTE[p.type]) + ')' : '') });
@@ -3238,6 +3252,7 @@
           modifierCarte(o => {
             o.perso = persoCarte().filter(x => x.id !== p.id);
             o.choix = (o.choix || []).filter(x => x !== p.id);
+            if (Array.isArray(o.choixVerso)) o.choixVerso = o.choixVerso.filter(x => x !== p.id);
             if (Array.isArray(o.ordre)) o.ordre = o.ordre.filter(x => x !== p.id);
             if (!o.perso.length) delete o.perso;
           });
@@ -3245,7 +3260,7 @@
           refaire();
         } });
         return el('div', { class: 'info-carte perso' + (coche ? '' : ' off') }, [
-          el('label', { class: 'case-info' }, [caseCoche(p.id), el('span', { text: t('Champ perso') })]),
+          el('div', { class: 'case-info' }, [caseCoche(p.id), el('span', { text: t('Champ perso') })]),
           el('div', { class: 'perso-champs' }, [type, etiq, val]),
           el('div', { class: 'outils-info' }, [btnTypo].concat(fleches(p.id), [suppr])),
           rangeeTypo]);
@@ -3256,13 +3271,14 @@
         modifierCarte(o => {
           o.perso = persoCarte().concat([{ id, type: 'tel', etiq: '', valeur: '' }]);
           if (o.choix.length < MAX_INFOS_CARTE) o.choix = o.choix.concat([id]);
+          if (Array.isArray(o.choixVerso) && o.choixVerso.length < MAX_INFOS_CARTE) o.choixVerso = o.choixVerso.concat([id]);
           o.ordre = ordreCompletCarte().filter(x => x !== id).concat([id]);
         });
         refaire();
         const lignes = bloc.querySelectorAll('.info-carte.perso'), champ = lignes.length && lignes[lignes.length - 1].querySelector('.perso-champs input:last-child');
         if (champ && !champ.disabled) champ.focus();
       } });
-      bloc.append(ajouter, el('div', { class: 'aide', style: 'margin:4px 0 0', text: plein ? t('5 informations cochées : décochez-en une pour en afficher une autre.') : t('Champ perso : un 2e numéro, un autre e-mail, des horaires… Un champ coché laissé vide fait un espace sur la carte.') }));
+      bloc.append(ajouter, el('div', { class: 'aide', style: 'margin:4px 0 0', text: plein ? t('5 informations cochées sur une face : décochez-en une pour en afficher une autre.') : t('Champ perso : un 2e numéro, un autre e-mail, des horaires… Un champ coché laissé vide fait un espace sur la carte.') }));
     };
     dessiner();
     return bloc;
@@ -3356,7 +3372,8 @@
         return m;
       })(),
       logo: await chargerImage(cfg.logo && logoSurCarte() ? res(cfg.logo) : ''),
-      ...infosCarte()
+      ...infosCarte('recto'),
+      infos: { recto: infosCarte('recto'), verso: infosCarte('verso') }      // informations propres à chaque face
     };
   }
 
@@ -3921,6 +3938,7 @@
     const avecQR = opt.qr;
     if (!opt.logo && D.logo) D = Object.assign({}, D, { logo: null });
     if (opt.fond && D.fondsCarte && D.fondsCarte[opt.fond]) D = Object.assign({}, D, { fondImg: D.fondsCarte[opt.fond] });
+    if (opt.cote && D.infos && D.infos[opt.cote]) D = Object.assign({}, D, D.infos[opt.cote]);
     if (TAILLES_CARTE[modele]) D = Object.assign({}, D, TAILLES_CARTE[modele]);
     else D = Object.assign({}, D, { W: 2008, H: 1300 });
     const cv = document.createElement('canvas');
@@ -3950,8 +3968,9 @@
   function reglagesFaces() {
     const q = qrFaces(), l = logoFaces();
     const r = reglagesCarte(), fond = c => (typeof c === 'string' && c) || '';
-    const recto = { qr: q.recto, logo: l.recto, fond: fond(r.fondRecto) }, verso = { qr: q.verso, logo: l.verso, fond: fond(r.fondVerso) };
-    return { recto, verso, differentes: recto.qr !== verso.qr || recto.logo !== verso.logo || recto.fond !== verso.fond };
+    const recto = { cote: 'recto', qr: q.recto, logo: l.recto, fond: fond(r.fondRecto) }, verso = { cote: 'verso', qr: q.verso, logo: l.verso, fond: fond(r.fondVerso) };
+    const memeInfos = choixCarte(undefined, 'recto').join() === choixCarte(undefined, 'verso').join();
+    return { recto, verso, differentes: recto.qr !== verso.qr || recto.logo !== verso.logo || recto.fond !== verso.fond || !memeInfos };
   }
 
   /* Réglages « Aa » des cartes appliqués sans toucher aux 22 modèles : chaque texte mesuré ou écrit est reconnu
