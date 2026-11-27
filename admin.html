@@ -3531,12 +3531,14 @@
     ticket(ctx, D) {
       const { W, H, P } = D;
       const xs = W - 690;
-      const texte = fondPage(ctx, D, 0, 0, xs, H, 0.45);
-      ctx.fillStyle = '#ffffff'; ctx.fillRect(xs, 0, W - xs, H);
-      ctx.save(); ctx.strokeStyle = '#b9b9c2'; ctx.lineWidth = 7; ctx.setLineDash([26, 22]);
-      ctx.beginPath(); ctx.moveTo(xs, 70); ctx.lineTo(xs, H - 70); ctx.stroke(); ctx.restore();
-      ctx.fillStyle = '#ececf1';
-      [0, H].forEach(cy => { ctx.beginPath(); ctx.arc(xs, cy, 62, 0, Math.PI * 2); ctx.fill(); });
+      const texte = fondPage(ctx, D, 0, 0, qrCarteMasque ? W : xs, H, 0.45);
+      if (!qrCarteMasque) {                                  // souche du QR : seulement s'il y a un QR
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(xs, 0, W - xs, H);
+        ctx.save(); ctx.strokeStyle = '#b9b9c2'; ctx.lineWidth = 7; ctx.setLineDash([26, 22]);
+        ctx.beginPath(); ctx.moveTo(xs, 70); ctx.lineTo(xs, H - 70); ctx.stroke(); ctx.restore();
+        ctx.fillStyle = '#ececf1';
+        [0, H].forEach(cy => { ctx.beginPath(); ctx.arc(xs, cy, 62, 0, Math.PI * 2); ctx.fill(); });
+      }
       const q = 470, qx = xs + (W - xs - q) / 2, qy = (H - q) / 2 - 50;
       dessinerQR(ctx, URL_QR, qx, qy, q, '#111');
       legendeQR(ctx, D, 'Scannez-moi', xs + (W - xs) / 2, qy + q + 40, accentLisible(D), 44);
@@ -3551,7 +3553,7 @@
       const accent = accentLisible(D);
       const q = H - 170, qx = W - 85 - q, qy = 85;
       dessinerQR(ctx, URL_QR, qx, qy, q, '#111');
-      ctx.fillStyle = accent; ctx.fillRect(qx - 70, 110, 10, H - 220);
+      if (!qrCarteMasque) { ctx.fillStyle = accent; ctx.fillRect(qx - 70, 110, 10, H - 220); }
       const L = qx - 70 - 100 - 60;
       let y = 100;
       if (D.logo) { dessinerLogo(ctx, D, 100, y, 170); y += 170 + 46; } else y += 30;
@@ -3593,9 +3595,11 @@
       const { W, H, P } = D;
       const texte = fondPage(ctx, D, 0, 0, W, H, 0.5);
       const r = 450, cx = W - 470, cy = H / 2;
-      ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.28)'; ctx.shadowBlur = 50; ctx.shadowOffsetY = 12;
-      ctx.fillStyle = D.d.accent; ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill(); ctx.restore();
-      ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(cx, cy, r - 26, 0, Math.PI * 2); ctx.stroke();
+      if (!qrCarteMasque) {                                  // disque autour du QR
+        ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.28)'; ctx.shadowBlur = 50; ctx.shadowOffsetY = 12;
+        ctx.fillStyle = D.d.accent; ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+        ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(cx, cy, r - 26, 0, Math.PI * 2); ctx.stroke();
+      }
       const q = 500, hb = Math.round(q * 1.17);
       dessinerBlocQR(ctx, D, cx - q / 2, cy - hb / 2, q, 'Scannez-moi', false);
       let y = P + (D.logo ? dessinerLogo(ctx, D, P, P, 210) + 56 : 40);
@@ -3615,7 +3619,7 @@
       ctx.save(); ctx.strokeStyle = neon; ctx.lineWidth = 6; ctx.shadowColor = neon; ctx.shadowBlur = 30;
       rectArrondi(ctx, 44, 44, W - 88, H - 88, 46); ctx.stroke(); ctx.restore();
       const q = 520, qx = W - P - 40 - q, hb = Math.round(q * 1.17), qy = (H - hb) / 2;
-      ctx.save(); ctx.shadowColor = neon; ctx.shadowBlur = 70; ctx.fillStyle = '#fff'; rectArrondi(ctx, qx, qy, q, hb, 36); ctx.fill(); ctx.restore();
+      if (!qrCarteMasque) { ctx.save(); ctx.shadowColor = neon; ctx.shadowBlur = 70; ctx.fillStyle = '#fff'; rectArrondi(ctx, qx, qy, q, hb, 36); ctx.fill(); ctx.restore(); }
       dessinerBlocQR(ctx, D, qx, qy, q, 'Scannez-moi', false);
       let y = P + 40 + (D.logo ? dessinerLogo(ctx, D, P + 40, P + 40, 200) + 56 : 30);
       ctx.save(); ctx.shadowColor = neon; ctx.shadowBlur = 24;
@@ -3646,7 +3650,7 @@
       dessinerQR(ctx, URL_QR, qx, qy, q, '#111');
       const e = 70, L = 120, ep = 16;
       ctx.fillStyle = accent;
-      [[qx - e, qy - e, 1, 1], [qx + q + e, qy - e, -1, 1], [qx - e, qy + q + e, 1, -1], [qx + q + e, qy + q + e, -1, -1]].forEach(([x, y, sx, sy]) => {
+      if (!qrCarteMasque) [[qx - e, qy - e, 1, 1], [qx + q + e, qy - e, -1, 1], [qx - e, qy + q + e, 1, -1], [qx + q + e, qy + q + e, -1, -1]].forEach(([x, y, sx, sy]) => {
         ctx.fillRect(sx > 0 ? x : x - L, sy > 0 ? y : y - ep, L, ep);
         ctx.fillRect(sx > 0 ? x : x - ep, sy > 0 ? y : y - L, ep, L);
       });
@@ -3671,8 +3675,10 @@
       const encre = '#2a2016';
       const accent = luminance(D.d.accent) < 0.25 ? D.d.accent : '#7a3b1d';
       const q = 480, qx = W - P - 20 - q, qy = (H - q) / 2 - 30;
-      ctx.save(); ctx.strokeStyle = encre; ctx.lineWidth = 6; ctx.setLineDash([18, 12]);
-      rectArrondi(ctx, qx - 40, qy - 40, q + 80, q + 140, 26); ctx.stroke(); ctx.restore();
+      if (!qrCarteMasque) {                                  // cadre « tampon » du QR
+        ctx.save(); ctx.strokeStyle = encre; ctx.lineWidth = 6; ctx.setLineDash([18, 12]);
+        rectArrondi(ctx, qx - 40, qy - 40, q + 80, q + 140, 26); ctx.stroke(); ctx.restore();
+      }
       dessinerQR(ctx, URL_QR, qx, qy, q, encre);
       legendeQR(ctx, D, 'Scannez-moi', qx + q / 2, qy + q + 26, encre, 38);
       let y = P + (D.logo ? dessinerLogo(ctx, D, P, P, 190) + 52 : 40);
