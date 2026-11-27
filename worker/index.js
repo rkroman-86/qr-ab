@@ -4317,7 +4317,7 @@ function synchroniserConfig(src, tr) {
   // textes de la version, posés là où la même place existe encore
   const textes = textesATraduire(T);
   for (const cle of Object.keys(textes)) {
-    if (/^(reseaux|blog\.articles|galerie)\./.test(cle)) continue;
+    if (/^(reseaux|boutons|blog\.articles|galerie)\./.test(cle)) continue;
     const chemin = cle.split('.');
     let o = out;
     for (let i = 0; i < chemin.length - 1 && o; i++) o = o[/^\d+$/.test(chemin[i]) ? Number(chemin[i]) : chemin[i]];
@@ -4330,6 +4330,21 @@ function synchroniserConfig(src, tr) {
     const x = ((T[id] || {}).articles || [])[i];
     if (a && x) ['titre', 'texte', 'alt'].forEach(k => { if (typeof x[k] === 'string') a[k] = x[k]; else delete a[k]; });
   }));
+  // boutons : appariés par type + lien (même déplacés sur la page d'origine), sinon par position
+  if (Array.isArray(out.boutons)) {
+    const anciens = Array.isArray(T.boutons) ? T.boutons : [], pris = new Set();
+    const lier = (b, x, j) => { pris.add(j); ['texte', 'message'].forEach(k => { if (typeof x[k] === 'string') b[k] = x[k]; else delete b[k]; }); };
+    out.boutons.forEach(b => {
+      if (!b) return;
+      const j = anciens.findIndex((x, k) => x && !pris.has(k) && x.type === b.type && String(x.valeur || '') === String(b.valeur || ''));
+      if (j >= 0) lier(b, anciens[j], j); else b._apparier = true;
+    });
+    out.boutons.forEach((b, i) => {
+      if (!b || !b._apparier) return;
+      delete b._apparier;
+      if (anciens[i] && !pris.has(i) && anciens[i].type === b.type) lier(b, anciens[i], i);
+    });
+  }
   // messages des pictos WhatsApp, SMS, e-mail : appariés par réseau
   if (Array.isArray(out.reseaux)) out.reseaux.forEach(r => {
     const x = r && (T.reseaux || []).find(y => y && y.id === r.id);
