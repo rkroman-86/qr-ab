@@ -53,6 +53,8 @@
     .pages-bandeau .pb-page{border:1px solid var(--ligne);background:var(--bg);color:var(--txt);border-radius:999px;padding:6px 11px;font:inherit;font-size:.86rem;cursor:pointer}
     .pages-bandeau .pb-page.actif{border-color:var(--prim);background:color-mix(in srgb,var(--prim) 14%,var(--bg));font-weight:700;cursor:default}
     .pages-bandeau .pb-trad{border-bottom:1px solid var(--ligne);padding:0 0 10px;margin:0 0 10px}
+    .pages-bandeau .pb-synchro{margin-top:6px}
+    .synchro-alerte ul{margin:6px 0 0;padding-left:18px;text-align:left}.synchro-alerte li{margin:4px 0}
     #fen-pages .choix-ajout{display:flex;flex-direction:column;gap:8px;margin:0 0 14px}
     #fen-pages .choix-ajout label{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--ligne);border-radius:12px;padding:10px 12px;cursor:pointer}
     #fen-pages .choix-ajout label.actif{border-color:var(--prim);background:var(--bg)}
@@ -2009,7 +2011,9 @@
             el('span', { text: 'Vous pouvez la modifier librement : elle est indépendante de la page d’origine.' })]),
           el('button', { type: 'button', class: 'btn btn-mini', onclick: () => lancerTraduction(false) },
             [el('span', {}, ['🔄 ', el('span', { text: 'Retraduire depuis la page d’origine' }), ' (',      // un seul bloc : le bouton est en flex
-              ...(c.plan === 'gratuit' ? [el('span', { text: 'offert' })] : [euros(c.offre.prixTraduction) + ' ', el('span', { text: 'HT' })]), ')'])])
+              ...(c.plan === 'gratuit' ? [el('span', { text: 'offert' })] : [euros(c.offre.prixTraduction) + ' ', el('span', { text: 'HT' })]), ')'])]),
+          el('button', { type: 'button', class: 'btn btn-mini pb-synchro', onclick: () => synchroniserVersion() },
+            [el('span', {}, ['🎨 ', el('span', { text: 'Reprendre images et style de la page d’origine' }), ' (', el('span', { text: 'gratuit' }), ')'])])
         ]));
       }
       const plusieurs = g && g.pages.length > 1;
@@ -2167,6 +2171,51 @@
       el('div', { class: 'boutons' }, [el('button', { type: 'button', class: 'btn', text: t('Annuler'), onclick: fermer }), go]));
     if (!g.ajout.gratuit) fen.append(el('div', { class: 'aide', style: 'margin-top:8px;text-align:center', text: '🔒 ' + t(g.ajout.ligne ? 'Paiement sécurisé par Stripe. Résiliable avec votre abonnement.' : 'Paiement sécurisé par Stripe. Facture envoyée par e-mail.') }));
     majZones();
+  }
+
+  /* Synchronisation gratuite d'une version traduite : images, style, pages et nombre de pancartes repris de la page d'origine,
+     textes de la version gardés (calcul côté serveur, appliqué dans l'éditeur après confirmation ; « Enregistrer » publie) */
+  async function synchroniserVersion() {
+    const c = compteCF;
+    if (!c || !c.traduction) return;
+    const { fen, fermer } = fenetrePages();
+    fen.append(el('h2', { text: '🎨 ' + t('Reprendre images et style') }), el('p', { class: 'sous', text: t('Comparaison avec la page d’origine…') }));
+    let j;
+    try { j = await (await appelAPI('synchro', jetonCF, { method: 'POST', body: JSON.stringify({ cfg }) })).json(); }
+    catch (e) {
+      fen.innerHTML = '';
+      fen.append(el('h2', { text: t('Synchronisation impossible') }), el('div', { class: 'alerte-abo', text: e.message === 'Failed to fetch' ? t('Connexion impossible.') : e.message }),
+        el('button', { type: 'button', class: 'btn btn-plein fermer', text: t('Fermer'), onclick: fermer }));
+      return;
+    }
+    const r = j.rapport || {}, langue = nomLangue(j.langueSource || 'fr').toLowerCase();
+    const NOMS = { home: 'Page Home', perso: nomPage('perso') };
+    const alertes = [];
+    const ligneNb = (nom, origine, ici, mot) => {
+      const diff = origine - ici;
+      return el('li', {}, [el('b', { 'data-no-i18n': nom === NOMS.perso ? '' : undefined, text: t(nom) }), ' : ',
+        String(origine) + ' ', el('span', { text: mot }), ' ', el('span', { text: 'sur la page d’origine' }), ', ' + ici + ' ', el('span', { text: 'ici' }), ' → ',
+        diff > 0 ? el('span', {}, ['+' + diff + ' : ', el('span', { text: 'texte de la page d’origine (en' }), ' ' + langue + '), ', el('span', { text: 'à traduire' })])
+                 : el('span', {}, [String(diff) + ' : ', el('span', { text: 'retrait en fin de liste' })])]);
+    };
+    (r.pancartes || []).forEach(p => alertes.push(ligneNb(NOMS[p.page] || p.page, p.origine, p.ici, 'pancartes')));
+    if (r.boutons) alertes.push(ligneNb('Boutons', r.boutons.origine, r.boutons.ici, 'boutons'));
+    if (r.blog) alertes.push(el('li', {}, [el('b', { text: t('Blog') }), ' : ',
+      ...(r.blog.nouveaux ? ['+' + r.blog.nouveaux + ' ', el('span', { text: 'article(s) : texte de la page d’origine (en' }), ' ' + langue + '), ', el('span', { text: 'à traduire' }), '. '] : []),
+      ...(r.blog.retires ? ['−' + r.blog.retires + ' ', el('span', { text: 'article(s) : supprimés comme sur la page d’origine.' })] : [])]));
+    const go = el('button', { type: 'button', class: 'btn btn-prim', text: t('Synchroniser') });
+    go.addEventListener('click', () => {
+      cfg = normaliser(fusion(CONFIG_DEFAUT, j.cfg));
+      fermer();
+      construireFormulaire(); majApercu(); changement();
+      const e = $('#etat'); e.className = 'etat'; e.textContent = t('Images et style repris : vérifiez l’aperçu puis appuyez sur Enregistrer.');
+    });
+    fen.innerHTML = '';
+    fen.append(el('h2', { text: '🎨 ' + t('Reprendre images et style') }),
+      el('p', { class: 'sous', text: t('Repris de la page d’origine : design et couleurs, logo, image de fond, numéros et liens des boutons, pages affichées et leur ordre, pictos des pages, images des pancartes et nombre de pancartes.') }),
+      el('p', { class: 'sous', text: t('Gardés ici : tous vos textes traduits (titres, pancartes, articles, noms des pages, boutons) et vos cartes de visite.') }),
+      alertes.length ? el('div', { class: 'alerte-abo synchro-alerte' }, [el('b', { text: '⚠️ ' + t('Nombres différents de la page d’origine :') }), el('ul', {}, alertes)]) : null,
+      el('div', { class: 'boutons' }, [el('button', { type: 'button', class: 'btn', text: t('Annuler'), onclick: fermer }), go]));
   }
 
   /* Traduction IA de cette version (la 1re, à la création, est offerte) puis publication */

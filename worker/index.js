@@ -1402,6 +1402,18 @@ async function apiClient(request, env, slug, route) {
     return json({ ok: true, offerte, compte: await resumeAvecOffre(env, frais) });
   }
 
+  if (route === 'synchro' && m === 'POST') {
+    // Version traduite : reprend images, style, pages et nombre de pancartes de la page d'origine, en gardant ses textes (gratuit)
+    if (!compte.traduction) throw new ErreurAPI(400, 'Cette page n’est pas une version traduite.');
+    const { cfg: actuelle } = await corpsJSON(request);
+    let src = null;
+    try { src = JSON.parse(await env.CLIENTS.get('site:' + compte.traduction.source + ':config.json') || 'null'); } catch (e) {}
+    if (!src || typeof src !== 'object') throw new ErreurAPI(404, 'La page d’origine n’a pas encore été enregistrée.');
+    const tr = actuelle && typeof actuelle === 'object' ? actuelle : JSON.parse(await env.CLIENTS.get('site:' + slug + ':config.json') || '{}');
+    const source = await lireCompte(env, compte.traduction.source);
+    return json(Object.assign(synchroniserConfig(src, tr), { langueSource: (source && source.langueSite) || 'fr' }));
+  }
+
   if (route === 'demande' && m === 'POST') {
     const dd = await corpsJSON(request);
     const genre = dd.genre === 'recharge' ? 'recharge' : 'abonnement';
@@ -4290,6 +4302,63 @@ function textesATraduire(cfg) {
   mettre('seo.titre', seo.titre); mettre('seo.description', seo.description); mettre('seo.motCle', seo.motCle);
   return t;
 }
+/* Synchronisation d'une version traduite avec sa page d'origine : tout vient de l'origine (design, logo, fond, valeurs des boutons,
+   pages affichées et leur ordre, pictos, images des pancartes, nombre de pancartes et d'articles), sauf les textes de la version
+   (même liste que la traduction IA), ses réglages propres (langue, aperçu des liens, icônes, cartes de visite) et sa galerie
+   (servie depuis l'origine). Pancartes : appariées par position ; articles du blog : par identifiant. */
+function synchroniserConfig(src, tr) {
+  const out = JSON.parse(JSON.stringify(src));
+  tr = tr && typeof tr === 'object' ? tr : {};
+  const propre = k => ['langue', 'partage', 'appIcones'].includes(k) || /^carte/.test(k);
+  for (const k of Object.keys(out)) if (propre(k)) delete out[k];
+  for (const k of Object.keys(tr)) if (propre(k)) out[k] = tr[k];
+  const T = JSON.parse(JSON.stringify(tr));
+  const rapport = { pancartes: [], blog: null, boutons: null };
+  // textes de la version, posés là où la même place existe encore
+  const textes = textesATraduire(T);
+  for (const cle of Object.keys(textes)) {
+    if (/^(reseaux|blog\.articles|galerie)\./.test(cle)) continue;
+    const chemin = cle.split('.');
+    let o = out;
+    for (let i = 0; i < chemin.length - 1 && o; i++) o = o[/^\d+$/.test(chemin[i]) ? Number(chemin[i]) : chemin[i]];
+    if (o && typeof o === 'object') o[chemin[chemin.length - 1]] = textes[cle];
+  }
+  // textes de la version vidés volontairement (ex. nom de page effacé) : gardés vides
+  ['boutonContact', 'lienTexte'].forEach(k => { if (T.home && typeof T.home[k] === 'string' && out.home) out.home[k] = T.home[k]; });
+  ['perso', 'blog'].forEach(id => { if (T[id] && typeof T[id].titre === 'string' && out[id]) out[id].titre = T[id].titre; });
+  ['home', 'perso'].forEach(id => ((out[id] || {}).articles || []).forEach((a, i) => {
+    const x = ((T[id] || {}).articles || [])[i];
+    if (a && x) ['titre', 'texte', 'alt'].forEach(k => { if (typeof x[k] === 'string') a[k] = x[k]; else delete a[k]; });
+  }));
+  // messages des pictos WhatsApp, SMS, e-mail : appariés par réseau
+  if (Array.isArray(out.reseaux)) out.reseaux.forEach(r => {
+    const x = r && (T.reseaux || []).find(y => y && y.id === r.id);
+    if (x && typeof x.message === 'string') r.message = x.message; else if (r) delete r.message;
+  });
+  // blog : articles appariés par identifiant (sinon par position)
+  if (out.blog && Array.isArray(out.blog.articles)) {
+    const anciens = (T.blog && T.blog.articles) || [];
+    let nouveaux = 0;
+    out.blog.articles.forEach((a, i) => {
+      const x = a && (a.id ? anciens.find(y => y && y.id === a.id) : anciens[i]);
+      if (x) { a.titre = x.titre; a.texte = x.texte; } else nouveaux++;
+    });
+    const gardes = new Set(out.blog.articles.map(a => a && a.id).filter(Boolean));
+    const retires = anciens.filter(y => y && (y.id ? !gardes.has(y.id) : false)).length;
+    if (nouveaux || retires) rapport.blog = { nouveaux, retires };
+  }
+  // galerie : la version ne garde que son titre (les photos sont servies depuis l'origine)
+  if (out.galerie || T.galerie) out.galerie = { titre: (T.galerie && typeof T.galerie.titre === 'string') ? T.galerie.titre : '' };
+  // nombres différents : pancartes (Home, page personnalisée) et boutons
+  [['home', 'Home'], ['perso', 'perso']].forEach(([id]) => {
+    const n = ((out[id] || {}).articles || []).length, m = ((T[id] || {}).articles || []).length;
+    if (n !== m) rapport.pancartes.push({ page: id, origine: n, ici: m });
+  });
+  const nb = (out.boutons || []).length, mb = (T.boutons || []).length;
+  if (nb !== mb) rapport.boutons = { origine: nb, ici: mb };
+  return { cfg: out, rapport };
+}
+
 // Liens écrits dans les textes (même forme que RE_LIEN de commun.js)
 const RE_LIEN_TXT = /\[([^\[\]\n]{1,200})\]\(((?:page|article):[a-z0-9_-]+|https?:\/\/[^\s)]+|mailto:[^\s)]+|tel:[^\s)]+)\)/;
 const sansLiensTxt = t => String(t || '').replace(new RegExp(RE_LIEN_TXT.source, 'g'), '$1');
