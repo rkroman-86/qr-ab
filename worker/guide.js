@@ -11,10 +11,13 @@ qrbc.app (QR-BC, édité par KPS) permet de créer en quelques minutes, depuis u
 - En haut : les onglets « Modifier » (le formulaire), « Aperçu » (la page telle que les visiteurs la verront) et « 📊 » (statistiques), le choix de la langue de l'éditeur (FR, EN, RU), le bouton « 👤 » (Mon compte) et « Quitter » (sur petit écran, « Quitter » est remplacé par « Se déconnecter » dans Mon compte).
 - « 👤 Mon compte » : e-mail du compte ; informations de facturation (nom de l'entreprise ou nom, adresse, code postal, ville, pays, n° de TVA intracommunautaire facultatif), qui apparaissent sur les factures suivantes (pas sur celles déjà émises) ; « Mes factures » pour télécharger la facture PDF de chaque paiement (abonnement, recharge, page ajoutée) ; changement du mot de passe (un seul pour toutes les pages du compte, 10 caractères minimum ; les autres appareils sont déconnectés). La facture et le reçu sont aussi envoyés par e-mail après chaque paiement.
 - Sous les onglets : un bandeau qui indique l'état du compte (essai et jours restants, abonnement et date d'échéance, compte offert). Le toucher ouvre la fenêtre d'abonnement et de crédit IA.
-- Le formulaire est fait de sections repliables : Textes, Boutons et réseaux, Disposition, Logo, Design, Image de fond, Page Home, QR code et carte de visite, Référencement Google.
+- Menu « Pages » en haut du formulaire : une ligne qui montre la rubrique en cours de modification ; la toucher déplie la liste. Dans l'ordre : « 🎨 Style » (thème, couleurs, police, forme des boutons : section Design), « 🖼️ Logo », puis les pages du site (Contact, Page Home, page personnalisée, Blog, Galerie) dans l'ordre du menu ☰, puis « 📇 QR code et cartes de visite ». Toucher une ligne l'ouvre et replie la liste.
+- Sur chaque page de la liste : une case (cochée = page affichée sur le site, décochée = masquée aux visiteurs sans rien effacer) et les flèches ↑ ↓ qui règlent l'ordre du menu ☰ des visiteurs. La page Contact est la page principale : toujours affichée.
+- Rubrique Contact : sections repliables Textes, Boutons et réseaux, Disposition, Image de fond, Référencement Google. Les autres rubriques s'affichent directement.
+- Une page masquée reste modifiable (un bandeau rappelle qu'elle est masquée) et l'aperçu la montre quand elle est ouverte dans l'éditeur.
 - En bas, une barre fixe : à gauche le message d'état (« Modifications non enregistrées », « Publié… ») et le bouton « ❓ » de l'assistant ; à droite le bouton « Enregistrer ».
 - IMPORTANT : rien n'est publié tant qu'on n'a pas appuyé sur « Enregistrer ». Après l'enregistrement, la page en ligne est à jour en moins d'une minute (recharger la page si besoin).
-- L'aperçu se met à jour en direct pendant la saisie. Quand on modifie la section Page Home, l'aperçu montre la Home ; sinon la page contact.
+- L'aperçu se met à jour en direct pendant la saisie. L'aperçu montre la page ouverte dans le menu « Pages » (Home, page personnalisée, blog) ; sinon la page contact.
 
 ## Création express (⚡ « Créer mon site »)
 - Pour aller vite : on décrit son activité (avec un maximum de détails : services, lieux desservis, horaires, langues parlées, ce qui vous distingue), sa zone et son téléphone. L'IA prépare tout en une minute environ : textes, pancartes de la page Home, accroche, logo, image de fond et référencement Google.
@@ -71,18 +74,18 @@ qrbc.app (QR-BC, édité par KPS) permet de créer en quelques minutes, depuis u
 
 ## Page Home (mini-site à pancartes)
 - Vocabulaire : les clients appellent parfois les pancartes « cartes », « cards », « carduri », « карточки » ou « slides ». Ne pas confondre avec les cartes de visite (section QR code et carte de visite) : en cas de doute, demander de quoi il s'agit.
-- « Activer la page Home » : une suite de pancartes plein écran, on passe de l'une à l'autre en glissant. Un lien « Découvrir l'entreprise » (texte modifiable), en haut à droite de la page contact, y mène.
+- Page Home (cocher sa case dans le menu « Pages » pour l'afficher) : une suite de pancartes plein écran, on passe de l'une à l'autre en glissant. Un lien « Découvrir l'entreprise » (texte modifiable), en haut à droite de la page contact, y mène.
 - Dans le constructeur, les pancartes s'affichent une par une : glisser à gauche ou à droite, ou utiliser les boutons ◀ ▶ sous la pancarte (« Pancarte 2 / 5 » entre les deux). Chaque pancarte a un titre, un texte et un style : Photo plein écran, Image + texte, ou Texte seul. Les flèches ← → à côté de « 🗑 Supprimer » changent sa place dans l'ordre ; on peut masquer ou supprimer une pancarte (30 au maximum, utile par exemple pour les pages d'un menu de restaurant : une photo de page par pancarte). « ＋ Ajouter un article » affiche directement la nouvelle pancarte.
 - « ✨ Image IA » sur chaque pancarte : crée 2 images inspirées du titre et du texte de la pancarte. Une pancarte « Texte seul » passe automatiquement en « Photo plein écran » quand on lui ajoute une image.
 - « ✨ Texte IA » sur chaque pancarte : rédige ou améliore cette pancarte seulement, sans toucher aux autres (décompté comme un texte IA). Écrire d'abord un titre ou une idée pour choisir le sujet ; laisser vide pour que l'IA propose un sujet non traité ailleurs. « ↩ Annuler » revient au texte précédent. Pratique pour ajouter une pancarte sans tout réécrire.
 - Rédaction IA de toutes les pancartes d'un coup : décrire l'activité avec un maximum de détails (et la zone) ; l'IA rédige les pancartes (10 au plus d'un coup), vous relisez, corrigez et validez. L'IA n'invente rien : elle n'utilise que ce que vous écrivez.
 
 ## Galerie photos
-- Section « Galerie photos », juste après la page Home. Désactivée par défaut : cocher « Activer la galerie ».
+- Rubrique « Galerie » du menu « Pages ». Masquée par défaut : cocher sa case dans le menu pour l'afficher.
 - « 📷 Ajouter des photos » : on peut en choisir plusieurs d'un coup, jusqu'à 100 photos par page. Elles sont réduites automatiquement (1280 px au plus, avec une petite vignette pour la grille) : chargement rapide et peu de place. Une photo illisible est ignorée, avec un message.
 - Sur chaque vignette : ✕ retire la photo, ← → changent sa place dans l'ordre. « Titre du bouton » : texte du bouton (vide = « Galerie », traduit selon la langue de la page). Penser à enregistrer : les photos sont envoyées à ce moment-là (compteur « Envoi des images 3 / 20… »), et les photos retirées sont effacées du serveur.
 - Sur la page, la galerie s'ouvre depuis le coin en haut à droite (voir « Passer d'une page à l'autre »). Elle montre une grille de vignettes ; toucher une photo l'affiche en grand, glisser à gauche/droite pour la suivante, vers le bas ou « × » pour revenir à la grille ; le bouton retour du téléphone ferme la photo puis la galerie. Sur ordinateur : flèches ‹ › et clavier (← → Échap).
-- Décocher « Activer la galerie » cache le bouton sans effacer les photos. Les versions traduites de la page montrent les mêmes photos (le titre du bouton est traduit).
+- Décocher la case de la galerie dans le menu « Pages » cache le bouton sans effacer les photos. Les versions traduites de la page montrent les mêmes photos (le titre du bouton est traduit).
 
 ## Police, style, taille et couleur d'un texte
 - Bouton « Aa » sous chaque titre et texte modifiable (nom, sous-titre et bas de la page contact ; titre et texte des pancartes de la Home et de la page personnalisée ; titre et texte des articles du blog) et à droite du texte de chaque bouton de la page contact.
@@ -100,14 +103,14 @@ qrbc.app (QR-BC, édité par KPS) permet de créer en quelques minutes, depuis u
 - Pas de lien dans les titres ni dans les boutons (les boutons ont déjà leur propre lien).
 
 ## Page personnalisée (ex. Tarifs)
-- Section « Page personnalisée », juste après la page Home. Désactivée par défaut : cocher « Activer la page personnalisée ».
+- Rubrique « Page personnalisée » du menu « Pages ». Masquée par défaut : cocher sa case dans le menu pour l'afficher (le nom « Tarifs » et une première pancarte sont alors proposés).
 - « Nom de la page (menu) » : nom affiché aux visiteurs (proposé : « Tarifs » ; ex. Prestations, Menu, Horaires).
 - Même fonctionnement que la page Home : 1 à 30 pancartes plein écran (titre, texte, mise en page, image, ✨ Texte IA, ✨ Image IA), glisser ou ◀ ▶ pour passer de l'une à l'autre, ← → pour l'ordre.
-- Pour le visiteur : page à part (nom.qrbc.app/page.html), ouverte depuis le coin en haut à droite des autres pages (nom de la page ou menu ☰). Sa place dans le menu se règle dans « Menu des pages ».
+- Pour le visiteur : page à part (nom.qrbc.app/page.html), ouverte depuis le coin en haut à droite des autres pages (nom de la page ou menu ☰). Sa place dans le menu se règle avec les flèches ↑ ↓ du menu « Pages » de l'éditeur.
 - L'IA n'invente pas de prix : écrire les tarifs soi-même (ou les donner dans le texte) avant « ✨ Texte IA ».
 
 ## Page Blog
-- Section « Page Blog », après la galerie. Désactivée par défaut : cocher « Activer le blog ». « Titre de la page » : nom du blog (vide = « Blog »).
+- Rubrique « Blog » du menu « Pages ». Masqué par défaut : cocher sa case dans le menu pour l'afficher. « Titre de la page » : nom du blog (vide = « Blog »).
 - « ＋ Nouvel article » ajoute un article en tête (le plus récent en premier), daté du jour. Jusqu'à 50 articles.
 - Les articles s'affichent un par un : glisser à gauche/droite ou boutons ◀ « Article 2 / 5 » ▶. Sur chaque article : titre, date (modifiable), photo (facultative, réduite automatiquement), texte, case « Afficher » pour le cacher sans le supprimer, ← → pour changer l'ordre, 🗑 Supprimer.
 - « ✨ Texte IA » rédige ou améliore l'article affiché (décompté comme un texte IA), avec « ↩ Annuler ». Écrire d'abord un titre ou quelques idées pour choisir le sujet.
@@ -118,7 +121,7 @@ qrbc.app (QR-BC, édité par KPS) permet de créer en quelques minutes, depuis u
 - Les pages possibles : Contact, Home, page personnalisée (ex. Tarifs), Blog, Galerie (chacune si activée).
 - 2 pages en tout : le nom de l'autre page s'affiche en haut à droite (ex. « Découvrir l'entreprise » sur la page contact, « Contact » dans la barre de la Home ou du blog, « 📷 Galerie »).
 - À partir de 3 : un picto ☰ en haut à droite ouvre la liste des pages pour choisir (la page en cours est marquée).
-- Ordre des pages dans ce menu : section « Menu des pages » du rédacteur (après le blog), boutons ↑ ↓. Les pages désactivées y figurent en grisé pour garder leur place.
+- Ordre des pages dans ce menu : flèches ↑ ↓ du menu « Pages » de l'éditeur. Les pages masquées y restent (en grisé) pour garder leur place.
 - « Installer » et le choix de langue sont en haut à gauche de la page contact.
 
 ## QR code et carte de visite
