@@ -405,6 +405,7 @@
     .qr-faces{margin:12px 0 10px}.qr-faces-cases{display:flex;gap:22px;flex-wrap:wrap;margin:4px 0}
     .qr-faces .case-info{display:flex;align-items:center;gap:8px;font-size:.88rem;font-weight:600;cursor:pointer}.qr-faces .case-info input{width:18px;height:18px;margin:0;flex:none}
     .modele-carte .face-carte{font-weight:500;opacity:.75}
+    .fond-carte{margin:6px 0;border:1px solid var(--ligne);border-radius:12px;padding:8px 12px}.fond-carte > summary{cursor:pointer;font-size:.88rem}.fond-carte .fond-resume{opacity:.7}.fond-carte[open] > summary{margin-bottom:4px}
     .info-carte>input{width:100%;min-width:0}
     .info-carte.off>input{opacity:.45}
     .info-carte .outils-info{grid-column:2;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
@@ -3348,6 +3349,12 @@
       })(),
       typo: typoCarte(),
       fondImg: await chargerImage(d.imageFond ? res(d.imageFond) : ''),
+      // fonds choisis pour le recto / le verso (vide : image de fond de la page contact)
+      fondsCarte: await (async () => {
+        const r = reglagesCarte(), m = {};
+        for (const c of [r.fondRecto, r.fondVerso]) if (c && typeof c === 'string' && !(c in m)) m[c] = await chargerImage(res(c));
+        return m;
+      })(),
       logo: await chargerImage(cfg.logo && logoSurCarte() ? res(cfg.logo) : ''),
       ...infosCarte()
     };
@@ -3909,9 +3916,11 @@
   // opt : { qr, logo } pour une face (true / false seul = QR ; par défaut : QR + logo du recto)
   async function genererCarte(modele, D, opt) {
     D = D || await preparerCarte();
-    opt = typeof opt === 'boolean' ? { qr: opt, logo: logoFaces().recto } : Object.assign({ qr: true, logo: logoFaces().recto }, opt || {});
+    const parDefaut = () => ({ qr: true, logo: logoFaces().recto, fond: reglagesFaces().recto.fond });
+    opt = typeof opt === 'boolean' ? Object.assign(parDefaut(), { qr: opt }) : Object.assign(parDefaut(), opt || {});
     const avecQR = opt.qr;
     if (!opt.logo && D.logo) D = Object.assign({}, D, { logo: null });
+    if (opt.fond && D.fondsCarte && D.fondsCarte[opt.fond]) D = Object.assign({}, D, { fondImg: D.fondsCarte[opt.fond] });
     if (TAILLES_CARTE[modele]) D = Object.assign({}, D, TAILLES_CARTE[modele]);
     else D = Object.assign({}, D, { W: 2008, H: 1300 });
     const cv = document.createElement('canvas');
@@ -3940,8 +3949,9 @@
   // Réglages de chaque face (QR, logo) et faces différentes ou non
   function reglagesFaces() {
     const q = qrFaces(), l = logoFaces();
-    const recto = { qr: q.recto, logo: l.recto }, verso = { qr: q.verso, logo: l.verso };
-    return { recto, verso, differentes: recto.qr !== verso.qr || recto.logo !== verso.logo };
+    const r = reglagesCarte(), fond = c => (typeof c === 'string' && c) || '';
+    const recto = { qr: q.recto, logo: l.recto, fond: fond(r.fondRecto) }, verso = { qr: q.verso, logo: l.verso, fond: fond(r.fondVerso) };
+    return { recto, verso, differentes: recto.qr !== verso.qr || recto.logo !== verso.logo || recto.fond !== verso.fond };
   }
 
   /* Réglages « Aa » des cartes appliqués sans toucher aux 22 modèles : chaque texte mesuré ou écrit est reconnu
@@ -4024,7 +4034,25 @@
       el('span', { class: 'etiq', style: 'margin-top:8px', text: 'Logo sur la carte' }),
       el('div', { class: 'qr-faces-cases logo-faces' }, [caseFace('logoRecto', 'logoVerso', l, 'recto', t('Au recto'), !cfg.logo), caseFace('logoRecto', 'logoVerso', l, 'verso', t('Au verso'), !cfg.logo)]),
       cfg.logo ? null : el('div', { class: 'aide', style: 'margin:0', text: t('Pas de logo : ajoutez-en un dans la section Logo.') }),
+      el('span', { class: 'etiq', style: 'margin-top:8px', text: 'Image de fond de la carte' }),
+      choixFondCarte('recto', rafraichir), choixFondCarte('verso', rafraichir),
       aide]);
+  }
+  // Image de fond d'une face : « Mes images », galerie du téléphone ou photo ; vide = image de fond de la page contact
+  function choixFondCarte(face, rafraichir) {
+    const cle = face === 'recto' ? 'fondRecto' : 'fondVerso';
+    const obj = {};               // passe-plat vers cfg.carteInfos (recréé par modifierCarte)
+    Object.defineProperty(obj, cle, {
+      get: () => { const v = reglagesCarte()[cle]; return typeof v === 'string' ? v : ''; },
+      set: v => { modifierCarte(o => { if (v) o[cle] = v; else delete o[cle]; }); majResume(); rafraichir(); }
+    });
+    const resume = el('span', { class: 'fond-resume' });
+    const majResume = () => { resume.textContent = obj[cle] ? t('image choisie') : t('celle de la page contact'); };
+    majResume();
+    return el('details', { class: 'fond-carte' }, [
+      el('summary', {}, [el('b', { text: face === 'recto' ? t('Fond du recto') : t('Fond du verso') }), ' : ', resume]),
+      el('div', { class: 'aide', style: 'margin:4px 0 6px', text: t('« Retirer » remet l’image de fond de la page contact.') }),
+      choixImage(face === 'recto' ? 'Image du recto' : 'Image du verso', obj, cle, { nom: 'fond', max: 1600, fond: true, photo: true, ratio: () => 2008 / 1300, apresImage: () => { majResume(); rafraichir(); } })]);
   }
 
   function nomFichierCarte(modele) {
@@ -4129,7 +4157,7 @@
   // appli sur sa propre adresse (nom--carte.qrbc.app) : elle ne remplace jamais l'appli de la page
   function lienAppliCarte() { return URL_PUBLIQUE.replace(/^(https?:\/\/)([^./]+)\./, '$1$2--carte.').replace(/^(https?:\/\/[^/]+).*$/, '$1/'); }
   function cleCarteApp() {
-    return JSON.stringify([cfg.carteApp && cfg.carteApp.modeles, cfg.design, cfg.logo, cfg.titre, cfg.sousTitre, cfg.pied, infosCarte(), typoCarte(), logoFaces(), URL_PUBLIQUE, cfg.langue || 'fr', 3]);
+    return JSON.stringify([cfg.carteApp && cfg.carteApp.modeles, cfg.design, cfg.logo, cfg.titre, cfg.sousTitre, cfg.pied, infosCarte(), typoCarte(), logoFaces(), reglagesFaces().recto.fond, URL_PUBLIQUE, cfg.langue || 'fr', 3]);
   }
   async function preparerCarteApp(forcer) {
     const ca = cfg.carteApp;
