@@ -839,6 +839,7 @@
     'Choisir…': ['Choose…', 'Выбрать…'],
     'Retirer': ['Remove', 'Убрать'],
     'Aucune': ['None', 'Нет'],
+    'Image introuvable': ['Image not found', 'Изображение не найдено'],
     'Assombrir l’image (meilleure lisibilité du texte)': ['Darken the image (better text readability)', 'Затемнить изображение (текст читается лучше)'],
 
     /* --- Logo / atelier --- */

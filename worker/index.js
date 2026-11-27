@@ -1185,7 +1185,7 @@ async function apiClient(request, env, slug, route) {
     return json(route === 'fonds' ? { fonds: medias.filter(x => x.genre === 'fond') } : { medias });
   }
   if ((route === 'medias' || route === 'fonds') && m === 'DELETE') {
-    const { chemin } = await corpsJSON(request);
+    const { chemin, garder } = await corpsJSON(request);
     const racine = racineDe(compte);
     let medias = await lireMedias(env, racine);
     if (!medias.some(x => x.chemin === chemin)) throw new ErreurAPI(404, 'Image introuvable.');
@@ -1193,7 +1193,8 @@ async function apiClient(request, env, slug, route) {
     await env.CLIENTS.put('site:' + racine + ':medias', JSON.stringify(medias));
     // le fichier n'est effacé que si aucune page publiée du compte ne l'utilise
     const cfg = await configsGroupe(env, racine);
-    if (!cfg.includes(chemin)) await env.CLIENTS.delete('img:' + racine + ':' + chemin.slice(7));
+    // ni si l'éditeur l'utilise encore (choisie mais pas encore enregistrée : garder = true)
+    if (!garder && !cfg.includes(chemin)) await env.CLIENTS.delete('img:' + racine + ':' + chemin.slice(7));
     return json(route === 'fonds' ? { fonds: medias.filter(x => x.genre === 'fond') } : { medias });
   }
   if (route === 'fond' && m === 'POST') {

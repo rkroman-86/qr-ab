@@ -287,6 +287,7 @@
     .vignette{width:64px;height:64px;border-radius:12px;border:1px dashed var(--ligne);background:var(--bg) center/cover no-repeat;flex-shrink:0;
       display:flex;align-items:center;justify-content:center;color:var(--doux);font-size:.75rem}
     .vignette img{max-width:100%;max-height:100%}
+    .vignette .vign-absente{font-size:11px;line-height:1.2;color:#c0392b;text-align:center;padding:4px}
     details.section[data-id=fond] .vignette,details.section[data-id=fond] .fond-ia.actif{position:relative;overflow:hidden}
     details.section[data-id=fond] .vignette::after,details.section[data-id=fond] .fond-ia.actif::after{content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;background:rgba(0,0,0,var(--voile-fond,0));z-index:1}
     details.section[data-id=fond] .fond-ia.actif>*{z-index:2}
@@ -1708,7 +1709,8 @@
           e.stopPropagation();
           if (!confirm(t(actif ? 'Cette image est utilisée sur votre page. La retirer de « Mes images » ? (elle reste affichée tant que vous ne la changez pas)' : 'Supprimer définitivement cette image ?'))) return;
           try {
-            const r = await appelAPI('medias', jetonCF, { method: 'DELETE', body: JSON.stringify({ chemin: m.chemin }) });
+            // image utilisée dans l'éditeur (même pas encore enregistrée) : le fichier est gardé sur le serveur
+            const r = await appelAPI('medias', jetonCF, { method: 'DELETE', body: JSON.stringify({ chemin: m.chemin, garder: actif || JSON.stringify(cfg).includes(m.chemin) }) });
             medias = (await r.json()).medias;
             construireFormulaire();
           } catch (er) { alert(er.message); }
@@ -1732,6 +1734,10 @@
       const v = obj[cle];
       if (!v) { vign.textContent = 'Aucune'; return; }
       const url = imagesLocales[v] || v;
+      // image introuvable sur le serveur (supprimée) : on le dit, au lieu d'une vignette vide
+      const sonde = new Image();
+      sonde.onerror = () => { if (obj[cle] !== v) return; vign.innerHTML = ''; vign.style.backgroundImage = ''; vign.appendChild(el('span', { class: 'vign-absente', text: t('Image introuvable') })); };
+      sonde.src = url;
       if (reglages.fond) vign.style.backgroundImage = 'url("' + url + '")';
       else vign.appendChild(el('img', { src: url, alt: '' }));
     }
@@ -4555,6 +4561,7 @@
   let rubriquesOuvert = false;
   function objPage(id) {
     if (id === 'home') return cfg.home;
+    if (!PAGES_MENU.includes(id)) return {};                 // Style, Logo, QR : pas des pages (ne jamais écraser cfg.logo)
     if (!cfg[id] || typeof cfg[id] !== 'object') cfg[id] = { actif: false, titre: '', [id === 'galerie' ? 'photos' : 'articles']: [] };
     return cfg[id];
   }
@@ -4668,7 +4675,7 @@
     const tete = el('button', { type: 'button', class: 'rb-tete', 'aria-expanded': String(rubriquesOuvert), onclick: () => { rubriquesOuvert = !rubriquesOuvert; construireFormulaire(); } }, [
       el('span', { class: 'rb-lib', text: 'Pages' }),
       el('span', { class: 'rb-cour' }, [el('span', { class: 'rb-ico', text: ico }), el('span', { class: 'rb-nom', text: nom, 'data-no-i18n': '' }),
-        pageAffichee(vueEdit) || !PAGES_MENU.includes(vueEdit) ? null : el('small', { text: t('masquée') })]),
+        !PAGES_MENU.includes(vueEdit) || pageAffichee(vueEdit) ? null : el('small', { text: t('masquée') })]),
       el('span', { class: 'rb-fleche', text: rubriquesOuvert ? '▴' : '▾' })]);
     return el('div', { class: 'rubriques' + (rubriquesOuvert ? ' ouvert' : '') }, [tete, rubriquesOuvert ? liste : null]);
   }

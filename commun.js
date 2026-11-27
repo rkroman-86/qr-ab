@@ -122,6 +122,11 @@ function lienReseau(id, valeur, message) {
 
 /* Complète une configuration ancienne : liste des réseaux + bloc d'icônes dans les boutons */
 function normaliser(cfg) {
+  // réparation (27/11) : le menu « Pages » de l'éditeur a pu remplacer le logo (et créer style / partage) par un objet de page vide
+  const pageVide = v => v && typeof v === 'object' && !Array.isArray(v) && v.actif === false && v.titre === '' && Array.isArray(v.articles) && !v.articles.length;
+  if (typeof cfg.logo !== 'string') cfg.logo = '';
+  if (pageVide(cfg.style)) delete cfg.style;
+  if (pageVide(cfg.partage)) delete cfg.partage;
   const nouvelle = !Array.isArray(cfg.reseaux);
   const liste = !nouvelle ? cfg.reseaux.filter(r => r && RESEAUX[r.id]) : [];
   Object.keys(RESEAUX).forEach(id => {
@@ -833,6 +838,7 @@ function creerRond(doc, o) {
 function rendrePage(cfgBrut, racine, opts) {
   opts = opts || {};
   const cfg = fusion(CONFIG_DEFAUT, cfgBrut);
+  if (typeof cfg.logo !== 'string') cfg.logo = '';          // logo abîmé (objet) : ignoré
   const d = cfg.design;
   const res = opts.resoudre || (x => x);
   const doc = racine.ownerDocument;
@@ -871,6 +877,7 @@ function rendrePage(cfgBrut, racine, opts) {
   if (cfg.logo) {
     const img = doc.createElement('img');
     img.className = 'qp-logo' + (d.logoRond ? ' qp-logo-rond' : '');
+    img.onerror = () => img.remove();          // fichier absent : pas d'icône d'image cassée
     img.src = res(cfg.logo);
     img.alt = cfg.titre || '';
     entete.appendChild(img);
@@ -1382,6 +1389,7 @@ function rendreHome(cfgBrut, racine, opts) {
   if (cfg.logo) {
     const img = doc.createElement('img');
     img.className = 'qh-logo' + (d.logoRond ? ' rond' : '');
+    img.onerror = () => img.remove();
     img.src = res(cfg.logo); img.alt = '';
     barre.appendChild(img);
   }
@@ -1513,7 +1521,7 @@ function rendreBlog(cfgBrut, racine, opts) {
 
   const barre = doc.createElement('div');
   barre.className = 'qh-barre';
-  if (cfg.logo) { const img = doc.createElement('img'); img.className = 'qh-logo' + (d.logoRond ? ' rond' : ''); img.src = res(cfg.logo); img.alt = ''; barre.appendChild(img); }
+  if (cfg.logo) { const img = doc.createElement('img'); img.className = 'qh-logo' + (d.logoRond ? ' rond' : ''); img.onerror = () => img.remove(); img.src = res(cfg.logo); img.alt = ''; barre.appendChild(img); }
   const nom = doc.createElement('div'); nom.className = 'qh-nom'; nom.textContent = cfg.titre || ''; barre.appendChild(nom);
   const langues = opts.apercu ? null : selecteurLangues(doc, false);
   if (langues) barre.appendChild(langues);
@@ -1702,7 +1710,7 @@ function echapperHTML(t) {
 }
 
 function urlAbsolue(base, p) {
-  if (!p) return '';
+  if (!p || typeof p !== 'string') return '';
   if (/^https?:\/\//i.test(p)) return p;
   return base.replace(/\/?$/, '/') + String(p).replace(/^\.?\//, '');
 }
