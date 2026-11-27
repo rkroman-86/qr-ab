@@ -840,6 +840,7 @@
     'Retirer': ['Remove', 'Убрать'],
     'Aucune': ['None', 'Нет'],
     'Image introuvable': ['Image not found', 'Изображение не найдено'],
+    'Cochez les informations à imprimer (5 au plus). Elles sont reprises de votre page ; modifiez-les ici si vous voulez imprimer un autre numéro ou un autre e-mail (votre page ne change pas). ↑ ↓ changent l’ordre : un champ perso peut monter entre le nom et le slogan, ou au-dessus du nom.': ['Tick the details to print (5 at most). They are taken from your page; edit them here to print another number or email (your page does not change). ↑ ↓ change the order: a custom field can move between the name and the slogan, or above the name.', 'Отметьте данные для печати (не больше 5). Они берутся с вашей страницы; измените их здесь, чтобы напечатать другой номер или e-mail (страница не меняется). ↑ ↓ меняют порядок: своё поле можно поднять между названием и слоганом или над названием.'],
     'QR code sur la carte': ['QR code on the card', 'QR-код на визитке'],
     'Au recto': ['On the front', 'На лицевой стороне'],
     'Au verso': ['On the back', 'На обороте'],

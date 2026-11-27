@@ -3135,31 +3135,44 @@
     persoCarte().forEach(p => { v[p.id] = String(p.valeur || '').trim(); });
     return v;
   }
-  function ordreCoordsCarte() {
-    const toutes = ['tel', 'email', 'site'].concat(persoCarte().map(p => p.id));
-    const o = (Array.isArray(reglagesCarte().ordre) ? reglagesCarte().ordre : []).filter(k => toutes.includes(k));
-    return o.concat(toutes.filter(k => !o.includes(k)));
+  // Ordre complet (27/11) : nom, slogan et coordonnées. Les champs perso peuvent monter au-dessus du nom ou entre le nom et le slogan ;
+  // téléphone, e-mail et site restent sous le slogan. Ancien réglage (sans « nom ») : nom et slogan en tête.
+  function ordreCompletCarte() {
+    const coords = ['tel', 'email', 'site'].concat(persoCarte().map(p => p.id));
+    let o = (Array.isArray(reglagesCarte().ordre) ? reglagesCarte().ordre : []).filter((k, i, a) => (k === 'nom' || k === 'slogan' || coords.includes(k)) && a.indexOf(k) === i);
+    if (!o.includes('nom')) o = ['nom'].concat(o);
+    if (!o.includes('slogan')) o.splice(o.indexOf('nom') + 1, 0, 'slogan');
+    if (o.indexOf('slogan') < o.indexOf('nom')) { o = o.filter(k => k !== 'slogan'); o.splice(o.indexOf('nom') + 1, 0, 'slogan'); }
+    const hautStd = o.slice(0, o.indexOf('slogan')).filter(k => ['tel', 'email', 'site'].includes(k));
+    o = o.filter(k => !hautStd.includes(k));
+    o.splice(o.indexOf('slogan') + 1, 0, ...hautStd);
+    return o.concat(coords.filter(k => !o.includes(k)));
   }
+  function ordreCoordsCarte() { return ordreCompletCarte().filter(k => k !== 'nom' && k !== 'slogan'); }
   function choixCarte(v) {
-    const r = reglagesCarte(), cles = ['nom', 'slogan'].concat(ordreCoordsCarte());
+    const r = reglagesCarte(), cles = ordreCompletCarte();
     if (Array.isArray(r.choix)) return cles.filter(k => r.choix.includes(k)).slice(0, MAX_INFOS_CARTE);
     v = v || valeursCarte();
     return cles.filter(k => v[k]).slice(0, MAX_INFOS_CARTE);   // par défaut : tout ce qui est rempli
   }
   function infosCarte() {
-    const v = valeursCarte(), ch = choixCarte(v), coords = [], coordsCles = [];
+    const v = valeursCarte(), ch = choixCarte(v), coords = [], coordsCles = [], avant = [], avantCles = [], entre = [], entreCles = [];
     const perso = {}; persoCarte().forEach(p => { perso[p.id] = p; });
-    ordreCoordsCarte().filter(k => ch.includes(k)).forEach(k => {
-      if (!String(v[k] || '').trim()) { coords.push(['', '']); coordsCles.push(k); return; }   // champ coché mais vide : un espace sur la carte
+    const complet = ordreCompletCarte(), iNom = complet.indexOf('nom'), iSlogan = complet.indexOf('slogan');
+    complet.filter(k => k !== 'nom' && k !== 'slogan' && ch.includes(k)).forEach(k => {
+      const i = complet.indexOf(k);
+      // champ perso placé au-dessus du nom ou entre le nom et le slogan
+      const [L, LC] = i < iNom ? [avant, avantCles] : i < iSlogan ? [entre, entreCles] : [coords, coordsCles];
+      if (!String(v[k] || '').trim()) { L.push(['', '']); LC.push(k); return; }   // champ coché mais vide : un espace sur la carte
       const p = perso[k], type = p ? p.type : k;
       let val = v[k], etiq = p ? (String(p.etiq || '').trim() || tc(ETIQ_TYPE_CARTE[type] || '')) : tc(ETIQ_TYPE_CARTE[type]);
       if (type === 'tel') {
         if (!p) { const n = numeroInternational(val), wa = contactPage(cfg, ['whatsapp']); if (wa && n && numeroInternational(wa.valeur) === n) etiq = tc('Tél. / WhatsApp'); }
         if (String(val).replace(/\D/g, '').length >= 6) val = formaterNumero(val);
       } else if (type === 'site') val = val.replace(/^https?:\/\//i, '').replace(/\/$/, '');
-      coords.push([etiq, val]); coordsCles.push(k);
+      L.push([etiq, val]); LC.push(k);
     });
-    return { nom: ch.includes('nom') ? v.nom : '', slogan: ch.includes('slogan') ? v.slogan : '', coords, coordsCles };
+    return { nom: ch.includes('nom') ? v.nom : '', slogan: ch.includes('slogan') ? v.slogan : '', coords, coordsCles, avant, avantCles, entre, entreCles };
   }
   // Réglage dans la section « QR code et carte de visite »
   function blocInfosCarte(rafraichir) {
@@ -3168,10 +3181,11 @@
       bloc.innerHTML = '';
       const d = defautsCarte(), r = reglagesCarte(), ch = choixCarte();
       const plein = ch.length >= MAX_INFOS_CARTE;
-      const persos = persoCarte(), ordre = ordreCoordsCarte();
+      const persos = persoCarte(), ordre = ordreCompletCarte(), estStd = k => ['tel', 'email', 'site'].includes(k);
       const refaire = () => { dessiner(); rafraichir(); };
       bloc.append(el('span', { class: 'etiq', text: 'Informations sur la carte' }),
-        el('div', { class: 'aide', style: 'margin:0 0 8px', text: 'Cochez les informations à imprimer (5 au plus). Elles sont reprises de votre page ; modifiez-les ici si vous voulez imprimer un autre numéro ou un autre e-mail (votre page ne change pas). Le nom et le slogan restent en haut de la carte ; ↑ ↓ changent l’ordre des coordonnées.' }));
+        el('div', { class: 'aide', style: 'margin:0 0 8px', text: 'Cochez les informations à imprimer (5 au plus). Elles sont reprises de votre page ; modifiez-les ici si vous voulez imprimer un autre numéro ou un autre e-mail (votre page ne change pas). ↑ ↓ changent l’ordre : un champ perso peut monter entre le nom et le slogan, ou au-dessus du nom.' }),
+        blocQRFaces(rafraichir));
       // Logo : affiché ou non sur la carte
       const caseLogo = el('input', { type: 'checkbox' }); caseLogo.checked = !!cfg.logo && logoSurCarte(); caseLogo.disabled = !cfg.logo;
       caseLogo.addEventListener('change', () => { modifierCarte(o => { if (caseLogo.checked) delete o.logo; else o.logo = false; }); refaire(); });
@@ -3189,7 +3203,9 @@
       const fleches = k => {
         const i = ordre.indexOf(k);
         const bouger = dir => modifierCarte(o => { const n = ordre.slice(); [n[i], n[i + dir]] = [n[i + dir], n[i]]; o.ordre = n; }) || refaire();
-        return [el('button', { type: 'button', class: 'btn btn-mini', text: '↑', title: t('Monter'), disabled: i <= 0, onclick: () => bouger(-1) }),
+        // téléphone, e-mail, site : jamais au-dessus du slogan ; champs perso : partout (au-dessus du nom, entre nom et slogan)
+        const haut = i <= 0 || (estStd(k) && ordre[i - 1] === 'slogan');
+        return [el('button', { type: 'button', class: 'btn btn-mini', text: '↑', title: t('Monter'), disabled: haut, onclick: () => bouger(-1) }),
           el('button', { type: 'button', class: 'btn btn-mini', text: '↓', title: t('Descendre'), disabled: i >= ordre.length - 1, onclick: () => bouger(1) })];
       };
       const ligneStd = k => {
@@ -3237,14 +3253,13 @@
           el('div', { class: 'outils-info' }, [btnTypo].concat(fleches(p.id), [suppr])),
           rangeeTypo]);
       };
-      bloc.append(ligneStd('nom'), ligneStd('slogan'));
       ordre.forEach(k => { const p = persos.find(x => x.id === k); bloc.append(p ? lignePerso(p) : ligneStd(k)); });
       const ajouter = el('button', { type: 'button', class: 'btn btn-mini', style: 'margin-top:4px', text: '＋ ' + t('Ajouter un champ'), disabled: persos.length >= MAX_PERSO_CARTE, onclick: () => {
         const id = 'p' + Date.now().toString(36);
         modifierCarte(o => {
           o.perso = persoCarte().concat([{ id, type: 'tel', etiq: '', valeur: '' }]);
           if (o.choix.length < MAX_INFOS_CARTE) o.choix = o.choix.concat([id]);
-          o.ordre = ordreCoordsCarte().filter(x => x !== id).concat([id]);
+          o.ordre = ordreCompletCarte().filter(x => x !== id).concat([id]);
         });
         refaire();
         const lignes = bloc.querySelectorAll('.info-carte.perso'), champ = lignes.length && lignes[lignes.length - 1].querySelector('.perso-champs input:last-child');
@@ -3382,11 +3397,38 @@
     return h;
   }
 
+  /* Lignes de champs perso placées au-dessus du nom ou entre le nom et le slogan : « ÉTIQUETTE valeur » sur une ligne.
+     x, largeur = bloc de texte ; renvoie le y suivant. */
+  function lignesInfos(ctx, D, liste, x, y, largeur, align, couleur, accent, taille) {
+    if (!liste || !liste.length) return y;
+    taille = taille || 46;
+    const av = { a: ctx.textAlign, b: ctx.textBaseline, f: ctx.fillStyle, g: ctx.globalAlpha, p: ctx.font };
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.globalAlpha = 1;
+    liste.forEach(([etiq, val]) => {
+      if (val) {
+        const E = Math.round(taille * 0.72), te = etiq ? String(etiq).toUpperCase() : '';
+        let we = 0;
+        if (te) { ctx.font = '700 ' + E + 'px ' + D.fam; we = ctx.measureText(te).width + Math.round(taille * 0.35); }
+        const fv = policeAjustee(ctx, val, '600', taille, Math.min(28, taille), Math.max(120, largeur - we), D.fam);
+        ctx.font = fv;
+        const wv = ctx.measureText(val).width;
+        const x0 = align === 'center' ? x + (largeur - we - wv) / 2 : align === 'right' ? x + largeur - we - wv : x;
+        if (te) { ctx.font = '700 ' + E + 'px ' + D.fam; ctx.fillStyle = accent || couleur; ctx.fillText(te, x0, y + Math.round((taille - E) * 0.55)); }
+        ctx.font = fv; ctx.fillStyle = couleur; ctx.fillText(val, x0 + we, y);
+      }
+      y += Math.round(taille * 1.3);
+    });
+    ctx.textAlign = av.a; ctx.textBaseline = av.b; ctx.fillStyle = av.f; ctx.globalAlpha = av.g; ctx.font = av.p;
+    return y;
+  }
+  const hauteurInfos = (liste, taille) => (liste || []).length * Math.round((taille || 46) * 1.3);
+
   // Titre + sous-titre + trait + coordonnées ; align 'left' ou 'center'
   function dessinerTextes(ctx, D, x, y, largeur, c, align) {
     const cfgT = { titre: D.nom, sousTitre: D.slogan }, fam = D.fam;
     const ax = align === 'center' ? x + largeur / 2 : x;
     ctx.textAlign = align; ctx.textBaseline = 'top';
+    if (D.avant && D.avant.length) y = lignesInfos(ctx, D, D.avant, x, y, largeur, align, c.texte, c.accent, 46) + 8;
     if (cfgT.titre) {
       ctx.fillStyle = c.texte;
       ctx.font = policeAjustee(ctx, cfgT.titre, '800', c.titre || 124, 60, largeur, fam);
@@ -3403,6 +3445,7 @@
         y += t * 0.08;
       }
     }
+    if (D.entre && D.entre.length) { y = lignesInfos(ctx, D, D.entre, x, y, largeur, align, c.texte, c.accent, 46) + 4; ctx.textAlign = align; ctx.textBaseline = 'top'; }
     if (cfgT.sousTitre) {
       ctx.font = '400 ' + (c.sous || 54) + 'px ' + fam; ctx.fillStyle = c.texte; ctx.globalAlpha = 0.8;
       coupeLignes(ctx, sansLiens(cfgT.sousTitre), largeur, 2).forEach(l => { ctx.fillText(l, ax, y); y += (c.sous || 54) * 1.26; });
@@ -3516,9 +3559,11 @@
       const L = qx - 70 - 100 - 60;
       let y = 100;
       if (D.logo) { dessinerLogo(ctx, D, 100, y, 170); y += 170 + 46; } else y += 30;
+      y = lignesInfos(ctx, D, D.avant, 100, y, L, 'left', '#111', accent, 40);
       ctx.textBaseline = 'top'; ctx.fillStyle = '#111';
       ctx.font = policeAjustee(ctx, D.nom || '', '800', 92, 44, L, D.fam);
       coupeLignes(ctx, D.nom || '', L, 2).forEach(l => { ctx.fillText(l, 100, y); y += parseInt(ctx.font.match(/(\d+)px/)[1], 10) * 1.12; });
+      y = lignesInfos(ctx, D, D.entre, 100, y, L, 'left', '#111', accent, 40);
       if (D.slogan) {
         ctx.font = '400 42px ' + D.fam; ctx.fillStyle = '#555';
         coupeLignes(ctx, sansLiens(D.slogan), L, 2).forEach(l => { ctx.fillText(l, 100, y + 6); y += 54; });
@@ -3666,10 +3711,12 @@
       const x = qx + q + 110, L = W - x - 120;
       let y = 260;
       if (D.logo) { dessinerLogo(ctx, D, x, y - 60, 170); y += 170; }
+      y = lignesInfos(ctx, D, D.avant, x, y, L, 'left', texte, texte, 42);
       ctx.fillStyle = texte; ctx.textBaseline = 'top';
       ctx.font = policeAjustee(ctx, D.nom || '', '800', 96, 46, L, D.fam);
       coupeLignes(ctx, D.nom || '', L, 2).forEach(l => { ctx.fillText(l, x, y); y += parseInt(ctx.font.match(/(\d+)px/)[1], 10) * 1.12; });
-      y += 30; ctx.fillRect(x, y, 120, 8); y += 50;
+      y = lignesInfos(ctx, D, D.entre, x, y, L, 'left', texte, texte, 42);
+      ctx.fillStyle = texte; y += 30; ctx.fillRect(x, y, 120, 8); y += 50;
       ctx.font = '500 48px ' + D.fam; ctx.globalAlpha = 0.9;
       coupeLignes(ctx, tc('Scannez pour réserver, appeler ou laisser un avis'), L, 3).forEach(l => { ctx.fillText(l, x, y); y += 62; });
       ctx.globalAlpha = 1;
@@ -3795,9 +3842,12 @@
       let x = P;
       if (D.logo) { dessinerLogo(ctx, D, P, Hh - 250, 200); x = P + 250; }
       const Lt = qx - x - 50;
+      const hE = hauteurInfos(D.entre, 40), yNom = Hh - (D.slogan ? 130 : 70) - hE;
+      lignesInfos(ctx, D, D.avant, x, yNom - 104 - hauteurInfos(D.avant, 40), Lt, 'left', blanc, blanc, 40);
+      lignesInfos(ctx, D, D.entre, x, yNom + 18, Lt, 'left', blanc, blanc, 40);
       ctx.fillStyle = blanc; ctx.textBaseline = 'alphabetic';
       ctx.font = policeAjustee(ctx, D.nom || '', '800', 112, 52, Lt, D.fam);
-      ctx.fillText(D.nom || '', x, Hh - (D.slogan ? 130 : 70));
+      ctx.fillText(D.nom || '', x, yNom);
       if (D.slogan) {
         ctx.font = policeAjustee(ctx, sansLiens(D.slogan), '400', 50, 28, Lt, D.fam); ctx.globalAlpha = .85;
         ctx.fillText(sansLiens(D.slogan), x, Hh - 64); ctx.globalAlpha = 1;
@@ -3813,9 +3863,11 @@
       const accent = luminance(D.d.accent) > 0.6 ? '#1a1a1a' : D.d.accent;
       let y = 110;
       if (D.logo) { dessinerLogo(ctx, D, (W - 170) / 2, y, 170); y += 170 + 40; } else y += 60;
+      y = lignesInfos(ctx, D, D.avant, 150, y, W - 300, 'center', '#444', accent, 40);
       ctx.fillStyle = '#111'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
       ctx.font = policeAjustee(ctx, D.nom || '', '300', 104, 56, W - 300, D.fam);
       ctx.fillText(D.nom || '', W / 2, y); y += 130;
+      if (D.entre && D.entre.length) { y = lignesInfos(ctx, D, D.entre, 150, y - 10, W - 300, 'center', '#444', accent, 40) + 10; ctx.textAlign = 'center'; ctx.textBaseline = 'top'; }
       ctx.fillStyle = accent; ctx.fillRect(W / 2 - 50, y, 100, 5); y += 40;
       const lignes = lignesCoords(D.coords);
       ctx.fillStyle = '#444'; ctx.font = policeAjustee(ctx, lignes[0] || '', '500', 48, 30, W - 300, D.fam);
@@ -3840,11 +3892,14 @@
       const texte = fondPage(ctx, D, 0, 0, W, H, 0.55);
       const q = 760;
       dessinerBlocQR(ctx, D, (W - q) / 2, 110, q, '', true);
+      let yv = lignesInfos(ctx, D, D.avant, 150, 110 + q + 60, W - 300, 'center', texte, texte, 42);
       ctx.fillStyle = texte; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
       ctx.font = policeAjustee(ctx, D.nom || '', '800', 96, 50, W - 300, D.fam);
-      ctx.fillText(D.nom || '', W / 2, 110 + q + 70);
+      ctx.fillText(D.nom || '', W / 2, yv + (D.avant && D.avant.length ? 0 : 10)); yv += 120;
+      yv = lignesInfos(ctx, D, D.entre, 150, yv, W - 300, 'center', texte, texte, 42);
+      ctx.fillStyle = texte; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
       ctx.font = '500 50px ' + D.fam; ctx.globalAlpha = .8;
-      ctx.fillText(tc('Scannez pour réserver, appeler ou laisser un avis'), W / 2, 110 + q + 190);
+      ctx.fillText(tc('Scannez pour réserver, appeler ou laisser un avis'), W / 2, Math.max(110 + q + 190, yv + 10));
       ctx.globalAlpha = 1; ctx.textAlign = 'left';
     }
   };
@@ -3887,6 +3942,8 @@
     const norm = x => String(x || '').toLowerCase().replace(/…$/, '').trim();
     const vals = {}; ['nom', 'slogan'].forEach(k => { if (D[k]) vals[k] = norm(sansLiens(D[k])); });
     (D.coords || []).forEach(([, val], i) => { const k = (D.coordsCles || [])[i]; if (k) vals[k] = norm(val); });
+    (D.avant || []).forEach(([, val], i) => { const k = (D.avantCles || [])[i]; if (k) vals[k] = norm(val); });
+    (D.entre || []).forEach(([, val], i) => { const k = (D.entreCles || [])[i]; if (k) vals[k] = norm(val); });
     function categorie(texte) {
       const x = norm(texte); if (!x) return null;
       for (const k in vals) if (vals[k] === x) return k;
@@ -3937,7 +3994,7 @@
     const majAide = () => { const x = qrFaces(); aide.textContent = t(x.recto === x.verso ? (x.recto ? 'QR code sur les deux faces : un aperçu par modèle.' : 'Sans QR code : un aperçu par modèle (la place du QR reste vide).')
       : 'QR code sur une seule face : chaque modèle est montré en recto et en verso.'); };
     majAide();
-    return el('div', { class: 'infos-carte qr-faces' }, [el('span', { class: 'etiq', text: 'QR code sur la carte' }),
+    return el('div', { class: 'qr-faces' }, [el('span', { class: 'etiq', text: 'QR code sur la carte' }),
       el('div', { class: 'qr-faces-cases' }, [caseFace('recto', t('Au recto')), caseFace('verso', t('Au verso'))]), aide]);
   }
 
@@ -4028,7 +4085,6 @@
       el('span', { class: 'etiq', text: 'Carte de visite' }),
       el('div', { class: 'aide', style: 'margin:0 0 10px', text: 'Créée à partir de la page telle qu’elle est affichée : fond, logo, QR code et les informations choisies ci-dessous.' }),
       blocInfosCarte(() => { if (grilleModeles.childElementCount) btnCarte.click(); }),
-      blocQRFaces(() => { if (grilleModeles.childElementCount) btnCarte.click(); }),
       btnCarte, grilleModeles, zoneCarte, btnAppli, aideAppli, btnCommande, aideCommande
     ]);
   }
