@@ -3126,7 +3126,9 @@
     };
   }
   function reglagesCarte() { return cfg.carteInfos && typeof cfg.carteInfos === 'object' ? cfg.carteInfos : {}; }
-  function logoSurCarte() { return reglagesCarte().logo !== false; }   // logo imprimé sauf case décochée (ne compte pas dans les 5)
+  // Logo imprimé au recto / au verso (27/11 ; ancien réglage logo: false = sur aucune face) — ne compte pas dans les 5 informations
+  function logoFaces() { const r = reglagesCarte(), non = r.logo === false; return { recto: !!cfg.logo && !non && r.logoRecto !== false, verso: !!cfg.logo && !non && r.logoVerso !== false }; }
+  function logoSurCarte() { const l = logoFaces(); return l.recto || l.verso; }
   function persoCarte() { const p = reglagesCarte().perso; return Array.isArray(p) ? p.filter(x => x && x.id) : []; }
   function modifierCarte(f) { cfg.carteInfos = Object.assign({}, reglagesCarte(), { choix: choixCarte() }); f(cfg.carteInfos); changement(); }
   function valeursCarte() {
@@ -3186,12 +3188,6 @@
       bloc.append(el('span', { class: 'etiq', text: 'Informations sur la carte' }),
         el('div', { class: 'aide', style: 'margin:0 0 8px', text: 'Cochez les informations à imprimer (5 au plus). Elles sont reprises de votre page ; modifiez-les ici si vous voulez imprimer un autre numéro ou un autre e-mail (votre page ne change pas). ↑ ↓ changent l’ordre : un champ perso peut monter entre le nom et le slogan, ou au-dessus du nom.' }),
         blocQRFaces(rafraichir));
-      // Logo : affiché ou non sur la carte
-      const caseLogo = el('input', { type: 'checkbox' }); caseLogo.checked = !!cfg.logo && logoSurCarte(); caseLogo.disabled = !cfg.logo;
-      caseLogo.addEventListener('change', () => { modifierCarte(o => { if (caseLogo.checked) delete o.logo; else o.logo = false; }); refaire(); });
-      bloc.append(el('div', { class: 'info-carte logo-carte' + (caseLogo.checked ? '' : ' off') }, [
-        el('label', { class: 'case-info' }, [caseLogo, el('span', { text: t('Logo') })]),
-        el('span', { class: 'aide', style: 'margin:0', text: cfg.logo ? t('Afficher le logo sur la carte (ne compte pas dans les 5 informations).') : t('Pas de logo : ajoutez-en un dans la section Logo.') })]));
       const caseCoche = k => {
         const c = el('input', { type: 'checkbox' }); c.checked = ch.includes(k); c.disabled = !c.checked && plein;
         c.addEventListener('change', () => {
@@ -3904,8 +3900,12 @@
     }
   };
 
-  async function genererCarte(modele, D, avecQR) {
+  // opt : { qr, logo } pour une face (true / false seul = QR ; par défaut : QR + logo du recto)
+  async function genererCarte(modele, D, opt) {
     D = D || await preparerCarte();
+    opt = typeof opt === 'boolean' ? { qr: opt, logo: logoFaces().recto } : Object.assign({ qr: true, logo: logoFaces().recto }, opt || {});
+    const avecQR = opt.qr;
+    if (!opt.logo && D.logo) D = Object.assign({}, D, { logo: null });
     if (TAILLES_CARTE[modele]) D = Object.assign({}, D, TAILLES_CARTE[modele]);
     else D = Object.assign({}, D, { W: 2008, H: 1300 });
     const cv = document.createElement('canvas');
@@ -3931,6 +3931,12 @@
   }
   // QR imprimé au recto / au verso (cfg.carteInfos.qrRecto / qrVerso, oui par défaut)
   function qrFaces() { const r = reglagesCarte(); return { recto: r.qrRecto !== false, verso: r.qrVerso !== false }; }
+  // Réglages de chaque face (QR, logo) et faces différentes ou non
+  function reglagesFaces() {
+    const q = qrFaces(), l = logoFaces();
+    const recto = { qr: q.recto, logo: l.recto }, verso = { qr: q.verso, logo: l.verso };
+    return { recto, verso, differentes: recto.qr !== verso.qr || recto.logo !== verso.logo };
+  }
 
   /* Réglages « Aa » des cartes appliqués sans toucher aux 22 modèles : chaque texte mesuré ou écrit est reconnu
      (nom, slogan, téléphone, e-mail, site — entier, une de ses lignes, ou en majuscules) et reçoit police, style,
@@ -3984,18 +3990,35 @@
 
   // Cases « QR code au recto / au verso » (section QR code et carte de visite)
   function blocQRFaces(rafraichir) {
-    const q = qrFaces();
-    const caseFace = (face, lib) => {
-      const c = el('input', { type: 'checkbox' }); c.checked = q[face];
-      c.addEventListener('change', () => { modifierCarte(o => { if (c.checked) delete o[face === 'recto' ? 'qrRecto' : 'qrVerso']; else o[face === 'recto' ? 'qrRecto' : 'qrVerso'] = false; }); majAide(); rafraichir(); });
+    const q = qrFaces(), l = logoFaces();
+    const caseFace = (cleRecto, cleVerso, etat, face, lib, inactif) => {
+      const cle = face === 'recto' ? cleRecto : cleVerso;
+      const c = el('input', { type: 'checkbox' }); c.checked = etat[face]; c.disabled = !!inactif;
+      c.addEventListener('change', () => {
+        modifierCarte(o => {
+          if (cle === 'logoRecto' || cle === 'logoVerso') {      // ancien réglage « logo sur aucune face » converti en deux cases
+            if (o.logo === false) { delete o.logo; o.logoRecto = false; o.logoVerso = false; }
+          }
+          if (c.checked) delete o[cle]; else o[cle] = false;
+        });
+        majAide(); rafraichir();
+      });
       return el('label', { class: 'case-info' }, [c, el('span', { text: lib })]);
     };
     const aide = el('div', { class: 'aide', style: 'margin:2px 0 0' });
-    const majAide = () => { const x = qrFaces(); aide.textContent = t(x.recto === x.verso ? (x.recto ? 'QR code sur les deux faces : un aperçu par modèle.' : 'Sans QR code : un aperçu par modèle (la place du QR reste vide).')
-      : 'QR code sur une seule face : chaque modèle est montré en recto et en verso.'); };
+    const majAide = () => {
+      const f = reglagesFaces(), x = qrFaces();
+      aide.textContent = t(f.differentes ? 'Recto et verso différents : chaque modèle est montré en recto et en verso.'
+        : x.recto ? 'Recto et verso identiques : un aperçu par modèle.' : 'Sans QR code : un aperçu par modèle (la place du QR reste vide).');
+    };
     majAide();
-    return el('div', { class: 'qr-faces' }, [el('span', { class: 'etiq', text: 'QR code sur la carte' }),
-      el('div', { class: 'qr-faces-cases' }, [caseFace('recto', t('Au recto')), caseFace('verso', t('Au verso'))]), aide]);
+    return el('div', { class: 'qr-faces' }, [
+      el('span', { class: 'etiq', text: 'QR code sur la carte' }),
+      el('div', { class: 'qr-faces-cases' }, [caseFace('qrRecto', 'qrVerso', q, 'recto', t('Au recto')), caseFace('qrRecto', 'qrVerso', q, 'verso', t('Au verso'))]),
+      el('span', { class: 'etiq', style: 'margin-top:8px', text: 'Logo sur la carte' }),
+      el('div', { class: 'qr-faces-cases logo-faces' }, [caseFace('logoRecto', 'logoVerso', l, 'recto', t('Au recto'), !cfg.logo), caseFace('logoRecto', 'logoVerso', l, 'verso', t('Au verso'), !cfg.logo)]),
+      cfg.logo ? null : el('div', { class: 'aide', style: 'margin:0', text: t('Pas de logo : ajoutez-en un dans la section Logo.') }),
+      aide]);
   }
 
   function nomFichierCarte(modele) {
@@ -4019,19 +4042,19 @@
     const grilleModeles = el('div', { class: 'modeles-carte' });
     let choisi = 'photo', choisiFace = 'recto', donnees = null;
     // Faces à montrer : QR identique sur les deux faces → une carte par modèle ; sinon recto ET verso de chaque modèle (2×)
-    const facesCarte = () => { const q = qrFaces(); return q.recto === q.verso ? [{ face: '', qr: q.recto }] : [{ face: 'recto', qr: q.recto }, { face: 'verso', qr: q.verso }]; };
+    const facesCarte = () => { const f = reglagesFaces(); return !f.differentes ? [Object.assign({ face: '' }, f.recto)] : [Object.assign({ face: 'recto' }, f.recto), Object.assign({ face: 'verso' }, f.verso)]; };
     const libFace = f => f === 'recto' ? t('Recto') : f === 'verso' ? t('Verso') : '';
 
     async function afficherChoisi() {
       zoneCarte.innerHTML = '';
       const faces = facesCarte(), f = faces.find(x => x.face === choisiFace) || faces[0];
       choisiFace = f.face;
-      const cv = await genererCarte(choisi, donnees, f.qr);
+      const cv = await genererCarte(choisi, donnees, f);
       const nomF = MODELES_CARTE[choisi] + (f.face ? ' · ' + libFace(f.face) : '');
       zoneCarte.append(
         el('img', { class: 'carte-apercu', alt: 'Carte de visite', src: cv.toDataURL('image/jpeg', 0.85) }),
         el('button', { type: 'button', class: 'btn btn-prim btn-plein', 'data-no-i18n': '', text: '⬇ ' + t('Télécharger') + ' « ' + t(MODELES_CARTE[choisi]) + (f.face ? ' · ' + libFace(f.face) : '') + ' » (JPEG)',
-          onclick: () => telecharger(cv, nomFichierCarte(choisi + (f.face ? '-' + f.face : '') + (f.qr ? '' : '-sans-qr')), 'image/jpeg', 0.95) }),
+          onclick: () => telecharger(cv, nomFichierCarte(choisi + (f.face ? '-' + f.face : '') + (f.qr ? '' : '-sans-qr') + (cfg.logo && !f.logo ? '-sans-logo' : '')), 'image/jpeg', 0.95) }),
         el('div', { class: 'aide', style: 'margin:4px 0 0', text: (TAILLES_CARTE[choisi] ? 'Format 55 × 85 mm (vertical)' : 'Format 85 × 55 mm') + ', 600 dpi, prêt pour l’imprimeur. Astuce : « Verso QR » fait un beau dos de carte.' }));
     }
 
@@ -4044,7 +4067,7 @@
         const faces = facesCarte();
         if (!faces.some(x => x.face === choisiFace)) choisiFace = faces[0].face;
         for (const k of Object.keys(MODELES_CARTE)) for (const f of faces) {
-          const cv = await genererCarte(k, donnees, f.qr);
+          const cv = await genererCarte(k, donnees, f);
           const mini = document.createElement('canvas');
           const ech = Math.min(502 / cv.width, 325 / cv.height);
           mini.width = Math.round(cv.width * ech); mini.height = Math.round(cv.height * ech);
@@ -4100,7 +4123,7 @@
   // appli sur sa propre adresse (nom--carte.qrbc.app) : elle ne remplace jamais l'appli de la page
   function lienAppliCarte() { return URL_PUBLIQUE.replace(/^(https?:\/\/)([^./]+)\./, '$1$2--carte.').replace(/^(https?:\/\/[^/]+).*$/, '$1/'); }
   function cleCarteApp() {
-    return JSON.stringify([cfg.carteApp && cfg.carteApp.modeles, cfg.design, cfg.logo, cfg.titre, cfg.sousTitre, cfg.pied, infosCarte(), typoCarte(), logoSurCarte(), URL_PUBLIQUE, cfg.langue || 'fr', 3]);
+    return JSON.stringify([cfg.carteApp && cfg.carteApp.modeles, cfg.design, cfg.logo, cfg.titre, cfg.sousTitre, cfg.pied, infosCarte(), typoCarte(), logoFaces(), URL_PUBLIQUE, cfg.langue || 'fr', 3]);
   }
   async function preparerCarteApp(forcer) {
     const ca = cfg.carteApp;
@@ -4315,15 +4338,15 @@
 
     let offre, donnees;
     // faces dessinées selon le réglage « QR code au recto / au verso » ; même réglage des deux côtés → mêmes images
-    const QF = qrFaces();
-    const cartesR = {}, minisR = {}, cartesV = QF.recto === QF.verso ? cartesR : {}, minisV = QF.recto === QF.verso ? minisR : {};
+    const QF = qrFaces(), RF = reglagesFaces();
+    const cartesR = {}, minisR = {}, cartesV = !RF.differentes ? cartesR : {}, minisV = !RF.differentes ? minisR : {};
     const cartesDe = cle => cle === 'verso' ? cartesV : cartesR, minisDe = cle => cle === 'verso' ? minisV : minisR;
     try {
       offre = await (await appelAPI('cartes/offre', jetonCF)).json();
       if (!offre.actif) throw new Error(t('La commande de cartes imprimées n’est pas encore ouverte.'));
       donnees = await preparerCarte();
-      for (const [C, M, qr] of [[cartesR, minisR, QF.recto]].concat(cartesV === cartesR ? [] : [[cartesV, minisV, QF.verso]])) for (const k of Object.keys(MODELES_CARTE)) {
-        C[k] = await genererCarte(k, donnees, qr);
+      for (const [C, M, face] of [[cartesR, minisR, RF.recto]].concat(cartesV === cartesR ? [] : [[cartesV, minisV, RF.verso]])) for (const k of Object.keys(MODELES_CARTE)) {
+        C[k] = await genererCarte(k, donnees, face);
         const p = versPaysage(C[k]), mini = document.createElement('canvas');
         const ech = Math.min(420 / p.width, 272 / p.height);
         mini.width = Math.round(p.width * ech); mini.height = Math.round(p.height * ech);
@@ -4337,7 +4360,7 @@
     const ordreVerso = VERSOS.concat(Object.keys(MODELES_CARTE).filter(k => VERSOS.indexOf(k) < 0));
     const recto0 = MODELES_CARTE[modeleInitial] && VERSOS.indexOf(modeleInitial) < 0 ? modeleInitial : ordreRecto[0];
     // QR sur une seule face : le verso proposé est le même modèle que le recto (seul le QR change)
-    const S = { recto: recto0, verso: QF.recto !== QF.verso ? recto0 : 'verso', avecVerso: QF.recto !== QF.verso,
+    const S = { recto: recto0, verso: RF.differentes ? recto0 : 'verso', avecVerso: RF.differentes,
       quantite: offre.quantites.indexOf(100) >= 0 ? 100 : offre.quantites[0], vue: 'recto' };
     const adr = offre.adresses || {}, F = Object.assign({ pays: 'FR' }, adr.facturation || {}), L = Object.assign({ separee: false, pays: Object.keys(offre.livraison)[0] || 'FR' }, adr.livraison || {});
     const paysLivraison = () => L.separee ? L.pays : (F.pays || 'FR');
@@ -4394,7 +4417,7 @@
       majQuantites(); majApercu(); majPrix();
       corps.append(
         apercu, legende,
-        el('p', { class: 'cpt-aide', style: 'margin:0 0 6px', text: t(QF.recto ? 'QR code au recto' : 'Pas de QR code au recto') + ' · ' + t(QF.verso ? 'QR code au verso' : 'Pas de QR code au verso') + ' ' + t('(réglage dans « Carte de visite »).') }),
+        el('p', { class: 'cpt-aide', style: 'margin:0 0 6px', text: t(QF.recto ? 'QR code au recto' : 'Pas de QR code au recto') + ' · ' + t(QF.verso ? 'QR code au verso' : 'Pas de QR code au verso') + (cfg.logo ? ' · ' + t(RF.recto.logo ? 'logo au recto' : 'pas de logo au recto') + ' · ' + t(RF.verso.logo ? 'logo au verso' : 'pas de logo au verso') : '') + ' ' + t('(réglage dans « Carte de visite »).') }),
         el('span', { class: 'etiq', text: 'Recto' }), rangee(ordreRecto, 'recto'),
         el('label', { class: 'bascule' }, [el('span', { text: 'Imprimer aussi un verso' }), interrupteur]), rangVerso,
         el('span', { class: 'etiq', style: 'margin-top:12px', text: 'Quantité' }), qte,
