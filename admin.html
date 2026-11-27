@@ -316,6 +316,7 @@
     .damier.grand{width:min(200px,44vw);aspect-ratio:1}
     .damier img{width:90%;height:90%;object-fit:contain}
     .logo-apercu{display:block}
+    .photo-ia{display:flex;align-items:center;gap:10px;margin:0 0 10px}.photo-ia img{width:56px;height:56px;object-fit:cover;border-radius:10px}
     .motifs{display:grid;grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:8px;margin:6px 0 14px}
     .motif-v{border:2px solid var(--ligne);border-radius:12px;background:var(--bg);padding:5px;cursor:pointer;color:var(--txt);display:flex;flex-direction:column;align-items:center;gap:4px}
     .motif-v .damier{width:100%;aspect-ratio:1}
@@ -5481,6 +5482,20 @@
   function ouvrirCreateurLogo() {
     const o = optionsLogo();
     let photo = null; // motif photo (calculé à l'ouverture, non enregistré)
+    let maPhoto = null; // photo choisie sur le téléphone (gardée le temps de l'atelier, non enregistrée)
+    if (o.choix === 'maphoto') o.choix = 'mono';
+    if (o.sourceIA === 'maphoto') o.sourceIA = 'description';
+    const entreePhoto = el('input', { type: 'file', accept: 'image/*', class: 'cache' });
+    let apresPhoto = null;
+    entreePhoto.addEventListener('change', async () => {
+      const f = entreePhoto.files[0]; entreePhoto.value = ''; if (!f) return;
+      try { maPhoto = { type: 'photo', data: await reduireImage(f, 1024, 'image/jpeg', 0.85) }; }
+      catch (e) { alert(t('Cette image ne peut pas être lue sur cet appareil. Essayez une autre image (JPEG ou PNG de moins de 3 Mo).')); return; }
+      const suite = apresPhoto; apresPhoto = null;
+      if (suite) suite(); else { o.choix = 'maphoto'; construire(); rafraichir(); }
+    });
+    const choisirPhoto = suite => { apresPhoto = suite || null; entreePhoto.click(); };
+    const estPhoto = () => o.choix === 'photo' || o.choix === 'maphoto';
 
     const fond = el('div', { class: 'modale-fond' });
     const boite = el('div', { class: 'modale', role: 'dialog', 'aria-modal': 'true' });
@@ -5493,6 +5508,7 @@
     const corps = el('div', { class: 'modale-corps' });
     const motifCourant = () => {
       if (o.choix === 'photo') return photo;
+      if (o.choix === 'maphoto') return maPhoto;
       if (o.choix === 'mono') return { type: 'mono' };
       const i = Number(String(o.choix).replace('ia', ''));
       return o.motifs[i] || { type: 'mono' };
@@ -5550,7 +5566,8 @@
       go.addEventListener('click', async () => {
         go.disabled = true; go.textContent = 'L’IA dessine…'; msg.className = 'msg'; msg.textContent = '';
         try {
-          const b64 = o.sourceIA === 'fond' && aFond ? (await imageFondReduite(1024, .85)).split(',')[1] : null;
+          const b64 = o.sourceIA === 'fond' && aFond ? (await imageFondReduite(1024, .85)).split(',')[1]
+            : o.sourceIA === 'maphoto' && maPhoto ? maPhoto.data.split(',')[1] : null;
           const nouveaux = await creerMotifsIA(o, b64);
           o.motifs = o.motifs.concat(nouveaux).slice(-60);   // historique des pictos (les 60 derniers)
           o.choix = 'ia' + (o.motifs.length - nouveaux.length);
@@ -5562,7 +5579,9 @@
         }
       });
       const src = el('div');
-      src.appendChild(puces('Inspiration', { description: 'Ma description', fond: 'Mon image de fond' }, 'sourceIA', () => { construireAlerte(); }));
+      src.appendChild(puces('Inspiration', { description: 'Ma description', fond: 'Mon image de fond', maphoto: 'Ma photo' }, 'sourceIA', () => {
+        if (o.sourceIA === 'maphoto' && !maPhoto) choisirPhoto(() => construire()); else construireAlerte();
+      }));
       const alerte = el('div');
       const construireAlerte = () => {
         alerte.innerHTML = '';
@@ -5571,7 +5590,11 @@
           el('div', { text: 'Ajoutez d’abord une photo dans la section « Image de fond » (galerie ou appareil photo).' }),
           el('button', { type: 'button', class: 'btn btn-mini', text: 'Aller à Image de fond', onclick: () => {
             fermer(); allerSection('fond'); } })]));
-        go.disabled = o.sourceIA === 'fond' && !aFond;
+        if (o.sourceIA === 'maphoto') alerte.appendChild(maPhoto
+          ? el('div', { class: 'photo-ia' }, [el('img', { src: maPhoto.data, alt: '' }), el('button', { type: 'button', class: 'btn btn-mini', text: '📷 ' + t('Autre photo'), onclick: () => choisirPhoto(() => construire()) })])
+          : el('div', { class: 'alerte' }, [el('b', { text: 'Aucune photo choisie.' }),
+              el('button', { type: 'button', class: 'btn btn-mini', text: '📷 ' + t('Choisir une photo'), onclick: () => choisirPhoto(() => construire()) })]));
+        go.disabled = (o.sourceIA === 'fond' && !aFond) || (o.sourceIA === 'maphoto' && !maPhoto);
       };
       construireAlerte();
       p.append(el('b', { class: 'ia-titre', text: '✨ Nouveaux motifs dessinés par l’IA' }),
@@ -5588,7 +5611,11 @@
       // Motifs disponibles
       const grille = el('div', { class: 'motifs' });
       grille.appendChild(vignetteMotif('mono', { type: 'mono' }, 'Monogramme'));
-      if (photo) grille.appendChild(vignetteMotif('photo', photo, 'Photo'));
+      if (photo) grille.appendChild(vignetteMotif('photo', photo, 'Image de fond'));
+      if (maPhoto) grille.appendChild(vignetteMotif('maphoto', maPhoto, 'Ma photo'));
+      const ajoutPhoto = el('button', { type: 'button', class: 'motif-v motif-plus' }, [el('span', { class: 'plus', text: '📷' }), el('b', { text: maPhoto ? 'Autre photo' : 'Ma photo' })]);
+      ajoutPhoto.addEventListener('click', () => choisirPhoto());
+      grille.appendChild(ajoutPhoto);
       o.motifs.forEach((m, i) => grille.appendChild(vignetteMotif('ia' + i, m, 'Motif IA ' + (i + 1))));
       const plus = el('button', { type: 'button', class: 'motif-v motif-plus' }, [el('span', { class: 'plus', text: '＋' }), el('b', { text: 'Motifs IA' })]);
       plus.addEventListener('click', () => { iaOuvert = !iaOuvert; construire(); });
@@ -5607,7 +5634,7 @@
       const perso = el('div', { class: 'couleurs' + (o.palette === 'perso' ? '' : ' cache') }, [couleurLogo('Fond', 'cFond'), couleurLogo('Motif', 'cMotif'), couleurLogo('Texte', 'cTexte')]);
       corps.appendChild(puces('Couleurs', LOGO_PALETTES, 'palette', () => perso.classList.toggle('cache', o.palette !== 'perso')));
       corps.appendChild(perso);
-      if (o.choix === 'photo') {
+      if (estPhoto()) {
         const c = el('input', { type: 'checkbox', checked: !!o.photoOrigine });
         c.addEventListener('change', () => { o.photoOrigine = c.checked; rafraichir(); });
         corps.appendChild(el('label', { class: 'bascule', style: 'border-top:0;margin-top:-6px' }, [el('span', { text: 'Garder les couleurs de la photo' }), c]));
@@ -5622,7 +5649,7 @@
       }
       const taille = el('input', { type: 'range', min: 60, max: 140, value: o.taille });
       taille.addEventListener('input', () => { o.taille = Number(taille.value); rafraichir(); });
-      corps.appendChild(el('div', { class: 'opt' }, [el('span', { class: 'etiq', text: o.choix === 'photo' ? 'Zoom de la photo' : 'Taille du motif' }), taille]));
+      corps.appendChild(el('div', { class: 'opt' }, [el('span', { class: 'etiq', text: estPhoto() ? 'Zoom de la photo' : 'Taille du motif' }), taille]));
       o._fond = o.transparent ? 'transparent' : 'plein';
       rafraichir();
     }
@@ -5646,7 +5673,7 @@
     boite.append(
       el('div', { class: 'modale-tete' }, [el('b', { text: '✨ Atelier logo' }), el('button', { type: 'button', class: 'btn btn-mini', text: '✕', 'aria-label': 'Fermer', onclick: fermer })]),
       el('div', { class: 'logo-scene' }, [el('span', { class: 'damier grand' }, [apercu]), utiliser]),
-      corps);
+      corps, entreePhoto);
     fond.appendChild(boite);
     document.body.appendChild(fond);
     document.body.style.overflow = 'hidden';
