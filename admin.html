@@ -1971,8 +1971,8 @@
       }
       const plusieurs = g && g.pages.length > 1;
       box.append(el('div', { class: 'pb-tete' }, [
-        el('b', {}, ['📄 ', el('span', { text: plusieurs ? 'Mes pages' : 'Une autre activité ou une autre langue ?' })]),
-        el('button', { type: 'button', class: 'btn btn-mini', onclick: () => ouvrirAjoutPage() }, [el('span', {}, ['＋ ', el('span', { text: 'Ajouter une page ou une langue' })])])
+        el('b', {}, ['📄 ', el('span', { text: plusieurs ? 'Mes sites' : 'Une autre activité ou une autre langue ?' })]),
+        el('button', { type: 'button', class: 'btn btn-mini', onclick: () => ouvrirAjoutPage() }, [el('span', {}, ['＋ ', el('span', { text: 'Ajouter un site ou une langue' })])])
       ]));
       if (plusieurs) {
         const liste = el('div', { class: 'pb-liste', 'data-no-i18n': '' });
@@ -2019,7 +2019,7 @@
     const c = compteCF;
     const { fond, fen, fermer } = fenetrePages();
     fond.addEventListener('click', e => { if (e.target === fond) fermer(); });
-    fen.append(el('h2', { text: t('Ajouter une page ou une langue') }));
+    fen.append(el('h2', { text: t('Ajouter un site ou une langue') }));
     if (!g.ajout.possible) {
       fen.append(el('div', { class: 'alerte-abo', text: g.ajout.raison }),
         el('button', { type: 'button', class: 'btn btn-prim btn-plein', text: t('Voir l’abonnement'), onclick: () => { fermer(); ouvrirAbonnement(); } }),
@@ -2040,14 +2040,14 @@
       return lab;
     };
     const choix = el('div', { class: 'choix-ajout' }, [
-      opt('page', t('Une nouvelle page'), t('Pour une autre activité : nouveau nom, nouvelle adresse, nouveau QR code.')),
+      opt('page', t('Un nouveau site'), t('Pour une autre activité : nouveau nom, nouvelle adresse, nouveau QR code.')),
       opt('traduction', t('Une traduction de cette page'), peutTraduire
         ? t('Même adresse et même QR code : la page s’ouvre dans la langue du téléphone du visiteur. Traduction automatique offerte.')
         : t('Ouvrez la page d’origine pour lui ajouter une langue.'), !peutTraduire)
     ]);
 
     // nouvelle page : nom + disponibilité
-    const nom = el('input', { type: 'text', maxLength: 30, placeholder: t('nom-de-la-page'), autocapitalize: 'none', spellcheck: 'false' });
+    const nom = el('input', { type: 'text', maxLength: 30, placeholder: t('nom-du-site'), autocapitalize: 'none', spellcheck: 'false' });
     const dispo = el('div', { class: 'dispo' });
     let minu = null, libre = false;
     nom.addEventListener('input', () => {
@@ -2066,7 +2066,7 @@
         } catch (e) {}
       }, 350);
     });
-    const zonePage = el('div', { class: 'zone-ajout' }, [el('label', { class: 'champ' }, [el('span', { text: t('Adresse de la nouvelle page') }),
+    const zonePage = el('div', { class: 'zone-ajout' }, [el('label', { class: 'champ' }, [el('span', { text: t('Adresse du nouveau site') }),
       el('div', { class: 'adresse' }, [nom, el('em', { text: '.qrbc.app' })])]), dispo]);
 
     // traduction : langue cible (+ langue actuelle de la page la 1re fois)
