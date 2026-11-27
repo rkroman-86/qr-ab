@@ -4663,8 +4663,7 @@
         el('button', { type: 'button', class: 'btn btn-mini', text: '↓', title: t('Descendre'), 'aria-label': t('Descendre'), disabled: i === ordre.length - 1, onclick: () => bouger(i + 1) }));
       liste.append(r);
     });
-    liste.append(el('div', { class: 'rb-aide', text: 'Case cochée : la page est affichée sur le site. Les flèches règlent l’ordre du menu ☰ en haut à droite des pages.' }),
-      el('div', { class: 'rb-sep' }), ligne('partage'));
+    liste.append(el('div', { class: 'rb-sep' }), ligne('partage'));
     const [ico, nom] = infoRubrique(vueEdit);
     const tete = el('button', { type: 'button', class: 'rb-tete', 'aria-expanded': String(rubriquesOuvert), onclick: () => { rubriquesOuvert = !rubriquesOuvert; construireFormulaire(); } }, [
       el('span', { class: 'rb-lib', text: 'Pages' }),
