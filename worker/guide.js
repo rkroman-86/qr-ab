@@ -15,6 +15,7 @@ qrbc.app (QR-BC, édité par KPS) permet de créer en quelques minutes, depuis u
 - Sur chaque page de la liste : une case (cochée = page affichée sur le site, décochée = masquée aux visiteurs sans rien effacer) et les flèches ↑ ↓ qui règlent l'ordre du menu ☰ des visiteurs. La page Contact est la page principale : toujours affichée.
 - Rubrique Contact : sections repliables Textes, Boutons et réseaux, Disposition, Image de fond, Référencement Google. Les autres rubriques s'affichent directement.
 - Une page masquée reste modifiable (un bandeau rappelle qu'elle est masquée) et l'aperçu la montre quand elle est ouverte dans l'éditeur.
+- Nom et picto de chaque page : en haut de chaque page ouverte dans le menu « Pages », carte « Nom et picto dans le menu du site ». Le nom est celui affiché aux visiteurs dans le menu ☰ (ou en haut à droite s'il n'y a que 2 pages) ; toucher le picto ouvre une grille de pictos standards (« Par défaut » remet celui d'origine : ✉️ Contact, 🏠 Home, 📄 page personnalisée, 📰 Blog, 📷 Galerie). Exemple : un restaurant qui montre sa carte en photos dans la galerie la renomme « Tarifs » avec le picto 💰. Dans la liste de l'éditeur, le type d'origine reste écrit en petit à côté d'un nom changé (ex. « Tarifs — Galerie photos »). Le nom de la page Contact est celui du bouton de retour vers le contact ; celui de la Home est le lien « Découvrir l'entreprise ».
 - En bas, une barre fixe : à gauche le message d'état (« Modifications non enregistrées », « Publié… ») et le bouton « ❓ » de l'assistant ; à droite le bouton « Enregistrer ».
 - IMPORTANT : rien n'est publié tant qu'on n'a pas appuyé sur « Enregistrer ». Après l'enregistrement, la page en ligne est à jour en moins d'une minute (recharger la page si besoin).
 - L'aperçu se met à jour en direct pendant la saisie. L'aperçu montre la page ouverte dans le menu « Pages » (Home, page personnalisée, blog) ; sinon la page contact.
@@ -83,7 +84,7 @@ qrbc.app (QR-BC, édité par KPS) permet de créer en quelques minutes, depuis u
 ## Galerie photos
 - Rubrique « Galerie » du menu « Pages ». Masquée par défaut : cocher sa case dans le menu pour l'afficher.
 - « 📷 Ajouter des photos » : on peut en choisir plusieurs d'un coup, jusqu'à 100 photos par page. Elles sont réduites automatiquement (1280 px au plus, avec une petite vignette pour la grille) : chargement rapide et peu de place. Une photo illisible est ignorée, avec un message.
-- Sur chaque vignette : ✕ retire la photo, ← → changent sa place dans l'ordre. « Titre du bouton » : texte du bouton (vide = « Galerie », traduit selon la langue de la page). Penser à enregistrer : les photos sont envoyées à ce moment-là (compteur « Envoi des images 3 / 20… »), et les photos retirées sont effacées du serveur.
+- Sur chaque vignette : ✕ retire la photo, ← → changent sa place dans l'ordre. Nom de la galerie : carte « Nom et picto » en haut de la rubrique (vide = « Galerie », traduit selon la langue de la page). Penser à enregistrer : les photos sont envoyées à ce moment-là (compteur « Envoi des images 3 / 20… »), et les photos retirées sont effacées du serveur.
 - Sur la page, la galerie s'ouvre depuis le coin en haut à droite (voir « Passer d'une page à l'autre »). Elle montre une grille de vignettes ; toucher une photo l'affiche en grand, glisser à gauche/droite pour la suivante, vers le bas ou « × » pour revenir à la grille ; le bouton retour du téléphone ferme la photo puis la galerie. Sur ordinateur : flèches ‹ › et clavier (← → Échap).
 - Décocher la case de la galerie dans le menu « Pages » cache le bouton sans effacer les photos. Les versions traduites de la page montrent les mêmes photos (le titre du bouton est traduit).
 
@@ -104,13 +105,13 @@ qrbc.app (QR-BC, édité par KPS) permet de créer en quelques minutes, depuis u
 
 ## Page personnalisée (ex. Tarifs)
 - Rubrique « Page personnalisée » du menu « Pages ». Masquée par défaut : cocher sa case dans le menu pour l'afficher (le nom « Tarifs » et une première pancarte sont alors proposés).
-- « Nom de la page (menu) » : nom affiché aux visiteurs (proposé : « Tarifs » ; ex. Prestations, Menu, Horaires).
+- Nom affiché aux visiteurs : carte « Nom et picto » en haut de la rubrique (proposé : « Tarifs » ; ex. Prestations, Menu, Horaires).
 - Même fonctionnement que la page Home : 1 à 30 pancartes plein écran (titre, texte, mise en page, image, ✨ Texte IA, ✨ Image IA), glisser ou ◀ ▶ pour passer de l'une à l'autre, ← → pour l'ordre.
 - Pour le visiteur : page à part (nom.qrbc.app/page.html), ouverte depuis le coin en haut à droite des autres pages (nom de la page ou menu ☰). Sa place dans le menu se règle avec les flèches ↑ ↓ du menu « Pages » de l'éditeur.
 - L'IA n'invente pas de prix : écrire les tarifs soi-même (ou les donner dans le texte) avant « ✨ Texte IA ».
 
 ## Page Blog
-- Rubrique « Blog » du menu « Pages ». Masqué par défaut : cocher sa case dans le menu pour l'afficher. « Titre de la page » : nom du blog (vide = « Blog »).
+- Rubrique « Blog » du menu « Pages ». Masqué par défaut : cocher sa case dans le menu pour l'afficher. Nom du blog : carte « Nom et picto » en haut de la rubrique (vide = « Blog »).
 - « ＋ Nouvel article » ajoute un article en tête (le plus récent en premier), daté du jour. Jusqu'à 50 articles.
 - Les articles s'affichent un par un : glisser à gauche/droite ou boutons ◀ « Article 2 / 5 » ▶. Sur chaque article : titre, date (modifiable), photo (facultative, réduite automatiquement), texte, case « Afficher » pour le cacher sans le supprimer, ← → pour changer l'ordre, 🗑 Supprimer.
 - « ✨ Texte IA » rédige ou améliore l'article affiché (décompté comme un texte IA), avec « ↩ Annuler ». Écrire d'abord un titre ou quelques idées pour choisir le sujet.

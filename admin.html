@@ -155,7 +155,7 @@
     .onglets button{border:0;background:transparent;padding:7px 14px;border-radius:8px;font-weight:600;color:var(--doux);cursor:pointer}
     .onglets button.actif{background:var(--panneau);color:var(--txt);box-shadow:0 1px 3px rgba(0,0,0,.1)}
     .corps{flex:1;display:grid;grid-template-columns:1fr;min-height:0}
-    .col-edit{padding:16px 16px 110px;max-width:640px;width:100%;margin:0 auto}
+    .col-edit{padding:16px 16px 110px;max-width:640px;width:100%;min-width:0;margin:0 auto}
     .col-apercu{padding:0 0 90px}
     .cadre{min-height:calc(100dvh - 150px);display:flex}
     .cadre > .qp{min-height:inherit}
@@ -245,6 +245,17 @@
     .rb-sep{font-size:.78rem;font-weight:700;color:var(--doux);text-transform:uppercase;letter-spacing:.04em;margin:6px 2px 0}
     .rb-sep:empty{height:1px;background:var(--ligne);margin:6px 0}
     .rb-aide{font-size:.8rem;color:var(--doux);margin:0 2px}
+    .rb .rb-type{font-size:.75rem;color:var(--doux);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:0 1 auto;max-width:38%}
+    .rubriques,.rb-liste,.rb,.rb-tete{min-width:0;max-width:100%}
+    .rb .rb-nom{width:0}
+    .nom-page{background:var(--panneau);border:1px solid var(--ligne);border-radius:16px;padding:12px 14px;margin:0 0 14px}
+    .np-ligne{display:flex;gap:8px;align-items:center}
+    .np-ligne input{flex:1;min-width:0}
+    .np-ico{width:48px;height:48px;flex-shrink:0;font-size:1.5rem;border-radius:12px;border:1px solid var(--prim);background:var(--bg);cursor:pointer;line-height:1}
+    .np-grille{display:grid;grid-template-columns:repeat(auto-fill,minmax(44px,1fr));gap:6px;margin:10px 0 0}
+    .np-choix{height:44px;font-size:1.35rem;border-radius:10px;border:1px solid var(--ligne);background:var(--bg);cursor:pointer;line-height:1}
+    .np-choix.actif{border-color:var(--prim);box-shadow:0 0 0 2px var(--prim) inset}
+    .np-defaut{grid-column:1/-1}
     .page-masquee{font-size:.88rem;padding:10px 12px;border-radius:12px;border:1px dashed var(--doux);color:var(--doux);margin:0 0 14px}
     .section > summary::after{content:"";margin-left:auto;width:9px;height:9px;border-right:2px solid var(--doux);border-bottom:2px solid var(--doux);transform:rotate(45deg);transition:transform .15s}
     .section[open] > summary::after{transform:rotate(-135deg)}
@@ -2718,6 +2729,7 @@
     const premiere = f.querySelector(':scope > details.section');
     f.insertBefore(menuRubriques(), premiere);
     const ids = VUES_EDITEUR[vueEdit] || VUES_EDITEUR.contact;
+    if (CHAMP_NOM_PAGE[vueEdit]) f.insertBefore(blocNomPage(vueEdit), premiere);
     if (PAGES_MENU.includes(vueEdit) && vueEdit !== 'contact' && !pageAffichee(vueEdit))
       f.insertBefore(el('div', { class: 'page-masquee' }, [el('span', { text: '🙈 ' }), el('span', { text: 'Cette page est masquée : les visiteurs ne la voient pas. Cochez sa case dans le menu « Pages » pour l’afficher sur le site.' })]), premiere);
     f.querySelectorAll(':scope > details.section').forEach(d => {
@@ -4463,7 +4475,6 @@
     });
     maj();
     corps.append(
-      champTexte('Titre du bouton', g, 'titre', { ph: t('Galerie') }),
       el('div', { class: 'galp-tete' }, [compteur, ajouter]),
       fichier, etat, grille,
       el('p', { class: 'aide', style: 'margin:10px 0 0', text: 'Les photos sont réduites automatiquement pour s’afficher vite et prendre peu de place. Les visiteurs ouvrent la galerie avec le bouton « 📷 » de la page contact (et de la barre de la page Home), puis touchent une photo pour la voir en grand et glissent pour passer à la suivante.' })
@@ -4524,7 +4535,6 @@
       if (visible) visible.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
     corps.append(
-      champTexte('Nom de la page (menu)', P, 'titre', { ph: 'Tarifs' }),
       el('span', { class: 'etiq', text: 'Pancartes — une plein écran chacune, comme la page Home ; glissez à gauche ou à droite pour passer de l’une à l’autre' }),
       nav, ajouter, liste,
       el('p', { class: 'aide', style: 'margin:10px 0 0', text: 'Page à part (adresse …/page.html), par exemple vos tarifs, vos prestations ou un menu. Les visiteurs y passent par le coin en haut à droite des autres pages.' })
@@ -4554,15 +4564,51 @@
     PAGES_MENU.forEach(x => { if (!ordre.includes(x)) ordre.push(x); });
     return ordre;
   }
+  // Nom et picto de chaque page (menu des visiteurs) : nom dans les champs existants, picto dans cfg.icosPages
+  const ICO_PAGE = { contact: '✉️', home: '🏠', perso: '📄', blog: '📰', galerie: '📷' };
+  const TYPE_PAGE = { contact: 'Page contact', home: 'Page Home', perso: 'Page personnalisée', blog: 'Blog', galerie: 'Galerie photos' };
+  const CHAMP_NOM_PAGE = {
+    contact: () => [cfg.home, 'boutonContact', 'Contact'],
+    home: () => [cfg.home, 'lienTexte', 'Découvrir l’entreprise'],
+    perso: () => [objPage('perso'), 'titre', 'Tarifs', 'Page personnalisée'],   // vide : « Page personnalisée » dans la liste, « Tarifs » proposé
+    blog: () => [objPage('blog'), 'titre', 'Blog'],
+    galerie: () => [objPage('galerie'), 'titre', 'Galerie']
+  };
+  const PICTOS_PAGES = ['✉️', '📞', '💬', '📍', '🏠', '🏢', '🏪', 'ℹ️', '⭐', '❤️', '👥', '🤝',
+    '📄', '📋', '📖', '📰', '📝', '❓', '📷', '🖼️', '🎬', '🎵', '💰', '💶',
+    '🏷️', '🛒', '🎁', '📅', '⏰', '🍽️', '🍕', '🍷', '☕', '🍰', '🛏️', '🏖️',
+    '🚗', '✈️', '🔧', '🛠️', '💇', '💅', '🏋️', '⚽', '🌿', '🐾', '🎓', '💼'];
+  function icoPage(id) { const v = cfg.icosPages && cfg.icosPages[id]; return v || ICO_PAGE[id]; }
+  function nomPage(id) { const [o, k, ph, vide] = CHAMP_NOM_PAGE[id](); return String(o[k] || '').trim() || t(vide || ph); }
   function infoRubrique(id) {
-    return {
-      style: ['🎨', t('Style')], logo: ['🖼️', t('Logo')], partage: ['📇', t('QR code et cartes de visite')],
-      contact: ['✉️', cfg.home.boutonContact || t('Contact')],
-      home: ['🏠', t('Page Home')],
-      perso: ['📄', (cfg.perso && cfg.perso.titre) || t('Page personnalisée')],
-      blog: ['📰', (cfg.blog && cfg.blog.titre) || t('Blog')],
-      galerie: ['📷', (cfg.galerie && cfg.galerie.titre) || t('Galerie')]
-    }[id];
+    if (CHAMP_NOM_PAGE[id]) return [icoPage(id), nomPage(id)];
+    return { style: ['🎨', t('Style')], logo: ['🖼️', t('Logo')], partage: ['📇', t('QR code et cartes de visite')] }[id];
+  }
+  function blocNomPage(id) {
+    const [o, k, ph] = CHAMP_NOM_PAGE[id]();
+    const btnIco = el('button', { type: 'button', class: 'np-ico', text: icoPage(id), title: t('Changer le picto'), 'aria-label': t('Changer le picto') });
+    const grille = el('div', { class: 'np-grille cache' });
+    const choisir = v => {
+      if (!cfg.icosPages || typeof cfg.icosPages !== 'object') cfg.icosPages = {};
+      if (!v || v === ICO_PAGE[id]) delete cfg.icosPages[id]; else cfg.icosPages[id] = v;
+      if (!Object.keys(cfg.icosPages).length) delete cfg.icosPages;
+      construireFormulaire(); changement();
+    };
+    PICTOS_PAGES.forEach(v => grille.appendChild(el('button', { type: 'button', class: 'np-choix' + (v === icoPage(id) ? ' actif' : ''), text: v, onclick: () => choisir(v) })));
+    grille.appendChild(el('button', { type: 'button', class: 'btn btn-mini np-defaut', onclick: () => choisir('') }, [el('span', { text: 'Par défaut' }), ' ' + ICO_PAGE[id]]));
+    btnIco.addEventListener('click', () => grille.classList.toggle('cache'));
+    const input = el('input', { type: 'text', value: o[k] || '', placeholder: t(ph), maxLength: 40 });
+    input.addEventListener('input', () => {
+      o[k] = input.value;
+      const n = document.querySelector('.rb-cour .rb-nom'); if (n) n.textContent = nomPage(id);
+      changement();
+    });
+    return el('div', { class: 'nom-page' }, [
+      el('span', { class: 'etiq', text: 'Nom et picto dans le menu du site' }),
+      el('div', { class: 'np-ligne' }, [btnIco, input]),
+      grille,
+      el('div', { class: 'aide', style: 'margin:6px 0 0', text: 'Touchez le picto pour en choisir un autre. Ex. une galerie de photos du menu d’un restaurant : nom « Tarifs », picto 💰.' })
+    ]);
   }
   function activerPage(id, on) {
     const P = objPage(id);
@@ -4599,7 +4645,9 @@
     const ligne = (id, extra) => {
       const [ico, nom] = infoRubrique(id);
       return el('div', { class: 'rb' + (id === vueEdit ? ' actif' : '') + (extra ? ' ' + extra : ''), onclick: e => { if (e.target.closest('button, input, label')) return; choisirRubrique(id); } }, [
-        el('span', { class: 'rb-ico', text: ico }), el('span', { class: 'rb-nom', text: nom, 'data-no-i18n': PAGES_MENU.includes(id) && id !== 'home' ? '' : undefined })]);
+        el('span', { class: 'rb-ico', text: ico }),
+        el('span', { class: 'rb-nom', text: nom, 'data-no-i18n': CHAMP_NOM_PAGE[id] ? '' : undefined }),
+        CHAMP_NOM_PAGE[id] && nom !== t(TYPE_PAGE[id]) && (id === 'home' || nom !== t(CHAMP_NOM_PAGE[id]()[3] || CHAMP_NOM_PAGE[id]()[2])) ? el('span', { class: 'rb-type', text: t(TYPE_PAGE[id]) }) : null]);   // type rappelé si le nom a changé
     };
     const liste = el('div', { class: 'rb-liste' });
     liste.append(ligne('style'), ligne('logo'), el('div', { class: 'rb-sep', text: 'Pages du site' }));
@@ -4688,7 +4736,6 @@
       if (visible) visible.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
     corps.append(
-      champTexte('Titre de la page', B, 'titre', { ph: 'Blog' }),
       el('span', { class: 'etiq', text: 'Articles — du plus récent au plus ancien ; glissez à gauche ou à droite pour passer de l’un à l’autre' }),
       nav, ajouter,
       n ? liste : el('div', { class: 'galp-vide', text: 'Aucun article pour l’instant.' }),
@@ -4888,10 +4935,6 @@
     });
 
     corps.append(
-      el('div', { class: 'grille2' }, [
-        champTexte('Bouton de la barre du haut', h, 'boutonContact', { ph: 'Contact' }),
-        champTexte('Lien vers la Home (page contact)', h, 'lienTexte', { ph: 'Découvrir l’entreprise' })
-      ]),
       blocIA(),
       el('span', { class: 'etiq', text: 'Articles — une pancarte plein écran chacun, on passe de l’une à l’autre en glissant' }),
       nav, ajouter, liste

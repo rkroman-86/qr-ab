@@ -278,7 +278,10 @@ function entreesPages(cfg, doc, res, opts, racine) {
   if (persoVisible(cfg)) e.push({ id: 'perso', nom: titrePerso(cfg), ico: '📄', href: L.perso || 'page.html', sur: S.perso });
   if (blogVisible(cfg)) e.push({ id: 'blog', nom: titreBlog(cfg, doc), ico: '📰', href: L.blog || 'blog.html', sur: S.blog });
   if (galerieVisible(cfg)) e.push({ id: 'galerie', nom: titreGalerie(cfg, doc), ico: '📷', href: '#galerie', sur: () => ouvrirGalerie(cfg, doc, res, opts.apercu ? racine : null) });
-  // ordre choisi dans l'éditeur (section « Menu des pages ») ; pages absentes de la liste : à la fin, dans l'ordre par défaut
+  // picto choisi dans l'éditeur (cfg.icosPages), sinon celui par défaut
+  const icos = cfg.icosPages && typeof cfg.icosPages === 'object' ? cfg.icosPages : {};
+  e.forEach(x => { const v = String(icos[x.id] || '').trim(); if (v && v.length <= 16) { x.ico = v; x.icoPerso = true; } });
+  // ordre choisi dans l'éditeur (menu « Pages ») ; pages absentes de la liste : à la fin, dans l'ordre par défaut
   const ordre = Array.isArray(cfg.ordrePages) ? cfg.ordrePages : [];
   const rang = x => { const k = ordre.indexOf(x.id); return k < 0 ? 100 + PAGES_MENU.indexOf(x.id) : k; };
   return e.sort((a, b) => rang(a) - rang(b));
@@ -298,7 +301,7 @@ function navPages(cfg, doc, res, actuelle, opts, racine, enBarre) {
   if (toutes.length === 2) {
     const x = toutes.find(y => y.id !== actuelle) || toutes[1];
     const a = lien(x, enBarre ? 'qh-contact' : (x.id === 'galerie' ? 'qp-galerie' : 'qp-lien-home'));
-    if (x.id === 'galerie') { const i = doc.createElement('span'); i.className = 'qp-ico'; i.textContent = '📷'; a.appendChild(i); }
+    if (x.id === 'galerie' || x.icoPerso) { const i = doc.createElement('span'); i.className = 'qp-ico'; i.textContent = x.ico; a.appendChild(i); }
     a.appendChild(doc.createTextNode(x.nom));
     a.style.background = d.accent; a.style.color = texteContraste(d.accent);       // couleur d'accent partout, comme ☰ et « Installer »
     return a;
@@ -682,6 +685,7 @@ const CSS_PAGE = `
 .qh-logo.rond{border-radius:50%;object-fit:cover;background:#fff}
 .qh-nom{flex:1;min-width:0;font-weight:700;font-size:1rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .qh-contact{flex-shrink:0;padding:9px 16px;border-radius:999px;font-weight:700;font-size:.9rem;text-decoration:none}
+.qp-lien-home .qp-ico,.qh-contact .qp-ico{margin-right:6px;font-size:1em}
 .qh-defile{height:100%;overflow-y:auto;scroll-snap-type:y mandatory;overscroll-behavior-y:contain;scrollbar-width:none;outline:none}
 .qh-defile::-webkit-scrollbar{display:none}
 .qh-panneau{position:relative;height:100%;min-height:100%;scroll-snap-align:start;scroll-snap-stop:always;overflow:hidden;
