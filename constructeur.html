@@ -69,6 +69,13 @@
   .carte{background:var(--panneau);border:1px solid var(--ligne);border-radius:14px;padding:14px;margin:0 0 14px}
   .carte h2{font-size:1rem;margin:0 0 10px}
   .liste-pages{display:flex;flex-direction:column;gap:6px}
+  .carte-pages{padding-top:10px;padding-bottom:10px}
+  .pages-tete{display:flex;align-items:center;gap:10px;width:100%;background:none;border:0;padding:4px 0;font:inherit;color:inherit;cursor:pointer;text-align:left}
+  .pages-tete .pt-lib{font-weight:700;font-size:1rem}
+  .pages-tete .pt-cour{flex:1;min-width:0;display:flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid var(--accent);border-radius:10px;background:#fff4ef}
+  .pages-tete .pt-cour .nom{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+  .pages-tete .pt-fleche{font-size:1.1rem;color:var(--doux);width:18px;text-align:center}
+  .pages-deroule{margin-top:10px}
   .lp{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--ligne);border-radius:10px;background:var(--bg);cursor:pointer}
   .lp.actif{border-color:var(--accent);background:#fff4ef}
   .lp .ico{width:22px;text-align:center}
@@ -325,6 +332,7 @@
   var vueForm = false;                     // formulaire d'inscription affiché à la place des réglages de la page
   var vuePied = false;                     // pied de page affiché à la place des réglages de la page
   var vueEntete = false;                   // en-tête (logo, ordre, figé) : idem
+  var pagesOuvert = false;                 // menu déroulant « Pages » déplié ?
   var NOMS_TYPES = { articles: 'Articles', galerie: 'Galerie', blog: 'Blog', contact: 'Contact' };
   function champ(lib, obj, cle, opts) {
     opts = opts || {};
@@ -524,9 +532,9 @@
     cfg.pages.forEach(function (p, i) {
       var accueil = p.chemin === '';
       var trad = langue !== 'fr' ? etatTraduction(p) : null;
-      liste.append(el('div', { class: 'lp' + (p.id === pageSel && !vuePied && !vueEntete && !vueForm ? ' actif' : ''), onclick: function (e) { if (e.target.closest('button')) return; pageSel = p.id; vuePied = false; vueEntete = false; vueForm = false; articleApercu = ''; dessiner(); apercu(); } }, [
+      liste.append(el('div', { class: 'lp' + (p.id === pageSel && !vuePied && !vueEntete && !vueForm ? ' actif' : ''), onclick: function (e) { if (e.target.closest('button')) return; pageSel = p.id; pagesOuvert = false; vuePied = false; vueEntete = false; vueForm = false; articleApercu = ''; dessiner(); apercu(); } }, [
         el('span', { class: 'ico', text: ICONES[p.type] }),
-        el('span', { class: 'nom', text: p.titre }),
+        el('span', { class: 'nom', text: p.titre || '/' + p.chemin }),
         el('span', { class: 'chemin', text: '/' + p.chemin + (p.menu === false ? ' · hors menu' : '') }),
         trad ? el('span', { class: 'badge ' + (trad.ok ? 'ok' : 'ko'), text: trad.texte }) : null,
         el('button', { type: 'button', class: 'btn btn-mini', text: '↑', title: 'Monter (ordre du menu)', disabled: i === 0, onclick: function () { cfg.pages.splice(i - 1, 0, cfg.pages.splice(i, 1)[0]); changement(); } }),
@@ -542,19 +550,27 @@
     ].map(function (t) {
       return el('button', { type: 'button', onclick: function () { ajouterPage(t[0]); } }, [el('b', { text: ICONES[t[0]] + ' ' + t[1] }), el('small', { text: t[2] })]);
     }));
-    liste.insertBefore(el('div', { class: 'lp lp-pied' + (vueEntete ? ' actif' : ''), onclick: function () { vueEntete = true; vuePied = false; vueForm = false; dessiner(); } }, [
+    liste.insertBefore(el('div', { class: 'lp lp-pied' + (vueEntete ? ' actif' : ''), onclick: function () { vueEntete = true; pagesOuvert = false; vuePied = false; vueForm = false; dessiner(); } }, [
       el('span', { class: 'ico', text: '🔝' }), el('span', { class: 'nom', text: 'En-tête' }), el('span', { class: 'chemin', text: 'logo, menu, langues' })]), liste.firstChild);
     var tradForm = langue !== 'fr' ? etatTraduction(cfg.formulaire) : null;
-    liste.append(el('div', { class: 'lp lp-pied lp-form' + (vueForm ? ' actif' : ''), onclick: function () { vueForm = true; vuePied = false; vueEntete = false; dessiner(); apercuFormulaire(); } }, [
+    liste.append(el('div', { class: 'lp lp-pied lp-form' + (vueForm ? ' actif' : ''), onclick: function () { vueForm = true; pagesOuvert = false; vuePied = false; vueEntete = false; dessiner(); apercuFormulaire(); } }, [
       el('span', { class: 'ico', text: '📝' }), el('span', { class: 'nom', text: 'Formulaire d’inscription' }), el('span', { class: 'chemin', text: 'textes et prix' }),
       tradForm ? el('span', { class: 'badge ' + (tradForm.ok ? 'ok' : 'ko'), text: tradForm.texte }) : null]));
     var tradPied = langue !== 'fr' ? etatTraduction(cfg.pied) : null;
-    liste.append(el('div', { class: 'lp lp-pied' + (vuePied ? ' actif' : ''), onclick: function () { vuePied = true; vueEntete = false; vueForm = false; dessiner(); } }, [
+    liste.append(el('div', { class: 'lp lp-pied' + (vuePied ? ' actif' : ''), onclick: function () { vuePied = true; pagesOuvert = false; vueEntete = false; vueForm = false; dessiner(); } }, [
       el('span', { class: 'ico', text: '🦶' }), el('span', { class: 'nom', text: 'Pied de page' }), el('span', { class: 'chemin', text: 'toutes les pages' }),
       tradPied ? el('span', { class: 'badge ' + (tradPied.ok ? 'ok' : 'ko'), text: tradPied.texte }) : null]));
-    return el('div', { class: 'carte' }, [el('h2', { text: 'Pages du site' }), liste,
-      langue === 'fr' ? el('button', { type: 'button', class: 'btn', style: 'margin-top:10px;width:100%', text: '＋ Ajouter une page', onclick: function () { menu.hidden = !menu.hidden; } }) : null,
-      menu]);
+    // ligne repliée : « Pages » + page en cours ; un appui déplie la liste
+    var cour = vueEntete ? ['🔝', 'En-tête'] : vuePied ? ['🦶', 'Pied de page'] : vueForm ? ['📝', 'Formulaire d’inscription']
+      : (function (p) { return [ICONES[p.type], p.titre || '/' + p.chemin]; })(page());
+    var tete = el('button', { type: 'button', class: 'pages-tete', 'aria-expanded': String(pagesOuvert), onclick: function () { pagesOuvert = !pagesOuvert; dessiner(); } }, [
+      el('span', { class: 'pt-lib', text: 'Pages' }),
+      el('span', { class: 'pt-cour' }, [el('span', { class: 'ico', text: cour[0] }), el('span', { class: 'nom', text: cour[1] })]),
+      el('span', { class: 'pt-fleche', text: pagesOuvert ? '▴' : '▾' })]);
+    return el('div', { class: 'carte carte-pages' + (pagesOuvert ? ' ouvert' : '') }, [tete,
+      pagesOuvert ? el('div', { class: 'pages-deroule' }, [liste,
+        langue === 'fr' ? el('button', { type: 'button', class: 'btn', style: 'margin-top:10px;width:100%', text: '＋ Ajouter une page', onclick: function () { menu.hidden = !menu.hidden; } }) : null,
+        menu]) : null]);
   }
   function ajouterPage(type) {
     var nom = { articles: 'Nouvelle page', galerie: 'Galerie', blog: 'Blog', contact: 'Contact' }[type];
@@ -566,7 +582,7 @@
     if (type === 'galerie') { p.intro = ''; p.photos = []; }
     if (type === 'blog') { p.intro = ''; p.articles = []; }
     if (type === 'contact') { p.source = 'qrbc01'; p.intro = ''; }
-    cfg.pages.push(p); pageSel = p.id; vuePied = false; vueEntete = false; vueForm = false; articleApercu = '';
+    cfg.pages.push(p); pageSel = p.id; pagesOuvert = false; vuePied = false; vueEntete = false; vueForm = false; articleApercu = '';
     changement(); apercu();
   }
   function carteReglagesPage(p) {
