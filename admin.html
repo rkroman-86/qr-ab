@@ -3402,15 +3402,8 @@
   }
 
   // Coordonnées « en ligne » : les 2 premières sur une ligne, les suivantes par deux sur des lignes un peu plus petites
-  function lignesCoords(coords) {
-    const l = []; let c = [];
-    coords.forEach(x => {
-      if (!x[1]) { if (c.length) l.push(c.join('   ·   ')); c = []; l.push(''); return; }   // champ vide : ligne vide
-      c.push(x[1]); if (c.length === 2) { l.push(c.join('   ·   ')); c = []; }
-    });
-    if (c.length) l.push(c.join('   ·   '));
-    return l;
-  }
+  // Une coordonnée par ligne, jamais deux à la suite (28/11 : « · » faisait déborder sur le QR ou les filets)
+  function lignesCoords(coords) { return coords.map(x => String(x[1] || '')); }
   function rectArrondi(ctx, x, y, w, h, r) {
     ctx.beginPath();
     ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
@@ -3576,21 +3569,21 @@
     y += 30;
     ctx.fillStyle = c.accent; ctx.fillRect(align === 'center' ? ax - 65 : align === 'right' ? ax - 130 : x, y, 130, 8); y += 56;
     if (c.enLigne) {
+      // une coordonnée par ligne, toutes à la même taille (celle qui fait tenir la plus longue dans la largeur)
       const lignes = lignesCoords(D.coords);
-      ctx.font = policeAjustee(ctx, lignes[0] || '', '600', 52, 34, largeur, fam);
+      let tl = lignes.length > 3 ? 46 : 52;
+      lignes.forEach(l => { if (l) { ctx.font = policeAjustee(ctx, l, '600', tl, 24, largeur, fam); tl = Math.min(tl, parseInt(ctx.font.match(/(\d+)px/)[1], 10)); } });
       ctx.fillStyle = c.texte;
-      if (lignes[0]) ctx.fillText(lignes[0], ax, y);
-      y += 70;
-      const t0 = parseInt(ctx.font.match(/(\d+)px/)[1], 10);
-      lignes.slice(1).forEach(l => {             // coordonnées suivantes (souvent le site) sur d'autres lignes, un peu plus petites
-        ctx.font = policeAjustee(ctx, l, '500', Math.max(30, t0 - 4), 28, largeur, fam);
-        if (l) ctx.fillText(l, ax, y - 8);
-        y += 62;
+      lignes.forEach(l => {
+        ctx.font = '600 ' + tl + 'px ' + fam;
+        if (l) ctx.fillText(l, ax, y);
+        y += Math.round(tl * 1.32);
       });
+      y += 8;
     } else {
       D.coords.forEach(([etiq, val]) => {
         ctx.font = '700 40px ' + fam; ctx.fillStyle = c.accent; ctx.fillText(etiq.toUpperCase(), ax, y);
-        ctx.fillStyle = c.texte; ctx.font = policeAjustee(ctx, val, '600', 56, 34, largeur, fam);
+        ctx.fillStyle = c.texte; ctx.font = policeAjustee(ctx, val, '600', 56, 24, largeur, fam);
         ctx.fillText(val, ax, y + 46); y += 128;
       });
     }
@@ -3650,7 +3643,7 @@
     const E = Math.round((c.etiq || 40) * k), V = Math.round((c.val || 56) * k), pas = Math.round((c.pas || 128) * k);
     D.coords.forEach(([etiq, val]) => {
       if (etiq) { ctx.font = '700 ' + E + 'px ' + D.fam; ctx.fillStyle = c.accent; ctx.fillText(etiq.toUpperCase(), ax, y); }
-      ctx.fillStyle = c.texte; ctx.font = policeAjustee(ctx, val, '600', V, Math.min(30, V), largeur, D.fam);
+      ctx.fillStyle = c.texte; ctx.font = policeAjustee(ctx, val, '600', V, Math.min(22, V), largeur, D.fam);
       ctx.fillText(val, ax, y + (etiq ? E + 6 : Math.round(E / 2))); y += pas;
     });
     ctx.textAlign = 'left';
