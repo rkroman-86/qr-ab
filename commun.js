@@ -1377,12 +1377,14 @@ function reglagesEntete(d) {
   const o = Array.isArray(e.ordre) ? e.ordre.filter((x, i, a) => ORDRE_ENTETE.includes(x) && a.indexOf(x) === i) : [];
   ORDRE_ENTETE.forEach(x => { if (!o.includes(x)) o.push(x); });
   const fond = e.fond == null || isNaN(Number(e.fond)) ? 76 : Math.max(0, Math.min(100, Number(e.fond)));
-  return { fige: e.fige !== false, ordre: o, fond };
+  const couleurNom = /^#[0-9a-f]{6}$/i.test(e.couleurNom || '') ? e.couleurNom : '';
+  return { fige: e.fige !== false, ordre: o, fond, couleurNom };
 }
 // parts : { logo: [éléments], langues: élément, menu: élément } ; defile : zone qui défile (Home) ou rien (page entière)
 function appliquerEntete(barre, d, parts, defile) {
   const r = reglagesEntete(d);
   r.ordre.forEach(k => [].concat(parts[k] || []).forEach(x => { if (x) barre.appendChild(x); }));
+  if (r.couleurNom) [].concat(parts.logo || []).forEach(x => { if (x && x.classList.contains('qh-nom')) x.style.color = r.couleurNom; });
   // menu ou langues placés à gauche du nom : leur liste s'ouvre vers la droite
   const iNom = r.ordre.indexOf('logo');
   ['langues', 'menu'].forEach(k => { const x = parts[k]; if (x && r.ordre.indexOf(k) < iNom) x.classList.add('qh-gauche'); });

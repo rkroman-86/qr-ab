@@ -318,6 +318,7 @@
     .damier.sans-damier{background:none}
     .val-curseur{font-weight:400;opacity:.7}
     .ordre-entete{display:flex;flex-direction:column;gap:6px;margin:4px 0}.oe-ligne{display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--ligne);border-radius:10px}
+    .coul-nom{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:10px 0 0}
     .oe-num{width:20px;text-align:center;font-weight:700;opacity:.6}.oe-nom{flex:1;font-size:.9rem}
     .curseurs-logo{border:1px solid var(--ligne);border-radius:12px;padding:10px 12px 2px;margin:8px 0 12px}
     .curseurs-logo .opt{margin:0 0 10px}
@@ -2644,6 +2645,10 @@
     const sec = e.target.closest('details.section');
     if (!sec || sec.dataset.id === 'partage') return;
     if (sec.dataset.id === 'galerie' || sec.dataset.id === 'logo' || sec.dataset.id === 'design') return;
+    if (sec.dataset.id === 'entete') {                      // en-tête : l'aperçu reste sur Home / page perso / Blog
+      if (!['home', 'perso', 'blog'].includes(vueApercu)) apercuDeRubrique('entete');
+      return;
+    }
     if (sec.dataset.id === 'perso') { choisirApercu('perso'); return; }
     if (sec.dataset.id === 'blog') {                        // section Blog : l'aperçu montre le blog (article en cours gardé)
       if (vueApercu !== 'blog') { vueApercu = 'blog'; majApercu(); }
@@ -4869,9 +4874,17 @@
     const val = el('span', { class: 'val-curseur', text: r.fond + ' %' });
     const fond = el('input', { type: 'range', min: 0, max: 100, step: 5, value: r.fond, 'aria-label': t('Opacité du fond de l’en-tête') });
     fond.addEventListener('input', () => { reg().fond = Number(fond.value); val.textContent = fond.value + ' %'; changement(); });
+    // couleur du nom (vide : couleur du texte du site)
+    const cNom = el('input', { type: 'color', value: r.couleurNom || d.texte || '#2b2620', 'aria-label': t('Couleur du nom') });
+    const defNom = el('button', { type: 'button', class: 'btn btn-mini', text: t('Par défaut') });
+    const majDef = () => { defNom.disabled = !reglagesEntete(d).couleurNom; };
+    cNom.addEventListener('input', () => { reg().couleurNom = cNom.value; majDef(); changement(); });
+    defNom.addEventListener('click', () => { delete reg().couleurNom; cNom.value = d.texte || '#2b2620'; majDef(); changement(); });
+    majDef();
     return section('entete', 'En-tête', false, [
       el('div', { class: 'aide', style: 'margin:0 0 12px', text: 'Barre du haut des pages Home, page personnalisée et Blog (la page contact n’en a pas).' }),
       el('label', { class: 'bascule' }, [el('span', { text: 'Figer l’en-tête pendant le défilement' }), fige]),
+      el('div', { class: 'coul-nom' }, [el('label', { class: 'coul' }, [cNom, el('span', { text: 'Couleur du nom' })]), defNom]),
       el('span', { class: 'etiq', style: 'margin-top:12px', text: 'Ordre, de gauche à droite' }), liste,
       el('span', { class: 'etiq', style: 'margin-top:12px' }, [el('span', { text: 'Opacité du fond de l’en-tête' }), ' ', val]), fond,
       el('div', { class: 'aide', style: 'margin:4px 0 0', text: '0 % : en-tête transparent, posé sur la page. 100 % : fond plein.' })

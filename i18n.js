@@ -840,6 +840,7 @@
     'Retirer': ['Remove', 'Убрать'],
     'Aucune': ['None', 'Нет'],
     'Image introuvable': ['Image not found', 'Изображение не найдено'],
+    'Couleur du nom': ['Name colour', 'Цвет названия'],
     'En-tête': ['Header', 'Шапка'],
     'Logo et nom': ['Logo and name', 'Логотип и название'],
     'Sélecteur de langues': ['Language selector', 'Выбор языка'],
