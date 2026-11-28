@@ -1415,6 +1415,44 @@ async function apiClient(request, env, slug, route) {
     return json(Object.assign(synchroniserConfig(src, tr), { langueSource: (source && source.langueSite) || 'fr' }));
   }
 
+  /* Version traduite : état des articles du blog de la page d'origine (pour signaler ceux pas encore traduits) */
+  if (route === 'articles-origine' && m === 'GET') {
+    if (!compte.traduction) throw new ErreurAPI(400, 'Cette page n’est pas une version traduite.');
+    let src = null;
+    try { src = JSON.parse(await env.CLIENTS.get('site:' + compte.traduction.source + ':config.json') || 'null'); } catch (e) {}
+    const arts = ((src && src.blog && src.blog.articles) || []).filter(a => a && a.id).map(a => ({ id: String(a.id), titre: a.titre || '', texte: a.texte || '' }));
+    const source = await lireCompte(env, compte.traduction.source);
+    return json({ articles: arts, langueSource: (source && source.langueSite) || 'fr' });
+  }
+
+  /* Version traduite : traduction IA d'UN article du blog depuis la page d'origine (décomptée comme un texte IA) */
+  if (route === 'traduire-article' && m === 'POST') {
+    if (!compte.traduction) throw new ErreurAPI(400, 'Cette page n’est pas une version traduite.');
+    if (!actif(compte)) throw new ErreurAPI(402, compte.plan === 'essai'
+      ? 'Votre essai est terminé : abonnez-vous pour continuer à utiliser l’IA.'
+      : 'Abonnement inactif : l’IA est désactivée.', compte.plan === 'essai' ? 'essai_termine' : 'abonnement_inactif');
+    const cleIA = await cleAnthropic(env);
+    if (!cleIA) throw new ErreurAPI(503, 'La traduction IA n’est pas encore activée sur le serveur.');
+    const d = await corpsJSON(request);
+    let src = null;
+    try { src = JSON.parse(await env.CLIENTS.get('site:' + compte.traduction.source + ':config.json') || 'null'); } catch (e) {}
+    const a = ((src && src.blog && src.blog.articles) || []).find(x => x && String(x.id) === String(d.id || ''));
+    if (!a) throw new ErreurAPI(404, 'Cet article n’existe pas (ou plus) sur la page d’origine. Enregistrez d’abord la page d’origine, puis « Reprendre images et style ».');
+    const textes = {};
+    if (typeof a.titre === 'string' && a.titre.trim()) textes.titre = a.titre;
+    if (typeof a.texte === 'string' && a.texte.trim()) textes.texte = a.texte;
+    if (!Object.keys(textes).length) throw new ErreurAPI(400, 'Cet article est vide sur la page d’origine.');
+    const porte = await reserveIA(env, compte);
+    const mode = modeFacturation(porte, 'texte', false, compte);            // lève 402 si ni quota ni crédit
+    await limiter(env, 'ia:' + slug + ':' + new Date().toISOString().slice(0, 10), IA_PAR_JOUR, 86400 * 2, 'Limite quotidienne de l’IA atteinte. Réessayez demain.');
+    const source = await lireCompte(env, compte.traduction.source);
+    const tr = await traduireTextesPage(env, cleIA, textes, (source && source.langueSite) || 'fr', compte.traduction.langue);
+    const frais = (await lireCompte(env, slug)) || compte;
+    await facturerReserve(env, frais, porte, 'texte', mode);
+    return json({ titre: tr.titre || textes.titre || '', texte: tr.texte || textes.texte || '', origine: { titre: a.titre || '', texte: a.texte || '' },
+      compte: await resumeAvecOffre(env, frais) });
+  }
+
   if (route === 'demande' && m === 'POST') {
     const dd = await corpsJSON(request);
     const genre = dd.genre === 'recharge' ? 'recharge' : 'abonnement';
@@ -4388,6 +4426,17 @@ async function traduireConfig(env, cleIA, cfg, de, vers) {
   if (!copie.home.boutonContact) copie.home.boutonContact = 'Contact';
   const textes = textesATraduire(copie);
   if (!Object.keys(textes).length) return copie;
+  const traduits = await traduireTextesPage(env, cleIA, textes, de, vers);
+  for (const cle of Object.keys(traduits)) {
+    const chemin = cle.split('.');
+    let o = copie;
+    for (let i = 0; i < chemin.length - 1; i++) { o = o && o[/^\d+$/.test(chemin[i]) ? Number(chemin[i]) : chemin[i]]; }
+    if (o && typeof o === 'object') o[chemin[chemin.length - 1]] = traduits[cle];
+  }
+  return copie;
+}
+/* Traduction IA de textes { clé: texte } d'une page client ; renvoie seulement les textes traduits (liens abîmés retirés, jamais cassés) */
+async function traduireTextesPage(env, cleIA, textes, de, vers) {
   const r = await fetch(env.ANTHROPIC_URL || 'https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-api-key': cleIA, 'anthropic-version': '2023-06-01' },
@@ -4410,6 +4459,7 @@ async function traduireConfig(env, cleIA, cfg, de, vers) {
     sortie = JSON.parse(brut.slice(brut.indexOf('{'), brut.lastIndexOf('}') + 1));
   } catch (e) { sortie = null; }
   if (!sortie || typeof sortie !== 'object') throw new ErreurAPI(502, 'La traduction a échoué. Réessayez dans un instant (rien n’a été décompté).');
+  const out = {};
   for (const cle of Object.keys(textes)) {
     const v = sortie[cle];
     if (typeof v !== 'string' || !v.trim()) continue;            // texte manquant : on garde l'original
@@ -4417,12 +4467,9 @@ async function traduireConfig(env, cleIA, cfg, de, vers) {
     const cibles = x => (String(x).match(new RegExp(RE_LIEN_TXT.source, 'g')) || []).map(m => m.replace(RE_LIEN_TXT, '$2')).sort().join(' ');
     let w = v;
     if (cibles(textes[cle]) !== cibles(w)) w = w.replace(new RegExp(RE_LIEN_TXT.source, 'g'), '$1').replace(/\]\([^)\s]*\)/g, '').replace(/[\[\]]/g, '');
-    const chemin = cle.split('.');
-    let o = copie;
-    for (let i = 0; i < chemin.length - 1; i++) { o = o && o[/^\d+$/.test(chemin[i]) ? Number(chemin[i]) : chemin[i]]; }
-    if (o && typeof o === 'object') o[chemin[chemin.length - 1]] = w.slice(0, 4000);
+    out[cle] = w.slice(0, Math.max(4000, 2 * String(textes[cle]).length));   // article long du blog : jamais coupé
   }
-  return copie;
+  return out;
 }
 
 /* Langues publiées d'une page (pour le sélecteur et Google) : [{ l, u }] — vide si pas de traduction */

@@ -108,6 +108,9 @@
   .menu-lien{margin-top:6px;padding:10px;border:1px solid var(--ligne);border-radius:10px;background:var(--panneau);display:flex;flex-direction:column;gap:6px}
   .menu-lien .pages{display:flex;flex-wrap:wrap;gap:6px}
   .trad-ligne{margin:0 0 12px}
+  .trad-art-tete{display:flex;align-items:center;flex-wrap:wrap;gap:8px;font-size:1rem;margin:18px 0 8px;padding-top:12px;border-top:1px solid var(--bord,#ddd)}
+  .trad-art-tete .btn{margin-left:auto}
+  .trad-art-tete .btn-garder{margin-left:0}
   .trad-ligne .fr{font-size:.8rem;color:var(--doux);margin:0 0 4px;white-space:pre-wrap}
   .badge{display:inline-block;padding:2px 8px;border-radius:99px;font-size:.78rem;font-weight:700;background:var(--bg);border:1px solid var(--ligne)}
   .badge.ok{color:var(--ok)} .badge.ko{color:var(--accent)}
@@ -207,6 +210,39 @@
   function empreinte(s) { var h = 2166136261; for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); }
   function lireChemin(o, cle) { return cle.split('.').reduce(function (a, k) { return a == null ? a : a[/^\d+$/.test(k) ? Number(k) : k]; }, o); }
   function ecrireChemin(o, cle, v) { var p = cle.split('.'); for (var i = 0; i < p.length - 1; i++) { var k = /^\d+$/.test(p[i]) ? Number(p[i]) : p[i]; if (o[k] == null) o[k] = /^\d+$/.test(p[i + 1]) ? [] : {}; o = o[k]; } o[p[p.length - 1]] = v; }
+  /* Blog : traduction article par article (même calcul que worker/site.js) */
+  function empreintesBlog(page) {
+    var t = textesPage(page), hors = {}, art = {};
+    Object.keys(t).forEach(function (k) { if (!/^articles\./.test(k)) hors[k] = t[k]; });
+    (page.articles || []).forEach(function (a) { if (a && a.id) art[a.id] = empreinte(JSON.stringify(textesPage(a))); });
+    return { hors: empreinte(JSON.stringify(hors)), art: art };
+  }
+  // la traduction suit l'identifiant de chaque article (un article ajouté en tête ne décale plus les traductions)
+  function alignerBlog(p, t) {
+    if (!t || !t.page || p.type !== 'blog') return;
+    var anciens = Array.isArray(t.page.articles) ? t.page.articles : [];
+    var fr = empreintesBlog(p);
+    if (!t.art) {                                  // ancienne traduction (page entière) : à jour partout, sinon chaque article « à retraduire »
+      var toutAJour = empreinte(JSON.stringify(textesPage(p))) === t.source;
+      t.art = {};
+      (p.articles || []).forEach(function (a) {
+        var x = anciens.find(function (y) { return y && y.id === a.id; });
+        var memeQueFr = x && JSON.stringify(textesPage(x)) === JSON.stringify(textesPage(a));   // texte français laissé tel quel : pas traduit
+        if (x && !memeQueFr) t.art[a.id] = toutAJour ? fr.art[a.id] : '?';
+      });
+      t.hors = toutAJour ? fr.hors : '?';
+    }
+    t.page.articles = (p.articles || []).map(function (a) {
+      var x = anciens.find(function (y) { return y && y.id === a.id; });
+      return x ? x : JSON.parse(JSON.stringify(a));
+    });
+    Object.keys(t.art).forEach(function (id) { if (!(id in fr.art)) delete t.art[id]; });
+  }
+  function etatArticle(p, t, a) {
+    if (!t || !t.art || !t.art[a.id]) return { ok: false, texte: 'à traduire' };
+    if (t.art[a.id] === '?') return { ok: false, texte: 'à vérifier' };
+    return t.art[a.id] === empreintesBlog(p).art[a.id] ? { ok: true, texte: 'à jour' } : { ok: false, texte: 'à retraduire' };
+  }
 
   /* ---------- Connexion ---------- */
   $('#f-cnx').addEventListener('submit', async function (e) {
@@ -893,6 +929,12 @@
     var t = cfg.traductions[langue] && cfg.traductions[langue][p.id];
     if (!t && p.type === 'formulaire' && formulaireAJour(p)) return { ok: true, texte: 'auto' };
     if (!t) return { ok: false, texte: 'à traduire' };
+    if (p.type === 'blog') {
+      alignerBlog(p, t);
+      var e = empreintesBlog(p), ids = Object.keys(e.art);
+      var nb = ids.filter(function (id) { return t.art[id] !== e.art[id]; }).length + (t.hors === e.hors ? 0 : 1);
+      return nb ? { ok: false, texte: nb + ' à traduire' } : { ok: true, texte: 'à jour' };
+    }
     return empreinte(JSON.stringify(textesPage(p))) === t.source ? { ok: true, texte: 'à jour' } : { ok: false, texte: 'à retraduire' };
   }
   function nomCle(cle) {
@@ -907,6 +949,77 @@
       .replace(/encart\./, 'encart · ').replace(/bouton\./, 'bouton · ').replace(/seo\./, 'Google · ');
   }
   var cleFormulaire = false;
+  /* Blog traduit : textes de la page (titre, intro, Google) puis un bloc par article, chacun avec son bouton « Traduire » */
+  function carteTradBlog(c, p, fr) {
+    var tr = cfg.traductions[langue];
+    function entreeBlog() {
+      if (!tr[p.id]) tr[p.id] = { page: JSON.parse(JSON.stringify(p)), source: '', le: new Date().toISOString(), art: {}, hors: '' };
+      alignerBlog(p, tr[p.id]);
+      return tr[p.id];
+    }
+    async function traduireParties(parties, bouton, msg) {
+      bouton.disabled = true; msg.className = 'msg'; msg.textContent = 'Traduction en cours…';
+      try {
+        var j = await api('site-traduire', { page: p, lang: langue, parties: parties });
+        var t = entreeBlog();
+        Object.keys(j.traduits || {}).forEach(function (cle) { ecrireChemin(t.page, cle, j.traduits[cle]); });
+        Object.keys(j.art || {}).forEach(function (id) { t.art[id] = j.art[id]; });
+        if (typeof j.hors === 'string') t.hors = j.hors;
+        if (etatTraduction(p).ok) t.source = j.source;
+        t.le = j.le;
+        changement(); toast('Traduction prête : relisez-la');
+      } catch (e) { msg.className = 'msg err'; msg.textContent = e.message; bouton.disabled = false; }
+    }
+    var t0 = tr[p.id];
+    if (t0) alignerBlog(p, t0);
+    var e = empreintesBlog(p);
+    // « Traduire les nouveautés » : articles à traduire / à retraduire et textes de la page changés, rien d'autre
+    if (t0) {
+      // « à vérifier » (ancienne traduction de tout le blog) : jamais retraduit sans le demander
+      var aFaire = (p.articles || []).filter(function (a) { return t0.art[a.id] !== e.art[a.id] && t0.art[a.id] !== '?'; }).map(function (a) { return 'a:' + a.id; });
+      if (t0.hors !== e.hors && t0.hors !== '?') aFaire.unshift('hors');
+      if (aFaire.length) {
+        var msgN = el('div', { class: 'msg' });
+        var btnN = el('button', { type: 'button', class: 'btn btn-accent', style: 'margin-top:8px', text: '✨ Traduire seulement les nouveautés (' + aFaire.length + ')', onclick: function () { traduireParties(aFaire, btnN, msgN); } });
+        c.append(btnN, el('p', { class: 'aide', style: 'margin:4px 0 0', text: 'Seuls les articles nouveaux ou modifiés en français sont traduits. Les autres, et vos retouches, ne bougent pas.' }), msgN);
+      }
+    }
+    // textes de la page (introduction, Google…)
+    var cles = Object.keys(fr).filter(function (k) { return !/^articles\./.test(k) && k !== 'titre' && k !== 'nomMenu'; });
+    if (cles.length) {
+      var horsOk = t0 && t0.hors === e.hors;
+      var msgH = el('div', { class: 'msg' });
+      var btnH = el('button', { type: 'button', class: 'btn btn-mini', text: (t0 && t0.hors ? '✨ Retraduire' : '✨ Traduire') + ' ces textes', onclick: function () {
+        if (t0 && t0.hors && !confirm('Remplacer la traduction de ces textes (et vos retouches) ?')) return;
+        traduireParties(['hors'], btnH, msgH);
+      } });
+      var garderH = t0 && t0.hors && !horsOk ? el('button', { type: 'button', class: 'btn btn-mini btn-garder', text: '✓ Garder tel quel', title: 'La traduction actuelle est bonne : marquer à jour', onclick: function () { t0.hors = e.hors; changement(); } }) : null;
+      c.append(el('h3', { class: 'trad-art-tete' }, ['Textes de la page ', el('span', { class: 'badge ' + (horsOk ? 'ok' : 'ko'), text: horsOk ? 'à jour' : !(t0 && t0.hors) ? 'à traduire' : t0.hors === '?' ? 'à vérifier' : 'à retraduire' }), btnH, garderH]), msgH);
+      if (t0) cles.forEach(function (cle) { c.append(ligneTrad(p, t0, fr, cle)); });
+    }
+    // un bloc par article
+    (p.articles || []).forEach(function (a, i) {
+      var et = etatArticle(p, t0, a);
+      var msgA = el('div', { class: 'msg' });
+      var deja = t0 && t0.art && t0.art[a.id];
+      var btnA = el('button', { type: 'button', class: 'btn btn-mini', text: '✨ ' + (deja ? 'Retraduire' : 'Traduire') + ' cet article', onclick: function () {
+        if (deja && !confirm('Remplacer la traduction de cet article (et vos retouches) ? Les autres articles ne bougent pas.')) return;
+        traduireParties(['a:' + a.id], btnA, msgA);
+      } });
+      var garderA = deja && !et.ok ? el('button', { type: 'button', class: 'btn btn-mini btn-garder', text: '✓ Garder tel quel', title: 'La traduction actuelle est bonne : marquer à jour', onclick: function () { t0.art[a.id] = e.art[a.id]; changement(); } }) : null;
+      c.append(el('h3', { class: 'trad-art-tete' }, ['📰 ' + (a.titre || 'Article ' + (i + 1)) + (a.masque ? ' (masqué)' : '') + ' ', el('span', { class: 'badge ' + (et.ok ? 'ok' : 'ko'), text: et.texte }), btnA, garderA]), msgA);
+      if (deja) Object.keys(fr).filter(function (k) { return k.indexOf('articles.' + i + '.') === 0; }).forEach(function (cle) { c.append(ligneTrad(p, t0, fr, cle)); });
+      else c.append(el('p', { class: 'aide', style: 'margin:0 0 8px', text: 'Pas encore traduit : affiché en français dans cette langue.' }));
+    });
+  }
+  function ligneTrad(p, t, fr, cle) {
+    var long = fr[cle].length > 70 || /\n/.test(fr[cle]);
+    var inp = long ? el('textarea', { rows: Math.min(10, Math.max(2, Math.ceil(fr[cle].length / 60))) }) : el('input', { type: 'text' });
+    var v = lireChemin(t.page, cle);
+    inp.value = typeof v === 'string' ? v : '';
+    inp.addEventListener('input', function () { ecrireChemin(t.page, cle, inp.value); changement(true); });
+    return el('div', { class: 'trad-ligne' }, [el('span', { class: 'etiq', text: nomCle(cle) }), el('p', { class: 'fr', text: 'FR : ' + fr[cle] }), inp]);
+  }
   function carteTraduction(p) {
     cfg.traductions[langue] = cfg.traductions[langue] || {};
     var t = cfg.traductions[langue][p.id], et = etatTraduction(p);
@@ -914,14 +1027,15 @@
     cleFormulaire = p.type === 'formulaire';
     var c = el('div', { class: 'carte' }, [el('h2', {}, [(p.type === 'formulaire' ? '📝 Formulaire d’inscription' : ICONES[p.type] + ' ' + (estPied ? 'Pied de page' : p.titre)) + ' — ' + langue.toUpperCase() + ' ', el('span', { class: 'badge ' + (et.ok ? 'ok' : 'ko'), text: et.texte })])]);
     var msg = el('div', { class: 'msg' });
-    var btn = el('button', { type: 'button', class: 'btn btn-accent', text: t ? '✨ Retraduire depuis le français' : '✨ Traduire depuis le français', onclick: async function () {
-      if (t && !confirm('Remplacer la traduction actuelle (et vos retouches) ?')) return;
+    var btn = el('button', { type: 'button', class: 'btn btn-accent', text: p.type === 'blog' ? (t ? '✨ Retraduire tout le blog' : '✨ Traduire tout le blog') : t ? '✨ Retraduire depuis le français' : '✨ Traduire depuis le français', onclick: async function () {
+      if (t && !confirm(p.type === 'blog' ? 'Retraduire TOUT le blog (page et tous les articles) ? Vos retouches seront remplacées. Pour un seul article, utilisez son bouton plus bas.' : 'Remplacer la traduction actuelle (et vos retouches) ?')) return;
       btn.disabled = true; msg.className = 'msg'; msg.textContent = 'Traduction en cours…';
       try {
         var j = await api('site-traduire', { page: p, lang: langue });
         // nom dans le menu saisi à la main (vide en français) : gardé
         if (t && t.page && t.page.nomMenu && !j.page.nomMenu) j.page.nomMenu = t.page.nomMenu;
         cfg.traductions[langue][p.id] = { page: j.page, source: j.source, le: j.le };
+        if (p.type === 'blog') { cfg.traductions[langue][p.id].art = j.art || {}; cfg.traductions[langue][p.id].hors = j.hors || ''; }
         changement(); toast('Traduction prête : relisez-la');
       } catch (e) { msg.className = 'msg err'; msg.textContent = e.message; btn.disabled = false; }
     } });
@@ -931,7 +1045,7 @@
     var fr = textesPage(p);
     var seulNom = Object.keys(fr).every(function (k) { return k === 'titre' || k === 'nomMenu'; });
     function entree() {
-      if (!t) { t = cfg.traductions[langue][p.id] = { page: JSON.parse(JSON.stringify(p)), source: '', le: new Date().toISOString() }; }
+      if (!t) { t = cfg.traductions[langue][p.id] = { page: JSON.parse(JSON.stringify(p)), source: '', le: new Date().toISOString() }; if (p.type === 'blog') { t.art = {}; t.hors = ''; } }
       return t;
     }
     (estPied ? [] : [['titre', 'Titre de la page', p.titre], ['nomMenu', 'Nom dans le menu', p.nomMenu || p.titre]]).forEach(function (x) {
@@ -945,6 +1059,7 @@
       c.append(el('div', { class: 'trad-ligne trad-nom' }, [el('span', { class: 'etiq', text: x[1] + ' (' + langue.toUpperCase() + ')' }), el('p', { class: 'fr', text: 'FR : ' + x[2] }), inp]));
     });
     c.append(el('p', { class: 'aide', style: 'margin:10px 0 10px', text: 'La structure (sections, images, liens) vient de la page française. Ici, vous retouchez seulement les textes. Sans traduction, la page s’affiche en français.' }), btn, msg);
+    if (p.type === 'blog') { carteTradBlog(c, p, fr); return c; }
     if (!t) return c;
     Object.keys(fr).forEach(function (cle) {
       if (!estPied && (cle === 'titre' || cle === 'nomMenu')) return;          // déjà en haut

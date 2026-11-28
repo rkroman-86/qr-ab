@@ -368,6 +368,11 @@
     .ia-actions{display:flex;gap:8px;justify-content:space-between;margin-top:8px;flex-wrap:wrap}
     .article-carte .ac-tete{display:flex;align-items:center;gap:8px;margin-bottom:10px}
     .article-carte .ac-tete b{flex:1}
+    .article-carte .badge-trad{font-size:.75rem;padding:2px 8px;border-radius:999px;white-space:nowrap}
+    .article-carte .badge-trad.ko{background:#fff3cd;color:#7a5600}
+    .article-carte .badge-trad.ok{background:#e3f6e8;color:#1d6b35}
+    .article-carte .trad-article{display:flex;flex-direction:column;gap:6px;margin:0 0 12px;padding:10px;border:1px dashed var(--bord,#ccc);border-radius:10px}
+    .article-carte .trad-article .btn-trad-article{align-self:flex-start}
     .ajout-article{width:100%;margin:0 0 14px}
     .qr-bloc{display:flex;flex-direction:column;align-items:center;gap:10px}
     .qr-apercu{width:200px;height:200px;border-radius:14px;border:1px solid var(--ligne)}
@@ -2251,6 +2256,7 @@
     go.addEventListener('click', () => {
       cfg = normaliser(fusion(CONFIG_DEFAUT, j.cfg));
       fermer();
+      chargerOrigineBlog(true);
       construireFormulaire(); majApercu(); changement();
       const e = $('#etat'); e.className = 'etat'; e.textContent = t('Images et style repris : vérifiez l’aperçu puis appuyez sur Enregistrer.');
     });
@@ -5168,6 +5174,8 @@
 
   /* ---------------- Page Blog ---------------- */
   let articleBlogActif = 0;
+  let origineBlog = null, origineBlogEnCours = null;
+  const majsTradArticle = new Set();
   const idArticle = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
   const aujourdhui = () => new Intl.DateTimeFormat('fr-CA').format(new Date());
   const oublierImages = (...chemins) => chemins.forEach(c => { if (c) { delete imagesAEnvoyer[c]; delete imagesLocales[c]; } });
@@ -5176,6 +5184,7 @@
     const B = cfg.blog;
     if (!Array.isArray(B.articles)) B.articles = [];
     B.articles.forEach(a => { if (a && !a.id) a.id = idArticle(); });
+    majsTradArticle.clear();                                 // cartes reconstruites : anciennes mises à jour oubliées
     const corps = el('div');                                 // affichée ou non : case du menu « Pages »
     const n = B.articles.length;
     articleBlogActif = Math.max(0, Math.min(articleBlogActif, n - 1));
@@ -5235,6 +5244,18 @@
     );
     return section('blog', 'Page Blog', false, [corps]);
   }
+  /* Version traduite : articles du blog de la page d'origine (pour la traduction article par article) */
+  function chargerOrigineBlog(refaire) {
+    if (!compteCF || !compteCF.traduction) return Promise.resolve(null);
+    if (refaire) { origineBlog = null; origineBlogEnCours = null; }
+    if (origineBlog) return Promise.resolve(origineBlog);
+    if (!origineBlogEnCours) origineBlogEnCours = appelAPI('articles-origine', jetonCF).then(r => r.json()).then(j => {
+      origineBlog = { langue: j.langueSource || 'fr', articles: new Map((j.articles || []).map(x => [x.id, x])) };
+      majsTradArticle.forEach(f => f());
+      return origineBlog;
+    }).catch(() => { origineBlogEnCours = null; return null; });
+    return origineBlogEnCours;
+  }
   function carteBlog(a, i) {
     const B = cfg.blog, n = B.articles.length;
     const carte = el('div', { class: 'bouton-carte article-carte' + (a.masque ? ' masque' : '') });
@@ -5257,7 +5278,7 @@
       if (a.image) zonePhoto.append(el('img', { src: imagesLocales[a.mini] || imagesLocales[a.image] || a.mini || a.image, alt: '' }));
       zonePhoto.append(
         el('button', { type: 'button', class: 'btn btn-mini', text: a.image ? '📷 Changer la photo' : '📷 Ajouter une photo', onclick: () => fichier.click() }),
-        a.image ? el('button', { type: 'button', class: 'btn btn-mini', text: 'Retirer la photo', onclick: () => { oublierImages(a.image, a.mini); a.image = ''; a.mini = ''; majPhoto(); changement(); } }) : null,
+        ...(a.image ? [el('button', { type: 'button', class: 'btn btn-mini', text: 'Retirer la photo', onclick: () => { oublierImages(a.image, a.mini); a.image = ''; a.mini = ''; majPhoto(); changement(); } })] : []),
         msgPhoto, fichier);
     }
     fichier.addEventListener('change', async () => {
@@ -5300,8 +5321,54 @@
       } catch (e) { msgIA.className = 'msg err'; msgIA.textContent = e.message; }
       texteIA.disabled = false; texteIA.textContent = t('✨ Texte IA');
     } });
+    // 🌐 Version traduite : traduire CET article depuis la page d'origine (les autres articles ne bougent pas)
+    const estVersion = !!(compteCF && compteCF.traduction);
+    const badgeTrad = el('span', { class: 'badge-trad cache' });
+    const msgTrad = el('div', { class: 'msg', style: 'margin:0' });
+    const btnTrad = el('button', { type: 'button', class: 'btn btn-mini btn-trad-article', text: '🌐 ' + t('Traduire cet article') });
+    const zoneTrad = estVersion ? el('div', { class: 'trad-article' }, [btnTrad, msgTrad]) : null;
+    function majTrad() {
+      if (!estVersion) return;
+      const o = origineBlog && origineBlog.articles.get(String(a.id));
+      badgeTrad.classList.add('cache'); btnTrad.disabled = false;
+      if (!origineBlog) { btnTrad.textContent = '🌐 ' + t('Traduire cet article'); return; }
+      if (!o) { btnTrad.disabled = true; btnTrad.textContent = '🌐 ' + t('Absent de la page d’origine'); return; }
+      const pasTraduit = (a.titre || '') === (o.titre || '') && (a.texte || '') === (o.texte || '');
+      badgeTrad.textContent = pasTraduit ? '🔸 ' + t('pas encore traduit') : '✓ ' + t('traduit');
+      badgeTrad.className = 'badge-trad ' + (pasTraduit ? 'ko' : 'ok');
+      btnTrad.textContent = '🌐 ' + t(pasTraduit ? 'Traduire cet article' : 'Retraduire cet article');
+    }
+    if (estVersion) {
+      majsTradArticle.add(majTrad);
+      majTrad(); chargerOrigineBlog();
+      btnTrad.addEventListener('click', async () => {
+        const o = origineBlog && origineBlog.articles.get(String(a.id));
+        const deja = o && !((a.titre || '') === (o.titre || '') && (a.texte || '') === (o.texte || ''));
+        const prix = compteCF.plan === 'gratuit' ? t('offerte') : t('décomptée comme un texte IA');
+        if (deja && !confirm(t('Remplacer le titre et le texte de cet article par une nouvelle traduction de la page d’origine ? Vos retouches sur cet article seront perdues (↩ Annuler possible juste après).') + '\n\n' + t('Traduction : ') + prix)) return;
+        btnTrad.disabled = true; btnTrad.textContent = t('Traduction…'); msgTrad.className = 'msg'; msgTrad.textContent = '';
+        try {
+          const j = await (await appelAPI('traduire-article', jetonCF, { method: 'POST', body: JSON.stringify({ id: a.id }) })).json();
+          if (j.compte) afficherAbonnement(j.compte);
+          if (origineBlog && j.origine) origineBlog.articles.set(String(a.id), Object.assign({ id: String(a.id) }, j.origine));
+          avantIA = { titre: a.titre || '', texte: a.texte || '' };
+          a.titre = j.titre; a.texte = j.texte;
+          champTitre.querySelector('input').value = a.titre; champCorps.querySelector('textarea').value = a.texte;
+          annulerIA.classList.remove('cache');
+          msgTrad.className = 'msg ok'; msgTrad.textContent = t('Article traduit : relisez-le, puis Enregistrer. Les autres articles n’ont pas changé.');
+          changement();
+        } catch (e) {
+          msgTrad.className = 'msg err'; msgTrad.textContent = e.message === 'Failed to fetch' ? t('Connexion impossible.') : e.message;
+          if (e.status === 402) ouvrirAbonnement('quota', e.message);
+        }
+        majTrad();
+      });
+      champTitre.querySelector('input').addEventListener('input', majTrad);
+      champCorps.querySelector('textarea').addEventListener('input', majTrad);
+    }
     carte.append(
-      el('div', { class: 'ac-tete' }, [el('b', { text: t('Article ' + (i + 1)) }), caseAfficher(a, carte)]),
+      el('div', { class: 'ac-tete' }, [el('b', { text: t('Article ' + (i + 1)) }), badgeTrad, caseAfficher(a, carte)]),
+      ...(zoneTrad ? [zoneTrad] : []),
       champTitre,
       el('label', { class: 'champ' }, [el('span', { text: 'Date' }), date]),
       el('span', { class: 'etiq', text: 'Photo' }),

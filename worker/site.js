@@ -56,6 +56,24 @@ export function textesPage(page) {
   parcourir(page, '');
   return out;
 }
+/* Blog : la traduction d'un article suit son identifiant (pas sa place) — un article ajouté en tête ne décale plus les traductions.
+   Article pas encore traduit : texte français. */
+export function alignerArticles(page, tpage) {
+  if (!page || page.type !== 'blog' || !tpage || typeof tpage !== 'object') return tpage;
+  const anciens = Array.isArray(tpage.articles) ? tpage.articles : [];
+  return Object.assign({}, tpage, { articles: (page.articles || []).map(a => {
+    const x = anciens.find(y => y && y.id === a.id);
+    return x ? x : JSON.parse(JSON.stringify(a));
+  }) });
+}
+// empreintes d'une page de blog : textes hors articles, puis chaque article (par identifiant)
+export function empreintesBlog(page) {
+  const t = textesPage(page), hors = {};
+  for (const k of Object.keys(t)) if (!/^articles\./.test(k)) hors[k] = t[k];
+  const art = {};
+  (page.articles || []).forEach(a => { if (a && a.id) art[a.id] = empreinte(JSON.stringify(textesPage(a))); });
+  return { hors: empreinte(JSON.stringify(hors)), art };
+}
 function appliquerTextes(page, textes) {
   const copie = JSON.parse(JSON.stringify(page));
   for (const [cle, v] of Object.entries(textes)) {
@@ -223,7 +241,16 @@ export function nettoyerConfig(cfg) {
       const t = src[p.id];
       if (!t || !t.page) continue;
       // la traduction garde la structure de la page française (mêmes ids, images, liens) ; seuls les textes viennent de la traduction
-      trad[l][p.id] = { page: appliquerTextes(p, textesPage(nettoyerPage(Object.assign({}, t.page, { id: p.id, type: p.type, chemin: p.chemin }), { ids: new Set(), chemins: new Set(), accueil: true }))), source: ch(t.source, 20), le: ch(t.le, 30) };
+      const tpage = alignerArticles(p, t.page);
+      trad[l][p.id] = { page: appliquerTextes(p, textesPage(nettoyerPage(Object.assign({}, tpage, { id: p.id, type: p.type, chemin: p.chemin }), { ids: new Set(), chemins: new Set(), accueil: true }))), source: ch(t.source, 20), le: ch(t.le, 30) };
+      if (p.type === 'blog') {                     // traduction article par article : empreinte de chaque article traduit
+        if (t.art && typeof t.art === 'object') {   // absent : ancienne traduction (page entière), état déduit par le constructeur
+          const art = {};
+          for (const a of p.articles || []) if (typeof t.art[a.id] === 'string') art[a.id] = ch(t.art[a.id], 20);
+          trad[l][p.id].art = art;
+        }
+        if (typeof t.hors === 'string') trad[l][p.id].hors = ch(t.hors, 20);
+      }
     }
     const tp = src.pied;
     if (tp && tp.page) trad[l].pied = { page: appliquerTextes(pied, textesPage(nettoyerPied(tp.page))), source: ch(tp.source, 20), le: ch(tp.le, 30) };
@@ -763,15 +790,27 @@ export async function apiSite(request, env, action, d, O) {
     const estPied = d.page && (d.page.type === 'pied' || d.page.type === 'formulaire');
     const page = d.page && d.page.type === 'formulaire' ? nettoyerFormulaire(d.page) : estPied ? nettoyerPied(d.page) : nettoyerPage(d.page, { ids: new Set(), chemins: new Set(), accueil: d.page && d.page.chemin === '' ? false : true });
     if (d.page && d.page.id && !estPied) page.id = d.page.id;
-    const textes = textesPage(page);
-    const source = empreinte(JSON.stringify(textes));
+    const tous = textesPage(page);
+    const source = empreinte(JSON.stringify(tous));
+    // blog : seulement certaines parties (« hors » = titre, intro, Google… ; « a:<id> » = un article) — les autres traductions ne bougent pas
+    const parties = Array.isArray(d.parties) && page.type === 'blog' ? new Set(d.parties.map(String)) : null;
+    const partieDe = k => { const m = /^articles\.(\d+)\./.exec(k); return m ? 'a:' + ((page.articles[Number(m[1])] || {}).id || '') : 'hors'; };
+    const textes = {};
+    for (const k of Object.keys(tous)) if (!parties || parties.has(partieDe(k))) textes[k] = tous[k];
     // par paquets (gros blogs) : la réponse de l'IA reste courte
     const cles = Object.keys(textes), traduits = {};
     let paquet = {}, taille = 0;
     const envoyer = async () => { if (Object.keys(paquet).length) Object.assign(traduits, await O.traduireTextes(env, paquet, 'fr', lang)); paquet = {}; taille = 0; };
     for (const k of cles) { paquet[k] = textes[k]; taille += textes[k].length; if (taille > 9000) await envoyer(); }
     await envoyer();
-    return O.json({ ok: true, page: appliquerTextes(page, traduits), source, le: new Date().toISOString() });
+    const rep = { ok: true, page: appliquerTextes(page, traduits), traduits, source, le: new Date().toISOString() };
+    if (page.type === 'blog') {
+      const e = empreintesBlog(page);
+      rep.hors = !parties || parties.has('hors') ? e.hors : undefined;
+      rep.art = {};
+      for (const id of Object.keys(e.art)) if (!parties || parties.has('a:' + id)) rep.art[id] = e.art[id];
+    }
+    return O.json(rep);
   }
   if (action === 'site-langue' && request.method === 'POST') {       // langue ajoutée : traduire une fois les textes fixes du site
     const lang = LANGUES_DISPO[d.lang] ? d.lang : null;
