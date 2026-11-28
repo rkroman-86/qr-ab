@@ -1808,11 +1808,13 @@
       imageIA.disabled = false; imageIA.textContent = t('✨ Image IA');
       majQuotas();
     } }) : null;
+    // Recadrer / assombrir : pas de nouveau fichier, seulement les réglages (obj[cle + 'Cadre']) ; l'originale reste intacte
     const recadrer = reglages.fond ? el('button', { type: 'button', class: 'btn btn-mini', text: '✂ Recadrer', onclick: () => {
       if (!obj[cle]) { alert(t('Choisissez d’abord une image.')); return; }
-      ouvrirRecadrage(obj[cle], reglages.ratio ? reglages.ratio() : RATIO_ECRAN, reglages.nom, chemin => {
-        obj[cle] = chemin; if (reglages.apresImage) reglages.apresImage(); majVign(); changement(); if (CF) construireFormulaire();
-      });
+      ouvrirRecadrage(obj[cle], reglages.ratio ? reglages.ratio() : RATIO_ECRAN, reglages.nom, (src, cadre) => {
+        obj[cle] = src; obj[cle + 'Cadre'] = cadre;
+        if (reglages.apresImage) reglages.apresImage(); majVign(); changement(); if (CF) construireFormulaire();
+      }, obj[cle + 'Cadre']);
     } }) : null;
     majVign();
     const genre = reglages.nom === 'fond' ? 'fond' : reglages.nom === 'logo' ? 'logo' : 'article';
@@ -1827,10 +1829,11 @@
      (ou du bandeau d'image d'une pancarte). Le résultat est une NOUVELLE image : l'originale reste dans « Mes images ». */
   const RATIO_ECRAN = 9 / 19;          // téléphone en portrait (fond, pancarte « photo »)
   const RATIO_BANDEAU = 1;             // pancarte « image au-dessus du texte » (≈ carré sur téléphone)
-  async function ouvrirRecadrage(source, ratio, nom, fini) {
-    // Image déjà recadrée : on repart de l'ORIGINALE, au dernier cadrage (on peut donc dézoomer)
+  async function ouvrirRecadrage(source, ratio, nom, fini, cadreActuel) {
+    // Réglages actuels (cadrage + assombrissement), ou ancienne copie recadrée (cfg.cadres, avant le 28/11) : on repart de l'ORIGINALE
     cfg.cadres = cfg.cadres || {};
-    const prec = cfg.cadres[source];
+    const ca = typeof cadreImage === 'function' ? cadreImage(cadreActuel, source) : null;
+    const prec = ca ? { source, rect: { sx: ca.r[0], sy: ca.r[1], sw: ca.r[2], sh: ca.r[3] }, teinte: { couleur: ca.tc || '#000000', force: Number(ca.tf) || 0 } } : cfg.cadres[source];
     const charger = src => new Promise((ok, ko) => { const i = new Image(); i.decoding = 'async'; i.onload = () => ok(i); i.onerror = ko; i.src = imagesLocales[src] || src; });
     let img, origine = source, rect = null, teinte = null;
     if (prec && prec.source) {
@@ -1932,26 +1935,11 @@
     function appliquer() {
       const S = base * z;
       const sx = -ox / S, sy = -oy / S, sw = FW / S, sh = FH / S;
-      const maxL = ratio < 1 ? 1080 : 1400;                   // assez net pour un écran de téléphone, léger à charger
-      const ow = Math.round(Math.min(sw, maxL)), oh = Math.round(ow / ratio);
-      const cv = document.createElement('canvas'); cv.width = ow; cv.height = oh;
-      const ctx = cv.getContext('2d');
-      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, ow, oh);
-      ctx.imageSmoothingQuality = 'high';
-      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, ow, oh);
-      if (teinte.force > 0) { ctx.globalAlpha = teinte.force / 100; ctx.fillStyle = teinte.couleur; ctx.fillRect(0, 0, ow, oh); ctx.globalAlpha = 1; }
-      let data;
-      try { data = cv.toDataURL('image/jpeg', 0.86); } catch (e) { alert(t('Cette image ne peut pas être lue sur cet appareil. Essayez une autre image (JPEG ou PNG de moins de 3 Mo).')); return; }
-      const chemin = 'images/' + (nom === 'fond' ? 'fond' : 'article') + '-cadre-' + Date.now() + '.jpg';
-      imagesLocales[chemin] = data;
-      imagesAEnvoyer[chemin] = data.split(',')[1];
-      // mémorise l'originale et le cadrage, pour pouvoir recadrer (et dézoomer) plus tard
-      cfg.cadres[chemin] = { source: origine, rect: { sx: Math.round(sx), sy: Math.round(sy), sw: Math.round(sw), sh: Math.round(sh) }, teinte: { couleur: teinte.couleur, force: teinte.force } };
+      // seulement les réglages : l'originale reste telle quelle, aucun nouveau fichier dans « Mes images »
+      const cadre = { src: origine, r: [Math.round(sx), Math.round(sy), Math.round(sw), Math.round(sh)], iw, ih, tc: teinte.couleur, tf: teinte.force };
       if (pourPage) { cfg.design.voile = 0; const fo = document.getElementById('formulaire'); if (fo) fo.style.setProperty('--voile-fond', '0'); }
-      const utiles = new Set(JSON.stringify(Object.assign({}, cfg, { cadres: null })).match(/images\/[\w.-]+/g) || []);
-      for (const k in cfg.cadres) if (!utiles.has(k) && k !== chemin) delete cfg.cadres[k];   // pas d'entrées orphelines
       fermer();
-      fini(chemin);
+      fini(origine, cadre);
     }
   }
 
@@ -3013,7 +3001,7 @@
   const PARTAGE_L = 1200, PARTAGE_H = 630;
   function clePartage() {
     const d = cfg.design;
-    return [d.imageFond, cfg.logo, d.fond, d.fond2].join('|');
+    return [d.imageFond, cfg.logo, d.fond, d.fond2, JSON.stringify(d.imageFondCadre || '')].join('|');
   }
   function partageAJour() { return !(cfg.design.imageFond || cfg.logo) || (cfg.partage && cfg.partage.chemin && cfg.partage.cle === clePartage()); }
   async function preparerImagePartage() {
@@ -3026,7 +3014,7 @@
     const g = ctx.createLinearGradient(0, 0, PARTAGE_L, PARTAGE_H);
     g.addColorStop(0, d.fond || '#f5f1ea'); g.addColorStop(1, d.fond2 || d.fond || '#e9e0d2');
     ctx.fillStyle = g; ctx.fillRect(0, 0, PARTAGE_L, PARTAGE_H);
-    const fond = await chargerImage(d.imageFond ? resoudre(d.imageFond) : '');
+    const fond = await chargerImageCadree(d.imageFond, d.imageFondCadre, resoudre);
     const logo = await chargerImage(cfg.logo ? resoudre(cfg.logo) : '');
     if (fond && fond.width) {
       // recadrage « couvrir », un peu au-dessus du centre (le sujet d'un fond vertical y est souvent)
@@ -3122,6 +3110,20 @@
     cfg.appIcones = ic;
   }
 
+  // Image avec ses réglages de cadrage / assombrissement (sans fichier recadré) : canvas de la zone choisie, voile compris
+  async function chargerImageCadree(chemin, cadre, resoudre) {
+    const im = await chargerImage(chemin ? (resoudre ? resoudre(chemin) : (imagesLocales[chemin] || chemin)) : '');
+    const c = im && cadreImage(cadre, chemin);
+    if (!c) return im;
+    try {
+      const [sx, sy, sw, sh] = c.r, k = Math.min(1, 1600 / Math.max(sw, sh));
+      const cv = document.createElement('canvas'); cv.width = Math.round(sw * k); cv.height = Math.round(sh * k);
+      const x = cv.getContext('2d'); x.imageSmoothingQuality = 'high';
+      x.drawImage(im, sx * im.naturalWidth / c.iw, sy * im.naturalHeight / c.ih, sw * im.naturalWidth / c.iw, sh * im.naturalHeight / c.ih, 0, 0, cv.width, cv.height);
+      const t = teinteImage(c); if (t) { x.fillStyle = t; x.fillRect(0, 0, cv.width, cv.height); }
+      return cv;
+    } catch (e) { return im; }
+  }
   function chargerImage(src) {
     return new Promise((ok, ko) => {
       if (!src) return ok(null);
@@ -3430,11 +3432,11 @@
         return fam;
       })(),
       typo: typoCarte(),
-      fondImg: await chargerImage(d.imageFond ? res(d.imageFond) : ''),
+      fondImg: await chargerImageCadree(d.imageFond, d.imageFondCadre, res),
       // fonds choisis pour le recto / le verso (vide : image de fond de la page contact)
       fondsCarte: await (async () => {
         const r = reglagesCarte(), m = {};
-        for (const c of [r.fondRecto, r.fondVerso]) if (c && typeof c === 'string' && !(c in m)) m[c] = await chargerImage(res(c));
+        for (const [c, cad] of [[r.fondRecto, r.fondRectoCadre], [r.fondVerso, r.fondVersoCadre]]) if (c && typeof c === 'string' && !(c in m)) m[c] = await chargerImageCadree(c, cad, res);
         return m;
       })(),
       logo: await chargerImage(cfg.logo && logoSurCarte() ? res(cfg.logo) : ''),
@@ -4131,6 +4133,10 @@
       get: () => { const v = reglagesCarte()[cle]; return typeof v === 'string' ? v : ''; },
       set: v => { modifierCarte(o => { if (v) o[cle] = v; else delete o[cle]; }); majResume(); rafraichir(); }
     });
+    Object.defineProperty(obj, cle + 'Cadre', {
+      get: () => reglagesCarte()[cle + 'Cadre'],
+      set: v => { modifierCarte(o => { if (v) o[cle + 'Cadre'] = v; else delete o[cle + 'Cadre']; }); rafraichir(); }
+    });
     const resume = el('span', { class: 'fond-resume' });
     const majResume = () => { resume.textContent = obj[cle] ? t('image choisie') : t('celle de la page contact'); };
     majResume();
@@ -4242,7 +4248,7 @@
   // appli sur sa propre adresse (nom--carte.qrbc.app) : elle ne remplace jamais l'appli de la page
   function lienAppliCarte() { return URL_PUBLIQUE.replace(/^(https?:\/\/)([^./]+)\./, '$1$2--carte.').replace(/^(https?:\/\/[^/]+).*$/, '$1/'); }
   function cleCarteApp() {
-    return JSON.stringify([cfg.carteApp && cfg.carteApp.modeles, cfg.design, cfg.logo, cfg.titre, cfg.sousTitre, cfg.pied, infosCarte(), typoCarte(), logoFaces(), reglagesFaces().recto.fond, URL_PUBLIQUE, cfg.langue || 'fr', 3]);
+    return JSON.stringify([cfg.carteApp && cfg.carteApp.modeles, cfg.design, cfg.logo, cfg.titre, cfg.sousTitre, cfg.pied, infosCarte(), typoCarte(), logoFaces(), reglagesFaces().recto.fond, reglagesCarte().fondRectoCadre || '', URL_PUBLIQUE, cfg.langue || 'fr', 3]);
   }
   async function preparerCarteApp(forcer) {
     const ca = cfg.carteApp;
@@ -5710,8 +5716,7 @@
   }
 
   async function imageFondReduite(max, qualite) {
-    const src = imagesLocales[cfg.design.imageFond] || cfg.design.imageFond;
-    const im = await chargerImage(src);
+    const im = await chargerImageCadree(cfg.design.imageFond, cfg.design.imageFondCadre);
     if (!im) throw new Error('Image de fond introuvable');
     const k = Math.min(1, max / Math.max(im.width, im.height));
     const cv = document.createElement('canvas');

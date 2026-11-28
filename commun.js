@@ -866,6 +866,12 @@ function rendrePage(cfgBrut, racine, opts) {
 
   if (d.imageFond) {
     page.style.backgroundImage = 'url("' + res(d.imageFond).replace(/"/g, '%22') + '")';
+    const cadreF = cadreImage(d.imageFondCadre, d.imageFond);
+    if (cadreF) {
+      suivreTaille(page, (W, H) => { const q = placerCadre(W, H, cadreF); page.style.backgroundSize = q.w + 'px ' + q.h + 'px'; page.style.backgroundPosition = q.x + 'px ' + q.y + 'px'; });
+      const tF = teinteImage(cadreF);
+      if (tF) { const v = doc.createElement('div'); v.className = 'qp-voile'; v.style.background = tF; page.appendChild(v); }
+    }
     const voile = doc.createElement('div');
     voile.className = 'qp-voile';
     const a = Math.max(0, Math.min(90, Number(d.voile) || 0)) / 100;
@@ -1369,6 +1375,35 @@ function creditQrbc(doc, apercu) {
   return a;
 }
 
+/* Cadrage et assombrissement d'une image SANS nouveau fichier (28/11) : l'originale reste intacte, les réglages sont gardés
+   à côté du champ (ex. design.imageFondCadre, article.imageCadre) : { src, r: [sx, sy, sw, sh], iw, ih, tc: couleur, tf: 0–80 }.
+   Ils ne valent que pour l'image src (une autre image choisie ensuite les ignore). */
+function cadreImage(c, src) {
+  return c && typeof c === 'object' && src && c.src === src && Array.isArray(c.r) && c.r.length === 4 && c.r[2] > 0 && c.r[3] > 0 && c.iw > 0 && c.ih > 0 ? c : null;
+}
+// position de l'image (px) pour que la zone choisie couvre un cadre W × H, centrée et sans bord vide
+function placerCadre(W, H, c) {
+  const [sx, sy, sw, sh] = c.r, k = Math.max(W / sw, H / sh), w = c.iw * k, h = c.ih * k;
+  const x = Math.min(0, Math.max(W - w, W / 2 - (sx + sw / 2) * k)), y = Math.min(0, Math.max(H - h, H / 2 - (sy + sh / 2) * k));
+  return { w, h, x, y };
+}
+function teinteImage(c) { return c && Number(c.tf) > 0 ? rgbaDe(c.tc || '#000000', Math.min(80, Number(c.tf)) / 100) : ''; }
+function suivreTaille(el, maj) {
+  const f = () => { if (el.clientWidth) maj(el.clientWidth, el.clientHeight); };
+  if (typeof requestAnimationFrame !== 'undefined') requestAnimationFrame(f);
+  if (typeof ResizeObserver !== 'undefined') new ResizeObserver(f).observe(el);
+  else if (typeof window !== 'undefined') window.addEventListener('resize', f);
+}
+// <img> dans un conteneur (overflow caché) : cadrage appliqué en direct, voile de teinte par-dessus
+function cadrerImg(conteneur, img, c) {
+  conteneur.style.overflow = 'hidden';
+  if (!conteneur.classList.contains('qh-panneau')) conteneur.style.position = 'relative';
+  Object.assign(img.style, { position: 'absolute', maxWidth: 'none', objectFit: 'fill', inset: 'auto' });
+  suivreTaille(conteneur, (W, H) => { const p = placerCadre(W, H, c); Object.assign(img.style, { width: p.w + 'px', height: p.h + 'px', left: p.x + 'px', top: p.y + 'px' }); });
+  const t = teinteImage(c);
+  if (t) { const v = conteneur.ownerDocument.createElement('div'); v.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:0;background:' + t; img.after(v); }
+}
+
 /* En-tête des pages Home, personnalisée et Blog (design.entete) : figé ou non au défilement, ordre logo / langues / menu,
    opacité du fond (0–100 %, 76 par défaut). La page contact n'a pas d'en-tête. */
 const ORDRE_ENTETE = ['logo', 'langues', 'menu'];
@@ -1460,12 +1495,15 @@ function rendreHome(cfgBrut, racine, opts) {
       if (i > 0) im.setAttribute('loading', 'lazy');
       return im;
     };
-    if (style === 'photo') { const im = image(); im.className = 'qh-photo-img'; p.appendChild(im); }
+    const cadreA = cadreImage(a.imageCadre, a.image);
+    if (style === 'photo') { const im = image(); im.className = 'qh-photo-img'; p.appendChild(im); if (cadreA) cadrerImg(p, im, cadreA); }
     if (style === 'image') {
       const cadre = doc.createElement('div');
       cadre.className = 'qh-img';
-      cadre.appendChild(image());
+      const im = image();
+      cadre.appendChild(im);
       p.appendChild(cadre);
+      if (cadreA) cadrerImg(cadre, im, cadreA);
     }
     const corps = doc.createElement('div');
     corps.className = 'qh-corps';
