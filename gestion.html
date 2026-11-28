@@ -59,8 +59,8 @@
   .promo .actions{margin-top:2px}
   /* Onglets */
   /* ---------- Stats du site principal ---------- */
-  .st-periode{display:flex;gap:4px;padding:3px;background:var(--bg);border:1px solid var(--ligne);border-radius:10px;width:max-content;margin:0 0 14px}
-  .st-periode button{border:0;background:transparent;padding:7px 14px;border-radius:7px;font-weight:600;font-size:.86rem;color:var(--doux);min-height:34px}
+  .st-periode{display:flex;gap:2px;padding:3px;background:var(--bg);border:1px solid var(--ligne);border-radius:10px;width:max-content;max-width:100%;overflow-x:auto;margin:0 0 14px}
+  .st-periode button{border:0;background:transparent;padding:7px 11px;white-space:nowrap;border-radius:7px;font-weight:600;font-size:.86rem;color:var(--doux);min-height:34px}
   .st-periode button.actif{background:var(--panneau);color:var(--txt);box-shadow:0 1px 3px rgba(0,0,0,.12)}
   .st-tuiles{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
   .st-tuile{background:var(--panneau);border:1px solid var(--ligne);border-radius:14px;padding:12px 14px}
@@ -1211,7 +1211,7 @@
     try { await chargerSupprimes(); } catch (e) {}
     const z = $('#stats-site'); z.innerHTML = '';
     z.append(el('h2', { text: 'Statistiques de qrbc.app', style: 'margin:0 0 10px;font-size:1.15rem' }),
-      el('div', { class: 'st-periode' }, [7, 30, 90, 365].map(n => el('button', { type: 'button', class: n === periodeSite ? 'actif' : '', text: n === 365 ? '1 an' : n + ' jours', onclick: () => { periodeSite = n; chargerStatsSite(); } }))));
+      el('div', { class: 'st-periode' }, [1, 7, 30, 90, 365].map(n => el('button', { type: 'button', class: n === periodeSite ? 'actif' : '', text: n === 1 ? 'Aujourd’hui' : n === 365 ? '1 an' : n + ' jours', onclick: () => { periodeSite = n; chargerStatsSite(); } }))));
     const att = el('p', { class: 'st-vide', text: 'Chargement…' }); z.append(att);
     let s;
     try { s = await api('stats-site?jours=' + periodeSite); } catch (e) { att.textContent = 'Statistiques indisponibles : ' + e.message; return; }
@@ -1228,8 +1228,10 @@
             return n ? el('div', { class: 'l', text: 'dont ' + n + ' supprimé' + (n > 1 ? 's' : '') + ' depuis' }) : '';
           })()]),
         el('div', { class: 'st-tuile' }, [el('div', { class: 'v', text: taux }), el('div', { class: 'l', text: 'Visites → inscription' })])]),
-      grapheSite(s),
+      periodeSite === 1 ? '' : grapheSite(s),          // un seul jour : pas de graphique
       listeSite('Provenance', s.source, k => SOURCES_SITE[k] || (k.indexOf('campagne:') === 0 ? 'Campagne : ' + k.slice(9) : k)),
+      listeSite('Sites d’origine', s.referent, k => k),
+      el('p', { class: 'infos', text: 'Nom du site d’où vient le visiteur (Google, Facebook, un annuaire…), quand son navigateur l’indique. Compté depuis le 28 novembre 2026. Sans site d’origine : lien tapé, favori, QR code, application (WhatsApp, Gmail…) ou navigateur qui le masque.' }),
       listeSite('Page d’arrivée', s.page, k => PAGES_SITE[k] || k),
       listeSite('Pays', s.pays, pays),
       listeSite('Langue choisie', s.langue, k => ({ fr: 'Français', en: 'Anglais', ru: 'Russe' })[k] || k),

@@ -4785,8 +4785,13 @@ function compterVisiteSite(request, env, url, page) {
   const campagne = campagneVisite(url);
   if (campagne) source = 'campagne:' + campagne;                            // ?depuis=NOM ou ?gclid (Google Ads) : ligne à part
   const pays = (request.cf && request.cf.country) || 'XX', l = url.searchParams.get('lang');
-  ecrireStats(env, PAGE_SITE, [['visite', ''], ['source', source], ['page', page], ['pays', /^[A-Z]{2}$/.test(pays) ? pays : 'XX'],
-    ['langue', l === 'en' || l === 'ru' ? l : 'fr']]);
+  const lignes = [['visite', ''], ['source', source], ['page', page], ['pays', /^[A-Z]{2}$/.test(pays) ? pays : 'XX'],
+    ['langue', l === 'en' || l === 'ru' ? l : 'fr']];
+  // 28/11 : nom du site d'origine (domaine seul, sans chemin ni donnée personnelle) quand le navigateur l'envoie
+  let h = '';
+  try { h = new URL(request.headers.get('referer') || '').hostname.toLowerCase().replace(/^www\./, ''); } catch (e) {}
+  if (h && /^[a-z0-9.-]{3,60}$/.test(h)) lignes.push(['referent', h]);
+  ecrireStats(env, PAGE_SITE, lignes);
 }
 // Campagne d'une visite du site : ?depuis=NOM (lettres, chiffres, tirets), sinon ?gclid seul (ajouté par Google Ads) = « google-ads »
 function campagneVisite(url) {
@@ -4834,7 +4839,7 @@ function marquerProprietaire() {
 }
 async function lireStats(env, page, jours) {
   const debut = jourParis(new Date(Date.now() - (jours - 1) * 86400000));
-  const res = { actif: !!env.STATS, jours, debut, fin: jourParis(), parJour: {}, source: {}, pays: {}, langue: {}, clic: {}, page: {}, inscription: {}, etape: {}, etapep: {}, visites: 0, clics: 0, inscriptions: 0 };
+  const res = { actif: !!env.STATS, jours, debut, fin: jourParis(), parJour: {}, source: {}, referent: {}, pays: {}, langue: {}, clic: {}, page: {}, inscription: {}, etape: {}, etapep: {}, visites: 0, clics: 0, inscriptions: 0 };
   if (!(await tablesStats(env))) return res;
   const { results } = await env.STATS.prepare('SELECT jour, type, cle, SUM(n) AS n FROM stats WHERE page = ? AND jour >= ? GROUP BY jour, type, cle')
     .bind(page, debut).all();
