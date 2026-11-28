@@ -108,6 +108,12 @@
   .menu-lien{margin-top:6px;padding:10px;border:1px solid var(--ligne);border-radius:10px;background:var(--panneau);display:flex;flex-direction:column;gap:6px}
   .menu-lien .pages{display:flex;flex-wrap:wrap;gap:6px}
   .trad-ligne{margin:0 0 12px}
+  .fr-plie{margin:0 0 4px;font-size:.8rem;color:var(--doux)}
+  .fr-plie summary{cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;list-style:none;padding:2px 0}
+  .fr-plie summary::-webkit-details-marker{display:none}
+  .fr-plie summary::before{content:'▸ ';color:var(--accent)}
+  .fr-plie[open] summary::before{content:'▾ '}
+  .fr-plie .fr{margin:4px 0 6px;padding:8px 10px;border-left:3px solid var(--accent);background:rgba(0,0,0,.03);border-radius:0 6px 6px 0}
   .trad-art-tete{display:flex;align-items:center;flex-wrap:wrap;gap:8px;font-size:1rem;margin:18px 0 8px;padding-top:12px;border-top:1px solid var(--bord,#ddd)}
   .trad-art-tete .btn{margin-left:auto}
   .trad-art-tete .btn-garder{margin-left:0}
@@ -1012,13 +1018,20 @@
       else c.append(el('p', { class: 'aide', style: 'margin:0 0 8px', text: 'Pas encore traduit : affiché en français dans cette langue.' }));
     });
   }
+  // texte français d'origine : court = une ligne ; long (article…) = replié, à déplier au besoin
+  function texteFr(v) {
+    if (v.length <= 70 && !/\n/.test(v)) return el('p', { class: 'fr', text: 'FR : ' + v });
+    var apercuFr = 'FR : ' + v.replace(/\s+/g, ' ').slice(0, 60) + '…';
+    var resume = el('summary', { text: apercuFr });
+    return el('details', { class: 'fr-plie', ontoggle: function () { resume.textContent = this.open ? 'FR : texte d’origine' : apercuFr; } }, [resume, el('p', { class: 'fr', text: v })]);
+  }
   function ligneTrad(p, t, fr, cle) {
     var long = fr[cle].length > 70 || /\n/.test(fr[cle]);
     var inp = long ? el('textarea', { rows: Math.min(10, Math.max(2, Math.ceil(fr[cle].length / 60))) }) : el('input', { type: 'text' });
     var v = lireChemin(t.page, cle);
     inp.value = typeof v === 'string' ? v : '';
     inp.addEventListener('input', function () { ecrireChemin(t.page, cle, inp.value); changement(true); });
-    return el('div', { class: 'trad-ligne' }, [el('span', { class: 'etiq', text: nomCle(cle) }), el('p', { class: 'fr', text: 'FR : ' + fr[cle] }), inp]);
+    return el('div', { class: 'trad-ligne' }, [el('span', { class: 'etiq', text: nomCle(cle) }), texteFr(fr[cle]), inp]);
   }
   function carteTraduction(p) {
     cfg.traductions[langue] = cfg.traductions[langue] || {};
@@ -1068,7 +1081,7 @@
       var v = lireChemin(t.page, cle);
       inp.value = typeof v === 'string' ? v : '';
       inp.addEventListener('input', function () { ecrireChemin(t.page, cle, inp.value); changement(true); });
-      c.append(el('div', { class: 'trad-ligne' }, [el('span', { class: 'etiq', text: nomCle(cle) }), el('p', { class: 'fr', text: 'FR : ' + fr[cle] }), inp]));
+      c.append(el('div', { class: 'trad-ligne' }, [el('span', { class: 'etiq', text: nomCle(cle) }), texteFr(fr[cle]), inp]));
     });
     return c;
   }
