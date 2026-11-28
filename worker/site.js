@@ -575,7 +575,9 @@ function piedHtml(cfg, ctx) {
 function redirectionLangue(langues) {
   return '<script>(function(){try{var L=' + JSON.stringify(langues) + ';var u=new URL(location.href);if(u.searchParams.has("lang")||/bot|crawl|spider|slurp|lighthouse|google|bing|yandex|baidu|duckduck|facebookexternalhit|whatsapp|telegram/i.test(navigator.userAgent))return;' +
     'var l=null;try{l=localStorage.getItem("qp-langue");}catch(e){}if(L.indexOf(l)<0){var n=(navigator.language||"fr").slice(0,2).toLowerCase();l=L.indexOf(n)>=0?n:(L.indexOf("en")>=0?"en":"fr");}' +
-    'if(l!=="fr"){u.searchParams.set("lang",l);location.replace(u.pathname+u.search+u.hash);}}catch(e){}})();</script>\n';
+    // visite comptée ici (la page d'arrivée, redirigée, la verrait comme une navigation interne)
+    'if(l!=="fr"){var V=window.QRBC_VUE;if(V&&!navigator.webdriver){V.l=l;try{navigator.sendBeacon("/api/vue",JSON.stringify(V))}catch(e){}}' +
+    'u.searchParams.set("lang",l);location.replace(u.pathname+u.search+u.hash);}}catch(e){}})();</script>\n';
 }
 const nomF = (k, lang, fx) => NOMS[k][lang] || (fx && fx[NOMS[k].fr]) || NOMS[k].en;
 export async function rendrePageSite(env, request, cfg, page, lang, opts) {

@@ -1427,7 +1427,7 @@
     );
     if (Object.keys(s.langue || {}).length > 1) z.appendChild(listeStats('Langues', s.langue, k => nomIntl(k, 'language')));
     z.append(
-      el('p', { class: 'st-note', text: 'Visites comptées sans cookie ni donnée personnelle, hors robots et hors vos propres visites.' }),
+      el('p', { class: 'st-note', text: 'Visites comptées sans cookie ni donnée personnelle, hors robots et hors vos propres visites : une visite n’est comptée que lorsque la page s’affiche vraiment sur un écran (depuis le 28/11/2026, d’où des chiffres parfois plus bas qu’avant).' }),
       el('p', { class: 'st-note', text: 'Les scans sont reconnus sur les QR codes créés depuis le 12 novembre 2026. Les cartes imprimées avant comptent en « Lien direct ou inconnu ».' }));
   }
   document.querySelectorAll('.onglets button[data-vue=stats]').forEach(b => b.addEventListener('click', chargerStats));
@@ -2037,9 +2037,8 @@
      (i18n) les traduit et les retraduit à chaque changement de langue, sans recharger la page. */
   const NOMS_PROPRES_LANGUE = { fr: 'Français', en: 'English', ru: 'Русский', es: 'Español', de: 'Deutsch', it: 'Italiano', pt: 'Português',
     nl: 'Nederlands', uk: 'Українська', pl: 'Polski', ro: 'Română', tr: 'Türkçe', zh: '中文', ja: '日本語' };
-  let sitesOuvert = null;                       // ligne « Mes sites » dépliée ? (null : dépliée seulement pour un site tout neuf)
+  let sitesOuvert = null;                       // ligne « Mes sites » dépliée ? (null : dépliée pour un site tout neuf ou un compte d'un seul site)
   function bandeauPages() {
-    if (sitesOuvert === null) sitesOuvert = titreParDefaut();
     const box = el('div', { class: 'pages-bandeau' });
     const boiteTrad = box.boiteTrad = el('div', { class: 'pb-trad-boite' });   // version traduite : hors de la zone figée
     const remplir = () => {
@@ -2063,11 +2062,14 @@
       const pages = (g && g.pages) || [];
       const cour = pages.find(p => p.slug === (g && g.courant)) || pages.find(p => p.slug === (c && c.slug));
       const nomCour = cour ? libellePage(cour) + (cour.principale && pages.length > 1 ? ' ★' : '') : ((c && c.slug) || '');
-      box.append(el('button', { type: 'button', class: 'rb-tete pb-tete', 'aria-expanded': String(sitesOuvert), onclick: () => { sitesOuvert = !sitesOuvert; remplir(); } }, [
+      // un seul site : dépliée au départ (Création express et « Ajouter un site ou une langue » visibles)
+      if (sitesOuvert === null && g) sitesOuvert = titreParDefaut() || pages.length <= 1;
+      const ouvertS = sitesOuvert === null ? titreParDefaut() : sitesOuvert;
+      box.append(el('button', { type: 'button', class: 'rb-tete pb-tete', 'aria-expanded': String(ouvertS), onclick: () => { sitesOuvert = !ouvertS; remplir(); } }, [
         el('span', { class: 'rb-lib', text: 'Mes sites' }),
         el('span', { class: 'rb-cour' }, [el('span', { class: 'rb-ico', text: '📄' }), el('span', { class: 'rb-nom', 'data-no-i18n': '', text: nomCour })]),
-        el('span', { class: 'rb-fleche', text: sitesOuvert ? '▴' : '▾' })]));
-      if (!sitesOuvert) return;
+        el('span', { class: 'rb-fleche', text: ouvertS ? '▴' : '▾' })]));
+      if (!ouvertS) return;
       const liste = el('div', { class: 'pb-liste' });
       pages.forEach((p, i) => {
         const actif = p === cour;
@@ -2693,6 +2695,7 @@
   });
 
   function construireFormulaire() {
+    majsTradArticle.clear();                     // cartes reconstruites : anciennes mises à jour de « Traduire cet article / cette pancarte » oubliées
     const f = $('#formulaire');
     const defil = window.scrollY;
     f.innerHTML = '';
@@ -5184,7 +5187,6 @@
     const B = cfg.blog;
     if (!Array.isArray(B.articles)) B.articles = [];
     B.articles.forEach(a => { if (a && !a.id) a.id = idArticle(); });
-    majsTradArticle.clear();                                 // cartes reconstruites : anciennes mises à jour oubliées
     const corps = el('div');                                 // affichée ou non : case du menu « Pages »
     const n = B.articles.length;
     articleBlogActif = Math.max(0, Math.min(articleBlogActif, n - 1));
@@ -5250,7 +5252,7 @@
     if (refaire) { origineBlog = null; origineBlogEnCours = null; }
     if (origineBlog) return Promise.resolve(origineBlog);
     if (!origineBlogEnCours) origineBlogEnCours = appelAPI('articles-origine', jetonCF).then(r => r.json()).then(j => {
-      origineBlog = { langue: j.langueSource || 'fr', articles: new Map((j.articles || []).map(x => [x.id, x])) };
+      origineBlog = { langue: j.langueSource || 'fr', articles: new Map((j.articles || []).map(x => [x.id, x])), home: j.home || [], perso: j.perso || [] };
       majsTradArticle.forEach(f => f());
       return origineBlog;
     }).catch(() => { origineBlogEnCours = null; return null; });
@@ -6461,8 +6463,56 @@
       } catch (e) { msgIA.className = 'msg err'; msgIA.textContent = e.message; }
       texteIA.disabled = false; texteIA.textContent = t('✨ Texte IA');
     } });
+    // 🌐 Version traduite : traduire CETTE pancarte depuis la pancarte à la même place sur la page d'origine
+    const estVersion = !!(compteCF && compteCF.traduction);
+    const badgeTrad = el('span', { class: 'badge-trad cache' });
+    const msgTrad = el('div', { class: 'msg', style: 'margin:0' });
+    const btnTrad = el('button', { type: 'button', class: 'btn btn-mini btn-trad-article', text: '🌐 ' + t('Traduire cette pancarte') });
+    const memeOrigine = o => (a.titre || '') === (o.titre || '') && (a.texte || '') === (o.texte || '');
+    function majTrad() {
+      if (!estVersion) return;
+      const o = origineBlog && (origineBlog[cle] || [])[i];
+      badgeTrad.classList.add('cache'); btnTrad.disabled = false;
+      if (!origineBlog) { btnTrad.textContent = '🌐 ' + t('Traduire cette pancarte'); return; }
+      if (!o || !(o.titre || o.texte)) { btnTrad.disabled = true; btnTrad.textContent = '🌐 ' + t('Absent de la page d’origine'); return; }
+      const pasTraduit = memeOrigine(o);
+      badgeTrad.textContent = pasTraduit ? '🔸 ' + t('pas encore traduit') : '✓ ' + t('traduit');
+      badgeTrad.className = 'badge-trad ' + (pasTraduit ? 'ko' : 'ok');
+      btnTrad.textContent = '🌐 ' + t(pasTraduit ? 'Traduire cette pancarte' : 'Retraduire cette pancarte');
+    }
+    if (estVersion) {
+      majsTradArticle.add(majTrad);
+      majTrad(); chargerOrigineBlog();
+      btnTrad.addEventListener('click', async () => {
+        const o = origineBlog && (origineBlog[cle] || [])[i];
+        const deja = o && !memeOrigine(o);
+        const prix = compteCF.plan === 'gratuit' ? t('offerte') : t('décomptée comme un texte IA');
+        if (deja && !confirm(t('Remplacer le titre et le texte de cette pancarte par une nouvelle traduction de la page d’origine ? Vos retouches sur cette pancarte seront perdues (↩ Annuler possible juste après).') + '\n\n' + t('Traduction : ') + prix)) return;
+        btnTrad.disabled = true; btnTrad.textContent = t('Traduction…'); msgTrad.className = 'msg'; msgTrad.textContent = '';
+        try {
+          const j = await (await appelAPI('traduire-article', jetonCF, { method: 'POST', body: JSON.stringify({ genre: cle, index: i }) })).json();
+          if (j.compte) afficherAbonnement(j.compte);
+          if (origineBlog && j.origine) (origineBlog[cle] = origineBlog[cle] || [])[i] = j.origine;
+          avantIA = { titre: a.titre || '', texte: a.texte || '' };
+          a.titre = j.titre; a.texte = j.texte;
+          if (j.alt) a.alt = j.alt;
+          champTitre.querySelector('input').value = a.titre; champCorps.querySelector('textarea').value = a.texte;
+          const champAlt = carte.querySelector('.champ-alt input, .champ-alt textarea'); if (champAlt && j.alt) champAlt.value = j.alt;
+          annulerIA.classList.remove('cache');
+          msgTrad.className = 'msg ok'; msgTrad.textContent = t('Pancarte traduite : relisez-la, puis Enregistrer. Les autres pancartes n’ont pas changé.');
+          changement(); majApercu();
+        } catch (e) {
+          msgTrad.className = 'msg err'; msgTrad.textContent = e.message === 'Failed to fetch' ? t('Connexion impossible.') : e.message;
+          if (e.status === 402) ouvrirAbonnement('quota', e.message);
+        }
+        majTrad();
+      });
+      champTitre.querySelector('input').addEventListener('input', majTrad);
+      champCorps.querySelector('textarea').addEventListener('input', majTrad);
+    }
     carte.append(
-      el('div', { class: 'ac-tete' }, [el('b', { text: 'Pancarte ' + (i + 1) }), caseAfficher(a, carte)]),
+      el('div', { class: 'ac-tete' }, [el('b', { text: 'Pancarte ' + (i + 1) }), badgeTrad, caseAfficher(a, carte)]),
+      ...(estVersion ? [el('div', { class: 'trad-article' }, [btnTrad, msgTrad])] : []),
       champTitre,
       champCorps,
       el('div', { class: 'bc-actions', style: 'margin:-4px 0 4px' }, [texteIA, annulerIA]),
@@ -6477,8 +6527,8 @@
           const cles = Object.keys(HOME_STYLES);
           carte.querySelectorAll('.segments button').forEach((b, k) => b.classList.toggle('actif', cles[k] === 'photo'));
         } }),
-      champTexte('Description de l’image (Google, malvoyants)', a, 'alt',
-        { ph: [a.titre, cfg.titre].filter(Boolean).join(' – ') || t('Ex. : Mercedes Classe V devant l’aéroport d’Orly') }),
+      (() => { const c = champTexte('Description de l’image (Google, malvoyants)', a, 'alt',
+        { ph: [a.titre, cfg.titre].filter(Boolean).join(' – ') || t('Ex. : Mercedes Classe V devant l’aéroport d’Orly') }); c.classList.add('champ-alt'); return c; })(),
       el('div', { class: 'bc-actions' }, [
         el('button', { type: 'button', class: 'btn btn-mini', text: '←', title: t('Déplacer vers la gauche'), 'aria-label': t('Déplacer vers la gauche'), disabled: i === 0, onclick: () => deplacer(-1) }),
         el('button', { type: 'button', class: 'btn btn-mini', text: '→', title: t('Déplacer vers la droite'), 'aria-label': t('Déplacer vers la droite'), disabled: i === n - 1, onclick: () => deplacer(1) }),

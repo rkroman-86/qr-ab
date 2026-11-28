@@ -275,6 +275,7 @@ async function siteClient(request, env, url, slug) {
 
   if (p === '/api/moi') return marquerProprietaire();
   if (p === '/api/clic' && request.method === 'POST') return compterClic(request, env, slug);
+  if (p === '/api/vue' && request.method === 'POST') return compterVueClient(request, env, slug);
   if (p.startsWith('/api/')) return apiClient(request, env, slug, p.slice(5));
   if (p === '/admin' || p === '/admin/' || p === '/admin.html') return statique(env, request, '/admin.html', true);
   if (estStatique(p)) return statique(env, request, p);
@@ -323,7 +324,7 @@ async function siteClient(request, env, url, slug) {
     if (p === '/' && url.searchParams.get('s') === 'qr') {
       const dest = await lienQRPerso(env, slug);
       if (dest) {
-        compterVisite(request, env, slug, url, compte.langueSite || 'fr');
+        compterVisite(request, env, slug, url, compte.langueSite || 'fr', true);
         return new Response(null, { status: 302, headers: { location: dest, 'cache-control': 'private, no-store', 'referrer-policy': 'no-referrer-when-downgrade' } });
       }
     }
@@ -337,8 +338,8 @@ async function siteClient(request, env, url, slug) {
     let corps = await env.CLIENTS.get('site:' + slug + ':' + nom);
     if (!corps && nom !== 'sitemap.xml') corps = await pageDemarrage(env, slug, nom === 'accueil.html' ? 'home' : nom === 'blog.html' ? 'blog' : nom === 'page.html' ? 'perso' : '');
     if (!corps) return texte('Introuvable', 404);
-    if (nom !== 'sitemap.xml') compterVisite(request, env, slug, url, (langs.length ? langs[0].l : null) || compte.langueSite || 'fr');
-    return reponsePage(corps, nom, langs, langs.length ? langs[0].l : null, slug, url, !!compte.noindex);
+    const mesure = nom !== 'sitemap.xml' ? compterVisite(request, env, slug, url, (langs.length ? langs[0].l : null) || compte.langueSite || 'fr') : null;
+    return avecMesureSite(reponsePage(corps, nom, langs, langs.length ? langs[0].l : null, slug, url, !!compte.noindex), mesure);
   }
   return pageInfo('Page introuvable', 'Ce lien n’existe pas.', 404);
 }
@@ -386,8 +387,8 @@ async function pageTraduite(request, env, url, slug, tc, reste) {
   let corps = await env.CLIENTS.get('site:' + tc.slug + ':' + nom);
   if (!corps && nom !== 'sitemap.xml') corps = await pageDemarrage(env, tc.slug, nom === 'accueil.html' ? 'home' : nom === 'blog.html' ? 'blog' : nom === 'page.html' ? 'perso' : '');
   if (!corps) return texte('Introuvable', 404);
-  if (nom !== 'sitemap.xml') compterVisite(request, env, slug, url, tc.traduction.langue);
-  return reponsePage(corps, nom, languesPage(source), tc.traduction.langue, slug, url, !!(source.noindex || tc.noindex));
+  const mesure = nom !== 'sitemap.xml' ? compterVisite(request, env, slug, url, tc.traduction.langue) : null;
+  return avecMesureSite(reponsePage(corps, nom, languesPage(source), tc.traduction.langue, slug, url, !!(source.noindex || tc.noindex)), mesure);
 }
 function cookieLangue(request) {
   const m = (request.headers.get('cookie') || '').match(/(?:^|;\s*)qrbc-l=([a-z]{2})/);
@@ -1421,8 +1422,10 @@ async function apiClient(request, env, slug, route) {
     let src = null;
     try { src = JSON.parse(await env.CLIENTS.get('site:' + compte.traduction.source + ':config.json') || 'null'); } catch (e) {}
     const arts = ((src && src.blog && src.blog.articles) || []).filter(a => a && a.id).map(a => ({ id: String(a.id), titre: a.titre || '', texte: a.texte || '' }));
+    // pancartes de la page Home et de la page personnalisée : par position (comme « Reprendre images et style »)
+    const panc = id => ((src && src[id] && src[id].articles) || []).map(a => ({ titre: (a && a.titre) || '', texte: (a && a.texte) || '' }));
     const source = await lireCompte(env, compte.traduction.source);
-    return json({ articles: arts, langueSource: (source && source.langueSite) || 'fr' });
+    return json({ articles: arts, home: panc('home'), perso: panc('perso'), langueSource: (source && source.langueSite) || 'fr' });
   }
 
   /* Version traduite : traduction IA d'UN article du blog depuis la page d'origine (décomptée comme un texte IA) */
@@ -1436,12 +1439,15 @@ async function apiClient(request, env, slug, route) {
     const d = await corpsJSON(request);
     let src = null;
     try { src = JSON.parse(await env.CLIENTS.get('site:' + compte.traduction.source + ':config.json') || 'null'); } catch (e) {}
-    const a = ((src && src.blog && src.blog.articles) || []).find(x => x && String(x.id) === String(d.id || ''));
-    if (!a) throw new ErreurAPI(404, 'Cet article n’existe pas (ou plus) sur la page d’origine. Enregistrez d’abord la page d’origine, puis « Reprendre images et style ».');
+    // genre : 'blog' (article, par identifiant) ou 'home' / 'perso' (pancarte, par position)
+    const genre = ['home', 'perso'].includes(d.genre) ? d.genre : 'blog';
+    const a = genre === 'blog' ? ((src && src.blog && src.blog.articles) || []).find(x => x && String(x.id) === String(d.id || ''))
+      : ((src && src[genre] && src[genre].articles) || [])[Number.isInteger(d.index) ? d.index : -1];
+    if (!a) throw new ErreurAPI(404, genre === 'blog' ? 'Cet article n’existe pas (ou plus) sur la page d’origine. Enregistrez d’abord la page d’origine, puis « Reprendre images et style ».'
+      : 'Cette pancarte n’existe pas sur la page d’origine. Enregistrez d’abord la page d’origine, puis « Reprendre images et style ».');
     const textes = {};
-    if (typeof a.titre === 'string' && a.titre.trim()) textes.titre = a.titre;
-    if (typeof a.texte === 'string' && a.texte.trim()) textes.texte = a.texte;
-    if (!Object.keys(textes).length) throw new ErreurAPI(400, 'Cet article est vide sur la page d’origine.');
+    for (const k of genre === 'blog' ? ['titre', 'texte'] : ['titre', 'texte', 'alt']) if (typeof a[k] === 'string' && a[k].trim()) textes[k] = a[k];
+    if (!textes.titre && !textes.texte) throw new ErreurAPI(400, genre === 'blog' ? 'Cet article est vide sur la page d’origine.' : 'Cette pancarte est vide sur la page d’origine.');
     const porte = await reserveIA(env, compte);
     const mode = modeFacturation(porte, 'texte', false, compte);            // lève 402 si ni quota ni crédit
     await limiter(env, 'ia:' + slug + ':' + new Date().toISOString().slice(0, 10), IA_PAR_JOUR, 86400 * 2, 'Limite quotidienne de l’IA atteinte. Réessayez demain.');
@@ -1449,7 +1455,7 @@ async function apiClient(request, env, slug, route) {
     const tr = await traduireTextesPage(env, cleIA, textes, (source && source.langueSite) || 'fr', compte.traduction.langue);
     const frais = (await lireCompte(env, slug)) || compte;
     await facturerReserve(env, frais, porte, 'texte', mode);
-    return json({ titre: tr.titre || textes.titre || '', texte: tr.texte || textes.texte || '', origine: { titre: a.titre || '', texte: a.texte || '' },
+    return json({ titre: tr.titre || textes.titre || '', texte: tr.texte || textes.texte || '', alt: tr.alt || textes.alt || '', origine: { titre: a.titre || '', texte: a.texte || '' },
       compte: await resumeAvecOffre(env, frais) });
   }
 
@@ -4817,13 +4823,32 @@ function sourceVisite(url, request, slug, hotesInternes) {
   if (/(^|\.)(facebook|fb|instagram|t|twitter|x|linkedin|lnkd|tiktok|pinterest|youtube|vk|ok|telegram|whatsapp|snapchat|threads|reddit|messenger)\.(com|co|me|ru|net|in)$/.test(h)) return 'reseaux';
   return 'site';
 }
-function compterVisite(request, env, slug, url, langue) {
-  if (!env.STATS || (request.method !== 'GET' && request.method !== 'HEAD') || !visiteurHumain(request)) return;
-  if (url.searchParams.has('moi')) return;                                       // lien « ouvrir » de l'éditeur
+/* Pages des clients (nom.qrbc.app) — 28/11 : même comptage fiable que qrbc.app. Le serveur prépare la visite (provenance, langue)
+   et l'écrit dans la page ; elle n'est comptée que quand la page s'affiche vraiment (balise vers nom.qrbc.app/api/vue).
+   direct = true : compté tout de suite (scan du QR renvoyé vers un lien personnel : pas de page affichée chez nous). */
+function compterVisite(request, env, slug, url, langue, direct) {
+  if (!env.STATS || (request.method !== 'GET' && request.method !== 'HEAD') || !visiteurHumain(request)) return null;
+  if (url.searchParams.has('moi')) return null;                                  // lien « ouvrir » de l'éditeur
   const source = sourceVisite(url, request, slug);
-  if (!source) return;
+  if (!source) return null;
+  const l = /^[a-z]{2}$/.test(langue || '') ? langue : 'fr';
+  if (!direct) return request.method === 'GET' ? { s: source, l } : null;
   const pays = (request.cf && request.cf.country) || 'XX';
-  ecrireStats(env, slug, [['visite', ''], ['source', source], ['pays', /^[A-Z]{2}$/.test(pays) ? pays : 'XX'], ['langue', /^[a-z]{2}$/.test(langue || '') ? langue : 'fr']]);
+  ecrireStats(env, slug, [['visite', ''], ['source', source], ['pays', /^[A-Z]{2}$/.test(pays) ? pays : 'XX'], ['langue', l]]);
+  return null;
+}
+async function compterVueClient(request, env, slug) {
+  if (env.STATS && visiteurHumain(request) && /^[a-z0-9-]+$/.test(slug)) {
+    let d = {};
+    try { d = JSON.parse(await request.text() || '{}'); } catch (e) {}
+    const ok = /^(qr|promo|google|moteur|reseaux|site|direct)$/.test(d.s || '') && /^[a-z]{2}$/.test(d.l || '');
+    if (ok && await limiter(env, 'vue:' + ip(request) + ':' + new Date().toISOString().slice(0, 13), 120, 7200, 'Trop de requêtes.').then(() => true, () => false)
+        && await env.CLIENTS.get('compte:' + slug)) {
+      const pays = (request.cf && request.cf.country) || 'XX';
+      ecrireStats(env, slug, [['visite', ''], ['source', d.s], ['pays', /^[A-Z]{2}$/.test(pays) ? pays : 'XX'], ['langue', d.l]]);
+    }
+  }
+  return new Response(null, { status: 204 });
 }
 // Site principal qrbc.app : mêmes statistiques, rangées sous la page « @site » (nom impossible pour un client),
 // avec en plus la page d'arrivée (accueil, app, cgv, mentions-legales) et les inscriptions.
@@ -4841,14 +4866,16 @@ function compterVisiteSite(request, env, url, page) {
   const l = url.searchParams.get('lang');
   let h = '';
   try { h = new URL(request.headers.get('referer') || '').hostname.toLowerCase().replace(/^www\./, ''); } catch (e) {}
-  return { p: String(page).slice(0, 30), s: source, l: l === 'en' || l === 'ru' ? l : 'fr', r: /^[a-z0-9.-]{3,60}$/.test(h) ? h : '' };
+  return { p: String(page).slice(0, 30), s: source, l: /^[a-z]{2}$/.test(l || '') ? l : 'fr', r: /^[a-z0-9.-]{3,60}$/.test(h) ? h : '' };
 }
 function avecMesureSite(reponse, mesure) {
   if (!mesure || !reponse || !reponse.ok || !/text\/html/.test(reponse.headers.get('content-type') || '')) return reponse;
   const js = '<script>(function(){if(navigator.webdriver)return;var d=' + JSON.stringify(JSON.stringify(mesure)).replace(/</g, '\\u003c') +
     ',f=function(){try{navigator.sendBeacon("/api/vue",d)}catch(e){}},v=function(){if(document.visibilityState==="visible"){document.removeEventListener("visibilitychange",v);setTimeout(f,1000)}};' +
     'document.visibilityState==="visible"?setTimeout(f,1000):document.addEventListener("visibilitychange",v)})()</script>';
-  const r = new HTMLRewriter().on('body', { element(e) { e.append(js, { html: true }); } }).transform(reponse);
+  // copie en tête de page : la redirection de langue du site (avant l'affichage) envoie la visite elle-même avant de partir
+  const tete = '<script>window.QRBC_VUE=' + JSON.stringify(mesure).replace(/</g, '\\u003c') + ';</script>';
+  const r = new HTMLRewriter().on('head', { element(e) { e.prepend(tete, { html: true }); } }).on('body', { element(e) { e.append(js, { html: true }); } }).transform(reponse);
   const hd = new Headers(r.headers); hd.set('cache-control', 'private, no-store');   // une page = une mesure : pas de copie en cache
   return new Response(r.body, { status: r.status, headers: hd });
 }
@@ -4873,7 +4900,7 @@ async function compterVueSite(request, env) {
     let d = {};
     try { d = JSON.parse(await request.text() || '{}'); } catch (e) {}
     const ok = /^[a-z0-9-]{1,30}$/.test(d.p || '') && /^(qr|promo|google|moteur|reseaux|site|direct|campagne:[a-z0-9-]{1,25})$/.test(d.s || '') &&
-      ['fr', 'en', 'ru'].includes(d.l) && /^[a-z0-9.-]{0,60}$/.test(d.r || '');
+      /^[a-z]{2}$/.test(d.l || '') && /^[a-z0-9.-]{0,60}$/.test(d.r || '');
     if (ok && await limiter(env, 'vue:' + ip(request) + ':' + new Date().toISOString().slice(0, 13), 120, 7200, 'Trop de requêtes.').then(() => true, () => false)) {
       const ua = request.headers.get('user-agent') || '', pays = (request.cf && request.cf.country) || 'XX';
       const a = appareilDe(ua), n = navigateurDe(ua);
