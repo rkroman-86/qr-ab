@@ -840,6 +840,7 @@
     'Retirer': ['Remove', 'Убрать'],
     'Aucune': ['None', 'Нет'],
     'Image introuvable': ['Image not found', 'Изображение не найдено'],
+    'ouvert': ['open', 'открыт'],
     'Rubrique': ['Section', 'Раздел'],
     'Droite épuré': ['Right clean', 'Справа, минимализм'],
     'Droite photo': ['Right photo', 'Справа, фото'],

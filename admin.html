@@ -48,10 +48,15 @@
     #fen-abo .attente,#fen-express .attente,    #fen-pages .attente{margin-top:14px;padding:12px;border-radius:12px;background:var(--bg);font-size:.9rem}
     #fen-abo .fermer,#fen-express .fermer,    #fen-pages .fermer{margin-top:14px}
     .pages-bandeau{border:1px solid var(--ligne);background:var(--panneau);border-radius:14px;padding:10px 12px;margin:0 0 12px}
-    .pages-bandeau .pb-tete{display:flex;align-items:center;gap:8px;justify-content:space-between;flex-wrap:wrap}
-    .pages-bandeau .pb-liste{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
-    .pages-bandeau .pb-page{border:1px solid var(--ligne);background:var(--bg);color:var(--txt);border-radius:999px;padding:6px 11px;font:inherit;font-size:.86rem;cursor:pointer}
-    .pages-bandeau .pb-page.actif{border-color:var(--prim);background:color-mix(in srgb,var(--prim) 14%,var(--bg));font-weight:700;cursor:default}
+    .pages-bandeau{padding:8px 12px}
+    .pages-bandeau .pb-liste{display:flex;flex-direction:column;gap:6px;margin:8px 0}
+    .pages-bandeau .pb-page{width:100%;font:inherit;color:var(--txt);text-align:left}
+    .pages-bandeau .pb-page .rb-nom{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .pages-bandeau .pb-page.actif .rb-nom{font-weight:700}
+    .pages-bandeau .pb-page small{color:var(--doux);font-size:.78rem}
+    .pages-bandeau .pb-num{flex:none;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--panneau);border:1px solid var(--ligne);font-size:.82rem;font-weight:700}
+    .pages-bandeau .express-bandeau{margin:8px 0}
+    .pages-bandeau .pb-ajout{margin:2px 0 6px}
     .pages-bandeau .pb-trad{border-bottom:1px solid var(--ligne);padding:0 0 10px;margin:0 0 10px}
     .pages-bandeau .pb-synchro{margin-top:6px}
     .synchro-alerte ul{margin:6px 0 0;padding-left:18px;text-align:left}.synchro-alerte li{margin:4px 0}
@@ -2010,7 +2015,9 @@
      (i18n) les traduit et les retraduit à chaque changement de langue, sans recharger la page. */
   const NOMS_PROPRES_LANGUE = { fr: 'Français', en: 'English', ru: 'Русский', es: 'Español', de: 'Deutsch', it: 'Italiano', pt: 'Português',
     nl: 'Nederlands', uk: 'Українська', pl: 'Polski', ro: 'Română', tr: 'Türkçe', zh: '中文', ja: '日本語' };
+  let sitesOuvert = null;                       // ligne « Mes sites » dépliée ? (null : dépliée seulement pour un site tout neuf)
   function bandeauPages() {
+    if (sitesOuvert === null) sitesOuvert = titreParDefaut();
     const box = el('div', { class: 'pages-bandeau' });
     const remplir = () => {
       box.innerHTML = '';
@@ -2028,20 +2035,27 @@
             [el('span', {}, ['🎨 ', el('span', { text: 'Reprendre images et style de la page d’origine' }), ' (', el('span', { text: 'gratuit' }), ')'])])
         ]));
       }
-      const plusieurs = g && g.pages.length > 1;
-      box.append(el('div', { class: 'pb-tete' }, [
-        el('b', {}, ['📄 ', el('span', { text: plusieurs ? 'Mes sites' : 'Une autre activité ou une autre langue ?' })]),
-        el('button', { type: 'button', class: 'btn btn-mini', onclick: () => ouvrirAjoutPage() }, [el('span', {}, ['＋ ', el('span', { text: 'Ajouter un site ou une langue' })])])
-      ]));
-      if (plusieurs) {
-        const liste = el('div', { class: 'pb-liste', 'data-no-i18n': '' });
-        g.pages.forEach(p => {
-          const actif = p.slug === g.courant;
-          liste.appendChild(el('button', { type: 'button', class: 'pb-page' + (actif ? ' actif' : ''), text: libellePage(p) + (p.principale ? ' ★' : ''),
-            title: p.adresse, onclick: actif ? null : () => basculerVers(p.slug) }));
-        });
-        box.append(liste);
-      }
+      /* Une ligne repliable (28/11), comme « Rubrique » : Mes sites · site ouvert · ▾ ;
+         dépliée : la liste numérotée des sites, la Création express, puis « Ajouter un site ou une langue » */
+      const pages = (g && g.pages) || [];
+      const cour = pages.find(p => p.slug === (g && g.courant)) || pages.find(p => p.slug === (c && c.slug));
+      const nomCour = cour ? libellePage(cour) + (cour.principale && pages.length > 1 ? ' ★' : '') : ((c && c.slug) || '');
+      box.append(el('button', { type: 'button', class: 'rb-tete pb-tete', 'aria-expanded': String(sitesOuvert), onclick: () => { sitesOuvert = !sitesOuvert; remplir(); } }, [
+        el('span', { class: 'rb-lib', text: 'Mes sites' }),
+        el('span', { class: 'rb-cour' }, [el('span', { class: 'rb-ico', text: '📄' }), el('span', { class: 'rb-nom', 'data-no-i18n': '', text: nomCour })]),
+        el('span', { class: 'rb-fleche', text: sitesOuvert ? '▴' : '▾' })]));
+      if (!sitesOuvert) return;
+      const liste = el('div', { class: 'pb-liste' });
+      pages.forEach((p, i) => {
+        const actif = p === cour;
+        liste.appendChild(el('button', { type: 'button', class: 'rb pb-page' + (actif ? ' actif' : ''), title: p.adresse, onclick: actif ? () => { sitesOuvert = false; remplir(); } : () => basculerVers(p.slug) }, [
+          el('span', { class: 'pb-num', text: String(i + 1) }),
+          el('span', { class: 'rb-nom', 'data-no-i18n': '', text: libellePage(p) + (p.principale && pages.length > 1 ? ' ★' : '') }),
+          actif ? el('small', { text: t('ouvert') }) : null]));
+      });
+      if (pages.length) box.append(liste);
+      if (!(c && c.traduction)) box.append(bandeauExpress());
+      box.append(el('button', { type: 'button', class: 'btn btn-mini pb-ajout', onclick: () => ouvrirAjoutPage() }, [el('span', {}, ['＋ ', el('span', { text: 'Ajouter un site ou une langue' })])]));
     };
     remplir();
     chargerGroupe().then(remplir);
@@ -2661,7 +2675,6 @@
     requestAnimationFrame(() => window.scrollTo(0, defil));
     const d = cfg.design;
     if (CF) f.appendChild(bandeauPages());
-    if (CF && !(compteCF && compteCF.traduction)) f.appendChild(bandeauExpress());
 
     /* Textes */
     f.appendChild(section('textes', 'Textes', true, [
