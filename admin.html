@@ -59,10 +59,10 @@
     .pages-bandeau .express-bandeau{margin:8px 0}
     .pages-bandeau .pb-ajout{margin:2px 0 6px}
     .pages-bandeau.pb-trad{padding:10px 12px}
-    .zone-fixe{position:sticky;top:var(--h-barre,57px);z-index:25;margin:-16px -16px 14px;background:var(--panneau);border-bottom:1px solid var(--txt);
+    .zone-fixe{position:sticky;top:var(--h-barre,57px);z-index:25;margin:-16px -16px 14px;background:linear-gradient(var(--txt),var(--txt)) center bottom/75% 1px no-repeat,var(--panneau);
       max-height:calc(100dvh - var(--h-barre,57px));overflow-y:auto;overscroll-behavior:contain}
     .zone-fixe > .pages-bandeau,.zone-fixe > .rubriques{margin:0;border:0;border-radius:0;background:transparent;padding:4px 16px}
-    .zone-fixe > * + *{border-top:1px solid var(--txt) !important}
+    .zone-fixe > * + *{background:linear-gradient(var(--txt),var(--txt)) center top/75% 1px no-repeat !important}   /* traits de séparation : 3/4 de la largeur, centrés */
     .zone-fixe .rb-tete{padding:4px 0}
     .zone-fixe .rb-cour{padding:6px 12px}
     .zone-fixe .rb-fleche{width:36px;height:36px}
@@ -164,7 +164,7 @@
     /* ---------- Éditeur ---------- */
     #editeur{min-height:100dvh;display:flex;flex-direction:column}
     .barre{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:10px;padding:10px 16px;
-      background:var(--panneau);border-bottom:1px solid var(--txt)}
+      background:linear-gradient(var(--txt),var(--txt)) center bottom/75% 1px no-repeat,var(--panneau)}
     .barre h1{font-size:1rem;margin:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .onglets{display:flex;background:var(--bg);border-radius:10px;padding:3px}
     .onglets button{border:0;background:transparent;padding:7px 14px;border-radius:8px;font-weight:600;color:var(--doux);cursor:pointer}
