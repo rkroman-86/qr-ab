@@ -67,7 +67,7 @@ qrbc.app (QR-BC, édité par KPS) permet de créer en quelques minutes, depuis u
 
 ## Recadrer et zoomer (« ✂ Recadrer »)
 - Faire glisser l'image, pincer ou utiliser le curseur pour zoomer. Le cadre montre ce qui sera visible sur un téléphone. « Recentrer » remet au centre.
-- Assombrir : voile de couleur incrusté dans l'image, de 0 à 80 % (20 % par défaut), noir par défaut ou blanc, bleu nuit, brun ou une couleur au choix. Pratique pour masquer les défauts d'une image IA et faire ressortir le texte. Pour l'image de fond, la page ajoute déjà son propre voile : 0 à 20 % suffisent en général.
+- Assombrir : voile de couleur incrusté dans l'image, de 0 à 80 % (20 % par défaut), noir par défaut ou blanc, bleu nuit, brun ou une couleur au choix. Pratique pour masquer les défauts d'une image IA et faire ressortir le texte. C'est le seul réglage d'assombrissement de l'image de fond de la page contact (comme pour les pancartes) : il n'y a plus de curseur dans la section Image de fond. Un ancien assombrissement de la page est repris dans ce réglage à l'ouverture de « ✂ Recadrer », puis incrusté dans l'image.
 - L'image d'origine n'est jamais abîmée : « Recadrer » repart toujours de l'originale (avec les derniers réglages), on peut donc dézoomer ou éclaircir plus tard.
 
 ## Mes images
@@ -179,7 +179,7 @@ qrbc.app (QR-BC, édité par KPS) permet de créer en quelques minutes, depuis u
 
 ## Problèmes fréquents
 - La page en ligne n'a pas changé : avez-vous appuyé sur « Enregistrer » ? Attendre une minute et recharger la page (tirer vers le bas sur téléphone).
-- Le texte est illisible sur la photo : Design → Texte sur l'image « Blanc » et Effet « Bandeau » ou « Ombre forte » ; ou augmenter le voile ; ou Recadrer → Assombrir.
+- Le texte est illisible sur la photo : Design → Texte sur l'image « Blanc » et Effet « Bandeau » ou « Ombre forte » ; ou Recadrer → Assombrir.
 - L'image IA ne plaît pas : relancer une création (consomme une création), changer d'ambiance ou d'idée, recadrer et assombrir, ou utiliser une vraie photo.
 - Image IA refusée : éviter les marques, parcs d'attractions et personnages connus dans le texte de la pancarte.
 - Le bouton avis ne marche pas : utiliser le lien « Demander des avis » de la fiche Google Business Profile.

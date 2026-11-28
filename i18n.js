@@ -840,6 +840,7 @@
     'Retirer': ['Remove', 'Убрать'],
     'Aucune': ['None', 'Нет'],
     'Image introuvable': ['Image not found', 'Изображение не найдено'],
+    'Assombrir ou éclaircir l’image : bouton « ✂ Recadrer », réglage « Assombrir » (comme pour les pancartes).': ['Darken or lighten the image: “✂ Crop” button, “Darken” setting (as for panels).', 'Затемнить или осветлить изображение: кнопка «✂ Кадрировать», настройка «Затемнить» (как для плашек).'],
     'Cette image a été assombrie de': ['This image was darkened by', 'Это изображение затемнено на'],
     'au recadrage (incrusté dans l’image).': ['when cropped (built into the image).', 'при кадрировании (встроено в изображение).'],
     'Impossible de retrouver l’image d’origine.': ['The original image cannot be found.', 'Не удалось найти исходное изображение.'],

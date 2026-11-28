@@ -318,7 +318,6 @@
     .damier.sans-damier{background:none}
     .val-curseur{font-weight:400;opacity:.7}
     .ordre-entete{display:flex;flex-direction:column;gap:6px;margin:4px 0}.oe-ligne{display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--ligne);border-radius:10px}
-    .teinte-incrustee{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:8px 0 0;padding:8px 10px;border-radius:10px;background:color-mix(in srgb,var(--alerte,#c0392b) 10%,transparent);font-size:.85rem}
     .coul-nom{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:10px 0 0}
     .oe-num{width:20px;text-align:center;font-weight:700;opacity:.6}.oe-nom{flex:1;font-size:.9rem}
     .curseurs-logo{border:1px solid var(--ligne);border-radius:12px;padding:10px 12px 2px;margin:8px 0 12px}
@@ -1850,8 +1849,12 @@
     const im = el('img', { src: img.src, alt: '' });
     zone.appendChild(im);
     // Assombrir : voile de couleur (noir par défaut) incrusté dans l'image, pour masquer les défauts et faire ressortir le texte
-    // nouvelle image : pas d'assombrissement incrusté pour un fond (le curseur « Assombrir l'image » de la page s'en charge, réglable à tout moment)
-    if (!teinte) teinte = { couleur: '#000000', force: nom === 'fond' ? 0 : 20 };
+    if (!teinte) teinte = { couleur: '#000000', force: 20 };   // nouvelle image : légèrement assombrie (comme les pancartes)
+    // fond de la page contact : un seul réglage d'assombrissement, ici. L'ancien voile de la page (design.voile) est repris
+    // dans ce réglage puis incrusté dans l'image à « Appliquer » (le voile de la page repasse alors à 0).
+    const pourPage = nom === 'fond' && source === cfg.design.imageFond;
+    const voilePage = pourPage ? Math.max(0, Math.min(80, Number(cfg.design.voile) || 0)) : 0;
+    if (voilePage) teinte = { couleur: teinte.couleur, force: Math.min(80, Math.round(100 * (1 - (1 - (prec && prec.teinte ? teinte.force : 0) / 100) * (1 - voilePage / 100)))) };
     const voileCadre = el('div', { class: 'cadre-voile' });
     zone.appendChild(voileCadre);
     const forceVoile = el('input', { type: 'range', min: '0', max: '80', step: '1', value: String(teinte.force), 'aria-label': t('Assombrir') });
@@ -1944,29 +1947,12 @@
       imagesAEnvoyer[chemin] = data.split(',')[1];
       // mémorise l'originale et le cadrage, pour pouvoir recadrer (et dézoomer) plus tard
       cfg.cadres[chemin] = { source: origine, rect: { sx: Math.round(sx), sy: Math.round(sy), sw: Math.round(sw), sh: Math.round(sh) }, teinte: { couleur: teinte.couleur, force: teinte.force } };
+      if (pourPage) { cfg.design.voile = 0; const fo = document.getElementById('formulaire'); if (fo) fo.style.setProperty('--voile-fond', '0'); }
       const utiles = new Set(JSON.stringify(Object.assign({}, cfg, { cadres: null })).match(/images\/[\w.-]+/g) || []);
       for (const k in cfg.cadres) if (!utiles.has(k) && k !== chemin) delete cfg.cadres[k];   // pas d'entrées orphelines
       fermer();
       fini(chemin);
     }
-  }
-
-  // Refait une image recadrée à partir de son originale, même cadrage, sans assombrissement incrusté ; renvoie le nouveau chemin
-  async function retirerTeinte(chemin, nom) {
-    const c = cfg.cadres && cfg.cadres[chemin];
-    if (!c || !c.source || !c.rect) return null;
-    const img = await new Promise((ok, ko) => { const i = new Image(); i.onload = () => ok(i); i.onerror = ko; i.src = imagesLocales[c.source] || c.source; });
-    const { sx, sy, sw, sh } = c.rect, ratio = sw / sh;
-    const maxL = ratio < 1 ? 1080 : 1400, ow = Math.round(Math.min(sw, maxL)), oh = Math.round(ow / ratio);
-    const cv = document.createElement('canvas'); cv.width = ow; cv.height = oh;
-    const ctx = cv.getContext('2d');
-    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, ow, oh); ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, ow, oh);
-    const data = cv.toDataURL('image/jpeg', 0.86);
-    const n = 'images/' + (nom === 'fond' ? 'fond' : 'article') + '-cadre-' + Date.now() + '.jpg';
-    imagesLocales[n] = data; imagesAEnvoyer[n] = data.split(',')[1];
-    cfg.cadres[n] = { source: c.source, rect: c.rect, teinte: { couleur: (c.teinte && c.teinte.couleur) || '#000000', force: 0 } };
-    return n;
   }
 
   /* ---------------- Atelier « fond par l'IA » (Cloudflare) ---------------- */
@@ -2762,10 +2748,8 @@
 
     const policeSel = choixPolice(Object.keys(FONTS).map(k => [k, FONTS[k].nom, FONTS[k].css]), d.police || 'moderne', v => { d.police = v; changement(); });
 
-    const voile = el('input', { type: 'range', min: 0, max: 80, value: d.voile || 0 });
-    // l'image choisie (vignette + image cochée dans « Mes images ») s'assombrit en direct, comme sur la page
+    // ancien voile de la page (repris dans « ✂ Recadrer ») : la vignette le montre tant qu'il existe
     f.style.setProperty('--voile-fond', String((Number(d.voile) || 0) / 100));
-    voile.addEventListener('input', () => { d.voile = Number(voile.value); f.style.setProperty('--voile-fond', String(d.voile / 100)); changement(); });
 
     f.appendChild(section('design', 'Design', false, [
       el('span', { class: 'etiq', text: 'Thème' }), themes,
@@ -2799,19 +2783,7 @@
     f.appendChild(section('fond', 'Image de fond', false, [
       el('div', { class: 'aide', style: 'margin:0 0 12px', text: 'Photo affichée derrière la page contact. Elle sert aussi aux cartes de visite, à l’atelier logo et à l’aperçu de partage. Astuce : photo en format portrait, sujet bien éclairé.' }),
       choixImage('Photo', d, 'imageFond', { nom: 'fond', max: 1600, fond: true, photo: true }),
-      el('span', { class: 'etiq', text: 'Assombrir l’image (meilleure lisibilité du texte)' }), voile,
-      ...(() => {                                            // image déjà assombrie au recadrage : le curseur ne peut pas l'éclaircir
-        const c = cfg.cadres && d.imageFond && cfg.cadres[d.imageFond];
-        const f = c && c.teinte && Number(c.teinte.force) || 0;
-        if (!f) return [];
-        const b = el('button', { type: 'button', class: 'btn btn-mini', text: t('Retirer') });
-        b.addEventListener('click', async () => {
-          b.disabled = true;
-          try { const n = await retirerTeinte(d.imageFond, 'fond'); if (n) { d.imageFond = n; construireFormulaire(); changement(); } }
-          catch (e) { b.disabled = false; alert(t('Impossible de retrouver l’image d’origine.')); }
-        });
-        return [el('div', { class: 'teinte-incrustee' }, [el('span', {}, [el('span', { text: 'Cette image a été assombrie de' }), ' ' + f + ' % ', el('span', { text: 'au recadrage (incrusté dans l’image).' })]), b])];
-      })(),
+      el('div', { class: 'aide', style: 'margin:8px 0 0', text: 'Assombrir ou éclaircir l’image : bouton « ✂ Recadrer », réglage « Assombrir » (comme pour les pancartes).' }),
       ...(CF ? [atelierFond()] : [])
     ]));
 
