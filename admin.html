@@ -2067,10 +2067,11 @@
       const pages = (g && g.pages) || [];
       const cour = pages.find(p => p.slug === (g && g.courant)) || pages.find(p => p.slug === (c && c.slug));
       const nomCour = cour ? libellePage(cour) + (cour.principale && pages.length > 1 ? ' ★' : '') : ((c && c.slug) || '');
-      // un seul site : dépliée au départ (Création express et « Ajouter un site ou une langue » visibles)
-      if (sitesOuvert === null && g) sitesOuvert = titreParDefaut() || pages.length <= 1;
-      const ouvertS = sitesOuvert === null ? titreParDefaut() : sitesOuvert;
-      box.append(el('button', { type: 'button', class: 'rb-tete pb-tete', 'aria-expanded': String(ouvertS), onclick: () => { sitesOuvert = !ouvertS; remplir(); } }, [
+      // un seul site : pas de ligne « Mes sites » (inutile) ; seulement « ⚡ Création express · ＋ Site ou langue »
+      const seul = pages.length <= 1 && !(c && c.traduction);
+      if (sitesOuvert === null && g) sitesOuvert = titreParDefaut();
+      const ouvertS = seul || (sitesOuvert === null ? titreParDefaut() : sitesOuvert);
+      if (!seul) box.append(el('button', { type: 'button', class: 'rb-tete pb-tete', 'aria-expanded': String(ouvertS), onclick: () => { sitesOuvert = !ouvertS; remplir(); } }, [
         el('span', { class: 'rb-lib', text: 'Mes sites' }),
         el('span', { class: 'rb-cour' }, [el('span', { class: 'rb-ico', text: '📄' }), el('span', { class: 'rb-nom', 'data-no-i18n': '', text: nomCour })]),
         el('span', { class: 'rb-fleche', text: ouvertS ? '▴' : '▾' })]));
