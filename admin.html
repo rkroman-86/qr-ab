@@ -20,6 +20,7 @@
     .cache{display:none !important}
     .abo{font-size:.78rem;font-weight:600;padding:3px 9px;border-radius:99px;background:var(--bg);border:1px solid var(--ligne);color:var(--doux);white-space:nowrap}
     .abo-alerte{color:var(--err);border-color:var(--err)}
+    .cpt-abo{display:block;margin:0 0 10px;font-size:.9rem;padding:6px 12px}
     button.abo{cursor:pointer;font-family:inherit;min-width:0;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto}
     @media (max-width:560px){
       /* téléphone : le badge d'abonnement passe sur sa propre ligne, sous la barre */
@@ -729,7 +730,7 @@
   })();
 
   /* ---------------- Abonnement (mode Cloudflare) ---------------- */
-  let compteCF = null;
+  let compteCF = null, etatAbo = { txt: '', alerte: false };
   const euros = c => ((c || 0) / 100).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
   function afficherAbonnement(c) {
     if (c) compteCF = c;
@@ -748,8 +749,10 @@
       else txt = a.formule === 'mensuel' ? 'Abonné · formule mensuelle' : 'Abonné · formule annuelle';
     }
     else if (c.plan === 'payant') txt = 'Abonné' + (c.payeJusqua ? ' · ' + new Date(c.payeJusqua).toLocaleDateString('fr-FR') : '');
+    // 28/11 : l'état du compte est dans 👤 Mon compte ; la barre du haut ne le montre qu'en cas d'alerte (fin d'essai, paiement refusé…)
+    etatAbo = { txt, alerte: /abo-alerte/.test(classe) };
     b.textContent = txt;
-    b.className = txt ? classe : 'abo cache';
+    b.className = txt && etatAbo.alerte ? classe : 'abo cache';
     majQuotas();
   }
   $('#abonnement').addEventListener('click', () => ouvrirAbonnement());
@@ -795,6 +798,7 @@
     const c = compteCF || {};
     const ligneC = (lib, val) => el('div', { class: 'compteur' }, [el('span', { text: lib }), el('b', { 'data-no-i18n': '', text: val })]);
     const solde = el('div', { class: 'cpt-section' }, [el('h3', { text: 'Mon solde' })]);
+    if (etatAbo.txt) solde.appendChild(el('button', { type: 'button', class: 'abo cpt-abo' + (etatAbo.alerte ? ' abo-alerte' : ''), text: etatAbo.txt, title: t('Mon abonnement'), onclick: () => { fermer(); ouvrirAbonnement(); } }));
     const fin = c.plan === 'essai' ? c.finEssai : c.plan === 'payant' ? (c.abo && c.abo.actif ? c.abo.fin : c.payeJusqua) : null;
     const etats = { gratuit: 'Compte offert', essai: c.actif ? 'Essai gratuit' : 'Essai terminé', payant: c.actif ? (c.abo && c.abo.actif ? (c.abo.formule === 'mensuel' ? 'Formule mensuelle' : 'Formule annuelle') : 'Abonnement actif') : 'Abonnement expiré', suspendu: 'Compte suspendu' };
     solde.appendChild(el('div', { class: 'compteur' }, [el('span', { text: etats[c.plan] || 'Abonnement' }),
