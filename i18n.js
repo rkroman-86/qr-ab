@@ -840,6 +840,7 @@
     'Retirer': ['Remove', 'Убрать'],
     'Aucune': ['None', 'Нет'],
     'Image introuvable': ['Image not found', 'Изображение не найдено'],
+    'Icône de l’appli améliorée : cliquez sur Enregistrer pour la mettre à jour.': ['App icon improved: tap Save to update it.', 'Значок приложения улучшен: нажмите «Сохранить», чтобы обновить его.'],
     'Cochez les informations à imprimer : R au recto, V au verso (5 au plus par face). Elles sont reprises de votre page ; modifiez-les ici si vous voulez imprimer un autre numéro ou un autre e-mail (votre page ne change pas). ↑ ↓ changent l’ordre : un champ perso peut monter entre le nom et le slogan, ou au-dessus du nom.': ['Tick the details to print: F on the front, B on the back (5 at most per side). They are taken from your page; edit them here to print another number or email (your page does not change). ↑ ↓ change the order: a custom field can move between the name and the slogan, or above the name.', 'Отметьте данные для печати: Л — лицевая сторона, О — оборот (не больше 5 на сторону). Они берутся с вашей страницы; измените их здесь, чтобы напечатать другой номер или e-mail (страница не меняется). ↑ ↓ меняют порядок: своё поле можно поднять между названием и слоганом или над названием.'],
     'R': ['F', 'Л'],
     'V': ['B', 'О'],

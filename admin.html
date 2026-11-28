@@ -314,6 +314,7 @@
     .logo-scene{display:flex;flex-direction:column;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--ligne)}
     .damier{display:flex;align-items:center;justify-content:center;border-radius:10px;background:repeating-conic-gradient(#e6e6e6 0 25%,#fff 0 50%) 0 0/16px 16px}
     .damier.grand{width:min(200px,44vw);aspect-ratio:1}
+    .damier.grand img{width:100%;height:100%}
     .damier img{width:90%;height:90%;object-fit:contain}
     .logo-apercu{display:block}
     .photo-ia{display:flex;align-items:center;gap:10px;margin:0 0 10px}.photo-ia img{width:56px;height:56px;object-fit:cover;border-radius:10px}
@@ -646,7 +647,7 @@
     if (!partageAJour() || !iconesAJour()) {
       changement();
       const e = $('#etat'); e.className = 'etat';
-      e.textContent = !iconesAJour() ? 'Nouveau : votre page s’installe comme une appli. Cliquez sur Enregistrer pour l’activer.' : 'Nouvelle image d’aperçu des liens (WhatsApp…) : cliquez sur Enregistrer';
+      e.textContent = !iconesAJour() ? (cfg.appIcones ? 'Icône de l’appli améliorée : cliquez sur Enregistrer pour la mettre à jour.' : 'Nouveau : votre page s’installe comme une appli. Cliquez sur Enregistrer pour l’activer.') : 'Nouvelle image d’aperçu des liens (WhatsApp…) : cliquez sur Enregistrer';
     }
   }
 
@@ -3023,17 +3024,40 @@
   }
 
   /* Icônes de l'appli (page installable) : 192, 512 et 512 « maskable », à partir du logo ou des initiales */
-  function cleIcones() { const d = cfg.design; return [cfg.logo, d.fond, d.accent, cfg.logo ? '' : initiales(cfg.titre)].join('|'); }
+  function cleIcones() { const d = cfg.design; return [cfg.logo, d.fond, d.accent, cfg.logo ? '' : initiales(cfg.titre), 'v2'].join('|'); }
   function iconesAJour() { return !CF || (cfg.appIcones && cfg.appIcones.i512 && cfg.appIcones.cle === cleIcones()); }
+  /* Logo « plein » (photo, carré arrondi, rond… qui touche les bords) : il remplit l'icône, sans marge.
+     Fond de l'icône = couleur près du bord du logo (coins d'un carré arrondi), sinon fond de la page. */
+  function analyserBordLogo(logo) {
+    try {
+      const N = 100, cv = document.createElement('canvas'); cv.width = cv.height = N;
+      const ctx = cv.getContext('2d');
+      const k = Math.min(N / logo.width, N / logo.height), w = logo.width * k, h = logo.height * k;
+      ctx.drawImage(logo, (N - w) / 2, (N - h) / 2, w, h);
+      const px = (x, y) => ctx.getImageData(Math.round(x), Math.round(y), 1, 1).data;
+      const milieux = [[50, 3], [50, 96], [3, 50], [96, 50]].map(([x, y]) => px(x, y));
+      const diag = [[12, 12], [87, 12], [12, 87], [87, 87]].map(([x, y]) => px(x, y));
+      const plein = milieux.every(c => c[3] > 200);
+      if (!plein) return { plein: false };
+      const coins = diag.every(c => c[3] > 200);
+      if (!coins) return { plein: true, couleur: null };          // rond : fond de la page dans les coins
+      // coins du haut seulement : le bas porte souvent le nom ou un bandeau
+      const m = [0, 1, 2].map(i => Math.round((diag[0][i] + diag[1][i]) / 2));
+      return { plein: true, couleur: '#' + m.map(v => v.toString(16).padStart(2, '0')).join('') };
+    } catch (e) { return { plein: false }; }
+  }
   async function preparerIconesAppli() {
     if (iconesAJour()) return;
     const d = cfg.design;
     const logo = await chargerImage(cfg.logo ? (imagesLocales[cfg.logo] || cfg.logo) : '');
+    const bordLogo = logo && logo.width ? analyserBordLogo(logo) : { plein: false };
     const dessiner = (taille, part) => {
       const cv = document.createElement('canvas'); cv.width = cv.height = taille;
       const ctx = cv.getContext('2d');
       if (logo && logo.width) {
-        ctx.fillStyle = d.fond || '#ffffff'; ctx.fillRect(0, 0, taille, taille);
+        ctx.fillStyle = (bordLogo.plein && bordLogo.couleur) || d.fond || '#ffffff'; ctx.fillRect(0, 0, taille, taille);
+        // logo plein : 100 % de l'icône (82 % pour l'icône « maskable », dont Android ne montre que le centre)
+        if (bordLogo.plein) part = part < 0.7 ? 0.82 : 1;
         const k = Math.min(taille * part / logo.width, taille * part / logo.height);
         ctx.drawImage(logo, (taille - logo.width * k) / 2, (taille - logo.height * k) / 2, logo.width * k, logo.height * k);
       } else {
@@ -5577,7 +5601,10 @@
       parts.push('<g' + filtre + '><g transform="' + autour(echBord) + '">' + formeEl(' fill="none" stroke="' + peinture('pBord', cMotif) + '" stroke-width="' + ep + '"') + '</g></g>');
     }
 
-    return '<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 512 512"><defs>' + defs.join('') + '</defs>' + parts.join('') + '</svg>';
+    // Photo sans bordure ni ombre / néon : la forme va jusqu'au bord de l'image (pas de vide autour)
+    const bordABord = motif.type === 'photo' && !avecBord && o.effet !== 'ombre' && o.effet !== 'neon';
+    const corps = bordABord ? '<g transform="' + autour(256 / 246) + '">' + parts.join('') + '</g>' : parts.join('');
+    return '<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 512 512"><defs>' + defs.join('') + '</defs>' + corps + '</svg>';
   }
   const svgEnURL = svg => 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
 
@@ -5672,17 +5699,26 @@
   function ouvrirCreateurLogo() {
     const o = optionsLogo();
     let photo = null; // motif photo (calculé à l'ouverture, non enregistré)
-    let maPhoto = null; // photo choisie sur le téléphone (gardée le temps de l'atelier, non enregistrée)
-    if (o.choix === 'maphoto') o.choix = 'mono';
-    if (o.sourceIA === 'maphoto') o.sourceIA = 'description';
+    // photo choisie sur le téléphone : enregistrée avec le logo (cfg.logoIA.photoPerso) et reprise à la réouverture
+    let maPhoto = null;
+    if (!o.photoPerso) {
+      if (o.choix === 'maphoto') o.choix = 'mono';
+      if (o.sourceIA === 'maphoto') o.sourceIA = 'description';
+    } else {
+      const src = imagesLocales[o.photoPerso] || o.photoPerso;
+      (src.startsWith('data:') ? Promise.resolve(src) : fetch(src).then(r => { if (!r.ok) throw new Error(r.status); return r.blob(); })
+        .then(b => new Promise((ok, ko) => { const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.onerror = ko; fr.readAsDataURL(b); })))
+        .then(data => { if (maPhoto) return; maPhoto = { type: 'photo', data, chemin: o.photoPerso }; construire(); rafraichir(); })
+        .catch(() => { delete o.photoPerso; if (o.choix === 'maphoto') { o.choix = 'mono'; construire(); rafraichir(); } });
+    }
     const entreePhoto = el('input', { type: 'file', accept: 'image/*', class: 'cache' });
     let apresPhoto = null;
     entreePhoto.addEventListener('change', async () => {
       const f = entreePhoto.files[0]; entreePhoto.value = ''; if (!f) return;
-      try { maPhoto = { type: 'photo', data: await reduireImage(f, 1024, 'image/jpeg', 0.85) }; }
+      try { maPhoto = { type: 'photo', data: await reduireImage(f, 1024, 'image/jpeg', 0.85) }; }   // pas encore de chemin : enregistrée à « Utiliser ce logo »
       catch (e) { alert(t('Cette image ne peut pas être lue sur cet appareil. Essayez une autre image (JPEG ou PNG de moins de 3 Mo).')); return; }
       const suite = apresPhoto; apresPhoto = null;
-      if (suite) suite(); else { o.choix = 'maphoto'; construire(); rafraichir(); }
+      if (suite) suite(); else { o.choix = 'maphoto'; o.bordure = 'aucune'; construire(); rafraichir(); }
     });
     const choisirPhoto = suite => { apresPhoto = suite || null; entreePhoto.click(); };
     const estPhoto = () => o.choix === 'photo' || o.choix === 'maphoto';
@@ -5849,6 +5885,13 @@
       utiliser.disabled = true;
       try {
         const png = await imageEnPNG(svgEnURL(composerLogo(o, motifCourant())), 1024);
+        // la photo du téléphone est gardée (dans « Mes images ») pour retoucher le logo plus tard
+        if (o.choix === 'maphoto' && maPhoto && !maPhoto.chemin) {
+          const src = 'images/logo-src-' + Date.now() + '.jpg';
+          imagesLocales[src] = maPhoto.data; imagesAEnvoyer[src] = maPhoto.data.split(',')[1];
+          maPhoto.chemin = src;
+        }
+        if (o.choix === 'maphoto' && maPhoto && maPhoto.chemin) o.photoPerso = maPhoto.chemin;
         const chemin = 'images/logo-' + Date.now() + '.png';
         imagesLocales[chemin] = png;
         imagesAEnvoyer[chemin] = png.split(',')[1];
