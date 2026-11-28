@@ -117,6 +117,8 @@
   .trad-art-tete{display:flex;align-items:center;flex-wrap:wrap;gap:8px;font-size:1rem;margin:18px 0 8px;padding-top:12px;border-top:1px solid var(--bord,#ddd)}
   .trad-art-tete .btn{margin-left:auto}
   .trad-art-tete .btn-garder{margin-left:0}
+  .trad-art-titre{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:10px 0 10px}
+  .trad-art-titre b{flex:1 1 100%}
   .trad-ligne .fr{font-size:.8rem;color:var(--doux);margin:0 0 4px;white-space:pre-wrap}
   .badge{display:inline-block;padding:2px 8px;border-radius:99px;font-size:.78rem;font-weight:700;background:var(--bg);border:1px solid var(--ligne)}
   .badge.ok{color:var(--ok)} .badge.ko{color:var(--accent)}
@@ -1003,8 +1005,11 @@
       c.append(el('h3', { class: 'trad-art-tete' }, ['Textes de la page ', el('span', { class: 'badge ' + (horsOk ? 'ok' : 'ko'), text: horsOk ? 'à jour' : !(t0 && t0.hors) ? 'à traduire' : t0.hors === '?' ? 'à vérifier' : 'à retraduire' }), btnH, garderH]), msgH);
       if (t0) cles.forEach(function (cle) { c.append(ligneTrad(p, t0, fr, cle)); });
     }
-    // un bloc par article
-    (p.articles || []).forEach(function (a, i) {
+    // un article à la fois, ◀ ▶ comme dans la version française (même article sélectionné)
+    if (!(p.articles || []).length) return;
+    c.append(el('h3', { class: 'trad-art-tete', text: '📰 Articles' }));
+    c.append(carrousel(p, p.articles, function (a, i) {
+      var bloc = el('div', { class: 'trad-article' });
       var et = etatArticle(p, t0, a);
       var msgA = el('div', { class: 'msg' });
       var deja = t0 && t0.art && t0.art[a.id];
@@ -1013,10 +1018,11 @@
         traduireParties(['a:' + a.id], btnA, msgA);
       } });
       var garderA = deja && !et.ok ? el('button', { type: 'button', class: 'btn btn-mini btn-garder', text: '✓ Garder tel quel', title: 'La traduction actuelle est bonne : marquer à jour', onclick: function () { t0.art[a.id] = e.art[a.id]; changement(); } }) : null;
-      c.append(el('h3', { class: 'trad-art-tete' }, ['📰 ' + (a.titre || 'Article ' + (i + 1)) + (a.masque ? ' (masqué)' : '') + ' ', el('span', { class: 'badge ' + (et.ok ? 'ok' : 'ko'), text: et.texte }), btnA, garderA]), msgA);
-      if (deja) Object.keys(fr).filter(function (k) { return k.indexOf('articles.' + i + '.') === 0; }).forEach(function (cle) { c.append(ligneTrad(p, t0, fr, cle)); });
-      else c.append(el('p', { class: 'aide', style: 'margin:0 0 8px', text: 'Pas encore traduit : affiché en français dans cette langue.' }));
-    });
+      bloc.append(el('div', { class: 'trad-art-titre' }, [el('b', { text: (a.titre || 'Article ' + (i + 1)) + (a.masque ? ' (masqué)' : '') }), el('span', { class: 'badge ' + (et.ok ? 'ok' : 'ko'), text: et.texte }), btnA, garderA]), msgA);
+      if (deja) Object.keys(fr).filter(function (k) { return k.indexOf('articles.' + i + '.') === 0; }).forEach(function (cle) { bloc.append(ligneTrad(p, t0, fr, cle, nomCle(cle).replace(/^Article \d+ · /, ''))); });
+      else bloc.append(el('p', { class: 'aide', style: 'margin:0 0 8px', text: 'Pas encore traduit : affiché en français dans cette langue.' }));
+      return bloc;
+    }, 'Article'));
   }
   // texte français d'origine : court = une ligne ; long (article…) = replié, à déplier au besoin
   function texteFr(v) {
@@ -1025,13 +1031,13 @@
     var resume = el('summary', { text: apercuFr });
     return el('details', { class: 'fr-plie', ontoggle: function () { resume.textContent = this.open ? 'FR : texte d’origine' : apercuFr; } }, [resume, el('p', { class: 'fr', text: v })]);
   }
-  function ligneTrad(p, t, fr, cle) {
+  function ligneTrad(p, t, fr, cle, libelle) {
     var long = fr[cle].length > 70 || /\n/.test(fr[cle]);
     var inp = long ? el('textarea', { rows: Math.min(10, Math.max(2, Math.ceil(fr[cle].length / 60))) }) : el('input', { type: 'text' });
     var v = lireChemin(t.page, cle);
     inp.value = typeof v === 'string' ? v : '';
     inp.addEventListener('input', function () { ecrireChemin(t.page, cle, inp.value); changement(true); });
-    return el('div', { class: 'trad-ligne' }, [el('span', { class: 'etiq', text: nomCle(cle) }), texteFr(fr[cle]), inp]);
+    return el('div', { class: 'trad-ligne' }, [el('span', { class: 'etiq', text: libelle || nomCle(cle) }), texteFr(fr[cle]), inp]);
   }
   function carteTraduction(p) {
     cfg.traductions[langue] = cfg.traductions[langue] || {};
