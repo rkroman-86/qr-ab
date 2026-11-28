@@ -3032,18 +3032,35 @@
   }
 
   /* Icônes de l'appli (page installable) : 192, 512 et 512 « maskable », à partir du logo ou des initiales */
-  function cleIcones() { const d = cfg.design; return [cfg.logo, d.fond, d.accent, cfg.logo ? '' : initiales(cfg.titre), 'v2'].join('|'); }
+  function cleIcones() { const d = cfg.design; return [cfg.logo, d.fond, d.accent, cfg.logo ? '' : initiales(cfg.titre), 'v3'].join('|'); }
   function iconesAJour() { return !CF || (cfg.appIcones && cfg.appIcones.i512 && cfg.appIcones.cle === cleIcones()); }
   /* Logo « plein » (photo, carré arrondi, rond… qui touche les bords) : il remplit l'icône, sans marge.
      Fond de l'icône = couleur près du bord du logo (coins d'un carré arrondi), sinon fond de la page. */
-  function analyserBordLogo(logo) {
+  // Zone utile du logo (sans la marge transparente autour) : [sx, sy, sw, sh] dans l'image d'origine
+  function zoneUtileLogo(logo) {
+    try {
+      const N = 128, cv = document.createElement('canvas'); cv.width = cv.height = N;
+      const ctx = cv.getContext('2d');
+      ctx.drawImage(logo, 0, 0, N, N);
+      const px = ctx.getImageData(0, 0, N, N).data;
+      let x0 = N, y0 = N, x1 = -1, y1 = -1;
+      for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (px[(y * N + x) * 4 + 3] > 24) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+      if (x1 < 0) return [0, 0, logo.width, logo.height];
+      const kx = logo.width / N, ky = logo.height / N;
+      return [x0 * kx, y0 * ky, (x1 - x0 + 1) * kx, (y1 - y0 + 1) * ky];
+    } catch (e) { return [0, 0, logo.width, logo.height]; }
+  }
+  function analyserBordLogo(logo, zone) {
     try {
       const N = 100, cv = document.createElement('canvas'); cv.width = cv.height = N;
       const ctx = cv.getContext('2d');
-      const k = Math.min(N / logo.width, N / logo.height), w = logo.width * k, h = logo.height * k;
-      ctx.drawImage(logo, (N - w) / 2, (N - h) / 2, w, h);
+      const [sx, sy, sw, sh] = zone || [0, 0, logo.width, logo.height];
+      const k = Math.min(N / sw, N / sh), w = sw * k, h = sh * k;
+      ctx.drawImage(logo, sx, sy, sw, sh, (N - w) / 2, (N - h) / 2, w, h);
       const px = (x, y) => ctx.getImageData(Math.round(x), Math.round(y), 1, 1).data;
-      const milieux = [[50, 3], [50, 96], [3, 50], [96, 50]].map(([x, y]) => px(x, y));
+      // milieu de chaque côté, un peu à l'intérieur (2 à 8 %) : un liseré antialiasé ne fausse pas le résultat
+      const milieux = [[[50, 2], [50, 5], [50, 8]], [[50, 97], [50, 94], [50, 91]], [[2, 50], [5, 50], [8, 50]], [[97, 50], [94, 50], [91, 50]]]
+        .map(pts => pts.map(([x, y]) => px(x, y)).sort((a, b) => b[3] - a[3])[0]);
       const diag = [[12, 12], [87, 12], [12, 87], [87, 87]].map(([x, y]) => px(x, y));
       const plein = milieux.every(c => c[3] > 200);
       if (!plein) return { plein: false };
@@ -3058,7 +3075,8 @@
     if (iconesAJour()) return;
     const d = cfg.design;
     const logo = await chargerImage(cfg.logo ? (imagesLocales[cfg.logo] || cfg.logo) : '');
-    const bordLogo = logo && logo.width ? analyserBordLogo(logo) : { plein: false };
+    const zone = logo && logo.width ? zoneUtileLogo(logo) : null;
+    const bordLogo = logo && logo.width ? analyserBordLogo(logo, zone) : { plein: false };
     const dessiner = (taille, part) => {
       const cv = document.createElement('canvas'); cv.width = cv.height = taille;
       const ctx = cv.getContext('2d');
@@ -3066,8 +3084,10 @@
         ctx.fillStyle = (bordLogo.plein && bordLogo.couleur) || d.fond || '#ffffff'; ctx.fillRect(0, 0, taille, taille);
         // logo plein : 100 % de l'icône (82 % pour l'icône « maskable », dont Android ne montre que le centre)
         if (bordLogo.plein) part = part < 0.7 ? 0.82 : 1;
-        const k = Math.min(taille * part / logo.width, taille * part / logo.height);
-        ctx.drawImage(logo, (taille - logo.width * k) / 2, (taille - logo.height * k) / 2, logo.width * k, logo.height * k);
+        // logo plein : rogné de sa marge transparente ; sinon logo entier (sa marge fait partie du dessin)
+        const [sx, sy, sw, sh] = bordLogo.plein && zone ? zone : [0, 0, logo.width, logo.height];
+        const k = Math.min(taille * part / sw, taille * part / sh);
+        ctx.drawImage(logo, sx, sy, sw, sh, (taille - sw * k) / 2, (taille - sh * k) / 2, sw * k, sh * k);
       } else {
         const fondI = d.accent || '#2b2620';
         ctx.fillStyle = fondI; ctx.fillRect(0, 0, taille, taille);
