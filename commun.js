@@ -570,6 +570,7 @@ const CSS_PAGE = `
   text-decoration:none;white-space:nowrap;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 4px 14px rgba(0,0,0,.18)}
 .qp-galerie .qp-ico{font-size:1rem;line-height:1}
 .qn{position:relative;flex-shrink:0}
+.qh-gauche .qn-liste,.qh-gauche.qp-langsel ul{right:auto;left:0}
 .qn-btn{display:inline-flex;align-items:center;justify-content:center;border:0;cursor:pointer;padding:0;margin:0}
 .qn-btn svg{width:20px;height:20px}
 .qn-btn{width:40px;height:40px;border-radius:50%}
@@ -1368,6 +1369,35 @@ function creditQrbc(doc, apercu) {
   return a;
 }
 
+/* En-tête des pages Home, personnalisée et Blog (design.entete) : figé ou non au défilement, ordre logo / langues / menu,
+   opacité du fond (0–100 %, 76 par défaut). La page contact n'a pas d'en-tête. */
+const ORDRE_ENTETE = ['logo', 'langues', 'menu'];
+function reglagesEntete(d) {
+  const e = d && d.entete && typeof d.entete === 'object' ? d.entete : {};
+  const o = Array.isArray(e.ordre) ? e.ordre.filter((x, i, a) => ORDRE_ENTETE.includes(x) && a.indexOf(x) === i) : [];
+  ORDRE_ENTETE.forEach(x => { if (!o.includes(x)) o.push(x); });
+  const fond = e.fond == null || isNaN(Number(e.fond)) ? 76 : Math.max(0, Math.min(100, Number(e.fond)));
+  return { fige: e.fige !== false, ordre: o, fond };
+}
+// parts : { logo: [éléments], langues: élément, menu: élément } ; defile : zone qui défile (Home) ou rien (page entière)
+function appliquerEntete(barre, d, parts, defile) {
+  const r = reglagesEntete(d);
+  r.ordre.forEach(k => [].concat(parts[k] || []).forEach(x => { if (x) barre.appendChild(x); }));
+  // menu ou langues placés à gauche du nom : leur liste s'ouvre vers la droite
+  const iNom = r.ordre.indexOf('logo');
+  ['langues', 'menu'].forEach(k => { const x = parts[k]; if (x && r.ordre.indexOf(k) < iNom) x.classList.add('qh-gauche'); });
+  if (r.fond !== 76) {
+    barre.style.background = r.fond > 0 ? 'color-mix(in srgb,var(--fond) ' + r.fond + '%,transparent)' : 'transparent';
+    if (r.fond === 0) { barre.style.backdropFilter = 'none'; barre.style.webkitBackdropFilter = 'none'; barre.style.borderBottomColor = 'transparent'; }
+  }
+  if (!r.fige) {
+    if (defile) {
+      // l'en-tête part avec le défilement (il reste en place tout en haut)
+      defile.addEventListener('scroll', () => { barre.style.transform = 'translateY(' + (-Math.min(defile.scrollTop, barre.offsetHeight + 4)) + 'px)'; }, { passive: true });
+    } else barre.style.position = 'relative';
+  }
+}
+
 function rendreHome(cfgBrut, racine, opts) {
   opts = opts || {};
   const cfg = normaliser(fusion(CONFIG_DEFAUT, cfgBrut));
@@ -1391,21 +1421,19 @@ function rendreHome(cfgBrut, racine, opts) {
   /* Barre du haut, fixe */
   const barre = doc.createElement('div');
   barre.className = 'qh-barre';
+  let logoH = null;
   if (cfg.logo) {
     const img = doc.createElement('img');
     img.className = 'qh-logo' + (d.logoRond ? ' rond' : '');
     img.onerror = () => img.remove();
     img.src = res(cfg.logo); img.alt = '';
-    barre.appendChild(img);
+    logoH = img;
   }
   const nom = doc.createElement('div');
   nom.className = 'qh-nom';
   nom.textContent = cfg.titre || '';
-  barre.appendChild(nom);
   const languesH = opts.apercu ? null : selecteurLangues(doc, true);
-  if (languesH) barre.appendChild(languesH);
-  const navH = navPages(cfg, doc, res, pagePerso ? 'perso' : 'home', opts, racine, true);   // « Contact » (2 pages) ou ☰ (3 et plus), tout à droite
-  if (navH) barre.appendChild(navH);
+  const navH = navPages(cfg, doc, res, pagePerso ? 'perso' : 'home', opts, racine, true);   // « Contact » (2 pages) ou ☰ (3 et plus)
 
   /* Pancartes */
   const defile = doc.createElement('div');
@@ -1484,6 +1512,7 @@ function rendreHome(cfgBrut, racine, opts) {
   }
 
   if (defile.lastElementChild) defile.lastElementChild.appendChild(creditQrbc(doc, opts.apercu));   // sous la dernière pancarte
+  appliquerEntete(barre, d, { logo: [logoH, nom], langues: languesH, menu: navH }, defile);
   home.append(defile, barre, points);
   racine.appendChild(home);
 
@@ -1526,12 +1555,12 @@ function rendreBlog(cfgBrut, racine, opts) {
 
   const barre = doc.createElement('div');
   barre.className = 'qh-barre';
-  if (cfg.logo) { const img = doc.createElement('img'); img.className = 'qh-logo' + (d.logoRond ? ' rond' : ''); img.onerror = () => img.remove(); img.src = res(cfg.logo); img.alt = ''; barre.appendChild(img); }
-  const nom = doc.createElement('div'); nom.className = 'qh-nom'; nom.textContent = cfg.titre || ''; barre.appendChild(nom);
+  let logoB = null;
+  if (cfg.logo) { const img = doc.createElement('img'); img.className = 'qh-logo' + (d.logoRond ? ' rond' : ''); img.onerror = () => img.remove(); img.src = res(cfg.logo); img.alt = ''; logoB = img; }
+  const nom = doc.createElement('div'); nom.className = 'qh-nom'; nom.textContent = cfg.titre || '';
   const langues = opts.apercu ? null : selecteurLangues(doc, false);
-  if (langues) barre.appendChild(langues);
   const nav = navPages(cfg, doc, res, 'blog', opts, racine, true);
-  if (nav) barre.appendChild(nav);
+  appliquerEntete(barre, d, { logo: [logoB, nom], langues, menu: nav });
   b.appendChild(barre);
 
   const corps = doc.createElement('div');

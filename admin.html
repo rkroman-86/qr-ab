@@ -317,6 +317,8 @@
     .damier.grand img{width:100%;height:100%}
     .damier.sans-damier{background:none}
     .val-curseur{font-weight:400;opacity:.7}
+    .ordre-entete{display:flex;flex-direction:column;gap:6px;margin:4px 0}.oe-ligne{display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--ligne);border-radius:10px}
+    .oe-num{width:20px;text-align:center;font-weight:700;opacity:.6}.oe-nom{flex:1;font-size:.9rem}
     .curseurs-logo{border:1px solid var(--ligne);border-radius:12px;padding:10px 12px 2px;margin:8px 0 12px}
     .curseurs-logo .opt{margin:0 0 10px}
     .damier img{width:90%;height:90%;object-fit:contain}
@@ -1464,7 +1466,7 @@
   }
   // Sections ouvertes : fermées à la toute première visite, puis dernier état mémorisé sur l'appareil
   const CLE_SECTIONS = 'qp-sections', CLE_DEFIL = 'qp-defilement';
-  const ORDRE_SECTIONS = ['textes', 'dispo', 'boutons', 'design', 'fond', 'logo', 'home', 'perso', 'galerie', 'blog', 'menu', 'seo', 'partage'];
+  const ORDRE_SECTIONS = ['textes', 'dispo', 'boutons', 'design', 'fond', 'logo', 'entete', 'home', 'perso', 'galerie', 'blog', 'menu', 'seo', 'partage'];
   let sectionsOuvertes = (() => {
     try { const v = JSON.parse(localStorage.getItem(CLE_SECTIONS)); return Array.isArray(v) ? new Set(v) : new Set(); }
     catch (e) { return new Set(); }
@@ -2775,6 +2777,9 @@
       el('span', { class: 'etiq', text: 'Assombrir l’image (meilleure lisibilité du texte)' }), voile,
       ...(CF ? [atelierFond()] : [])
     ]));
+
+    /* En-tête des pages Home, personnalisée et Blog */
+    f.appendChild(sectionEntete());
 
     /* Référencement Google */
     f.appendChild(sectionSEO());
@@ -4840,10 +4845,43 @@
     return section('perso', 'Page personnalisée', false, [corps]);
   }
 
+  /* ---------------- En-tête (design.entete) : figé ou non, ordre logo / langues / menu, opacité du fond ---------------- */
+  function sectionEntete() {
+    const d = cfg.design;
+    const reg = () => { if (!d.entete || typeof d.entete !== 'object') d.entete = {}; return d.entete; };
+    const r = reglagesEntete(d);
+    const fige = el('input', { type: 'checkbox', checked: r.fige });
+    fige.addEventListener('change', () => { if (fige.checked) delete reg().fige; else reg().fige = false; changement(); });
+    const NOMS = { logo: 'Logo et nom', langues: 'Sélecteur de langues', menu: 'Menu des pages' };
+    const liste = el('div', { class: 'ordre-entete' });
+    const dessinerListe = () => {
+      liste.innerHTML = '';
+      const o = reglagesEntete(d).ordre;
+      o.forEach((k, i) => {
+        const bouger = j => { const n = o.slice(); [n[i], n[j]] = [n[j], n[i]]; reg().ordre = n; dessinerListe(); changement(); };
+        liste.appendChild(el('div', { class: 'oe-ligne' }, [
+          el('span', { class: 'oe-num', text: String(i + 1) }), el('span', { class: 'oe-nom', text: t(NOMS[k]) }),
+          el('button', { type: 'button', class: 'btn btn-mini', text: '↑', title: t('Monter'), disabled: i === 0, onclick: () => bouger(i - 1) }),
+          el('button', { type: 'button', class: 'btn btn-mini', text: '↓', title: t('Descendre'), disabled: i === o.length - 1, onclick: () => bouger(i + 1) })]));
+      });
+    };
+    dessinerListe();
+    const val = el('span', { class: 'val-curseur', text: r.fond + ' %' });
+    const fond = el('input', { type: 'range', min: 0, max: 100, step: 5, value: r.fond, 'aria-label': t('Opacité du fond de l’en-tête') });
+    fond.addEventListener('input', () => { reg().fond = Number(fond.value); val.textContent = fond.value + ' %'; changement(); });
+    return section('entete', 'En-tête', false, [
+      el('div', { class: 'aide', style: 'margin:0 0 12px', text: 'Barre du haut des pages Home, page personnalisée et Blog (la page contact n’en a pas).' }),
+      el('label', { class: 'bascule' }, [el('span', { text: 'Figer l’en-tête pendant le défilement' }), fige]),
+      el('span', { class: 'etiq', style: 'margin-top:12px', text: 'Ordre, de gauche à droite' }), liste,
+      el('span', { class: 'etiq', style: 'margin-top:12px' }, [el('span', { text: 'Opacité du fond de l’en-tête' }), ' ', val]), fond,
+      el('div', { class: 'aide', style: 'margin:4px 0 0', text: '0 % : en-tête transparent, posé sur la page. 100 % : fond plein.' })
+    ]);
+  }
+
   /* ---------------- Menu « Pages » de l'éditeur : Style, Logo, les pages du site, QR et cartes ----------------
      Ne change que l'organisation de l'éditeur : les données (cfg) et les pages publiées restent les mêmes. */
   const VUES_EDITEUR = {
-    style: ['design'], logo: ['logo'],
+    style: ['design'], logo: ['logo'], entete: ['entete'],
     contact: ['textes', 'boutons', 'dispo', 'fond', 'seo'],
     home: ['home'], perso: ['perso'], galerie: ['galerie'], blog: ['blog'],
     partage: ['partage']
@@ -4881,7 +4919,7 @@
   function nomPage(id) { const [o, k, ph, vide] = CHAMP_NOM_PAGE[id](); return String(o[k] || '').trim() || t(vide || ph); }
   function infoRubrique(id) {
     if (CHAMP_NOM_PAGE[id]) return [icoPage(id), nomPage(id)];
-    return { style: ['🎨', t('Style')], logo: ['🖼️', t('Logo')], partage: ['📇', t('QR code et cartes de visite')] }[id];
+    return { style: ['🎨', t('Style')], logo: ['🖼️', t('Logo')], entete: ['🔝', t('En-tête')], partage: ['📇', t('QR code et cartes de visite')] }[id];
   }
   function blocNomPage(id) {
     const [o, k, ph] = CHAMP_NOM_PAGE[id]();
@@ -4921,6 +4959,7 @@
     construireFormulaire(); changement();
   }
   function apercuDeRubrique(id) {
+    if (id === 'entete') id = ['home', 'perso', 'blog'].find(x => pageAffichee(x)) || 'home';   // en-tête : visible sur ces pages
     if (id === 'home' || id === 'perso' || id === 'blog') { if (id === 'blog') articleApercu = ''; vueApercu = id; }
     else if (id !== 'partage') vueApercu = 'contact';
     majApercu();
@@ -4949,7 +4988,7 @@
         CHAMP_NOM_PAGE[id] && nom !== t(TYPE_PAGE[id]) && (id === 'home' || nom !== t(CHAMP_NOM_PAGE[id]()[3] || CHAMP_NOM_PAGE[id]()[2])) ? el('span', { class: 'rb-type', text: t(TYPE_PAGE[id]) }) : null]);   // type rappelé si le nom a changé
     };
     const liste = el('div', { class: 'rb-liste' });
-    liste.append(ligne('style'), ligne('logo'), el('div', { class: 'rb-sep', text: 'Pages du site' }));
+    liste.append(ligne('style'), ligne('logo'), ligne('entete'), el('div', { class: 'rb-sep', text: 'Pages du site' }));
     const ordre = ordrePagesMenu();
     ordre.forEach((id, i) => {
       const r = ligne(id, pageAffichee(id) ? '' : 'masquee');
