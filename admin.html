@@ -317,6 +317,8 @@
     .damier.grand img{width:100%;height:100%}
     .damier.sans-damier{background:none}
     .val-curseur{font-weight:400;opacity:.7}
+    .curseurs-logo{border:1px solid var(--ligne);border-radius:12px;padding:10px 12px 2px;margin:8px 0 12px}
+    .curseurs-logo .opt{margin:0 0 10px}
     .damier img{width:90%;height:90%;object-fit:contain}
     .logo-apercu{display:block}
     .photo-ia{display:flex;align-items:center;gap:10px;margin:0 0 10px}.photo-ia img{width:56px;height:56px;object-fit:cover;border-radius:10px}
@@ -5873,7 +5875,6 @@
       if (o.forme !== 'aucune') {
         corps.appendChild(puces('Fond', { plein: 'Plein', transparent: 'Transparent' }, '_fond', () => { o.transparent = o._fond === 'transparent'; }));
         corps.appendChild(puces('Bordure', { aucune: 'Aucune', fine: 'Fine', epaisse: 'Épaisse' }, 'bordure', construire));
-        if (o.bordure && o.bordure !== 'aucune') corps.appendChild(curseurLogo('Opacité de la bordure', 'opBord'));
       }
       corps.appendChild(puces('Rendu', LOGO_EFFETS, 'effet'));
       const perso = el('div', { class: 'couleurs' + (o.palette === 'perso' ? '' : ' cache') }, [couleurLogo('Fond', 'cFond'), couleurLogo('Motif', 'cMotif'), couleurLogo('Texte', 'cTexte')]);
@@ -5892,10 +5893,13 @@
         if (o.forme === 'rond' || o.forme === 'aucune') corps.appendChild(puces('Position du texte', { dessous: 'Dessous', arc: 'En arc' }, 'position'));
         corps.appendChild(puces('Police', LOGO_POLICES, 'police'));
       }
+      // tous les curseurs ensemble, pour jouer avec et voir le résultat
       const taille = el('input', { type: 'range', min: 60, max: 140, value: o.taille });
       taille.addEventListener('input', () => { o.taille = Number(taille.value); rafraichir(); });
-      corps.appendChild(el('div', { class: 'opt' }, [el('span', { class: 'etiq', text: estPhoto() ? 'Zoom de la photo' : 'Taille du motif' }), taille]));
-      corps.appendChild(curseurLogo(estPhoto() ? 'Opacité de la photo' : 'Opacité du motif', 'opImage'));
+      corps.appendChild(el('div', { class: 'curseurs-logo' }, [
+        el('div', { class: 'opt' }, [el('span', { class: 'etiq', text: estPhoto() ? 'Zoom de la photo' : 'Taille du motif' }), taille]),
+        curseurLogo(estPhoto() ? 'Opacité de la photo' : 'Opacité du motif', 'opImage'),
+        o.forme !== 'aucune' && o.bordure && o.bordure !== 'aucune' ? curseurLogo('Opacité de la bordure', 'opBord') : null]));
       o._fond = o.transparent ? 'transparent' : 'plein';
       rafraichir();
     }
