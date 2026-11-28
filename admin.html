@@ -58,7 +58,14 @@
     .pages-bandeau .pb-num{flex:none;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--panneau);border:1px solid var(--ligne);font-size:.82rem;font-weight:700}
     .pages-bandeau .express-bandeau{margin:8px 0}
     .pages-bandeau .pb-ajout{margin:2px 0 6px}
-    .pages-bandeau .pb-trad{border-bottom:1px solid var(--ligne);padding:0 0 10px;margin:0 0 10px}
+    .pages-bandeau.pb-trad{padding:10px 12px}
+    .zone-fixe{position:sticky;top:var(--h-barre,57px);z-index:25;margin:-16px -16px 14px;background:var(--panneau);border-bottom:1px solid var(--txt);
+      max-height:calc(100dvh - var(--h-barre,57px));overflow-y:auto;overscroll-behavior:contain}
+    .zone-fixe > .pages-bandeau,.zone-fixe > .rubriques{margin:0;border:0;border-radius:0;background:transparent;padding:4px 16px}
+    .zone-fixe > * + *{border-top:1px solid var(--txt) !important}
+    .zone-fixe .rb-tete{padding:4px 0}
+    .zone-fixe .rb-cour{padding:6px 12px}
+    .zone-fixe .rb-fleche{width:36px;height:36px}
     .pages-bandeau .pb-synchro{margin-top:6px}
     .synchro-alerte ul{margin:6px 0 0;padding-left:18px;text-align:left}.synchro-alerte li{margin:4px 0}
     #fen-pages .choix-ajout{display:flex;flex-direction:column;gap:8px;margin:0 0 14px}
@@ -157,7 +164,7 @@
     /* ---------- Éditeur ---------- */
     #editeur{min-height:100dvh;display:flex;flex-direction:column}
     .barre{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:10px;padding:10px 16px;
-      background:var(--panneau);border-bottom:1px solid var(--ligne)}
+      background:var(--panneau);border-bottom:1px solid var(--txt)}
     .barre h1{font-size:1rem;margin:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .onglets{display:flex;background:var(--bg);border-radius:10px;padding:3px}
     .onglets button{border:0;background:transparent;padding:7px 14px;border-radius:8px;font-weight:600;color:var(--doux);cursor:pointer}
@@ -756,6 +763,12 @@
     majQuotas();
   }
   $('#abonnement').addEventListener('click', () => ouvrirAbonnement());
+  // Hauteur de l'en-tête : la zone figée (Mes sites, Rubrique) se colle juste dessous
+  (() => {
+    const barre = document.querySelector('#editeur .barre'); if (!barre) return;
+    const maj = () => document.documentElement.style.setProperty('--h-barre', barre.getBoundingClientRect().height + 'px');
+    maj(); if (window.ResizeObserver) new ResizeObserver(maj).observe(barre);
+  })();
 
   /* ---------------- Mon compte : facturation, factures, mot de passe ---------------- */
   const PAYS_FACT = ['FR','BE','CH','LU','MC','DE','ES','IT','PT','NL','AT','IE','PL','RO','BG','GR','CZ','SK','HU','SI','HR','DK','SE','FI','EE','LV','LT','CY','MT','GB','UA','MD','RU','US','CA'];
@@ -2023,12 +2036,13 @@
   function bandeauPages() {
     if (sitesOuvert === null) sitesOuvert = titreParDefaut();
     const box = el('div', { class: 'pages-bandeau' });
+    const boiteTrad = box.boiteTrad = el('div', { class: 'pb-trad-boite' });   // version traduite : hors de la zone figée
     const remplir = () => {
-      box.innerHTML = '';
+      box.innerHTML = ''; boiteTrad.innerHTML = '';
       const c = compteCF, g = groupe;
       if (c && c.traduction) {
         const L = c.traduction.langue;
-        box.append(el('div', { class: 'pb-trad' }, [
+        boiteTrad.append(el('div', { class: 'pages-bandeau pb-trad' }, [
           el('b', {}, ['🌐 ', el('span', { 'data-no-i18n': '', text: NOMS_PROPRES_LANGUE[L] || L.toUpperCase() }), ' · ', el('span', { text: 'version traduite' })]),
           el('div', { class: 'aide', style: 'margin:2px 0 8px' }, [el('span', { text: 'Traduction de' }), ' ', el('b', { text: c.traduction.source + '.qrbc.app' }), '. ',
             el('span', { text: 'Vous pouvez la modifier librement : elle est indépendante de la page d’origine.' })]),
@@ -2816,7 +2830,11 @@
 
     /* Menu « Pages » : seules les sections de la rubrique choisie sont affichées */
     const premiere = f.querySelector(':scope > details.section');
-    f.insertBefore(menuRubriques(), premiere);
+    /* Zone figée sous l'en-tête (28/11) : « Mes sites » puis « Rubrique », séparés par un trait */
+    const sites = f.querySelector(':scope > .pages-bandeau');
+    const fixes = el('div', { class: 'zone-fixe' }, [sites, menuRubriques()].filter(Boolean));
+    f.insertBefore(fixes, f.firstChild);
+    if (sites && sites.boiteTrad) f.insertBefore(sites.boiteTrad, premiere);
     const ids = VUES_EDITEUR[vueEdit] || VUES_EDITEUR.contact;
     if (CHAMP_NOM_PAGE[vueEdit]) f.insertBefore(blocNomPage(vueEdit), premiere);
     if (PAGES_MENU.includes(vueEdit) && vueEdit !== 'contact' && !pageAffichee(vueEdit))
