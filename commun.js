@@ -794,22 +794,27 @@ function injecterCSS(doc) {
 }
 
 /* Couleur d'un picto selon la gamme choisie (design.gammePictos) : 'defaut' = couleur de la marque, 'theme' = couleur des boutons du site,
-   'logo' = couleurs tirées du logo (design.couleursLogo, une par picto à tour de rôle). i = rang du picto parmi ceux cochés. */
+   'logo' = les 2 couleurs principales du logo (design.couleursLogo) : la 1re pour le fond de tous les pictos, la 2e (la plus contrastée) pour l'icône et la bordure. */
 function gammePictos(d) { return d.gammePictos || (d.reseauxTheme ? 'theme' : 'defaut'); }
 function couleurPicto(d, coul, i) {
   const g = gammePictos(d);
   if (g === 'theme') return d.accent;
-  if (g === 'logo' && Array.isArray(d.couleursLogo) && d.couleursLogo.length) return d.couleursLogo[(i || 0) % d.couleursLogo.length];
+  if (g === 'logo' && Array.isArray(d.couleursLogo) && d.couleursLogo.length) return d.couleursLogo[0];
+  void i;
   return coul;
 }
+function couleurIconePicto(d) {
+  return gammePictos(d) === 'logo' && Array.isArray(d.couleursLogo) && d.couleursLogo.length > 1 ? d.couleursLogo[1] : null;
+}
 // Opacité du fond et de la bordure (0–1) ; fond pâle : icône dessinée dans la couleur du picto. Sert aussi à la liste de l'éditeur.
-function peindrePicto(rond, ico, fond, opFond, opBord) {
+// icoCoul (gamme « logo ») : 2e couleur du logo pour l'icône et la bordure.
+function peindrePicto(rond, ico, fond, opFond, opBord, icoCoul) {
   const opF = opFond == null ? 1 : Math.max(0, Math.min(1, opFond)), opB = Math.max(0, Math.min(1, opBord || 0));
   rond.style.background = opF >= 1 ? fond : rgbaDe(fond, opF);
   rond.style.boxSizing = 'border-box';
-  rond.style.border = opB > 0 ? '2px solid ' + rgbaDe(fond, opB) : '';
+  rond.style.border = opB > 0 ? '2px solid ' + rgbaDe(icoCoul || fond, opB) : '';
   rond.style.boxShadow = opF < 0.35 ? 'none' : '';
-  ico.style.background = opF >= 0.5 ? couleurIcone(fond) : fond;
+  ico.style.background = icoCoul || (opF >= 0.5 ? couleurIcone(fond) : fond);
 }
 function creerRond(doc, o) {
   const a = doc.createElement('a');
@@ -823,7 +828,7 @@ function creerRond(doc, o) {
   const ico = doc.createElement('span');
   ico.className = 'qp-rs-ico';
   ico.style.setProperty('--ico', 'url("' + o.icone + '")');
-  peindrePicto(rond, ico, o.fond, o.opFond, o.opBord);
+  peindrePicto(rond, ico, o.fond, o.opFond, o.opBord, o.icoCoul);
   rond.appendChild(ico);
   a.appendChild(rond);
   if (o.nomVisible) { const n = doc.createElement('span'); n.textContent = o.nom; a.appendChild(n); }
@@ -930,7 +935,7 @@ function rendrePage(cfgBrut, racine, opts) {
         const R = RESEAUX[r.id];
         grille.appendChild(creerRond(doc, {
           href: lienReseau(r.id, r.valeur, r.message), nom: R.nom, icone: iconeReseau(r.id),
-          fond: couleurPicto(d, R.coul, coches.indexOf(r)), vide: !String(r.valeur || '').trim(),
+          fond: couleurPicto(d, R.coul, coches.indexOf(r)), icoCoul: couleurIconePicto(d), vide: !String(r.valeur || '').trim(),
           nomVisible: d.nomsReseaux, apercu: opts.apercu, opFond: (d.pictosFond == null ? 100 : d.pictosFond) / 100, opBord: (d.pictosBord || 0) / 100
         }));
       });
@@ -944,7 +949,7 @@ function rendrePage(cfgBrut, racine, opts) {
       if (!grille) { nouvelleGrille(); if (!ronds) grille.classList.add('qp-rs-libre'); }
       grille.appendChild(creerRond(doc, {
         href: construireLien(b), nom: b.texte || (TYPES[b.type] || TYPES.lien).nom, icone: iconeAction(b.type),
-        fond: b.couleur || couleurPicto(d, COULEURS_ACTIONS[b.type] || d.accent, 0),
+        fond: b.couleur || couleurPicto(d, COULEURS_ACTIONS[b.type] || d.accent, 0), icoCoul: b.couleur ? null : couleurIconePicto(d),
         vide: !String(b.valeur || '').trim(), nomVisible: d.nomsReseaux, apercu: opts.apercu,
         opFond: (d.pictosFond == null ? 100 : d.pictosFond) / 100, opBord: (d.pictosBord || 0) / 100
       }));

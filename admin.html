@@ -2854,26 +2854,30 @@
     const cases = {};
     for (let k = 0; k < px.length; k += 4) {
       const r = px[k], g = px[k + 1], b = px[k + 2], a = px[k + 3];
-      if (a < 200 || Math.min(r, g, b) > 232) continue;                 // transparent ou presque blanc
+      if (a < 200) continue;                                             // transparent
       const cle = (r >> 5) + ',' + (g >> 5) + ',' + (b >> 5);
       const c = cases[cle] || (cases[cle] = { n: 0, r: 0, g: 0, b: 0 });
       c.n++; c.r += r; c.g += g; c.b += b;
     }
     const liste = Object.values(cases).sort((a, b) => b.n - a.n).map(c => [c.r / c.n, c.g / c.n, c.b / c.n].map(Math.round));
     const total = Object.values(cases).reduce((s, c) => s + c.n, 0);
-    const choisies = [];
-    for (const c of liste) {
-      if (choisies.length >= 4) break;
-      if (choisies.some(o => Math.hypot(o[0] - c[0], o[1] - c[1], o[2] - c[2]) < 90)) continue;   // couleurs bien distinctes
-      choisies.push(c);
-    }
-    void total;
-    return choisies.map(c => '#' + c.map(v => v.toString(16).padStart(2, '0')).join(''));
+    // 2 couleurs principales : la plus présente, puis la plus contrastée parmi celles qui comptent (≥ 2 % du logo)
+    if (!liste.length) return [];
+    const principale = liste[0];
+    const comptes = Object.values(cases).sort((a, b) => b.n - a.n);
+    let seconde = null, dMax = 90;
+    comptes.forEach((c, i) => {
+      if (i === 0 || c.n < total * 0.02) return;
+      const col = liste[i], dist = Math.hypot(col[0] - principale[0], col[1] - principale[1], col[2] - principale[2]);
+      if (dist > dMax) { dMax = dist; seconde = col; }
+    });
+    return [principale].concat(seconde ? [seconde] : []).map(c => '#' + c.map(v => v.toString(16).padStart(2, '0')).join(''));
   }
   async function majCouleursLogo() {
     const d = cfg.design;
     d.couleursLogo = await couleursDuLogo();
     d.couleursLogoDe = cfg.logo || '';
+    d.couleursLogoV = 2;                                     // 2 couleurs (fond + icône), depuis le 28/11
   }
 
   function carteReseaux(b, i) {
@@ -2888,7 +2892,7 @@
       const coches = liste.filter(r => r.actif);
       icones.forEach(({ r, R, ico }) => {
         ico.style.borderRadius = d.formePictos === 'carre' ? '28%' : '50%';
-        peindrePicto(ico, ico.firstChild, couleurPicto(d, R.coul, Math.max(0, coches.indexOf(r))), (d.pictosFond == null ? 100 : d.pictosFond) / 100, (d.pictosBord || 0) / 100);
+        peindrePicto(ico, ico.firstChild, couleurPicto(d, R.coul, Math.max(0, coches.indexOf(r))), (d.pictosFond == null ? 100 : d.pictosFond) / 100, (d.pictosBord || 0) / 100, couleurIconePicto(d));
       });
     };
     const msgLogo = el('div', { class: 'aide', style: 'margin:2px 0 0' });
@@ -2901,10 +2905,10 @@
     };
     const choisirGamme = async () => {
       d.reseauxTheme = d.gammePictos === 'theme';
-      if (d.gammePictos === 'logo' && d.couleursLogoDe !== (cfg.logo || '')) { await majCouleursLogo(); changement(); }
+      if (d.gammePictos === 'logo' && (d.couleursLogoDe !== (cfg.logo || '') || d.couleursLogoV !== 2)) { await majCouleursLogo(); changement(); }
       montrerPalette(); majIcones();
     };
-    if (d.gammePictos === 'logo' && d.couleursLogoDe !== (cfg.logo || '')) choisirGamme();     // logo changé depuis
+    if (d.gammePictos === 'logo' && (d.couleursLogoDe !== (cfg.logo || '') || d.couleursLogoV !== 2)) choisirGamme();     // logo changé depuis
     liste.forEach((r, k) => {
       const R = RESEAUX[r.id];
       const ligne = el('div', { class: 'rs-ligne' + (r.actif ? '' : ' off') });
@@ -6285,7 +6289,7 @@
     btn.disabled = true; etat.className = 'etat'; etat.textContent = 'Enregistrement…';
     try {
       // 0. image d'aperçu des liens, refaite seulement si le fond ou le logo a changé
-      if (cfg.design.gammePictos === 'logo' && cfg.design.couleursLogoDe !== (cfg.logo || '')) { try { await majCouleursLogo(); } catch (e) {} }   // logo changé
+      if (cfg.design.gammePictos === 'logo' && (cfg.design.couleursLogoDe !== (cfg.logo || '') || cfg.design.couleursLogoV !== 2)) { try { await majCouleursLogo(); } catch (e) {} }   // logo changé
       try { await preparerImagePartage(); } catch (e) { console.warn('Aperçu des liens non mis à jour', e); }
       try { await preparerIconesAppli(); } catch (e) { console.warn('Icônes de l’appli non mises à jour', e); }
       try { await preparerCarteApp(false); } catch (e) { console.warn('Cartes de l’appli non mises à jour', e); }
