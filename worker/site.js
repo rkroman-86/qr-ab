@@ -661,12 +661,12 @@ export async function routeSite(request, env, url, O) {
   const l = url.searchParams.get('lang');
   const lang = languesDe(cfg).includes(l) ? l : 'fr';
   // le générateur de QR (désormais une page du constructeur) garde sa ligne de statistiques « Générateur de QR code »
-  O.compterVisiteSite(request, env, url, page.chemin === '' ? 'accueil' : page.chemin === 'generateur-qr-code' ? 'generateur-qr' : page.chemin.slice(0, 30));
+  const mesure = O.compterVisiteSite(request, env, url, page.chemin === '' ? 'accueil' : page.chemin === 'generateur-qr-code' ? 'generateur-qr' : page.chemin.slice(0, 30));
   const html = await rendrePageSite(env, request, cfg, page, lang, { article: segs.length === 2 ? segs[1] : '' });
   if (!html) return null;
   const r = traduireFixes(html, lang, await O.dictionnaire(env, request), await lireFixes(env, lang));
   const h = new Headers(r.headers); h.set('cache-control', 'public, max-age=60');
-  return new Response(r.body, { status: 200, headers: h });
+  return O.avecMesureSite(new Response(r.body, { status: 200, headers: h }), mesure);
 }
 async function servirMedia(env, request, nom) {
   const { value, metadata } = await env.CLIENTS.getWithMetadata(PREFIXE_MEDIA + nom, 'arrayBuffer');

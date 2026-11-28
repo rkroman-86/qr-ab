@@ -203,6 +203,7 @@ async function racine(request, env, url) {
   if (p === '/api/mdp-reinit' && request.method === 'POST') return mdpReinit(request, env);
   if (p === '/api/verifier-email' && request.method === 'POST') return verifierEmail(request, env);
   if (p === '/api/etape' && request.method === 'POST') return compterEtape(request, env, url);
+  if (p === '/api/vue' && request.method === 'POST') return compterVueSite(request, env);
   if (p === '/api/disponible') {
     const slug = (url.searchParams.get('nom') || '').toLowerCase();
     const err = erreurSlug(slug);
@@ -213,7 +214,7 @@ async function racine(request, env, url) {
   const rs = await routeSite(request, env, url, outilsSite());
   if (rs) return rs;
   if (p === '/constructeur' || p === '/constructeur.html') return statique(env, request, '/constructeur.html', true);
-  if (p === '/' || p === '/index.html') { compterVisiteSite(request, env, url, 'accueil'); return accueilLangue(env, request, url); }
+  if (p === '/' || p === '/index.html') return avecMesureSite(await accueilLangue(env, request, url), compterVisiteSite(request, env, url, 'accueil'));
   // Générateur de QR code : l'ancienne page statique (outil-qr.html) est archivée (23/11) ; le générateur est une page du constructeur.
   // Si cette page a pour adresse /generateur-qr-code, routeSite l'a déjà servie ; sinon renvoi temporaire vers elle (ou l'accueil).
   if (p === '/generateur-qr-code') return Response.redirect(url.origin + ((await adresseGenerateur(env)) || '/') + url.search, 302);
@@ -231,7 +232,7 @@ async function racine(request, env, url) {
     if ((request.method === 'GET' || request.method === 'HEAD') &&
         (p.endsWith('.html') || (l && !langue) || [...url.searchParams.keys()].some(k => k !== 'lang')))
       return Response.redirect('https://' + DOMAINE + base + (langue ? '?lang=' + langue : ''), 301);
-    compterVisiteSite(request, env, url, base.slice(1));
+    const mesure = compterVisiteSite(request, env, url, base.slice(1));
     const r = await statique(env, request, base + (langue ? '.' + langue : '') + '.html');
     if (!r.ok) return r;
     const adr = lg => 'https://' + DOMAINE + base + (lg && lg !== 'fr' ? '?lang=' + lg : '');
@@ -240,9 +241,9 @@ async function racine(request, env, url) {
       '\n<link rel="alternate" hreflang="x-default" href="' + adr('') + '">\n';
     const html = (await r.text()).replace(/\{\{(\w+)\}\}/g, (x, k) => k in VENDEUR ? esc(VENDEUR[k]) : x)
       .replace(/<\/head>/i, liens + '</head>');
-    return new Response(html, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=300' } });
+    return avecMesureSite(new Response(html, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=300' } }), mesure);
   }
-  if (p === '/app' || p === '/app/') { compterVisiteSite(request, env, url, 'app'); return statique(env, request, '/app.html', true); }
+  if (p === '/app' || p === '/app/') return avecMesureSite(await statique(env, request, '/app.html', true), compterVisiteSite(request, env, url, 'app'));
   if (p === '/favicon.ico') return statique(env, request, '/favicon.png');
   if (p === '/sw.js') {
     // le service worker doit toujours être relu, sinon les mises à jour de l'appli tardent
@@ -2163,8 +2164,10 @@ async function gestion(request, env, action) {
   }
 
   if (action === 'stats-site') {
-    const jours = Math.min(366, Math.max(1, parseInt(new URL(request.url).searchParams.get('jours'), 10) || 30));
-    return json(await lireStats(env, PAGE_SITE, jours));
+    const q = new URL(request.url).searchParams;
+    const jours = Math.min(366, Math.max(1, parseInt(q.get('jours'), 10) || 30));
+    const f = String(q.get('filtre') || '');                  // a:mobile, a:ordinateur, a:tablette, n:chrome…
+    return json(await lireStats(env, /^[an]:[a-z]{2,12}$/.test(f) ? PAGE_SITE + ':' + f : PAGE_SITE, jours));
   }
   if (action === 'liste') {
     const comptes = [];
@@ -4778,20 +4781,63 @@ function compterVisite(request, env, slug, url, langue) {
 // Site principal qrbc.app : mêmes statistiques, rangées sous la page « @site » (nom impossible pour un client),
 // avec en plus la page d'arrivée (accueil, app, cgv, mentions-legales) et les inscriptions.
 const PAGE_SITE = '@site';
+/* 28/11 — comptage fiable : le serveur prépare la visite (provenance, page, langue, site d'origine) et l'écrit dans la page ;
+   elle n'est comptée que lorsque la page s'affiche vraiment dans un navigateur (balise envoyée par la page vers /api/vue).
+   La plupart des robots (scanners, outils de référencement) ne vont pas jusque-là. On ajoute l'appareil et le navigateur
+   (tirés de l'en-tête User-Agent, rien d'autre) et une copie des lignes sous @site:a:<appareil> et @site:n:<navigateur> pour les filtres. */
 function compterVisiteSite(request, env, url, page) {
-  if (!env.STATS || (request.method !== 'GET' && request.method !== 'HEAD') || !visiteurHumain(request)) return;
+  if (!env.STATS || request.method !== 'GET' || !visiteurHumain(request)) return null;
   let source = sourceVisite(url, request, '', [DOMAINE, 'www.' + DOMAINE]);
-  if (!source) return;                                                      // navigation interne : déjà comptée
+  if (!source) return null;                                                 // navigation interne : déjà comptée
   const campagne = campagneVisite(url);
-  if (campagne) source = 'campagne:' + campagne;                            // ?depuis=NOM ou ?gclid (Google Ads) : ligne à part
-  const pays = (request.cf && request.cf.country) || 'XX', l = url.searchParams.get('lang');
-  const lignes = [['visite', ''], ['source', source], ['page', page], ['pays', /^[A-Z]{2}$/.test(pays) ? pays : 'XX'],
-    ['langue', l === 'en' || l === 'ru' ? l : 'fr']];
-  // 28/11 : nom du site d'origine (domaine seul, sans chemin ni donnée personnelle) quand le navigateur l'envoie
+  if (campagne) source = 'campagne:' + campagne;
+  const l = url.searchParams.get('lang');
   let h = '';
   try { h = new URL(request.headers.get('referer') || '').hostname.toLowerCase().replace(/^www\./, ''); } catch (e) {}
-  if (h && /^[a-z0-9.-]{3,60}$/.test(h)) lignes.push(['referent', h]);
-  ecrireStats(env, PAGE_SITE, lignes);
+  return { p: String(page).slice(0, 30), s: source, l: l === 'en' || l === 'ru' ? l : 'fr', r: /^[a-z0-9.-]{3,60}$/.test(h) ? h : '' };
+}
+function avecMesureSite(reponse, mesure) {
+  if (!mesure || !reponse || !reponse.ok || !/text\/html/.test(reponse.headers.get('content-type') || '')) return reponse;
+  const js = '<script>(function(){if(navigator.webdriver)return;var d=' + JSON.stringify(JSON.stringify(mesure)).replace(/</g, '\\u003c') +
+    ',f=function(){try{navigator.sendBeacon("/api/vue",d)}catch(e){}},v=function(){if(document.visibilityState==="visible"){document.removeEventListener("visibilitychange",v);setTimeout(f,1000)}};' +
+    'document.visibilityState==="visible"?setTimeout(f,1000):document.addEventListener("visibilitychange",v)})()</script>';
+  const r = new HTMLRewriter().on('body', { element(e) { e.append(js, { html: true }); } }).transform(reponse);
+  const hd = new Headers(r.headers); hd.set('cache-control', 'private, no-store');   // une page = une mesure : pas de copie en cache
+  return new Response(r.body, { status: r.status, headers: hd });
+}
+function appareilDe(ua) {
+  if (/iPad|Tablet|PlayBook|Silk|Kindle/i.test(ua) || (/Android/i.test(ua) && !/Mobile/i.test(ua))) return 'tablette';
+  if (/Mobi|iPhone|iPod|Android|Windows Phone/i.test(ua)) return 'mobile';
+  return 'ordinateur';
+}
+function navigateurDe(ua) {
+  if (/SamsungBrowser/i.test(ua)) return 'samsung';
+  if (/Edg(e|A|iOS)?\//i.test(ua)) return 'edge';
+  if (/OPR\/|Opera|OPiOS/i.test(ua)) return 'opera';
+  if (/YaBrowser/i.test(ua)) return 'yandex';
+  if (/FBAN|FBAV|Instagram|Line\/|Snapchat|TikTok|; wv\)/i.test(ua)) return 'appli';
+  if (/Firefox|FxiOS/i.test(ua)) return 'firefox';
+  if (/CriOS|Chrome\//i.test(ua)) return 'chrome';
+  if (/Safari\//i.test(ua)) return 'safari';
+  return 'autre';
+}
+async function compterVueSite(request, env) {
+  if (env.STATS && visiteurHumain(request)) {
+    let d = {};
+    try { d = JSON.parse(await request.text() || '{}'); } catch (e) {}
+    const ok = /^[a-z0-9-]{1,30}$/.test(d.p || '') && /^(qr|promo|google|moteur|reseaux|site|direct|campagne:[a-z0-9-]{1,25})$/.test(d.s || '') &&
+      ['fr', 'en', 'ru'].includes(d.l) && /^[a-z0-9.-]{0,60}$/.test(d.r || '');
+    if (ok && await limiter(env, 'vue:' + ip(request) + ':' + new Date().toISOString().slice(0, 13), 120, 7200, 'Trop de requêtes.').then(() => true, () => false)) {
+      const ua = request.headers.get('user-agent') || '', pays = (request.cf && request.cf.country) || 'XX';
+      const a = appareilDe(ua), n = navigateurDe(ua);
+      const lignes = [['visite', ''], ['source', d.s], ['page', d.p], ['pays', /^[A-Z]{2}$/.test(pays) ? pays : 'XX'], ['langue', d.l], ['appareil', a], ['navigateur', n]];
+      if (d.r) lignes.push(['referent', d.r]);
+      ecrireStats(env, PAGE_SITE, lignes);
+      ecrireStats(env, PAGE_SITE + ':a:' + a, lignes);
+      ecrireStats(env, PAGE_SITE + ':n:' + n, lignes);
+    }
+  }
+  return new Response(null, { status: 204 });
 }
 // Campagne d'une visite du site : ?depuis=NOM (lettres, chiffres, tirets), sinon ?gclid seul (ajouté par Google Ads) = « google-ads »
 function campagneVisite(url) {
@@ -4839,7 +4885,7 @@ function marquerProprietaire() {
 }
 async function lireStats(env, page, jours) {
   const debut = jourParis(new Date(Date.now() - (jours - 1) * 86400000));
-  const res = { actif: !!env.STATS, jours, debut, fin: jourParis(), parJour: {}, source: {}, referent: {}, pays: {}, langue: {}, clic: {}, page: {}, inscription: {}, etape: {}, etapep: {}, visites: 0, clics: 0, inscriptions: 0 };
+  const res = { actif: !!env.STATS, jours, debut, fin: jourParis(), parJour: {}, source: {}, referent: {}, appareil: {}, navigateur: {}, pays: {}, langue: {}, clic: {}, page: {}, inscription: {}, etape: {}, etapep: {}, visites: 0, clics: 0, inscriptions: 0 };
   if (!(await tablesStats(env))) return res;
   const { results } = await env.STATS.prepare('SELECT jour, type, cle, SUM(n) AS n FROM stats WHERE page = ? AND jour >= ? GROUP BY jour, type, cle')
     .bind(page, debut).all();
@@ -4858,7 +4904,7 @@ async function resumeStats(env, jours) {
   try {
     if (!(await tablesStats(env))) return out;
     const debut = jourParis(new Date(Date.now() - (jours - 1) * 86400000));
-    const { results } = await env.STATS.prepare("SELECT page, type, SUM(n) AS n FROM stats WHERE jour >= ? AND type IN ('visite', 'clic') AND page != '" + PAGE_SITE + "' GROUP BY page, type").bind(debut).all();
+    const { results } = await env.STATS.prepare("SELECT page, type, SUM(n) AS n FROM stats WHERE jour >= ? AND type IN ('visite', 'clic') AND page NOT LIKE '@%' GROUP BY page, type").bind(debut).all();
     for (const r of results || []) {
       const k = r.type === 'visite' ? 'visites' : 'clics';
       (out.pages[r.page] = out.pages[r.page] || { visites: 0, clics: 0 })[k] += r.n;
@@ -4888,7 +4934,7 @@ function planSitePrincipal(construit) {
     adresses.map(a => '  <url><loc>' + esc('https://' + DOMAINE + a.loc) + '</loc><lastmod>' + (a.lastmod || jour) + '</lastmod></url>\n').join('') + '</urlset>\n';
 }
 /* Outils transmis au module du site principal (worker/site.js) */
-function outilsSite() { return { json, ErreurAPI, dictionnaire, compterVisiteSite, traduireTextes }; }
+function outilsSite() { return { json, ErreurAPI, dictionnaire, compterVisiteSite, avecMesureSite, traduireTextes }; }
 /* Traduction d'un ensemble de textes { clé: texte } du site principal (constructeur) */
 async function traduireTextes(env, textes, de, vers) {
   const cleIA = await cleAnthropic(env);

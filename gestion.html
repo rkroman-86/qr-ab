@@ -61,6 +61,7 @@
   /* ---------- Stats du site principal ---------- */
   .st-periode{display:flex;gap:2px;padding:3px;background:var(--bg);border:1px solid var(--ligne);border-radius:10px;width:max-content;max-width:100%;overflow-x:auto;margin:0 0 14px}
   .st-periode button{border:0;background:transparent;padding:7px 11px;white-space:nowrap;border-radius:7px;font-weight:600;font-size:.86rem;color:var(--doux);min-height:34px}
+  .st-filtre{margin:0 0 14px}.st-filtre select{max-width:100%;padding:7px 10px;border-radius:10px;border:1px solid var(--ligne);background:var(--panneau);font:inherit}
   .st-periode button.actif{background:var(--panneau);color:var(--txt);box-shadow:0 1px 3px rgba(0,0,0,.12)}
   .st-tuiles{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
   .st-tuile{background:var(--panneau);border:1px solid var(--ligne);border-radius:14px;padding:12px 14px}
@@ -1121,7 +1122,7 @@
 
 
   /* ---------- Stats du site principal qrbc.app ---------- */
-  let periodeSite = 30;
+  let periodeSite = 30, filtreSite = '';
   const SOURCES_SITE = { qr: 'QR code', promo: 'Lien d’apporteur (?promo=)', google: 'Google', moteur: 'Autres moteurs', reseaux: 'Réseaux sociaux', site: 'Autre site', direct: 'Lien direct ou inconnu' };
   const PAGES_SITE = { accueil: 'Accueil', app: 'Appli / connexion', 'generateur-qr': 'Générateur de QR code', cgv: 'CGV', 'mentions-legales': 'Mentions légales' };
   const nombre = n => n.toLocaleString('fr-FR');
@@ -1214,30 +1215,42 @@
       el('div', { class: 'st-periode' }, [1, 7, 30, 90, 365].map(n => el('button', { type: 'button', class: n === periodeSite ? 'actif' : '', text: n === 1 ? 'Aujourd’hui' : n === 365 ? '1 an' : n + ' jours', onclick: () => { periodeSite = n; chargerStatsSite(); } }))));
     const att = el('p', { class: 'st-vide', text: 'Chargement…' }); z.append(att);
     let s;
-    try { s = await api('stats-site?jours=' + periodeSite); } catch (e) { att.textContent = 'Statistiques indisponibles : ' + e.message; return; }
+    // filtre : un type d'appareil ou un navigateur (compté depuis le 28/11 ; inscriptions et étapes non filtrables)
+    const APPAREILS = { mobile: 'Téléphone', ordinateur: 'Ordinateur', tablette: 'Tablette' };
+    const NAVS = { chrome: 'Chrome', safari: 'Safari', samsung: 'Samsung Internet', firefox: 'Firefox', edge: 'Edge', opera: 'Opera', yandex: 'Yandex', appli: 'Navigateur d’une appli (Facebook, Instagram…)', autre: 'Autre' };
+    const selF = el('select', { 'aria-label': 'Filtrer les visites' }, [el('option', { value: '', text: 'Tous les appareils et navigateurs' }),
+      el('optgroup', { label: 'Appareil' }, Object.entries(APPAREILS).map(([k, v]) => el('option', { value: 'a:' + k, text: v }))),
+      el('optgroup', { label: 'Navigateur' }, Object.entries(NAVS).map(([k, v]) => el('option', { value: 'n:' + k, text: v })))]);
+    selF.value = filtreSite;
+    selF.addEventListener('change', () => { filtreSite = selF.value; chargerStatsSite(); });
+    z.insertBefore(el('div', { class: 'st-filtre' }, [selF]), att);
+    try { s = await api('stats-site?jours=' + periodeSite + (filtreSite ? '&filtre=' + encodeURIComponent(filtreSite) : '')); } catch (e) { att.textContent = 'Statistiques indisponibles : ' + e.message; return; }
     att.remove();
     try { const pr = await api('promos'); codesConnus = (pr.promos || []).map(x => x.code).filter(Boolean); } catch (e) { codesConnus = []; }
     if (!s.actif) { z.append(el('p', { class: 'st-vide', text: 'Base de statistiques non branchée.' })); return; }
+    const filtre = !!filtreSite;
     const taux = s.visites ? (s.inscriptions / s.visites * 100).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' %' : '—';
     z.append(
       el('div', { class: 'st-tuiles' }, [
         el('div', { class: 'st-tuile' }, [el('div', { class: 'v', text: nombre(s.visites) }), el('div', { class: 'l', text: 'Visites' })]),
-        el('div', { class: 'st-tuile' }, [el('div', { class: 'v', text: nombre(s.inscriptions) }), el('div', { class: 'l', text: 'Inscriptions' }),
+        filtre ? '' : el('div', { class: 'st-tuile' }, [el('div', { class: 'v', text: nombre(s.inscriptions) }), el('div', { class: 'l', text: 'Inscriptions' }),
           (() => {                                       // comptes créés dans la période puis supprimés (toujours comptés)
             const n = supprimes.filter(c => !c.parent && c.cree && c.cree.slice(0, 10) >= s.debut && c.cree.slice(0, 10) <= s.fin).length;
             return n ? el('div', { class: 'l', text: 'dont ' + n + ' supprimé' + (n > 1 ? 's' : '') + ' depuis' }) : '';
           })()]),
-        el('div', { class: 'st-tuile' }, [el('div', { class: 'v', text: taux }), el('div', { class: 'l', text: 'Visites → inscription' })])]),
+        filtre ? '' : el('div', { class: 'st-tuile' }, [el('div', { class: 'v', text: taux }), el('div', { class: 'l', text: 'Visites → inscription' })])]),
       periodeSite === 1 ? '' : grapheSite(s),          // un seul jour : pas de graphique
       listeSite('Provenance', s.source, k => SOURCES_SITE[k] || (k.indexOf('campagne:') === 0 ? 'Campagne : ' + k.slice(9) : k)),
+      listeSite('Appareil', s.appareil, k => APPAREILS[k] || k),
+      listeSite('Navigateur', s.navigateur, k => NAVS[k] || k),
       listeSite('Sites d’origine', s.referent, k => k),
       el('p', { class: 'infos', text: 'Nom du site d’où vient le visiteur (Google, Facebook, un annuaire…), quand son navigateur l’indique. Compté depuis le 28 novembre 2026. Sans site d’origine : lien tapé, favori, QR code, application (WhatsApp, Gmail…) ou navigateur qui le masque.' }),
       listeSite('Page d’arrivée', s.page, k => PAGES_SITE[k] || k),
       listeSite('Pays', s.pays, pays),
       listeSite('Langue choisie', s.langue, k => ({ fr: 'Français', en: 'Anglais', ru: 'Russe' })[k] || k),
-      (sourcesConnues = s.source || {}, inscriptionsConnues = s.inscription || {}, entonnoir(s.etape || {}, s.etapep || {})),
-      listeSite('Inscriptions par code promo ou provenance', s.inscription, k => !k ? 'Sans code' : k === 'via:outil-qr' ? 'Sans code, venu du générateur de QR' : k.indexOf('via:') === 0 ? 'Sans code, venu de ' + k.slice(4) : k),
-      el('p', { class: 'infos', text: 'Visiteurs de qrbc.app (accueil, générateur de QR code, appli, pages légales), sans cookie ni donnée personnelle, hors robots et hors tes propres visites. Une visite = une arrivée sur le site ; la navigation d’une page à l’autre n’est pas recomptée. Compté depuis le 14 novembre 2026. Les visites des pages clients restent dans l’onglet Clients.' }));
+      filtre ? '' : (sourcesConnues = s.source || {}, inscriptionsConnues = s.inscription || {}, entonnoir(s.etape || {}, s.etapep || {})),
+      filtre ? '' : listeSite('Inscriptions par code promo ou provenance', s.inscription, k => !k ? 'Sans code' : k === 'via:outil-qr' ? 'Sans code, venu du générateur de QR' : k.indexOf('via:') === 0 ? 'Sans code, venu de ' + k.slice(4) : k),
+      el('p', { class: 'infos', text: 'Visiteurs de qrbc.app (accueil, générateur de QR code, appli, pages légales), sans cookie ni donnée personnelle, hors robots et hors tes propres visites. Une visite = une arrivée sur le site ; la navigation d’une page à l’autre n’est pas recomptée. Compté depuis le 14 novembre 2026. Depuis le 28 novembre 2026 (vers 17 h), une visite n’est comptée que lorsque la page s’affiche vraiment dans un navigateur : la plupart des robots (scanners, outils de référencement) n’y sont plus, d’où des chiffres plus bas qu’avant. Appareil, navigateur et filtre comptés depuis la même date ; avec un filtre, les inscriptions et les étapes ne sont pas affichées. Les visites des pages clients restent dans l’onglet Clients.' }));
   }
 
   /* ---------- Onglets ---------- */
