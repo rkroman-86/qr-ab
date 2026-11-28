@@ -315,6 +315,8 @@
     .damier{display:flex;align-items:center;justify-content:center;border-radius:10px;background:repeating-conic-gradient(#e6e6e6 0 25%,#fff 0 50%) 0 0/16px 16px}
     .damier.grand{width:min(200px,44vw);aspect-ratio:1}
     .damier.grand img{width:100%;height:100%}
+    .damier.sans-damier{background:none}
+    .val-curseur{font-weight:400;opacity:.7}
     .damier img{width:90%;height:90%;object-fit:contain}
     .logo-apercu{display:block}
     .photo-ia{display:flex;align-items:center;gap:10px;margin:0 0 10px}.photo-ia img{width:56px;height:56px;object-fit:cover;border-radius:10px}
@@ -5558,7 +5560,8 @@
         defs.push('<filter id="bichro" color-interpolation-filters="sRGB"><feColorMatrix type="saturate" values="0"/><feComponentTransfer><feFuncR type="linear" slope="1.5" intercept="-.25"/><feFuncG type="linear" slope="1.5" intercept="-.25"/><feFuncB type="linear" slope="1.5" intercept="-.25"/></feComponentTransfer><feComponentTransfer><feFuncR type="table" tableValues="' + tv(0) + '"/><feFuncG type="table" tableValues="' + tv(1) + '"/><feFuncB type="table" tableValues="' + tv(2) + '"/></feComponentTransfer></filter>');
         filtrePhoto = ' filter="url(#bichro)"';
       }
-      const img = '<image href="' + motif.data + '" x="' + X + '" y="' + X + '" width="' + W + '" height="' + W + '" preserveAspectRatio="xMidYMid slice"' + filtrePhoto + '/>';
+      const opI = Math.max(0, Math.min(100, o.opImage == null ? 100 : Number(o.opImage))) / 100;
+      const img = '<image href="' + motif.data + '" x="' + X + '" y="' + X + '" width="' + W + '" height="' + W + '" preserveAspectRatio="xMidYMid slice"' + filtrePhoto + (opI < 1 ? ' opacity="' + opI.toFixed(2) + '"' : '') + '/>';
       parts.push(forme !== 'aucune' ? '<g clip-path="url(#forme)">' + img + '</g>' : img);
       if (texte && !arc) {
         defs.push('<linearGradient id="bande" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="' + cFond + '" stop-opacity="0"/><stop offset="1" stop-color="' + cFond + '" stop-opacity=".92"/></linearGradient>');
@@ -5575,7 +5578,8 @@
         contenu = '<svg x="' + x + '" y="' + y + '" width="' + S + '" height="' + S + '" viewBox="' + xml(motif.vb) + '" color="#fff" fill="none">' + motif.c + '</svg>';
       }
       defs.push('<mask id="motif" maskUnits="userSpaceOnUse" x="0" y="0" width="512" height="512">' + contenu + '</mask>');
-      parts.push('<g' + filtre + '><rect width="512" height="512" fill="' + peinture('pMotif', cMotif) + '" mask="url(#motif)"/></g>');
+      const opM = Math.max(0, Math.min(100, o.opImage == null ? 100 : Number(o.opImage))) / 100;
+      parts.push('<g' + filtre + (opM < 1 ? ' opacity="' + opM.toFixed(2) + '"' : '') + '><rect width="512" height="512" fill="' + peinture('pMotif', cMotif) + '" mask="url(#motif)"/></g>');
     }
 
     // Texte
@@ -5598,7 +5602,8 @@
 
     // Bordure
     if (avecBord) {
-      parts.push('<g' + filtre + '><g transform="' + autour(echBord) + '">' + formeEl(' fill="none" stroke="' + peinture('pBord', cMotif) + '" stroke-width="' + ep + '"') + '</g></g>');
+      const opB = Math.max(0, Math.min(100, o.opBord == null ? 100 : Number(o.opBord))) / 100;
+      parts.push('<g' + filtre + '><g transform="' + autour(echBord) + '">' + formeEl(' fill="none" stroke="' + peinture('pBord', cMotif) + '" stroke-width="' + ep + '"' + (opB < 1 ? ' stroke-opacity="' + opB.toFixed(2) + '"' : '')) + '</g></g>');
     }
 
     // Photo sans bordure ni ombre / néon : la forme va jusqu'au bord de l'image (pas de vide autour)
@@ -5739,7 +5744,12 @@
       const i = Number(String(o.choix).replace('ia', ''));
       return o.motifs[i] || { type: 'mono' };
     };
-    const rafraichir = () => { const m = motifCourant(); if (m) apercu.src = svgEnURL(composerLogo(o, m)); };
+    const logoPlein = () => o.forme !== 'aucune' && (!o.transparent || estPhoto());
+    const rafraichir = () => {
+      const m = motifCourant(); if (m) apercu.src = svgEnURL(composerLogo(o, m));
+      if (apercu.parentNode) apercu.parentNode.classList.toggle('sans-damier', logoPlein());
+      boite.querySelectorAll('.motif-v .damier').forEach(d => d.classList.toggle('sans-damier', o.forme !== 'aucune' && !o.transparent));
+    };
 
     function puces(etiq, options, cle, apres) {
       const box = el('div', { class: 'puces' });
@@ -5832,6 +5842,14 @@
     }
 
     let iaOuvert = false;
+    // curseur 0–100 % (opacités), appliqué en direct
+    function curseurLogo(etiq, cle) {
+      const v = o[cle] == null ? 100 : Number(o[cle]);
+      const val = el('span', { class: 'val-curseur', text: v + ' %' });
+      const r = el('input', { type: 'range', min: 0, max: 100, step: 5, value: v, 'aria-label': t(etiq) });
+      r.addEventListener('input', () => { o[cle] = Number(r.value); val.textContent = r.value + ' %'; rafraichir(); });
+      return el('div', { class: 'opt' }, [el('span', { class: 'etiq' }, [el('span', { text: etiq }), ' ', val]), r]);
+    }
     function construire() {
       corps.innerHTML = '';
       // Motifs disponibles
@@ -5854,7 +5872,8 @@
       corps.appendChild(puces('Forme', LOGO_FORMES, 'forme', construire));
       if (o.forme !== 'aucune') {
         corps.appendChild(puces('Fond', { plein: 'Plein', transparent: 'Transparent' }, '_fond', () => { o.transparent = o._fond === 'transparent'; }));
-        corps.appendChild(puces('Bordure', { aucune: 'Aucune', fine: 'Fine', epaisse: 'Épaisse' }, 'bordure'));
+        corps.appendChild(puces('Bordure', { aucune: 'Aucune', fine: 'Fine', epaisse: 'Épaisse' }, 'bordure', construire));
+        if (o.bordure && o.bordure !== 'aucune') corps.appendChild(curseurLogo('Opacité de la bordure', 'opBord'));
       }
       corps.appendChild(puces('Rendu', LOGO_EFFETS, 'effet'));
       const perso = el('div', { class: 'couleurs' + (o.palette === 'perso' ? '' : ' cache') }, [couleurLogo('Fond', 'cFond'), couleurLogo('Motif', 'cMotif'), couleurLogo('Texte', 'cTexte')]);
@@ -5876,6 +5895,7 @@
       const taille = el('input', { type: 'range', min: 60, max: 140, value: o.taille });
       taille.addEventListener('input', () => { o.taille = Number(taille.value); rafraichir(); });
       corps.appendChild(el('div', { class: 'opt' }, [el('span', { class: 'etiq', text: estPhoto() ? 'Zoom de la photo' : 'Taille du motif' }), taille]));
+      corps.appendChild(curseurLogo(estPhoto() ? 'Opacité de la photo' : 'Opacité du motif', 'opImage'));
       o._fond = o.transparent ? 'transparent' : 'plein';
       rafraichir();
     }
