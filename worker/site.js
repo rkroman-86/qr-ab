@@ -859,7 +859,7 @@ async function brouillonInitial(env, request, O) {
         it('Avis Google, WhatsApp, réservation', 'Des boutons pour appeler, écrire, réserver, suivre vos réseaux ou laisser un avis : vos clients agissent en un geste.'),
         it('Textes et images avec l’IA', 'Décrivez votre activité en quelques mots : l’IA propose les textes, les pictogrammes et les images de votre site.'),
         it('Visible sur Google', 'Titre, description et fiche « entreprise locale » sont créés automatiquement pour les moteurs de recherche.'),
-        it('22 modèles de cartes de visite', 'Des cartes prêtes à imprimer avec votre QR code, chez vous ou chez l’imprimeur.')] },
+        it('26 modèles de cartes de visite', 'Des cartes prêtes à imprimer avec votre QR code, chez vous ou chez l’imprimeur.')] },
       { id: 'tarif', genre: 'texte', titre: 'Un prix simple', texte: '1 mois d’essai gratuit, sans carte bancaire. Ensuite 1,99 € TTC par mois, sans engagement, ou 19,99 € TTC par an (2 mois offerts) : site, QR code, cartes de visite et crédits IA compris.\n\nRésiliable à tout moment, en un clic depuis votre téléphone. Pas de prix d’appel qui explose la deuxième année. Satisfait ou remboursé pendant 14 jours.' },
       { id: 'faq', genre: 'faq', titre: 'Questions fréquentes', items: [
         it('Faut-il savoir créer un site ?', 'Non. Vous choisissez une adresse, vous remplissez quelques champs et l’IA propose le reste. Tout se fait depuis votre téléphone.'),

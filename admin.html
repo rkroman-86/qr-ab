@@ -3409,6 +3409,10 @@
     kraft:   'Kraft',
     vertical: 'Vertical',
     verticalEpure: 'Vertical épuré',
+    droite:  'Droite épuré',
+    droitePhoto: 'Droite photo',
+    droiteColonne: 'Droite colonne',
+    droitePrestige: 'Droite prestige',
     verso:   'Verso QR',
     versoCouleur: 'Verso couleur'
   };
@@ -3514,9 +3518,9 @@
   // Titre + sous-titre + trait + coordonnées ; align 'left' ou 'center'
   function dessinerTextes(ctx, D, x, y, largeur, c, align) {
     const cfgT = { titre: D.nom, sousTitre: D.slogan }, fam = D.fam;
-    const ax = align === 'center' ? x + largeur / 2 : x;
+    const ax = align === 'center' ? x + largeur / 2 : align === 'right' ? x + largeur : x;
     ctx.textAlign = align; ctx.textBaseline = 'top';
-    if (D.avant && D.avant.length) y = lignesInfos(ctx, D, D.avant, x, y, largeur, align, c.texte, c.accent, 46) + 8;
+    if (D.avant && D.avant.length) { y = lignesInfos(ctx, D, D.avant, x, y, largeur, align, c.texte, c.accent, 46) + 8; ctx.textAlign = align; ctx.textBaseline = 'top'; }
     if (cfgT.titre) {
       ctx.fillStyle = c.texte;
       ctx.font = policeAjustee(ctx, cfgT.titre, '800', c.titre || 124, 60, largeur, fam);
@@ -3540,7 +3544,7 @@
       ctx.globalAlpha = 1;
     }
     y += 30;
-    ctx.fillStyle = c.accent; ctx.fillRect(align === 'center' ? ax - 65 : x, y, 130, 8); y += 56;
+    ctx.fillStyle = c.accent; ctx.fillRect(align === 'center' ? ax - 65 : align === 'right' ? ax - 130 : x, y, 130, 8); y += 56;
     if (c.enLigne) {
       const lignes = lignesCoords(D.coords);
       ctx.font = policeAjustee(ctx, lignes[0] || '', '600', 52, 34, largeur, fam);
@@ -3562,6 +3566,29 @@
     }
     ctx.textAlign = 'left';
     return y;
+  }
+
+  /* Textes centrés verticalement entre haut et bas : hauteur mesurée sur une carte brouillon (mêmes réglages « Aa »), puis dessin */
+  function textesAuMilieu(ctx, D, x, largeur, c, align, haut, bas) {
+    const cv = document.createElement('canvas'); cv.width = D.W; cv.height = D.H;
+    const h = dessinerTextes(contexteTypo(cv.getContext('2d'), D), D, x, 0, largeur, c, align) - (c.enLigne ? 20 : 30);
+    return dessinerTextes(ctx, D, x, Math.round(haut + Math.max(0, (bas - haut - h) / 2)), largeur, c, align);
+  }
+  /* Colonne de gauche des modèles « texte à droite » : logo au-dessus du QR, le tout centré verticalement.
+     Sans QR : logo seul, plus grand. Renvoie rien. */
+  function colonneLogoQR(ctx, D, x, largeur, o) {
+    const { H } = D, ecart = 50;
+    const q = qrCarteMasque ? 0 : Math.min(o.q || 470, largeur);
+    const T = D.logo ? (q ? (o.logo || 170) : Math.min(o.logoSeul || 340, largeur)) : 0;
+    const hq = q ? Math.round(q * (o.legende ? 1.17 : 1)) + (o.sousQR ? 64 : 0) : 0;
+    const total = T + hq + (T && hq ? ecart : 0);
+    let y = Math.round((H - total) / 2);
+    if (T) { dessinerLogo(ctx, D, x + (largeur - T) / 2, y, T); y += T + ecart; }
+    if (!q) return;
+    const qx = Math.round(x + (largeur - q) / 2);
+    if (o.nu) dessinerQR(ctx, URL_QR, qx, y, q, '#111');
+    else dessinerBlocQR(ctx, D, qx, y, q, o.legende ? 'Scannez-moi' : '', !!o.ombre);
+    if (o.sousQR) legendeQR(ctx, D, 'Scannez-moi', qx + q / 2, y + q + 22, o.sousQR, 40);
   }
 
   function dessinerPied(ctx, D, x, y, couleur, align) {
@@ -3981,6 +4008,53 @@
       const q = 560;
       dessinerBlocQR(ctx, D, (W - q) / 2, Math.max(y + 10, H - 110 - q * 1.17), q, 'Scannez-moi', true);
     },
+    /* Textes au milieu à droite — Épuré : fond blanc, QR et logo à gauche, filet de couleur sur le bord droit */
+    droite(ctx, D) {
+      const { W, H, P } = D;
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
+      const accent = accentLisible(D);
+      ctx.fillStyle = accent; ctx.fillRect(W - 26, 0, 26, H);
+      const col = 560;
+      colonneLogoQR(ctx, D, P, col, { q: 480, logo: 170, nu: true, sousQR: '#777' });
+      const x = P + col + 110, L = W - 26 - P - x;
+      textesAuMilieu(ctx, D, x, L, { texte: '#1a1a1a', accent, enLigne: true, titre: 112 }, 'right', 70, H - (cfg.pied ? 130 : 70));
+      dessinerPied(ctx, D, W - 26 - P, H - 70, '#1a1a1a', 'right');
+    },
+    /* Textes au milieu à droite — Photo : image de fond (ou couleurs de la page), QR dans un cadre blanc à gauche */
+    droitePhoto(ctx, D) {
+      const { W, H, P } = D;
+      const texte = fondPage(ctx, D, 0, 0, W, H, 0.45);
+      const col = 540;
+      colonneLogoQR(ctx, D, P, col, { q: 470, logo: 180, legende: true, ombre: true });
+      const x = P + col + 110, L = W - P - x;
+      textesAuMilieu(ctx, D, x, L, { texte, accent: accentSurFond(D, texte), titre: 116 }, 'right', 70, H - (cfg.pied ? 130 : 70));
+      dessinerPied(ctx, D, W - P, H - 70, texte, 'right');
+    },
+    /* Textes au milieu à droite — Colonne : bande de couleur (ou photo) à gauche avec logo et QR, textes sur blanc */
+    droiteColonne(ctx, D) {
+      const { W, H, P } = D;
+      const B = 720;
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
+      if (D.fondImg) fondPage(ctx, D, 0, 0, B, H, 0.4); else fondAccent(ctx, D, 0, 0, B, H);
+      colonneLogoQR(ctx, D, 90, B - 180, { q: 460, logo: 180, logoSeul: 380, legende: true, ombre: true });
+      const accent = accentLisible(D), x = B + 110, L = W - P - x;
+      textesAuMilieu(ctx, D, x, L, { texte: '#1a1a1a', accent, titre: 108, sous: 50 }, 'right', 70, H - (cfg.pied ? 130 : 70));
+      dessinerPied(ctx, D, W - P, H - 70, '#1a1a1a', 'right');
+    },
+    /* Textes au milieu à droite — Prestige : fond noir, filets dorés, QR à gauche */
+    droitePrestige(ctx, D) {
+      const { W, H, P } = D;
+      const g = ctx.createLinearGradient(0, 0, W, H);
+      g.addColorStop(0, '#161616'); g.addColorStop(1, '#060606');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+      const or = luminance(D.d.accent) < 0.12 || luminance(D.d.accent) > 0.85 ? '#c9a45c' : D.d.accent;
+      ctx.fillStyle = or; ctx.fillRect(0, 70, W, 4); ctx.fillRect(0, H - 74, W, 4);
+      const col = 520;
+      colonneLogoQR(ctx, D, P, col, { q: 460, logo: 170, legende: true });
+      if (!qrCarteMasque || D.logo) { ctx.fillStyle = or; ctx.globalAlpha = .6; ctx.fillRect(P + col + 55, 190, 3, H - 380); ctx.globalAlpha = 1; }
+      const x = P + col + 120, L = W - P - x;
+      textesAuMilieu(ctx, D, x, L, { texte: '#f5efe0', accent: or, enLigne: true, titre: 112 }, 'right', 110, H - 110);
+    },
     verso(ctx, D) {
       const { W, H } = D;
       const texte = fondPage(ctx, D, 0, 0, W, H, 0.55);
@@ -4041,7 +4115,7 @@
     return { recto, verso, differentes: recto.qr !== verso.qr || recto.logo !== verso.logo || recto.fond !== verso.fond || !memeInfos };
   }
 
-  /* Réglages « Aa » des cartes appliqués sans toucher aux 22 modèles : chaque texte mesuré ou écrit est reconnu
+  /* Réglages « Aa » des cartes appliqués sans toucher aux 26 modèles : chaque texte mesuré ou écrit est reconnu
      (nom, slogan, téléphone, e-mail, site — entier, une de ses lignes, ou en majuscules) et reçoit police, style,
      taille et couleur choisies. La mesure aussi : les ajustements « tenir dans la largeur » des modèles en tiennent compte. */
   const TAILLES_CARTE_TYPO = { xs: 0.8, s: 0.9, l: 1.12, xl: 1.25 };
