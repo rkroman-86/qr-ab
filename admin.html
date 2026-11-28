@@ -56,8 +56,10 @@
     .pages-bandeau .pb-page.actif .rb-nom{font-weight:700}
     .pages-bandeau .pb-page small{color:var(--doux);font-size:.78rem}
     .pages-bandeau .pb-num{flex:none;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--panneau);border:1px solid var(--ligne);font-size:.82rem;font-weight:700}
-    .pages-bandeau .express-bandeau{margin:8px 0}
-    .pages-bandeau .pb-ajout{margin:2px 0 6px}
+    .pages-bandeau .pb-actions{display:flex;gap:8px;margin:8px 0 6px}
+    .pages-bandeau .pb-actions .rb{flex:1;min-width:0;font:inherit;color:var(--txt);justify-content:center}
+    .pages-bandeau .pb-actions .rb-nom{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+    .pages-bandeau .pb-express{border-color:color-mix(in srgb,var(--prim) 55%,var(--ligne));background:color-mix(in srgb,var(--prim) 10%,var(--bg))}
     .pages-bandeau.pb-trad{padding:10px 12px}
     .zone-fixe{position:sticky;top:var(--h-barre,57px);z-index:25;margin:-16px -16px 14px;background:linear-gradient(var(--txt),var(--txt)) center bottom/75% 1px no-repeat,var(--panneau);
       max-height:calc(100dvh - var(--h-barre,57px));overflow-y:auto;overscroll-behavior:contain}
@@ -170,8 +172,8 @@
     .onglets button{border:0;background:transparent;padding:7px 14px;border-radius:8px;font-weight:600;color:var(--doux);cursor:pointer}
     .onglets button.actif{background:var(--panneau);color:var(--txt);box-shadow:0 1px 3px rgba(0,0,0,.1)}
     .corps{flex:1;display:grid;grid-template-columns:1fr;min-height:0}
-    .col-edit{padding:16px 16px 110px;max-width:640px;width:100%;min-width:0;margin:0 auto}
-    .col-apercu{padding:0 0 90px}
+    .col-edit{padding:16px 16px 76px;max-width:640px;width:100%;min-width:0;margin:0 auto}
+    .col-apercu{padding:0 0 60px}
     .cadre{min-height:calc(100dvh - 150px);display:flex}
     .cadre > .qp{min-height:inherit}
     .choix-apercu{display:flex;gap:4px;margin:10px auto;padding:3px;width:max-content;background:var(--bg);border:1px solid var(--ligne);border-radius:10px}
@@ -542,11 +544,14 @@
     .ajout{display:flex;gap:8px}
     .ajout select{flex:1}
 
-    .pied-barre{position:fixed;left:0;right:0;bottom:0;z-index:6;display:flex;align-items:center;gap:12px;
-      padding:12px 16px calc(12px + env(safe-area-inset-bottom));background:var(--panneau);border-top:1px solid var(--ligne)}
-    .pied-barre .etat{flex:1;font-size:.86rem;color:var(--doux);line-height:1.3}
+    /* barre du bas compacte (28/11) : hauteur d'une ligne du haut, pour laisser la place à la rédaction */
+    .pied-barre{position:fixed;left:0;right:0;bottom:0;z-index:6;display:flex;align-items:center;gap:10px;
+      padding:5px 12px calc(5px + env(safe-area-inset-bottom));background:var(--panneau);border-top:1px solid var(--ligne)}
+    .pied-barre .etat{flex:1;min-width:0;font-size:.78rem;color:var(--doux);line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
     .pied-barre .etat.ok{color:var(--ok)} .pied-barre .etat.err{color:var(--err)}
-    .pied-barre .btn-prim{min-width:130px}
+    .pied-barre .etat.plein{-webkit-line-clamp:unset;display:block;max-height:40vh;overflow-y:auto}
+    .pied-barre .btn-prim{min-width:116px;min-height:38px;padding:6px 14px}
+    .pied-barre .btn-aide{width:38px;height:38px;font-size:1.1rem}
     .btn-aide{flex:none;width:44px;height:44px;border-radius:50%;border:1px solid var(--ligne);background:var(--bg);font-size:1.25rem;cursor:pointer;position:relative;padding:0}
     .btn-aide.actif{border-color:var(--prim);box-shadow:0 0 0 2px color-mix(in srgb,var(--prim) 35%,transparent)}
     .btn-aide.nouveau::after{content:'';position:absolute;top:2px;right:2px;width:10px;height:10px;border-radius:50%;background:var(--prim)}
@@ -2076,11 +2081,15 @@
         liste.appendChild(el('button', { type: 'button', class: 'rb pb-page' + (actif ? ' actif' : ''), title: p.adresse, onclick: actif ? () => { sitesOuvert = false; remplir(); } : () => basculerVers(p.slug) }, [
           el('span', { class: 'pb-num', text: String(i + 1) }),
           el('span', { class: 'rb-nom', 'data-no-i18n': '', text: libellePage(p) + (p.principale && pages.length > 1 ? ' ★' : '') }),
-          actif ? el('small', { text: t('ouvert') }) : null]));
+          actif ? el('small', { text: 'ouvert' }) : null]));
       });
-      if (pages.length) box.append(liste);
-      if (!(c && c.traduction)) box.append(bandeauExpress());
-      box.append(el('button', { type: 'button', class: 'btn btn-mini pb-ajout', onclick: () => ouvrirAjoutPage() }, [el('span', {}, ['＋ ', el('span', { text: 'Ajouter un site ou une langue' })])]));
+      if (pages.length > 1) box.append(liste);            // un seul site : son nom est déjà sur la ligne « Mes sites »
+      // une seule ligne, de la hauteur d'un site : ⚡ Création express · ＋ Site ou langue
+      box.append(el('div', { class: 'pb-actions' }, [
+        !(c && c.traduction) ? el('button', { type: 'button', class: 'rb pb-express', title: 'Pressé ? Décrivez votre activité : l’IA prépare tout votre site en une minute.', onclick: () => ouvrirExpress() },
+          [el('span', { text: '⚡' }), el('span', { class: 'rb-nom', text: 'Création express' })]) : null,
+        el('button', { type: 'button', class: 'rb pb-ajout', title: 'Ajouter un site ou une langue', onclick: () => ouvrirAjoutPage() },
+          [el('span', { text: '＋' }), el('span', { class: 'rb-nom', text: 'Site ou langue' })])]));
     };
     remplir();
     chargerGroupe().then(remplir);
@@ -6613,6 +6622,7 @@
 
   /* ---------------- Enregistrement ---------------- */
   $('#btn-enregistrer').addEventListener('click', () => { publier(); });
+  $('#etat').addEventListener('click', () => $('#etat').classList.toggle('plein'));   // message coupé à 2 lignes : toucher pour tout lire
   // Publication de la page ; renvoie true si tout est enregistré (sert aussi à l'appli « carte de visite »)
   async function publier() {
     const btn = $('#btn-enregistrer'), etat = $('#etat');

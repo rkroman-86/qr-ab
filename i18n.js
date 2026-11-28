@@ -841,6 +841,8 @@
     'Aucune': ['None', 'Нет'],
     'Image introuvable': ['Image not found', 'Изображение не найдено'],
     'Traduire cet article': ['Translate this article', 'Перевести эту статью'],
+    'Site ou langue': ['Site or language', 'Сайт или язык'],
+    'Création express': ['Express creation', 'Быстрое создание'],
     'Traduire cette pancarte': ['Translate this panel', 'Перевести эту панель'],
     'Retraduire cette pancarte': ['Translate this panel again', 'Перевести панель заново'],
     'Remplacer le titre et le texte de cette pancarte par une nouvelle traduction de la page d’origine ? Vos retouches sur cette pancarte seront perdues (↩ Annuler possible juste après).': ['Replace the title and text of this panel with a new translation of the original page? Your edits to this panel will be lost (↩ Undo available right after).', 'Заменить заголовок и текст этой панели новым переводом исходной страницы? Ваши правки этой панели пропадут (сразу после можно нажать ↩ Отменить).'],
