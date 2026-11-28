@@ -420,6 +420,7 @@
     .info-carte.off>input{opacity:.45}
     .info-carte .outils-info{grid-column:2;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
     .info-carte .rangee-typo{grid-column:1/-1}
+    .info-carte .rangees-typo-faces{grid-column:1/-1}
     .info-carte .perso-champs{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px}
     .info-carte .perso-champs>input:last-child{grid-column:1/-1}
     .info-carte .perso-champs>*{width:100%;min-width:0}
@@ -486,6 +487,8 @@
     .rangee-typo{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 0}
     .rangee-typo select{flex:1 1 120px;min-width:0}
     .rangee-typo .choix-police{flex:1 1 140px;min-width:0}
+    .typo-faces{display:inline-flex;gap:4px}
+    .typo-face{flex:1 1 100%;font-weight:700;font-size:.85rem;color:var(--doux)}
     .typo-coul{flex:1 1 100%;display:flex;align-items:center;gap:10px;font-size:.88rem;color:var(--doux)}
     .typo-coul input[type=color]{width:46px;height:34px;padding:2px;flex:none}
     .typo-coul input[type=color]:disabled{opacity:.4}
@@ -3175,10 +3178,22 @@
   const MAX_INFOS_CARTE = 5, MAX_PERSO_CARTE = 5;
   // « Aa » des cartes : cfg.typo.carteNom… et cfg.typo.carteP_<id> (mêmes réglages que les textes de la page : p, g, t, c)
   const CLES_TYPO_CARTE = { nom: 'carteNom', slogan: 'carteSlogan', tel: 'carteTel', email: 'carteEmail', site: 'carteSite' };
-  const cleTypoCarte = k => CLES_TYPO_CARTE[k] || 'carteP_' + k;
-  function typoCarte() {
+  // Verso (28/11) : mêmes clés suivies de « V » (cfg.typo.carteNomV…), réglées à part
+  const cleTypoCarte = (k, face) => (CLES_TYPO_CARTE[k] || 'carteP_' + k) + (face === 'verso' ? 'V' : '');
+  const clesInfosCarte = () => ['nom', 'slogan', 'tel', 'email', 'site'].concat(persoCarte().map(p => p.id));
+  // Anciennes cartes : un seul « Aa » valait pour les deux faces → recopié une fois sur le verso (carteInfos.typoV)
+  function typoVersoInit() {
+    if (reglagesCarte().typoV) return;
+    clesInfosCarte().forEach(k => {
+      const r = cfg.typo && cfg.typo[cleTypoCarte(k)], v = cleTypoCarte(k, 'verso');
+      if (r && typeof r === 'object' && !(cfg.typo[v])) cfg.typo[v] = Object.assign({}, r);
+    });
+    cfg.carteInfos = Object.assign({}, reglagesCarte(), { typoV: 1 });
+  }
+  function typoCarte(face) {
+    if (face === 'verso') typoVersoInit();
     const o = {};
-    ['nom', 'slogan', 'tel', 'email', 'site'].concat(persoCarte().map(p => p.id)).forEach(k => { const v = typoDe(cfg, cleTypoCarte(k)); if (v) o[k] = v; });
+    clesInfosCarte().forEach(k => { const v = typoDe(cfg, cleTypoCarte(k, face)); if (v) o[k] = v; });
     return o;
   }
   function boutonsCarte() { return cfg.boutons.filter(b => b && !b.masque && b.type !== 'reseaux' && String(b.valeur || '').trim()); }
@@ -3287,6 +3302,21 @@
         return [el('button', { type: 'button', class: 'btn btn-mini', text: '↑', title: t('Monter'), disabled: haut, onclick: () => bouger(-1) }),
           el('button', { type: 'button', class: 'btn btn-mini', text: '↓', title: t('Descendre'), disabled: i >= ordre.length - 1, onclick: () => bouger(1) })];
       };
+      // Deux « Aa » par information : « Aa R » (recto) et « Aa V » (verso), chacun avec ses réglages
+      const outilsTypoFaces = k => {
+        typoVersoInit();
+        const boutons = el('span', { class: 'typo-faces' }), rangees = el('div', { class: 'rangees-typo-faces' });
+        ['recto', 'verso'].forEach(face => {
+          const [b, r] = outilTypo(cfg, cleTypoCarte(k, face), rafraichir);
+          const nom = face === 'recto' ? t('Recto') : t('Verso');
+          b.textContent = 'Aa ' + (face === 'recto' ? t('R') : t('V'));
+          b.title = t('Police, style, taille et couleur') + ' — ' + nom; b.setAttribute('aria-label', b.title);
+          b.addEventListener('click', () => { if (!r.classList.contains('cache')) rangees.querySelectorAll('.rangee-typo').forEach(x => { if (x !== r) x.classList.add('cache'); }); });
+          r.prepend(el('div', { class: 'typo-face', text: nom }));
+          boutons.append(b); rangees.append(r);
+        });
+        return [boutons, rangees];
+      };
       const ligneStd = k => {
         const lib = CHAMPS_CARTE.find(x => x[0] === k)[1], coche = ch.includes(k) || chV.includes(k);
         const input = el('input', { type: k === 'email' ? 'email' : k === 'tel' ? 'tel' : 'text', value: String(r[k] || '').trim() || d[k], placeholder: d[k] || (k === 'slogan' ? 'Ex. : Votre chauffeur privé à Nice' : '') });
@@ -3297,7 +3327,7 @@
         });
         input.addEventListener('change', rafraichir);
         const perso = String(r[k] || '').trim() && String(r[k]).trim() !== d[k];
-        const [btnTypo, rangeeTypo] = outilTypo(cfg, cleTypoCarte(k), rafraichir);   // police, style, taille, couleur sur la carte
+        const [btnTypo, rangeeTypo] = outilsTypoFaces(k);   // police, style, taille, couleur : recto et verso à part
         return el('div', { class: 'info-carte' + (coche ? '' : ' off') }, [
           el('div', { class: 'case-info' }, [caseCoche(k), el('span', { text: lib })]), input,
           el('div', { class: 'outils-info' }, [btnTypo].concat(k === 'nom' || k === 'slogan' ? [] : fleches(k)).concat([
@@ -3315,7 +3345,7 @@
         etiq.addEventListener('input', () => maj(() => ({ etiq: etiq.value })));
         val.addEventListener('input', () => maj(() => ({ valeur: val.value })));
         [etiq, val].forEach(x => x.addEventListener('change', rafraichir));
-        const [btnTypo, rangeeTypo] = outilTypo(cfg, cleTypoCarte(p.id), rafraichir);
+        const [btnTypo, rangeeTypo] = outilsTypoFaces(p.id);
         const suppr = el('button', { type: 'button', class: 'btn btn-mini', text: '🗑', title: t('Supprimer ce champ'), onclick: () => {
           modifierCarte(o => {
             o.perso = persoCarte().filter(x => x.id !== p.id);
@@ -3324,7 +3354,7 @@
             if (Array.isArray(o.ordre)) o.ordre = o.ordre.filter(x => x !== p.id);
             if (!o.perso.length) delete o.perso;
           });
-          if (cfg.typo) { delete cfg.typo[cleTypoCarte(p.id)]; if (!Object.keys(cfg.typo).length) delete cfg.typo; }
+          if (cfg.typo) { delete cfg.typo[cleTypoCarte(p.id)]; delete cfg.typo[cleTypoCarte(p.id, 'verso')]; if (!Object.keys(cfg.typo).length) delete cfg.typo; }
           refaire();
         } });
         return el('div', { class: 'info-carte perso' + (coche ? '' : ' off') }, [
@@ -3431,7 +3461,7 @@
       W: 2008, H: 1300, P: 110, d,
       fam: await (async () => {                          // polices hébergées (Playfair, Lora, Nunito) chargées avant de dessiner
         const fam = (FONTS[d.police] || FONTS.moderne).css;
-        const fams = [fam].concat(Object.values(typoCarte()).filter(x => x.p && FONTS[x.p]).map(x => FONTS[x.p].css));
+        const fams = [fam].concat(Object.values(typoCarte()).concat(Object.values(typoCarte('verso'))).filter(x => x.p && FONTS[x.p]).map(x => FONTS[x.p].css));
         try { if (document.fonts) await Promise.all([].concat(...fams.map(f => ['400', '700', 'italic 400', 'italic 700'].map(w => document.fonts.load(w + ' 40px ' + f))))); } catch (e) {}
         return fam;
       })(),
@@ -3445,7 +3475,7 @@
       })(),
       logo: await chargerImage(cfg.logo && logoSurCarte() ? res(cfg.logo) : ''),
       ...infosCarte('recto'),
-      infos: { recto: infosCarte('recto'), verso: infosCarte('verso') }      // informations propres à chaque face
+      infos: { recto: Object.assign(infosCarte('recto'), { typo: typoCarte() }), verso: Object.assign(infosCarte('verso'), { typo: typoCarte('verso') }) }      // informations et « Aa » propres à chaque face
     };
   }
 
@@ -4111,7 +4141,7 @@
     const q = qrFaces(), l = logoFaces();
     const r = reglagesCarte(), fond = c => (typeof c === 'string' && c) || '';
     const recto = { cote: 'recto', qr: q.recto, logo: l.recto, fond: fond(r.fondRecto) }, verso = { cote: 'verso', qr: q.verso, logo: l.verso, fond: fond(r.fondVerso) };
-    const memeInfos = choixCarte(undefined, 'recto').join() === choixCarte(undefined, 'verso').join();
+    const memeInfos = choixCarte(undefined, 'recto').join() === choixCarte(undefined, 'verso').join() && JSON.stringify(typoCarte()) === JSON.stringify(typoCarte('verso'));
     return { recto, verso, differentes: recto.qr !== verso.qr || recto.logo !== verso.logo || recto.fond !== verso.fond || !memeInfos };
   }
 
@@ -4322,7 +4352,7 @@
   // appli sur sa propre adresse (nom--carte.qrbc.app) : elle ne remplace jamais l'appli de la page
   function lienAppliCarte() { return URL_PUBLIQUE.replace(/^(https?:\/\/)([^./]+)\./, '$1$2--carte.').replace(/^(https?:\/\/[^/]+).*$/, '$1/'); }
   function cleCarteApp() {
-    return JSON.stringify([cfg.carteApp && cfg.carteApp.modeles, cfg.design, cfg.logo, cfg.titre, cfg.sousTitre, cfg.pied, infosCarte(), typoCarte(), logoFaces(), reglagesFaces().recto.fond, reglagesCarte().fondRectoCadre || '', URL_PUBLIQUE, cfg.langue || 'fr', 3]);
+    return JSON.stringify([cfg.carteApp && cfg.carteApp.modeles, cfg.design, cfg.logo, cfg.titre, cfg.sousTitre, cfg.pied, infosCarte(), typoCarte(), typoCarte('verso'), logoFaces(), reglagesFaces().recto.fond, reglagesCarte().fondRectoCadre || '', URL_PUBLIQUE, cfg.langue || 'fr', 3]);
   }
   async function preparerCarteApp(forcer) {
     const ca = cfg.carteApp;
