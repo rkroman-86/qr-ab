@@ -234,7 +234,7 @@
     .rb-cour{flex:1;min-width:0;display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--prim);border-radius:12px}
     .rb-cour .rb-nom{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
     .rb-cour small{color:var(--doux);font-size:.78rem;white-space:nowrap}
-    .rb-fleche{color:var(--doux);width:18px;text-align:center}
+    .rb-fleche{flex:none;width:40px;height:40px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:color-mix(in srgb,var(--prim) 14%,transparent);color:var(--prim);font-size:1.5rem;line-height:1;font-weight:700}
     .rb-liste{display:flex;flex-direction:column;gap:6px;margin:8px 0 6px}
     .rb{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--ligne);border-radius:12px;background:var(--bg);cursor:pointer;min-height:44px}
     .rb.actif{border-color:var(--prim)}
@@ -5131,7 +5131,7 @@
     liste.append(el('div', { class: 'rb-sep' }), ligne('partage'));
     const [ico, nom] = infoRubrique(vueEdit);
     const tete = el('button', { type: 'button', class: 'rb-tete', 'aria-expanded': String(rubriquesOuvert), onclick: () => { rubriquesOuvert = !rubriquesOuvert; construireFormulaire(); } }, [
-      el('span', { class: 'rb-lib', text: 'Pages' }),
+      el('span', { class: 'rb-lib', text: 'Rubrique' }),
       el('span', { class: 'rb-cour' }, [el('span', { class: 'rb-ico', text: ico }), el('span', { class: 'rb-nom', text: nom, 'data-no-i18n': '' }),
         !PAGES_MENU.includes(vueEdit) || pageAffichee(vueEdit) ? null : el('small', { text: t('masquée') })]),
       el('span', { class: 'rb-fleche', text: rubriquesOuvert ? '▴' : '▾' })]);
